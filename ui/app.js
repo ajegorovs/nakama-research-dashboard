@@ -68,6 +68,26 @@ var css = `
   gap: 8px;
   flex-wrap: wrap;
 }
+/* Grouped controls: a divider between clusters, so the toolbar reads as three things rather than one
+   row of ten peers. The first group carries no leading divider. */
+[data-plugin-id="research-dashboard"] .rd-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+[data-plugin-id="research-dashboard"] .rd-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding-left: 12px;
+  border-left: 1px solid rgba(127, 127, 127, 0.35);
+}
+[data-plugin-id="research-dashboard"] .rd-group:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
 [data-plugin-id="research-dashboard"] .rd-muted { font-size: 12px; opacity: 0.65; }
 [data-plugin-id="research-dashboard"] .rd-error { color: var(--destructive, #b91c1c); font-size: 13px; }
 [data-plugin-id="research-dashboard"] .rd-meta {
@@ -1330,16 +1350,24 @@ function apply(ctx) {
     return /* @__PURE__ */ React.createElement("div", {
       className: "rd-stack"
     }, /* @__PURE__ */ React.createElement("div", {
-      className: "rd-row"
+      className: "rd-row",
+      "data-rd-topbar": "true"
     }, /* @__PURE__ */ React.createElement("h2", {
       style: { margin: 0 }
     }, "Research overview"), /* @__PURE__ */ React.createElement("div", {
-      className: "rd-cluster"
+      className: "rd-toolbar",
+      "data-rd-toolbar": "true"
+    }, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-group",
+      "data-rd-group": "views"
     }, /* @__PURE__ */ React.createElement(ViewControl, {
       disabled: busy,
       onChange: setView,
       value: view
-    }), /* @__PURE__ */ React.createElement(WindowControl, {
+    })), /* @__PURE__ */ React.createElement("div", {
+      className: "rd-group",
+      "data-rd-group": "window"
+    }, /* @__PURE__ */ React.createElement(WindowControl, {
       disabled: busy,
       onChange: setWindowDays,
       value: windowDays
@@ -1353,13 +1381,16 @@ function apply(ctx) {
       size: "sm"
     }), /* @__PURE__ */ React.createElement("span", {
       className: "rd-muted"
-    }, "archived")), /* @__PURE__ */ React.createElement(Button, {
+    }, "archived"))), /* @__PURE__ */ React.createElement("div", {
+      className: "rd-group",
+      "data-rd-group": "actions"
+    }, /* @__PURE__ */ React.createElement(Button, {
       disabled: busy,
       onClick: () => {
         load(windowDays, includeArchived);
       },
       variant: "outline"
-    }, "Refresh"))), error ? /* @__PURE__ */ React.createElement("p", {
+    }, "Refresh")))), error ? /* @__PURE__ */ React.createElement("p", {
       className: "rd-error",
       role: "alert"
     }, error) : null, /* @__PURE__ */ React.createElement("div", {
@@ -1398,6 +1429,7 @@ function apply(ctx) {
       return /* @__PURE__ */ React.createElement(Card, {
         className: "rd-topic-card",
         "data-rd-blocked": hasBlocked,
+        "data-rd-mode": editingThis ? "edit" : expanded ? "read" : "collapsed",
         "data-rd-topic": entry.topic.name,
         key: entry.topic.id
       }, /* @__PURE__ */ React.createElement(CardHeader, null, /* @__PURE__ */ React.createElement("div", {
@@ -1444,18 +1476,32 @@ function apply(ctx) {
         size: "sm",
         variant: "outline"
       }, expanded ? "Show fewer axes" : `All ${entry.axes.length} axes`) : null, /* @__PURE__ */ React.createElement(Button, {
+        "data-rd-close": expanded ? "true" : "false",
+        "data-rd-read-open": expanded ? "false" : "true",
+        disabled: busy,
+        onClick: () => {
+          if (expanded) {
+            setEditing(null);
+            setExpandedId(null);
+          } else {
+            toggle(entry.topic.id);
+          }
+        },
+        size: "sm",
+        variant: expanded ? "outline" : "default"
+      }, expanded ? "Close" : "Read topic"), /* @__PURE__ */ React.createElement(Button, {
+        "data-rd-edit-open": editingThis ? "false" : "true",
         disabled: busy,
         onClick: () => {
           if (editingThis) {
             setEditing(null);
-            setExpandedId(null);
           } else {
             startEditing(entry);
           }
         },
         size: "sm",
-        variant: editingThis ? "outline" : "default"
-      }, editingThis ? "Close" : "Edit fields"))), hidden > 0 && !expanded ? /* @__PURE__ */ React.createElement("span", {
+        variant: editingThis || !expanded ? "outline" : "default"
+      }, editingThis ? "Done editing" : "Edit fields"))), hidden > 0 && !expanded ? /* @__PURE__ */ React.createElement("span", {
         className: "rd-muted"
       }, hidden, " more axe", hidden === 1 ? "" : "s", " hidden") : null, details ? /* @__PURE__ */ React.createElement("div", {
         className: "rd-detail rd-divider",

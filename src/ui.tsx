@@ -384,6 +384,26 @@ const css = `
   gap: 8px;
   flex-wrap: wrap;
 }
+/* Grouped controls: a divider between clusters, so the toolbar reads as three things rather than one
+   row of ten peers. The first group carries no leading divider. */
+[data-plugin-id="research-dashboard"] .rd-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+[data-plugin-id="research-dashboard"] .rd-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding-left: 12px;
+  border-left: 1px solid rgba(127, 127, 127, 0.35);
+}
+[data-plugin-id="research-dashboard"] .rd-group:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
 [data-plugin-id="research-dashboard"] .rd-muted { font-size: 12px; opacity: 0.65; }
 [data-plugin-id="research-dashboard"] .rd-error { color: var(--destructive, #b91c1c); font-size: 13px; }
 [data-plugin-id="research-dashboard"] .rd-meta {
@@ -2228,34 +2248,43 @@ export function apply(ctx: Context) {
 
     return (
       <div className="rd-stack">
-        <div className="rd-row">
+        <div className="rd-row" data-rd-topbar="true">
           <h2 style={{ margin: 0 }}>Research overview</h2>
-          <div className="rd-cluster">
-            <ViewControl disabled={busy} onChange={setView} value={view} />
-            <WindowControl
-              disabled={busy}
-              onChange={setWindowDays}
-              value={windowDays}
-            />
-            <div className="rd-cluster">
-              <Switch
-                aria-label="Show archived topics"
-                checked={includeArchived}
-                disabled={busy}
-                onCheckedChange={(next) => setIncludeArchived(next === true)}
-                size="sm"
-              />
-              <span className="rd-muted">archived</span>
+          {/* Three groups rather than one strip: what you are looking at, the window you are looking
+              at it through, and the actions. The divider between them is the point — without it this
+              reads as ten controls of equal weight in a row. */}
+          <div className="rd-toolbar" data-rd-toolbar="true">
+            <div className="rd-group" data-rd-group="views">
+              <ViewControl disabled={busy} onChange={setView} value={view} />
             </div>
-            <Button
-              disabled={busy}
-              onClick={() => {
-                void load(windowDays, includeArchived);
-              }}
-              variant="outline"
-            >
-              Refresh
-            </Button>
+            <div className="rd-group" data-rd-group="window">
+              <WindowControl
+                disabled={busy}
+                onChange={setWindowDays}
+                value={windowDays}
+              />
+              <div className="rd-cluster">
+                <Switch
+                  aria-label="Show archived topics"
+                  checked={includeArchived}
+                  disabled={busy}
+                  onCheckedChange={(next) => setIncludeArchived(next === true)}
+                  size="sm"
+                />
+                <span className="rd-muted">archived</span>
+              </div>
+            </div>
+            <div className="rd-group" data-rd-group="actions">
+              <Button
+                disabled={busy}
+                onClick={() => {
+                  void load(windowDays, includeArchived);
+                }}
+                variant="outline"
+              >
+                Refresh
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -2321,6 +2350,7 @@ export function apply(ctx: Context) {
                 <Card
                   className="rd-topic-card"
                   data-rd-blocked={hasBlocked}
+                  data-rd-mode={editingThis ? "edit" : expanded ? "read" : "collapsed"}
                   data-rd-topic={entry.topic.name}
                   key={entry.topic.id}
                 >
@@ -2394,24 +2424,41 @@ export function apply(ctx: Context) {
                                 : `All ${entry.axes.length} axes`}
                             </Button>
                           ) : null}
+                          {/* Reading and editing are two ways into the same card, not one. Reading is
+                              the primary action and renders the detail with no form at all; the form
+                              appears only from `Edit fields`. Closing collapses the card; finishing an
+                              edit returns to reading it, which is why they are different words. */}
                           <Button
+                            data-rd-close={expanded ? "true" : "false"}
+                            data-rd-read-open={expanded ? "false" : "true"}
+                            disabled={busy}
+                            onClick={() => {
+                              if (expanded) {
+                                setEditing(null);
+                                setExpandedId(null);
+                              } else {
+                                toggle(entry.topic.id);
+                              }
+                            }}
+                            size="sm"
+                            variant={expanded ? "outline" : "default"}
+                          >
+                            {expanded ? "Close" : "Read topic"}
+                          </Button>
+                          <Button
+                            data-rd-edit-open={editingThis ? "false" : "true"}
                             disabled={busy}
                             onClick={() => {
                               if (editingThis) {
-                                // Closing the fields closes the card with them: for a topic with fewer axes
-                                // than the lead count there is no "show fewer axes" control, so this is the
-                                // only way back to a collapsed card — and the detail is not a separate
-                                // navigation pattern, it is the expanded card.
                                 setEditing(null);
-                                setExpandedId(null);
                               } else {
                                 startEditing(entry);
                               }
                             }}
                             size="sm"
-                            variant={editingThis ? "outline" : "default"}
+                            variant={editingThis || !expanded ? "outline" : "default"}
                           >
-                            {editingThis ? "Close" : "Edit fields"}
+                            {editingThis ? "Done editing" : "Edit fields"}
                           </Button>
                         </div>
                       </div>

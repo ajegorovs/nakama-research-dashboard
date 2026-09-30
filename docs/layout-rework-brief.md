@@ -4,6 +4,18 @@ What to change and what must not change. The corpus and the fixture are the two 
 (`docs/corpus/README.md`, `docs/layout-fixtures/README.md`); this file is the contract for the rework
 itself. Where a requirement came from a review note, it says so.
 
+## Status
+
+| Step | State |
+|---|---|
+| 1. Separate read and edit modes | **done** — `Read topic` / `Edit fields` / `Done editing`; three harness checks (`docs/layout-pr/`) |
+| 2. Group controls in the toolbar | **done** — three divided groups, one harness check |
+| 3. Compress axis presentation to one primary row | not started |
+| 4. Reduce counts that restate rows | not started |
+| 5. One grammar for People / Repositories / Progress | not started |
+| 6. Both datasets at both viewports after each change | continuous — all four combinations pass after 1–2 |
+| 7. Polish: borders, muted text, whitespace, emphasis, state colours | not started |
+
 ## What you are working from
 
 Two datasets, deliberately different jobs:
