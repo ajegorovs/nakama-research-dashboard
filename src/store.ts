@@ -31,7 +31,12 @@
  */
 import { Database } from "bun:sqlite";
 
-export const TOPIC_STATUSES = ["active", "paused", "completed", "archived"] as const;
+export const TOPIC_STATUSES = [
+  "active",
+  "paused",
+  "completed",
+  "archived",
+] as const;
 export const AXIS_KINDS = [
   "feature",
   "experiment",
@@ -256,8 +261,13 @@ function oneOf<T extends string>(
   allowed: readonly T[],
   field: string
 ): T {
-  if (typeof value !== "string" || !(allowed as readonly string[]).includes(value)) {
-    throw new ResearchStoreError(`${field} must be one of: ${allowed.join(", ")}.`);
+  if (
+    typeof value !== "string" ||
+    !(allowed as readonly string[]).includes(value)
+  ) {
+    throw new ResearchStoreError(
+      `${field} must be one of: ${allowed.join(", ")}.`
+    );
   }
   return value as T;
 }
@@ -267,7 +277,9 @@ function optionalOneOf<T extends string>(
   allowed: readonly T[],
   field: string
 ): T | undefined {
-  return value === undefined || value === null ? undefined : oneOf(value, allowed, field);
+  return value === undefined || value === null
+    ? undefined
+    : oneOf(value, allowed, field);
 }
 
 function text(value: unknown): string {
@@ -282,7 +294,10 @@ function clampLimit(value: unknown, fallback: number, max: number): number {
 }
 
 export function isTopicStatus(value: unknown): value is TopicStatus {
-  return typeof value === "string" && (TOPIC_STATUSES as readonly string[]).includes(value);
+  return (
+    typeof value === "string" &&
+    (TOPIC_STATUSES as readonly string[]).includes(value)
+  );
 }
 
 function toTopic(row: TopicRow): Topic {
@@ -327,7 +342,8 @@ function toAxis(row: AxisRow): Axis {
     branch: row.branch,
     createdAt: row.created_at,
     currentState: row.current_state,
-    currentStateConfidence: (row.current_state_confidence as Confidence) ?? "confirmed",
+    currentStateConfidence:
+      (row.current_state_confidence as Confidence) ?? "confirmed",
     description: row.description,
     id: row.id,
     kind: (row.kind as AxisKind) ?? "feature",
@@ -480,7 +496,10 @@ export class ResearchStore {
   /** The effective connection settings — asserted by the tests rather than assumed. */
   pragmas(): { foreignKeys: number; journalMode: string; busyTimeout: number } {
     const value = (name: string): unknown => {
-      const row = this.db.query(`PRAGMA ${name}`).get() as Record<string, unknown> | null;
+      const row = this.db.query(`PRAGMA ${name}`).get() as Record<
+        string,
+        unknown
+      > | null;
       return row ? Object.values(row)[0] : undefined;
     };
     return {
@@ -529,7 +548,9 @@ export class ResearchStore {
   }
 
   getTopic(id: string): Topic | null {
-    const row = this.db.query("SELECT * FROM topics WHERE id = ?").get(id) as TopicRow | null;
+    const row = this.db
+      .query("SELECT * FROM topics WHERE id = ?")
+      .get(id) as TopicRow | null;
     return row ? toTopic(row) : null;
   }
 
@@ -578,7 +599,9 @@ export class ResearchStore {
   }
 
   getPerson(id: string): Person | null {
-    const row = this.db.query("SELECT * FROM people WHERE id = ?").get(id) as PersonRow | null;
+    const row = this.db
+      .query("SELECT * FROM people WHERE id = ?")
+      .get(id) as PersonRow | null;
     return row ? toPerson(row) : null;
   }
 
@@ -596,7 +619,11 @@ export class ResearchStore {
     sinceDays?: number;
     limit?: number;
   }): Activity[] {
-    const limit = clampLimit(options?.limit, DEFAULT_ACTIVITY_LIMIT, MAX_ACTIVITY_LIMIT);
+    const limit = clampLimit(
+      options?.limit,
+      DEFAULT_ACTIVITY_LIMIT,
+      MAX_ACTIVITY_LIMIT
+    );
     const since = options?.sinceDays ? isoDaysAgo(options.sinceDays) : null;
     const rows = this.db
       .query(
@@ -619,8 +646,16 @@ export class ResearchStore {
     return rows.map(toActivity);
   }
 
-  listAnnotations(options?: { topicId?: string; axisId?: string; limit?: number }): Annotation[] {
-    const limit = clampLimit(options?.limit, DEFAULT_ANNOTATION_LIMIT, MAX_ANNOTATION_LIMIT);
+  listAnnotations(options?: {
+    topicId?: string;
+    axisId?: string;
+    limit?: number;
+  }): Annotation[] {
+    const limit = clampLimit(
+      options?.limit,
+      DEFAULT_ANNOTATION_LIMIT,
+      MAX_ANNOTATION_LIMIT
+    );
     const rows = this.db
       .query(
         `SELECT * FROM annotations
@@ -717,17 +752,26 @@ export class ResearchStore {
 
   updateTopic(
     id: string,
-    patch: { name?: string; description?: string; status?: TopicStatus; summary?: string },
+    patch: {
+      name?: string;
+      description?: string;
+      status?: TopicStatus;
+      summary?: string;
+    },
     options?: { expectedVersion?: number }
   ): Topic {
-    return this.atomic(() => this.applyTopicPatch(required(id, "topicId"), patch, options));
+    return this.atomic(() =>
+      this.applyTopicPatch(required(id, "topicId"), patch, options)
+    );
   }
 
   /** Cascades to the topic's axes, links, activities and annotations (FKs are on). */
   deleteTopic(id: string): void {
     this.atomic(() => {
       const topicId = required(id, "topicId");
-      const result = this.db.query("DELETE FROM topics WHERE id = ?").run(topicId);
+      const result = this.db
+        .query("DELETE FROM topics WHERE id = ?")
+        .run(topicId);
       if (Number(result.changes) === 0) {
         throw new ResearchStoreError("Topic not found.");
       }
@@ -796,7 +840,9 @@ export class ResearchStore {
   deleteAxis(id: string): void {
     this.atomic(() => {
       const axisId = required(id, "axisId");
-      const result = this.db.query("DELETE FROM development_axes WHERE id = ?").run(axisId);
+      const result = this.db
+        .query("DELETE FROM development_axes WHERE id = ?")
+        .run(axisId);
       if (Number(result.changes) === 0) {
         throw new ResearchStoreError("Axis not found.");
       }
@@ -835,7 +881,13 @@ export class ResearchStore {
       if (!this.repositoryExists(required(repositoryId, "repositoryId"))) {
         throw new ResearchStoreError("Repository not found.");
       }
-      this.linkRepository("topic_repositories", "topic_id", topicId, repositoryId, relationship);
+      this.linkRepository(
+        "topic_repositories",
+        "topic_id",
+        topicId,
+        repositoryId,
+        relationship
+      );
     });
   }
 
@@ -851,7 +903,13 @@ export class ResearchStore {
       if (!this.repositoryExists(required(repositoryId, "repositoryId"))) {
         throw new ResearchStoreError("Repository not found.");
       }
-      this.linkRepository("axis_repositories", "axis_id", axisId, repositoryId, relationship);
+      this.linkRepository(
+        "axis_repositories",
+        "axis_id",
+        axisId,
+        repositoryId,
+        relationship
+      );
     });
   }
 
@@ -907,7 +965,7 @@ export class ResearchStore {
       const summary = required(input.summary, "summary");
       const topicId = input.topicId ? required(input.topicId, "topicId") : null;
       const axisId = input.axisId ? required(input.axisId, "axisId") : null;
-      if (!topicId && !axisId) {
+      if (!(topicId || axisId)) {
         throw new ResearchStoreError("topicId or axisId is required.");
       }
       if (topicId && !this.getTopic(topicId)) {
@@ -925,14 +983,17 @@ export class ResearchStore {
       }
       return this.insertActivity({
         actorId: input.actorId ?? "",
-        actorType: optionalOneOf(input.actorType, ACTOR_TYPES, "actorType") ?? "unknown",
+        actorType:
+          optionalOneOf(input.actorType, ACTOR_TYPES, "actorType") ?? "unknown",
         axisId,
         occurredAt: input.occurredAt ?? nowIso(),
         repositoryId: input.repositoryId ?? null,
         sourceRef: text(input.sourceRef),
         // Validated here rather than left to the column's CHECK: a raw SQLite error reaches the caller
         // as a generic 500, and this is input the caller can fix.
-        sourceType: optionalOneOf(input.sourceType, SOURCE_TYPES, "sourceType") ?? "manual",
+        sourceType:
+          optionalOneOf(input.sourceType, SOURCE_TYPES, "sourceType") ??
+          "manual",
         sourceUrl: text(input.sourceUrl),
         summary,
         topicId: topicId ?? axis?.topicId ?? null,
@@ -951,7 +1012,7 @@ export class ResearchStore {
       const body = required(input.text, "text");
       const topicId = input.topicId ? required(input.topicId, "topicId") : null;
       const axisId = input.axisId ? required(input.axisId, "axisId") : null;
-      if (!topicId && !axisId) {
+      if (!(topicId || axisId)) {
         throw new ResearchStoreError("topicId or axisId is required.");
       }
       if (topicId && !this.getTopic(topicId)) {
@@ -1003,7 +1064,12 @@ export class ResearchStore {
         }
       }
 
-      const created = { axes: 0, people: 0, repositories: 0, topic: resolved.created };
+      const created = {
+        axes: 0,
+        people: 0,
+        repositories: 0,
+        topic: resolved.created,
+      };
       const touchedAxes: Axis[] = [];
       const activities: string[] = [];
       const annotations: string[] = [];
@@ -1049,14 +1115,14 @@ export class ResearchStore {
 
         let axis: Axis;
         if (existing) {
-          axis = this.applyAxisPatch(
-            existing.id,
-            axisInput,
-            { expectedVersion: axisInput.expectedVersion }
-          );
+          axis = this.applyAxisPatch(existing.id, axisInput, {
+            expectedVersion: axisInput.expectedVersion,
+          });
         } else {
           if (!axisInput.title) {
-            throw new ResearchStoreError("axis.title is required for a new axis.");
+            throw new ResearchStoreError(
+              "axis.title is required for a new axis."
+            );
           }
           axis = this.insertAxis(topic.id, axisInput);
           created.axes += 1;
@@ -1096,7 +1162,9 @@ export class ResearchStore {
           activityInput.axisTitle
         );
         const repository = activityInput.repositoryFullName
-          ? this.upsertRepository({ fullName: activityInput.repositoryFullName })
+          ? this.upsertRepository({
+              fullName: activityInput.repositoryFullName,
+            })
           : null;
         if (repository?.created) {
           created.repositories += 1;
@@ -1108,7 +1176,12 @@ export class ResearchStore {
           occurredAt: activityInput.occurredAt ?? nowIso(),
           repositoryId: repository?.repository.id ?? null,
           sourceRef: text(activityInput.sourceRef),
-          sourceType: optionalOneOf(activityInput.sourceType, SOURCE_TYPES, "sourceType") ?? "manual",
+          sourceType:
+            optionalOneOf(
+              activityInput.sourceType,
+              SOURCE_TYPES,
+              "sourceType"
+            ) ?? "manual",
           sourceUrl: text(activityInput.sourceUrl),
           summary: required(activityInput.summary, "summary"),
           topicId: topic.id,
@@ -1117,10 +1190,16 @@ export class ResearchStore {
       }
 
       for (const annotationInput of input.annotations ?? []) {
-        const axisId = this.resolveAxisId(topic.id, annotationInput.axisId, annotationInput.axisTitle);
+        const axisId = this.resolveAxisId(
+          topic.id,
+          annotationInput.axisId,
+          annotationInput.axisTitle
+        );
         const annotation = this.insertAnnotation({
           authorId: actor.id,
-          authorType: annotationInput.authorType ?? (actor.type === "agent" ? "agent" : "human"),
+          authorType:
+            annotationInput.authorType ??
+            (actor.type === "agent" ? "agent" : "human"),
           axisId,
           text: required(annotationInput.text, "text"),
           topicId: topic.id,
@@ -1188,37 +1267,67 @@ export class ResearchStore {
       .query(
         "INSERT INTO topics (id, name, description, status, summary, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)"
       )
-      .run(id, input.name, input.description, input.status, input.summary, timestamp, timestamp);
+      .run(
+        id,
+        input.name,
+        input.description,
+        input.status,
+        input.summary,
+        timestamp,
+        timestamp
+      );
     return this.getTopic(id) as Topic;
   }
 
   private applyTopicPatch(
     id: string,
-    patch: { name?: string; description?: string; status?: TopicStatus; summary?: string },
+    patch: {
+      name?: string;
+      description?: string;
+      status?: TopicStatus;
+      summary?: string;
+    },
     options?: { expectedVersion?: number }
   ): Topic {
     const existing = this.getTopic(id);
     if (!existing) {
       throw new ResearchStoreError("Topic not found.");
     }
-    this.assertVersion("topic", existing.name, existing.version, options?.expectedVersion);
+    this.assertVersion(
+      "topic",
+      existing.name,
+      existing.version,
+      options?.expectedVersion
+    );
     const next = {
       description: patch.description ?? existing.description,
-      name: patch.name !== undefined ? required(patch.name, "name") : existing.name,
-      status: optionalOneOf(patch.status, TOPIC_STATUSES, "status") ?? existing.status,
+      name:
+        patch.name === undefined ? existing.name : required(patch.name, "name"),
+      status:
+        optionalOneOf(patch.status, TOPIC_STATUSES, "status") ??
+        existing.status,
       summary: patch.summary ?? existing.summary,
     };
     if (next.name.toLowerCase() !== existing.name.toLowerCase()) {
       const clash = this.getTopicByName(next.name);
       if (clash && clash.id !== id) {
-        throw new ResearchStoreError(`A topic named "${next.name}" already exists.`);
+        throw new ResearchStoreError(
+          `A topic named "${next.name}" already exists.`
+        );
       }
     }
     this.db
       .query(
         "UPDATE topics SET name = ?, description = ?, status = ?, summary = ?, version = version + 1, updated_at = ? WHERE id = ?"
       )
-      .run(next.name, next.description, next.status, next.summary, nowIso(), id);
+      .run(
+        next.name,
+        next.description,
+        next.status,
+        next.summary,
+        nowIso(),
+        id
+      );
     return this.getTopic(id) as Topic;
   }
 
@@ -1252,10 +1361,18 @@ export class ResearchStore {
         text(input.prUrl),
         text(input.currentState),
         blocker,
-        optionalOneOf(input.stateConfidence, CONFIDENCES, "stateConfidence") ?? "confirmed",
-        optionalOneOf(input.currentStateConfidence, CONFIDENCES, "currentStateConfidence") ??
+        optionalOneOf(input.stateConfidence, CONFIDENCES, "stateConfidence") ??
           "confirmed",
-        optionalOneOf(input.blockerConfidence, CONFIDENCES, "blockerConfidence") ?? "confirmed",
+        optionalOneOf(
+          input.currentStateConfidence,
+          CONFIDENCES,
+          "currentStateConfidence"
+        ) ?? "confirmed",
+        optionalOneOf(
+          input.blockerConfidence,
+          CONFIDENCES,
+          "blockerConfidence"
+        ) ?? "confirmed",
         timestamp,
         timestamp
       );
@@ -1271,10 +1388,19 @@ export class ResearchStore {
     if (!existing) {
       throw new ResearchStoreError("Axis not found.");
     }
-    this.assertVersion("axis", existing.title, existing.version, options?.expectedVersion);
+    this.assertVersion(
+      "axis",
+      existing.title,
+      existing.version,
+      options?.expectedVersion
+    );
     const next = {
       blocker: patch.blocker ?? existing.blocker,
-      blockerConfidence: optionalOneOf(patch.blockerConfidence, CONFIDENCES, "blockerConfidence"),
+      blockerConfidence: optionalOneOf(
+        patch.blockerConfidence,
+        CONFIDENCES,
+        "blockerConfidence"
+      ),
       branch: patch.branch ?? existing.branch,
       currentState: patch.currentState ?? existing.currentState,
       currentStateConfidence: optionalOneOf(
@@ -1284,11 +1410,19 @@ export class ResearchStore {
       ),
       description: patch.description ?? existing.description,
       kind: optionalOneOf(patch.kind, AXIS_KINDS, "kind"),
-      prNumber: patch.prNumber === undefined ? existing.prNumber : patch.prNumber,
+      prNumber:
+        patch.prNumber === undefined ? existing.prNumber : patch.prNumber,
       prUrl: patch.prUrl ?? existing.prUrl,
       state: optionalOneOf(patch.state, AXIS_STATES, "state"),
-      stateConfidence: optionalOneOf(patch.stateConfidence, CONFIDENCES, "stateConfidence"),
-      title: patch.title !== undefined ? required(patch.title, "axis.title") : existing.title,
+      stateConfidence: optionalOneOf(
+        patch.stateConfidence,
+        CONFIDENCES,
+        "stateConfidence"
+      ),
+      title:
+        patch.title === undefined
+          ? existing.title
+          : required(patch.title, "axis.title"),
     };
     this.assertBlockerPresent(next.state ?? existing.state, next.blocker);
 
@@ -1342,9 +1476,18 @@ export class ResearchStore {
           .query(
             "UPDATE repositories SET url = ?, description = ?, default_branch = ?, updated_at = ? WHERE id = ?"
           )
-          .run(next.url, next.description, next.defaultBranch, nowIso(), existing.id);
+          .run(
+            next.url,
+            next.description,
+            next.defaultBranch,
+            nowIso(),
+            existing.id
+          );
       }
-      return { created: false, repository: this.getRepositoryByFullName(fullName) as Repository };
+      return {
+        created: false,
+        repository: this.getRepositoryByFullName(fullName) as Repository,
+      };
     }
     const timestamp = nowIso();
     const id = crypto.randomUUID();
@@ -1361,7 +1504,10 @@ export class ResearchStore {
         timestamp,
         timestamp
       );
-    return { created: true, repository: this.getRepositoryByFullName(fullName) as Repository };
+    return {
+      created: true,
+      repository: this.getRepositoryByFullName(fullName) as Repository,
+    };
   }
 
   private upsertPerson(input: {
@@ -1393,7 +1539,15 @@ export class ResearchStore {
       .query(
         "INSERT INTO people (id, display_name, nakama_user_id, github_login, notes, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
       )
-      .run(id, displayName, nakamaUserId, githubLogin, text(input.notes), timestamp, timestamp);
+      .run(
+        id,
+        displayName,
+        nakamaUserId,
+        githubLogin,
+        text(input.notes),
+        timestamp,
+        timestamp
+      );
     return { created: true, person: this.getPerson(id) as Person };
   }
 
@@ -1462,7 +1616,9 @@ export class ResearchStore {
     this.touch("topics", input.topicId);
     this.touch("development_axes", input.axisId);
     return toActivity(
-      this.db.query("SELECT * FROM activities WHERE id = ?").get(id) as ActivityRow
+      this.db
+        .query("SELECT * FROM activities WHERE id = ?")
+        .get(id) as ActivityRow
     );
   }
 
@@ -1490,7 +1646,9 @@ export class ResearchStore {
     this.touch("topics", input.topicId);
     this.touch("development_axes", input.axisId);
     return toAnnotation(
-      this.db.query("SELECT * FROM annotations WHERE id = ?").get(id) as AnnotationRow
+      this.db
+        .query("SELECT * FROM annotations WHERE id = ?")
+        .get(id) as AnnotationRow
     );
   }
 
@@ -1499,7 +1657,9 @@ export class ResearchStore {
     if (!id) {
       return;
     }
-    this.db.query(`UPDATE ${table} SET updated_at = ? WHERE id = ?`).run(nowIso(), id);
+    this.db
+      .query(`UPDATE ${table} SET updated_at = ? WHERE id = ?`)
+      .run(nowIso(), id);
   }
 
   private getAxisByTitle(topicId: string, title: string): Axis | null {
@@ -1529,7 +1689,9 @@ export class ResearchStore {
     if (axisTitle) {
       const axis = this.getAxisByTitle(topicId, axisTitle);
       if (!axis) {
-        throw new ResearchStoreError(`Axis "${axisTitle}" not found in this topic.`);
+        throw new ResearchStoreError(
+          `Axis "${axisTitle}" not found in this topic.`
+        );
       }
       return axis.id;
     }
@@ -1538,7 +1700,9 @@ export class ResearchStore {
 
   private repositoryExists(id: string): boolean {
     return Boolean(
-      this.db.query("SELECT 1 AS present FROM repositories WHERE id = ?").get(id)
+      this.db
+        .query("SELECT 1 AS present FROM repositories WHERE id = ?")
+        .get(id)
     );
   }
 
@@ -1576,7 +1740,9 @@ export class ResearchStore {
       ["current_state", axis.currentStateConfidence],
       ["blocker", axis.blockerConfidence],
     ];
-    const unbacked = claims.filter(([, confidence]) => confidence === "confirmed");
+    const unbacked = claims.filter(
+      ([, confidence]) => confidence === "confirmed"
+    );
     if (unbacked.length === 0) {
       return;
     }
@@ -1586,19 +1752,25 @@ export class ResearchStore {
       axis.prNumber !== null ||
       Boolean(
         this.db
-          .query("SELECT 1 AS present FROM activities WHERE axis_id = ? LIMIT 1")
+          .query(
+            "SELECT 1 AS present FROM activities WHERE axis_id = ? LIMIT 1"
+          )
           .get(axis.id)
       ) ||
       Boolean(
         this.db
-          .query("SELECT 1 AS present FROM annotations WHERE axis_id = ? LIMIT 1")
+          .query(
+            "SELECT 1 AS present FROM annotations WHERE axis_id = ? LIMIT 1"
+          )
           .get(axis.id)
       );
     if (!evidence) {
       throw new ResearchStoreError(
         `Axis "${axis.title}" claims 'confirmed' for ${unbacked
           .map(([field]) => field)
-          .join(", ")} but carries no evidence — add a branch, a PR or an activity, or mark it 'inferred'.`
+          .join(
+            ", "
+          )} but carries no evidence — add a branch, a PR or an activity, or mark it 'inferred'.`
       );
     }
   }

@@ -23,11 +23,11 @@
  */
 import type { PluginExecutionContext } from "@nakama/core";
 import {
+  type ActorType,
   DEFAULT_ACTIVITY_LIMIT,
   MAX_ACTIVITY_LIMIT,
   ResearchStore,
   ResearchStoreError,
-  type ActorType,
   type SourceType,
   type Topic,
   type TopicStatus,

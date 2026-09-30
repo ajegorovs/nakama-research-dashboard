@@ -13,15 +13,15 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  type Axis,
   ResearchStore,
   ResearchStoreConflictError,
   ResearchStoreError,
-  type Axis,
 } from "./store";
 
 const migrationsDir = join(import.meta.dir, "../migrations");
-const MIGRATIONS = ["001-research.sql", "002-coordination-model.sql"].map((name) =>
-  readFileSync(join(migrationsDir, name), "utf8")
+const MIGRATIONS = ["001-research.sql", "002-coordination-model.sql"].map(
+  (name) => readFileSync(join(migrationsDir, name), "utf8")
 );
 
 function tempPath(): string {
@@ -50,7 +50,9 @@ function openStore(): { path: string; store: ResearchStore } {
 function count(path: string, table: string): number {
   const db = new Database(path);
   try {
-    return (db.query(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n;
+    return (
+      db.query(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }
+    ).n;
   } finally {
     db.close();
   }
@@ -94,7 +96,10 @@ describe("ResearchStore topics", () => {
     expect(store.getTopic(created.id)?.id).toBe(created.id);
     expect(store.getTopicByName("signal processing")?.id).toBe(created.id);
 
-    const updated = store.updateTopic(created.id, { status: "completed", summary: "shipped" });
+    const updated = store.updateTopic(created.id, {
+      status: "completed",
+      summary: "shipped",
+    });
     expect(updated.version).toBe(2);
     expect(updated.status).toBe("completed");
     expect(updated.summary).toBe("shipped");
@@ -104,7 +109,9 @@ describe("ResearchStore topics", () => {
   test("rejects a duplicate name regardless of case", () => {
     const { store } = openStore();
     store.createTopic({ name: "Topic Alpha" });
-    expect(() => store.createTopic({ name: "topic alpha" })).toThrow(ResearchStoreError);
+    expect(() => store.createTopic({ name: "topic alpha" })).toThrow(
+      ResearchStoreError
+    );
   });
 
   test("validates the topic status vocabulary", () => {
@@ -129,15 +136,29 @@ describe("ResearchStore topics", () => {
     const { path, store } = openStore();
     const topic = store.createTopic({ name: "Signal Processing" });
     const other = store.createTopic({ name: "Topic Beta" });
-    const repository = store.registerRepository({ fullName: "group/processing-pipeline" });
+    const repository = store.registerRepository({
+      fullName: "group/processing-pipeline",
+    });
     const person = store.registerPerson({ displayName: "Researcher A" });
-    const axis = store.createAxis({ branch: "feat/signal-explorer", title: "Signal explorer", topicId: topic.id });
-    const second = store.createAxis({ branch: "feat/acquisition-control", title: "Parameter automation", topicId: topic.id });
+    const axis = store.createAxis({
+      branch: "feat/signal-explorer",
+      title: "Signal explorer",
+      topicId: topic.id,
+    });
+    const second = store.createAxis({
+      branch: "feat/acquisition-control",
+      title: "Parameter automation",
+      topicId: topic.id,
+    });
     store.linkTopicRepository(topic.id, repository.repository.id, "primary");
     store.linkTopicPerson(topic.id, person.person.id, "lead");
     store.linkAxisRepository(axis.id, repository.repository.id, "primary");
     store.linkAxisPerson(axis.id, person.person.id, "owner");
-    store.addActivity({ axisId: axis.id, summary: "prototype run", topicId: topic.id });
+    store.addActivity({
+      axisId: axis.id,
+      summary: "prototype run",
+      topicId: topic.id,
+    });
     store.addAnnotation({ axisId: axis.id, text: "hardware test postponed" });
 
     store.deleteTopic(topic.id);
@@ -163,13 +184,24 @@ describe("ResearchStore optimistic versioning", () => {
     const { store } = openStore();
     const topic = store.createTopic({ name: "Topic Alpha" });
     store.updateTopic(topic.id, { summary: "first writer" });
-    const current = store.getTopic(topic.id) as { updatedAt: string; version: number };
+    const current = store.getTopic(topic.id) as {
+      updatedAt: string;
+      version: number;
+    };
 
     expect(() =>
-      store.updateTopic(topic.id, { summary: "second writer" }, { expectedVersion: 1 })
+      store.updateTopic(
+        topic.id,
+        { summary: "second writer" },
+        { expectedVersion: 1 }
+      )
     ).toThrow(ResearchStoreConflictError);
     try {
-      store.updateTopic(topic.id, { summary: "second writer" }, { expectedVersion: 1 });
+      store.updateTopic(
+        topic.id,
+        { summary: "second writer" },
+        { expectedVersion: 1 }
+      );
     } catch (error) {
       expect((error as Error).message.startsWith("conflict: ")).toBe(true);
       expect((error as Error).message).toContain("version 2");
@@ -180,7 +212,10 @@ describe("ResearchStore optimistic versioning", () => {
       updatedAt: string;
       version: number;
     };
-    expect(after).toMatchObject({ summary: "first writer", version: current.version });
+    expect(after).toMatchObject({
+      summary: "first writer",
+      version: current.version,
+    });
     expect(after.updatedAt).toBe(current.updatedAt);
 
     // The matching version goes through.
@@ -200,9 +235,9 @@ describe("ResearchStore optimistic versioning", () => {
       title: "Signal explorer",
       topicId: topic.id,
     });
-    expect(() => store.updateAxis(axis.id, { state: "parked" }, { expectedVersion: 99 })).toThrow(
-      ResearchStoreConflictError
-    );
+    expect(() =>
+      store.updateAxis(axis.id, { state: "parked" }, { expectedVersion: 99 })
+    ).toThrow(ResearchStoreConflictError);
     expect(store.getAxis(axis.id)?.state).toBe("active");
   });
 });
@@ -212,7 +247,11 @@ describe("ResearchStore axes", () => {
     const { store } = openStore();
     const topic = store.createTopic({ name: "Acquisition Automation" });
     expect(() =>
-      store.createAxis({ state: "blocked", title: "Parameter automation", topicId: topic.id })
+      store.createAxis({
+        state: "blocked",
+        title: "Parameter automation",
+        topicId: topic.id,
+      })
     ).toThrow(/without blocker text/);
     const ok = store.createAxis({
       blocker: "waiting on the rig's firmware update",
@@ -220,7 +259,10 @@ describe("ResearchStore axes", () => {
       title: "Parameter automation",
       topicId: topic.id,
     });
-    expect(ok).toMatchObject({ blocker: "waiting on the rig's firmware update", state: "blocked" });
+    expect(ok).toMatchObject({
+      blocker: "waiting on the rig's firmware update",
+      state: "blocked",
+    });
   });
 
   test("refuses a claim of 'confirmed' with nothing behind it", () => {
@@ -253,10 +295,14 @@ describe("ResearchStore axes", () => {
     const { store } = openStore();
     const topic = store.createTopic({ name: "Topic Alpha" });
     expect(() =>
-      store.updateTopic(topic.id, { status: "abandoned" as unknown as "archived" })
+      store.updateTopic(topic.id, {
+        status: "abandoned" as unknown as "archived",
+      })
     ).toThrow(ResearchStoreError);
     // 'archived' is a topic state, 'abandoned' is an axis state.
-    expect(store.updateTopic(topic.id, { status: "archived" }).status).toBe("archived");
+    expect(store.updateTopic(topic.id, { status: "archived" }).status).toBe(
+      "archived"
+    );
   });
 });
 
@@ -292,7 +338,9 @@ describe("ResearchStore activity and annotations", () => {
   test("requires an owner and a valid source type", () => {
     const { store } = openStore();
     const topic = store.createTopic({ name: "Topic Alpha" });
-    expect(() => store.addActivity({ summary: "orphan" })).toThrow(ResearchStoreError);
+    expect(() => store.addActivity({ summary: "orphan" })).toThrow(
+      ResearchStoreError
+    );
     expect(() =>
       store.addActivity({
         sourceType: "PR" as unknown as "github_pr",
@@ -300,9 +348,9 @@ describe("ResearchStore activity and annotations", () => {
         topicId: topic.id,
       })
     ).toThrow(ResearchStoreError);
-    expect(() => store.addActivity({ summary: "unknown topic", topicId: "nope" })).toThrow(
-      ResearchStoreError
-    );
+    expect(() =>
+      store.addActivity({ summary: "unknown topic", topicId: "nope" })
+    ).toThrow(ResearchStoreError);
   });
 
   test("refuses an activity whose axis belongs to another topic", () => {
@@ -315,7 +363,11 @@ describe("ResearchStore activity and annotations", () => {
       topicId: beta.id,
     });
     expect(() =>
-      store.addActivity({ axisId: axis.id, summary: "mismatched", topicId: alpha.id })
+      store.addActivity({
+        axisId: axis.id,
+        summary: "mismatched",
+        topicId: alpha.id,
+      })
     ).toThrow(/does not belong/);
   });
 
@@ -328,7 +380,10 @@ describe("ResearchStore activity and annotations", () => {
       text: "the group agreed to park this until the rig is free",
       topicId: topic.id,
     });
-    expect(annotation).toMatchObject({ authorId: "user-9", authorType: "agent" });
+    expect(annotation).toMatchObject({
+      authorId: "user-9",
+      authorType: "agent",
+    });
     expect(store.listPeople()).toHaveLength(0);
     expect(store.listAnnotations({ topicId: topic.id })).toHaveLength(1);
   });
@@ -339,7 +394,9 @@ describe("ResearchStore reconcileTopic", () => {
     const { store } = openStore();
     const result = store.reconcileTopic({
       actor: { id: "user-1", type: "human" },
-      annotations: [{ axisTitle: "Signal explorer", text: "agreed in the group meeting" }],
+      annotations: [
+        { axisTitle: "Signal explorer", text: "agreed in the group meeting" },
+      ],
       axes: [
         {
           branch: "feat/signal-explorer",
@@ -356,12 +413,22 @@ describe("ResearchStore reconcileTopic", () => {
         },
       ],
       people: [{ displayName: "Researcher B", role: "reviewer" }],
-      repositories: [{ fullName: "group/processing-pipeline", relationship: "primary" }],
-      topic: { description: "filtering and reconstruction", summary: "under review" },
+      repositories: [
+        { fullName: "group/processing-pipeline", relationship: "primary" },
+      ],
+      topic: {
+        description: "filtering and reconstruction",
+        summary: "under review",
+      },
       topicName: "Signal Processing",
     });
 
-    expect(result.created).toMatchObject({ axes: 1, people: 2, repositories: 2, topic: true });
+    expect(result.created).toMatchObject({
+      axes: 1,
+      people: 2,
+      repositories: 2,
+      topic: true,
+    });
     expect(result.topic).toMatchObject({
       description: "filtering and reconstruction",
       name: "Signal Processing",
@@ -370,11 +437,17 @@ describe("ResearchStore reconcileTopic", () => {
     });
     expect(result.axes).toHaveLength(1);
     const axis = result.axes[0] as Axis;
-    expect(axis).toMatchObject({ kind: "experiment", state: "active", version: 1 });
+    expect(axis).toMatchObject({
+      kind: "experiment",
+      state: "active",
+      version: 1,
+    });
 
     // Many-to-many holds: one repository is primary for the topic and the axis, the other supporting.
     expect(
-      store.listAxisRepositories(axis.id).map((row) => [row.fullName, row.relationship])
+      store
+        .listAxisRepositories(axis.id)
+        .map((row) => [row.fullName, row.relationship])
     ).toEqual([
       ["group/processing-pipeline", "primary"],
       ["group/analysis-notes", "supporting"],
@@ -384,7 +457,9 @@ describe("ResearchStore reconcileTopic", () => {
       displayName: "Researcher A",
       role: "owner",
     });
-    expect(store.listTopicPeople(result.topic.id)[0]).toMatchObject({ displayName: "Researcher B" });
+    expect(store.listTopicPeople(result.topic.id)[0]).toMatchObject({
+      displayName: "Researcher B",
+    });
     expect(result.recorded.annotations).toHaveLength(1);
   });
 
@@ -395,7 +470,9 @@ describe("ResearchStore reconcileTopic", () => {
       topicName: "Signal Processing",
     });
     const again = store.reconcileTopic({
-      activities: [{ axisTitle: "Signal explorer", summary: "filtering run finished" }],
+      activities: [
+        { axisTitle: "Signal explorer", summary: "filtering run finished" },
+      ],
       axes: [{ state: "parked", title: "Signal explorer" }],
       topic: { status: "paused" },
       topicName: "Signal Processing",
@@ -419,7 +496,9 @@ describe("ResearchStore reconcileTopic", () => {
     store.linkTopicRepository(topic.id, one.repository.id, "primary");
     store.linkTopicRepository(topic.id, two.repository.id, "primary");
     expect(
-      store.listTopicRepositories(topic.id).map((row) => [row.fullName, row.relationship])
+      store
+        .listTopicRepositories(topic.id)
+        .map((row) => [row.fullName, row.relationship])
     ).toEqual([
       ["group/two", "primary"],
       ["group/one", "supporting"],
@@ -428,9 +507,15 @@ describe("ResearchStore reconcileTopic", () => {
 
   test("is atomic: a failure part-way through changes nothing", async () => {
     const { path, store } = openStore();
-    const topic = store.createTopic({ name: "Signal Processing", summary: "before" });
+    const topic = store.createTopic({
+      name: "Signal Processing",
+      summary: "before",
+    });
     await Bun.sleep(2);
-    const before = store.getTopic(topic.id) as { updatedAt: string; version: number };
+    const before = store.getTopic(topic.id) as {
+      updatedAt: string;
+      version: number;
+    };
 
     // The topic patch lands first, then the first axis, then the second axis trips the blocker rule —
     // far enough in that an unprotected writer would leave rows behind.
@@ -490,7 +575,9 @@ describe("ResearchStore reconcileTopic", () => {
 
     // ... and the same call passes when it also records what backs the claim.
     const result = store.reconcileTopic({
-      activities: [{ axisTitle: "Backed", summary: "reconstruction baseline retired" }],
+      activities: [
+        { axisTitle: "Backed", summary: "reconstruction baseline retired" },
+      ],
       axes: [{ state: "completed", title: "Backed" }],
       topicId: topic.id,
     });
@@ -501,8 +588,12 @@ describe("ResearchStore reconcileTopic", () => {
 
   test("reports unknown ids as fixable rules, not raw SQLite errors", () => {
     const { store } = openStore();
-    expect(() => store.reconcileTopic({ topicId: "missing" })).toThrow(/Topic not found/);
-    expect(() => store.reconcileTopic({})).toThrow(/topicId or topicName is required/);
+    expect(() => store.reconcileTopic({ topicId: "missing" })).toThrow(
+      /Topic not found/
+    );
+    expect(() => store.reconcileTopic({})).toThrow(
+      /topicId or topicName is required/
+    );
     const topic = store.createTopic({ name: "Topic Alpha" });
     expect(() =>
       store.reconcileTopic({
@@ -516,7 +607,10 @@ describe("ResearchStore reconcileTopic", () => {
 describe("ResearchStore repositories and people", () => {
   test("registers each repository once, keyed case-insensitively by full name", () => {
     const { path, store } = openStore();
-    const first = store.registerRepository({ description: "pipeline", fullName: "group/Repo" });
+    const first = store.registerRepository({
+      description: "pipeline",
+      fullName: "group/Repo",
+    });
     expect(first.created).toBe(true);
     const second = store.registerRepository({
       fullName: "GROUP/repo",
@@ -530,19 +624,35 @@ describe("ResearchStore repositories and people", () => {
 
   test("resolves a person by Nakama user id or GitHub login, never by display name", () => {
     const { path, store } = openStore();
-    const byNakama = store.registerPerson({ displayName: "Researcher A", nakamaUserId: "user-1" });
+    const byNakama = store.registerPerson({
+      displayName: "Researcher A",
+      nakamaUserId: "user-1",
+    });
     expect(
-      store.registerPerson({ displayName: "Researcher A renamed", nakamaUserId: "user-1" }).created
+      store.registerPerson({
+        displayName: "Researcher A renamed",
+        nakamaUserId: "user-1",
+      }).created
     ).toBe(false);
-    const byLogin = store.registerPerson({ displayName: "Researcher B", githubLogin: "researcher-b" });
+    const byLogin = store.registerPerson({
+      displayName: "Researcher B",
+      githubLogin: "researcher-b",
+    });
     expect(
-      store.registerPerson({ displayName: "Someone Else", githubLogin: "RESEARCHER-B" }).created
+      store.registerPerson({
+        displayName: "Someone Else",
+        githubLogin: "RESEARCHER-B",
+      }).created
     ).toBe(false);
     // Two people may share a display name; the name is not an identity.
-    expect(store.registerPerson({ displayName: "Researcher A" }).created).toBe(true);
+    expect(store.registerPerson({ displayName: "Researcher A" }).created).toBe(
+      true
+    );
     expect(count(path, "people")).toBe(3);
     expect(store.getPersonByNakamaUser("user-1")?.id).toBe(byNakama.person.id);
-    expect(store.getPerson(byLogin.person.id)?.githubLogin).toBe("researcher-b");
+    expect(store.getPerson(byLogin.person.id)?.githubLogin).toBe(
+      "researcher-b"
+    );
   });
 });
 
@@ -555,7 +665,10 @@ describe("ResearchStore concurrency", () => {
     try {
       for (let index = 0; index < 10; index += 1) {
         store.addActivity({ summary: `writer A ${index}`, topicId: topic.id });
-        other.addActivity({ summary: `writer B ${index}`, topicId: otherTopic.id });
+        other.addActivity({
+          summary: `writer B ${index}`,
+          topicId: otherTopic.id,
+        });
       }
     } finally {
       other.close();
@@ -582,7 +695,10 @@ db.exec("COMMIT");
 db.close();
 `
     );
-    const child = Bun.spawn(["bun", script, path], { stderr: "pipe", stdout: "pipe" });
+    const child = Bun.spawn(["bun", script, path], {
+      stderr: "pipe",
+      stdout: "pipe",
+    });
     const reader = child.stdout.getReader();
     await reader.read(); // the holder has the write lock now
 
