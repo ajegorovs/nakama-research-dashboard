@@ -153,6 +153,8 @@ Observations, not verdicts — the layout judgement is the review's to make:
 
 - The corpus is a **snapshot** of a repository that is still moving; the clone's HEAD is recorded
   above, and nothing here re-reads it.
-- The seed's write path is exercised by the transcript, but the harness's **write** pass was not run
-  against this corpus for this pack — so the checks that need a *write* are not part of the 36.
+- The seed's write path is exercised by the transcript, and the harness's **write** pass was run
+  against this corpus as well: **49 checks passed · 0 failed · 7 skipped** (the same skips). Its
+  screenshots are not published and the store was wiped and re-seeded from this bundle afterwards, so
+  what the published images rest on is the **read** pass above — 36 · 0 · 7.
 - No claim is made here about how the page behaves at other viewports; every capture is 1440×900.
