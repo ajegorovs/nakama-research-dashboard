@@ -148,9 +148,81 @@ type TopicOverview = {
   lastActivityAt: string | null;
 };
 
+/** A person as the rollup carries them: the link has its own row in `topic_people`/`axis_people`. */
+type Person = {
+  id: string;
+  displayName: string;
+  nakamaUserId: string | null;
+  githubLogin: string | null;
+  notes: string;
+};
+
+/** A repository as the rollup carries it: the relationship belongs to the link, not the repository. */
+type Repository = {
+  id: string;
+  fullName: string;
+  url: string;
+  description: string;
+  defaultBranch: string;
+};
+
+/**
+ * The lean axis shape both C6 views scan: title, state, repo/branch/PR and the blocker where there is
+ * one. No description — that belongs to the topic detail, and the overview already sends each axis once.
+ */
+type AxisScan = {
+  id: string;
+  topicId: string;
+  title: string;
+  kind: string;
+  state: AxisState;
+  blocker: string;
+  blockerConfidence: Confidence | null;
+  branch: string;
+  prNumber: number | null;
+  prUrl: string;
+  version: number;
+  updatedAt: string;
+  lastReviewedAt: string | null;
+  repositories: LinkedRepository[];
+};
+
+/** A topic as a rollup names it: enough to link and label, not a second copy of the topic. */
+type TopicRef = { id: string; name: string; status: string };
+
+type PersonTopicInvolvement = {
+  topic: TopicRef;
+  role: string;
+  axes: AxisScan[];
+};
+
+/** One person as the People view presents them: grouped involvement, and only their own events. */
+type PersonRollup = {
+  person: Person;
+  /** False when no account is mapped, i.e. no recorded event can ever be attributed to them. */
+  attributable: boolean;
+  topics: PersonTopicInvolvement[];
+  axes: AxisScan[];
+  axisCounts: Record<AxisState, number>;
+  recentActivity: Activity[];
+  lastActivityAt: string | null;
+  lastReviewedAt: string | null;
+};
+
+/** One repository as the Repositories view presents it: what it supports, what is happening in it. */
+type RepositoryRollup = {
+  repository: Repository;
+  topics: Array<{ relationship: string; topic: TopicRef }>;
+  axes: AxisScan[];
+  axisCounts: Record<AxisState, number>;
+  recentActivity: Activity[];
+  lastActivityAt: string | null;
+};
+
 type Activity = {
   id: string;
   axisId: string | null;
+  topicId: string | null;
   sourceType: string;
   sourceRef: string;
   summary: string;
@@ -170,6 +242,10 @@ type Overview = {
   axesByState: Record<string, number>;
   topics: TopicOverview[];
   recentActivity: Activity[];
+  people: PersonRollup[];
+  peopleTruncated: boolean;
+  repositories: RepositoryRollup[];
+  repositoriesTruncated: boolean;
 };
 
 type Context = {
@@ -240,6 +316,20 @@ const WINDOW_OPTIONS = [
 const COUNTED_STATES: AxisState[] = ["blocked", "active", "draft", "parked"];
 const OTHER_STATES: AxisState[] = ["completed", "abandoned"];
 
+/**
+ * The three views of one page (C6). The reviewer's symmetry, in the order a reader asks about it:
+ * what research directions are active (Topics, the default), what each person is on (People), what is
+ * happening in each codebase (Repositories). The counts line under the header is the compressed
+ * synthesis they all share.
+ */
+const VIEW_OPTIONS = [
+  { label: "Topics", value: "topics" },
+  { label: "People", value: "people" },
+  { label: "Repositories", value: "repositories" },
+] as const;
+
+type ViewName = (typeof VIEW_OPTIONS)[number]["value"];
+
 /** How many axes a collapsed card leads with — "then 2–4 most relevant axes". */
 const LEAD_AXES = 3;
 
@@ -306,6 +396,7 @@ const css = `
   font-weight: 600;
 }
 [data-plugin-id="research-dashboard"] .rd-window [aria-pressed="true"] { font-weight: 600; }
+[data-plugin-id="research-dashboard"] .rd-views [aria-pressed="true"] { font-weight: 600; }
 [data-plugin-id="research-dashboard"] .rd-newtopic { flex-wrap: nowrap; }
 [data-plugin-id="research-dashboard"] .rd-newtopic input { width: 18rem; }
 [data-plugin-id="research-dashboard"] .rd-activity { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
@@ -386,6 +477,53 @@ const css = `
   display: grid;
   gap: 6px;
 }
+/* C6: the index + panel split both rollup views use. The index stays narrow and the panel takes the
+   rest; below a reading width the two stack instead of squeezing a table into a phone. */
+[data-plugin-id="research-dashboard"] .rd-split {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+[data-plugin-id="research-dashboard"] .rd-index {
+  flex: 0 1 15rem;
+  min-width: 12rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+}
+[data-plugin-id="research-dashboard"] .rd-index-item {
+  width: 100%;
+  text-align: left;
+  display: grid;
+  gap: 2px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+[data-plugin-id="research-dashboard"] .rd-index-item:hover {
+  border-color: var(--border);
+}
+[data-plugin-id="research-dashboard"] .rd-index-item[aria-pressed="true"] {
+  border-color: var(--border);
+  background: var(--muted, rgba(127, 127, 127, 0.1));
+}
+[data-plugin-id="research-dashboard"] .rd-panel {
+  flex: 1 1 22rem;
+  min-width: 16rem;
+}
+[data-plugin-id="research-dashboard"] .rd-view { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+[data-plugin-id="research-dashboard"] .rd-involvement {
+  border-left: 2px solid var(--border);
+  padding: 0 0 0 10px;
+  display: grid;
+  gap: 6px;
+}
+[data-plugin-id="research-dashboard"] .rd-involvement > ul { margin: 0; }
 `;
 
 type Draft = {
@@ -585,6 +723,42 @@ export function apply(ctx: Context) {
             disabled={disabled}
             key={option.days}
             onClick={() => onChange(option.days)}
+            size="sm"
+            variant="outline"
+          >
+            {option.label}
+          </Button>
+        ))}
+      </div>
+    );
+  }
+
+  /**
+   * Which view of the same data is on screen (C6). Not a query-level control: `get_overview` already
+   * carries all three views, so switching costs nothing and the page never asks the store twice.
+   */
+  function ViewControl({
+    value,
+    onChange,
+    disabled,
+  }: {
+    value: ViewName;
+    onChange: (next: ViewName) => void;
+    disabled: boolean;
+  }) {
+    return (
+      <div
+        aria-label="Dashboard view"
+        className="rd-cluster rd-views"
+        role="group"
+      >
+        {VIEW_OPTIONS.map((option) => (
+          <Button
+            aria-pressed={option.value === value}
+            data-rd-view-option={option.value}
+            disabled={disabled}
+            key={option.value}
+            onClick={() => onChange(option.value)}
             size="sm"
             variant="outline"
           >
@@ -1023,8 +1197,380 @@ export function apply(ctx: Context) {
     );
   }
 
+  /**
+   * The one line an index row carries: how much is on, and how much of it is stuck. Never a score and
+   * never a percentage — "3 active · 1 blocked" is all a reader needs to decide where to look.
+   */
+  function involvementLine(entry: {
+    axes: AxisScan[];
+    axisCounts: Record<AxisState, number>;
+    topics: unknown[];
+  }): string {
+    const parts: string[] = [];
+    if (entry.axisCounts.active > 0) {
+      parts.push(`${entry.axisCounts.active} active`);
+    }
+    if (entry.axisCounts.blocked > 0) {
+      parts.push(`${entry.axisCounts.blocked} blocked`);
+    }
+    parts.push(countLabel(entry.axes.length, "axis", "axes"));
+    parts.push(countLabel(entry.topics.length, "topic", "topics"));
+    return parts.join(" · ");
+  }
+
+  /** One axis in a C6 rollup: state, title, repo/branch/PR, and the blocker where there is one. */
+  function AxisScanItem({ axis }: { axis: AxisScan }) {
+    const where = [
+      axis.repositories.map((repository) => repository.fullName).join(", "),
+      axis.branch,
+      axis.prNumber === null ? "" : `PR #${axis.prNumber}`,
+    ]
+      .filter((value) => value !== "")
+      .join(" · ");
+    return (
+      <li
+        className="rd-axis"
+        data-rd-axis-state={axis.state}
+        data-rd-scan-axis={axis.title}
+      >
+        <div className="rd-row">
+          <span className="rd-cluster">
+            <span className="rd-state" data-rd-state={axis.state}>
+              {axis.state}
+            </span>
+            <span className="rd-strong">{axis.title}</span>
+          </span>
+          <span className="rd-muted">{axis.kind}</span>
+        </div>
+        <span className="rd-meta">
+          {where || "no repository or branch recorded"}
+        </span>
+        {axis.blocker ? (
+          <span
+            className="rd-blocker"
+            data-rd-strong={axis.blockerConfidence === "confirmed"}
+          >
+            {axis.blocker}
+            {axis.blockerConfidence ? ` · ${axis.blockerConfidence}` : ""}
+          </span>
+        ) : null}
+      </li>
+    );
+  }
+
+  /**
+   * A list of recorded events, shared by both C6 panels. `dataAttr` names the row count so a harness
+   * can ask "how many rows did this panel show" without inferring it from the DOM.
+   */
+  function ActivityList({
+    dataAttr,
+    items,
+    windowDays,
+  }: {
+    dataAttr: string;
+    items: Activity[];
+    windowDays: number;
+  }) {
+    return (
+      <ul className="rd-activity" {...{ [dataAttr]: items.length }}>
+        {items.map((item) => (
+          <li key={item.id}>
+            <div>{item.summary}</div>
+            <span className="rd-meta">
+              {SOURCE_OPTIONS.find((option) => option.value === item.sourceType)
+                ?.label ?? item.sourceType}
+              {item.sourceRef ? ` · ${item.sourceRef}` : ""} ·{" "}
+              {item.occurredAt.slice(0, 10)}
+            </span>
+          </li>
+        ))}
+        {items.length === 0 ? (
+          <li className="rd-muted">
+            Nothing recorded in{" "}
+            {windowDays === 0
+              ? "any window"
+              : `the last ${countLabel(windowDays, "day", "days")}`}
+            .
+          </li>
+        ) : null}
+      </ul>
+    );
+  }
+
+  /**
+   * Person-first (C6): the index answers "who", the panel answers "what are they on" — the topics they
+   * are linked to, their own axes inside each, and only the events the store can attribute to their own
+   * account. Where attribution is impossible the panel says so, because "cannot be attributed" is a
+   * different fact from "recorded nothing"; and it reports when work was last recorded and last
+   * reviewed rather than scoring anybody.
+   */
+  function PersonPanel({
+    entry,
+    windowDays,
+  }: {
+    entry: PersonRollup;
+    windowDays: number;
+  }) {
+    return (
+      <Card className="rd-panel" data-rd-person-panel={entry.person.displayName}>
+        <CardHeader>
+          <div className="rd-row">
+            <CardTitle>{entry.person.displayName}</CardTitle>
+            {entry.person.githubLogin ? (
+              <span className="rd-muted">@{entry.person.githubLogin}</span>
+            ) : null}
+          </div>
+          <span className="rd-meta" data-rd-person-counts="true">
+            {involvementLine(entry)}
+          </span>
+        </CardHeader>
+        <CardContent>
+          <div className="rd-form">
+            <span className="rd-section">Topics they are on</span>
+            <ul className="rd-view" data-rd-person-topics={entry.topics.length}>
+              {entry.topics.map((involvement) => (
+                <li
+                  className="rd-involvement"
+                  data-rd-involvement={involvement.topic.name}
+                  key={involvement.topic.id}
+                >
+                  <div className="rd-row">
+                    <span className="rd-strong">{involvement.topic.name}</span>
+                    <span className="rd-muted">
+                      {involvement.role
+                        ? `${involvement.topic.status} · ${involvement.role}`
+                        : involvement.topic.status}
+                    </span>
+                  </div>
+                  {involvement.axes.length === 0 ? (
+                    <span className="rd-muted">no axis of theirs here</span>
+                  ) : (
+                    <ul className="rd-axes">
+                      {involvement.axes.map((axis) => (
+                        <AxisScanItem axis={axis} key={axis.id} />
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              ))}
+              {entry.topics.length === 0 ? (
+                <li className="rd-muted">
+                  Not linked to a topic yet — the link is what puts work on this
+                  page.
+                </li>
+              ) : null}
+            </ul>
+
+            <span className="rd-section">Activity attributable to them</span>
+            {entry.attributable ? (
+              <ActivityList
+                dataAttr="data-rd-person-activity"
+                items={entry.recentActivity}
+                windowDays={windowDays}
+              />
+            ) : (
+              <p className="rd-muted" data-rd-attributable="false">
+                No account is mapped to this person, so no recorded event can be
+                attributed to them. That is a missing link, not an absence of
+                work.
+              </p>
+            )}
+
+            <span className="rd-meta" data-rd-person-last="true">
+              {entry.lastActivityAt
+                ? `last activity ${describeAge(entry.lastActivityAt)}`
+                : "no attributable activity yet"}
+              {entry.lastReviewedAt
+                ? ` · last reviewed ${describeAge(entry.lastReviewedAt)}`
+                : " · never reviewed"}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  function PeopleView({
+    people,
+    truncated,
+    windowDays,
+  }: {
+    people: PersonRollup[];
+    truncated: boolean;
+    windowDays: number;
+  }) {
+    const [selectedId, setSelectedId] = React.useState<string | null>(null);
+    // One person is always in view: the first until another is picked. The selection is an id, so it
+    // survives a refresh that renames or re-orders the rows.
+    const selected =
+      people.find((entry) => entry.person.id === selectedId) ??
+      people[0] ??
+      null;
+
+    if (people.length === 0) {
+      return (
+        <Card>
+          <CardContent>
+            <p className="rd-muted">
+              Nobody is linked yet. People appear here once a topic or an axis names
+              them.
+            </p>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    return (
+      <div className="rd-split" data-rd-view="people">
+        <ul
+          className="rd-index"
+          data-rd-people={people.length}
+          data-rd-people-truncated={truncated}
+        >
+          {people.map((entry) => (
+            <li key={entry.person.id}>
+              <button
+                aria-pressed={selected?.person.id === entry.person.id}
+                className="rd-index-item"
+                data-rd-person={entry.person.displayName}
+                onClick={() => setSelectedId(entry.person.id)}
+                type="button"
+              >
+                <span className="rd-strong">{entry.person.displayName}</span>
+                <span className="rd-meta">{involvementLine(entry)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+        {selected ? (
+          <PersonPanel entry={selected} windowDays={windowDays} />
+        ) : null}
+      </div>
+    );
+  }
+
+  /**
+   * Repository-first (C6): what each codebase supports, the axes that name it, and the events recorded
+   * against it or against one of those axes. The same rules as the person view — factual, never scored.
+   */
+  function RepositoriesView({
+    repositories,
+    truncated,
+    windowDays,
+  }: {
+    repositories: RepositoryRollup[];
+    truncated: boolean;
+    windowDays: number;
+  }) {
+    const [selectedId, setSelectedId] = React.useState<string | null>(null);
+    const selected =
+      repositories.find((entry) => entry.repository.id === selectedId) ??
+      repositories[0] ??
+      null;
+
+    if (repositories.length === 0) {
+      return (
+        <Card>
+          <CardContent>
+            <p className="rd-muted">
+              No repository is attached yet. A topic or an axis names one and it
+              appears here.
+            </p>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    return (
+      <div className="rd-split" data-rd-view="repositories">
+        <ul
+          className="rd-index"
+          data-rd-repositories={repositories.length}
+          data-rd-repositories-truncated={truncated}
+        >
+          {repositories.map((entry) => (
+            <li key={entry.repository.id}>
+              <button
+                aria-pressed={selected?.repository.id === entry.repository.id}
+                className="rd-index-item"
+                data-rd-repository={entry.repository.fullName}
+                onClick={() => setSelectedId(entry.repository.id)}
+                type="button"
+              >
+                <span className="rd-strong">{entry.repository.fullName}</span>
+                <span className="rd-meta">{involvementLine(entry)}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+        {selected ? (
+          <Card
+            className="rd-panel"
+            data-rd-repository-panel={selected.repository.fullName}
+          >
+            <CardHeader>
+              <CardTitle>{selected.repository.fullName}</CardTitle>
+              <span className="rd-meta">
+                {selected.repository.description || "no description recorded"}
+                {selected.repository.defaultBranch
+                  ? ` · default branch ${selected.repository.defaultBranch}`
+                  : ""}
+              </span>
+            </CardHeader>
+            <CardContent>
+              <div className="rd-form">
+                <span className="rd-section">Supports</span>
+                <ul
+                  className="rd-view"
+                  data-rd-repository-topics={selected.topics.length}
+                >
+                  {selected.topics.map((link) => (
+                    <li className="rd-cluster" key={link.topic.id}>
+                      <span className="rd-strong">{link.topic.name}</span>
+                      <span className="rd-muted">· {link.relationship}</span>
+                    </li>
+                  ))}
+                  {selected.topics.length === 0 ? (
+                    <li className="rd-muted">no topic names it yet</li>
+                  ) : null}
+                </ul>
+
+                <span className="rd-section">Current work</span>
+                <ul
+                  className="rd-axes"
+                  data-rd-repository-axes={selected.axes.length}
+                >
+                  {selected.axes.map((axis) => (
+                    <AxisScanItem axis={axis} key={axis.id} />
+                  ))}
+                  {selected.axes.length === 0 ? (
+                    <li className="rd-muted">no axis names this repository</li>
+                  ) : null}
+                </ul>
+
+                <span className="rd-section">Recent activity</span>
+                <ActivityList
+                  dataAttr="data-rd-repository-activity"
+                  items={selected.recentActivity}
+                  windowDays={windowDays}
+                />
+
+                <span className="rd-meta" data-rd-repository-last="true">
+                  {selected.lastActivityAt
+                    ? `last activity ${describeAge(selected.lastActivityAt)}`
+                    : "no activity recorded yet"}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        ) : null}
+      </div>
+    );
+  }
+
   function ResearchPage() {
     const [overview, setOverview] = React.useState<Overview | null>(null);
+    const [view, setView] = React.useState<ViewName>("topics");
     const [windowDays, setWindowDays] = React.useState(14);
     const [includeArchived, setIncludeArchived] = React.useState(false);
     const [expandedId, setExpandedId] = React.useState<string | null>(null);
@@ -1341,6 +1887,11 @@ export function apply(ctx: Context) {
         <div className="rd-row">
           <h2 style={{ margin: 0 }}>Research overview</h2>
           <div className="rd-cluster">
+            <ViewControl
+              disabled={busy}
+              onChange={setView}
+              value={view}
+            />
             <WindowControl
               disabled={busy}
               onChange={setWindowDays}
@@ -1376,6 +1927,7 @@ export function apply(ctx: Context) {
 
         <div className="rd-row">
           <div className="rd-cluster">
+            {view === "topics" ? (
             <form
               className="rd-cluster rd-newtopic"
               onSubmit={(event) => {
@@ -1396,6 +1948,7 @@ export function apply(ctx: Context) {
                 Add topic
               </Button>
             </form>
+            ) : null}
           </div>
           <span className="rd-muted">
             {counts
@@ -1409,7 +1962,8 @@ export function apply(ctx: Context) {
           </span>
         </div>
 
-        {topics.map((entry) => {
+        {view === "topics"
+          ? topics.map((entry) => {
           const hasBlocked = entry.axisCounts.blocked > 0;
           const expanded = entry.topic.id === expandedId;
           const shown = expanded ? entry.axes : entry.axes.slice(0, LEAD_AXES);
@@ -1807,9 +2361,26 @@ export function apply(ctx: Context) {
               </CardContent>
             </Card>
           );
-        })}
+            })
+          : null}
 
-        {overview && topics.length === 0 ? (
+        {view === "people" ? (
+          <PeopleView
+            people={overview?.people ?? []}
+            truncated={overview?.peopleTruncated === true}
+            windowDays={windowDays}
+          />
+        ) : null}
+
+        {view === "repositories" ? (
+          <RepositoriesView
+            repositories={overview?.repositories ?? []}
+            truncated={overview?.repositoriesTruncated === true}
+            windowDays={windowDays}
+          />
+        ) : null}
+
+        {view === "topics" && overview && topics.length === 0 ? (
           <Card>
             <CardContent>
               <p className="rd-muted">

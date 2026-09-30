@@ -39,6 +39,8 @@ var DEFAULT_ACTIVITY_LIMIT = 25;
 var MAX_ACTIVITY_LIMIT = 100;
 var DEFAULT_ANNOTATION_LIMIT = 25;
 var MAX_ANNOTATION_LIMIT = 100;
+var MAX_ROLLUP_LIMIT = 50;
+var DEFAULT_ROLLUP_ACTIVITY_LIMIT = 5;
 var EVIDENCE_ITEM_LIMIT = 5;
 var DEFAULT_AXIS_HISTORY_LIMIT = 25;
 var MAX_AXIS_HISTORY_LIMIT = 100;
@@ -135,6 +137,31 @@ function toAxis(row) {
     updatedAt: row.updated_at,
     version: row.version
   };
+}
+function toAxisScan(axis, repositories) {
+  return {
+    blocker: axis.blocker,
+    blockerConfidence: axis.blockerConfidence,
+    branch: axis.branch,
+    id: axis.id,
+    kind: axis.kind,
+    lastReviewedAt: axis.lastReviewedAt,
+    prNumber: axis.prNumber,
+    prUrl: axis.prUrl,
+    repositories,
+    state: axis.state,
+    title: axis.title,
+    topicId: axis.topicId,
+    updatedAt: axis.updatedAt,
+    version: axis.version
+  };
+}
+function countAxesByState(axes) {
+  const counts = Object.fromEntries(AXIS_STATES.map((state) => [state, 0]));
+  for (const axis of axes) {
+    counts[axis.state] += 1;
+  }
+  return counts;
 }
 function toActivity(row) {
   return {
@@ -504,6 +531,7 @@ class ResearchStore {
            FROM development_axes a JOIN topics t ON t.id = a.topic_id
            WHERE a.state = 'blocked'
            ORDER BY a.updated_at DESC`).all();
+      const rollups = this.involvementRollups(includeArchived, since, MAX_ROLLUP_LIMIT);
       return {
         activitySinceDays,
         axesByState,
@@ -519,28 +547,22 @@ class ResearchStore {
         })),
         counts: { ...counts, topicsByStatus },
         generatedAt: nowIso(),
+        people: rollups.people,
+        peopleTruncated: rollups.peopleTruncated,
         recentActivity: this.listActivity({
           limit: 25,
           sinceDays: activitySinceDays > 0 ? activitySinceDays : undefined
         }),
         recentTopics: this.db.query("SELECT * FROM topics ORDER BY updated_at DESC, name ASC LIMIT ?").all(limit).map(toTopic),
+        repositories: rollups.repositories,
+        repositoriesTruncated: rollups.repositoriesTruncated,
         topics: this.topicOverviews(includeArchived, since)
       };
     });
   }
   topicOverviews(includeArchived, since) {
     const axesByTopic = new Map;
-    const repositoriesByAxis = new Map;
-    for (const row of this.db.query(`SELECT l.axis_id AS axis_id, r.*, l.relationship AS relationship
-         FROM axis_repositories l JOIN repositories r ON r.id = l.repository_id
-         ORDER BY (l.relationship = 'primary') DESC, r.full_name COLLATE NOCASE ASC`).all()) {
-      const linked = repositoriesByAxis.get(row.axis_id) ?? [];
-      linked.push({
-        ...toRepository(row),
-        relationship: row.relationship
-      });
-      repositoriesByAxis.set(row.axis_id, linked);
-    }
+    const repositoriesByAxis = this.repositoriesByAxis();
     for (const row of this.db.query("SELECT * FROM development_axes").all()) {
       const axis = toAxis(row);
       const grouped = axesByTopic.get(axis.topicId) ?? [];
@@ -579,10 +601,7 @@ class ResearchStore {
     }
     return this.listTopics().filter((topic) => includeArchived || topic.status !== "archived").map((topic) => {
       const axes = (axesByTopic.get(topic.id) ?? []).sort(compareAxesForAttention);
-      const axisCounts = Object.fromEntries(AXIS_STATES.map((state) => [state, 0]));
-      for (const axis of axes) {
-        axisCounts[axis.state] += 1;
-      }
+      const axisCounts = countAxesByState(axes);
       const activity = activityByTopic.get(topic.id);
       return {
         activityCount: activity?.n ?? 0,
@@ -594,6 +613,195 @@ class ResearchStore {
         topic
       };
     }).sort(compareTopicsForAttention);
+  }
+  repositoriesByAxis() {
+    const map = new Map;
+    for (const row of this.db.query(`SELECT l.axis_id AS axis_id, r.*, l.relationship AS relationship
+         FROM axis_repositories l JOIN repositories r ON r.id = l.repository_id
+         ORDER BY (l.relationship = 'primary') DESC, r.full_name COLLATE NOCASE ASC`).all()) {
+      const linked = map.get(row.axis_id) ?? [];
+      linked.push({
+        ...toRepository(row),
+        relationship: row.relationship
+      });
+      map.set(row.axis_id, linked);
+    }
+    return map;
+  }
+  involvementRollups(includeArchived, since, limit) {
+    const topicRefs = new Map;
+    for (const row of this.db.query("SELECT id, name, status FROM topics").all()) {
+      if (isTopicStatus(row.status)) {
+        topicRefs.set(row.id, { id: row.id, name: row.name, status: row.status });
+      }
+    }
+    const visible = (topicId) => {
+      const ref = topicRefs.get(topicId);
+      return Boolean(ref) && (includeArchived || ref?.status !== "archived");
+    };
+    const repositoriesByAxis = this.repositoriesByAxis();
+    const scans = new Map;
+    for (const row of this.db.query("SELECT * FROM development_axes").all()) {
+      if (visible(row.topic_id)) {
+        scans.set(row.id, toAxisScan(toAxis(row), repositoriesByAxis.get(row.id) ?? []));
+      }
+    }
+    const events = this.db.query(`SELECT * FROM activities
+           WHERE (? IS NULL OR occurred_at >= ?)
+           ORDER BY occurred_at DESC, rowid DESC`).all(since, since).map(toActivity);
+    const people = this.db.query("SELECT * FROM people ORDER BY display_name COLLATE NOCASE ASC").all();
+    const idByAccount = new Map;
+    for (const row of people) {
+      if (row.nakama_user_id) {
+        idByAccount.set(row.nakama_user_id, row.id);
+      }
+    }
+    const activityByPerson = new Map;
+    for (const event of events) {
+      const personId = event.actorId ? idByAccount.get(event.actorId) : undefined;
+      if (!personId) {
+        continue;
+      }
+      const own = activityByPerson.get(personId) ?? [];
+      if (own.length < DEFAULT_ROLLUP_ACTIVITY_LIMIT) {
+        own.push(event);
+        activityByPerson.set(personId, own);
+      }
+    }
+    const lastByAccount = new Map;
+    for (const row of this.db.query("SELECT actor_id, max(occurred_at) AS last FROM activities WHERE actor_id <> '' GROUP BY actor_id").all()) {
+      lastByAccount.set(row.actor_id, row.last);
+    }
+    const axesByPerson = new Map;
+    for (const row of this.db.query("SELECT person_id, axis_id FROM axis_people").all()) {
+      const axis = scans.get(row.axis_id);
+      if (!axis) {
+        continue;
+      }
+      const own = axesByPerson.get(row.person_id) ?? [];
+      own.push(axis);
+      axesByPerson.set(row.person_id, own);
+    }
+    const involvementsByPerson = new Map;
+    for (const row of this.db.query("SELECT person_id, topic_id, role FROM topic_people").all()) {
+      const topic = topicRefs.get(row.topic_id);
+      if (!(topic && visible(row.topic_id))) {
+        continue;
+      }
+      const own = involvementsByPerson.get(row.person_id) ?? new Map;
+      own.set(row.topic_id, { axes: [], role: row.role, topic });
+      involvementsByPerson.set(row.person_id, own);
+    }
+    for (const [personId, own] of axesByPerson) {
+      const involvements = involvementsByPerson.get(personId) ?? new Map;
+      for (const axis of own) {
+        const topic = topicRefs.get(axis.topicId);
+        if (!topic) {
+          continue;
+        }
+        const entry = involvements.get(axis.topicId) ?? {
+          axes: [],
+          role: "",
+          topic
+        };
+        entry.axes.push(axis);
+        involvements.set(axis.topicId, entry);
+      }
+      involvementsByPerson.set(personId, involvements);
+    }
+    const personRollups = people.slice(0, limit).map((row) => {
+      const person = toPerson(row);
+      const own = (axesByPerson.get(person.id) ?? []).sort(compareAxesForAttention);
+      const reviewed = own.map((axis) => axis.lastReviewedAt).filter((value) => Boolean(value));
+      return {
+        attributable: Boolean(person.nakamaUserId),
+        axes: own,
+        axisCounts: countAxesByState(own),
+        lastActivityAt: person.nakamaUserId ? lastByAccount.get(person.nakamaUserId) ?? null : null,
+        lastReviewedAt: reviewed.length > 0 ? reviewed.sort().at(-1) ?? null : null,
+        person,
+        recentActivity: activityByPerson.get(person.id) ?? [],
+        topics: [...involvementsByPerson.get(person.id)?.values() ?? []].map((entry) => ({
+          ...entry,
+          axes: entry.axes.sort(compareAxesForAttention)
+        })).sort((a, b) => a.topic.name.localeCompare(b.topic.name))
+      };
+    });
+    const repositoryIdsByAxis = new Map;
+    const axisIdsByRepository = new Map;
+    for (const [axisId, linked] of repositoriesByAxis) {
+      repositoryIdsByAxis.set(axisId, linked.map((repository) => repository.id));
+      for (const repository of linked) {
+        const own = axisIdsByRepository.get(repository.id) ?? [];
+        own.push(axisId);
+        axisIdsByRepository.set(repository.id, own);
+      }
+    }
+    const activityByRepository = new Map;
+    const addRepositoryEvent = (repositoryId, event) => {
+      const own = activityByRepository.get(repositoryId) ?? [];
+      if (own.length < DEFAULT_ROLLUP_ACTIVITY_LIMIT && !own.some((item) => item.id === event.id)) {
+        own.push(event);
+        activityByRepository.set(repositoryId, own);
+      }
+    };
+    for (const event of events) {
+      if (event.repositoryId) {
+        addRepositoryEvent(event.repositoryId, event);
+      }
+      for (const repositoryId of repositoryIdsByAxis.get(event.axisId ?? "") ?? []) {
+        addRepositoryEvent(repositoryId, event);
+      }
+    }
+    const lastByRepository = new Map;
+    const noteLast = (repositoryId, at) => {
+      const current = lastByRepository.get(repositoryId);
+      if (!current || at > current) {
+        lastByRepository.set(repositoryId, at);
+      }
+    };
+    for (const row of this.db.query(`SELECT repository_id, max(occurred_at) AS last FROM activities
+         WHERE repository_id IS NOT NULL GROUP BY repository_id`).all()) {
+      noteLast(row.repository_id, row.last);
+    }
+    for (const row of this.db.query(`SELECT ar.repository_id AS repository_id, max(x.occurred_at) AS last
+         FROM activities x JOIN axis_repositories ar ON ar.axis_id = x.axis_id
+         GROUP BY ar.repository_id`).all()) {
+      noteLast(row.repository_id, row.last);
+    }
+    const topicsByRepository = new Map;
+    for (const row of this.db.query("SELECT topic_id, repository_id, relationship FROM topic_repositories").all()) {
+      const topic = topicRefs.get(row.topic_id);
+      if (!(topic && visible(row.topic_id))) {
+        continue;
+      }
+      const own = topicsByRepository.get(row.repository_id) ?? [];
+      own.push({ relationship: row.relationship, topic });
+      topicsByRepository.set(row.repository_id, own);
+    }
+    const compareTopicLinks = (a, b) => {
+      const byPrimary = Number(b.relationship === "primary") - Number(a.relationship === "primary");
+      return byPrimary === 0 ? a.topic.name.localeCompare(b.topic.name) : byPrimary;
+    };
+    const repositoryRows = this.db.query("SELECT * FROM repositories ORDER BY full_name COLLATE NOCASE ASC").all();
+    const repositoryRollups = repositoryRows.slice(0, limit).map((row) => {
+      const repository = toRepository(row);
+      const own = (axisIdsByRepository.get(repository.id) ?? []).map((axisId) => scans.get(axisId)).filter((axis) => Boolean(axis)).sort(compareAxesForAttention);
+      return {
+        axes: own,
+        axisCounts: countAxesByState(own),
+        lastActivityAt: lastByRepository.get(repository.id) ?? null,
+        recentActivity: activityByRepository.get(repository.id) ?? [],
+        repository,
+        topics: (topicsByRepository.get(repository.id) ?? []).sort(compareTopicLinks)
+      };
+    });
+    return {
+      people: personRollups,
+      peopleTruncated: people.length > limit,
+      repositories: repositoryRollups,
+      repositoriesTruncated: repositoryRows.length > limit
+    };
   }
   searchDashboard(options) {
     const query = required(options.query, "query");

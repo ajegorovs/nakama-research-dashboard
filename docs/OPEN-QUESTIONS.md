@@ -13,11 +13,15 @@ behind every settled claim.
 in v0.4.31 (command palette only); the host shell cannot be restyled; plugin pages are invisible to
 org viewers.
 
-**Open.** Everything inside the page: information architecture, whether one page with internal views
-is enough, which host components to keep for visual consistency vs. bringing our own, whether the
-detail pane should become a route (client-side routing inside the page is ours to implement), and
-whether a chat-side card (`tool:<actionKey>` renderer) is a better home for activity review than the
-page.
+**Settled (2026-09-30, at C6).** One page with internal views is the model, and the views are cheaper than
+expected: `get_overview` carries all three, so switching is not a second query. The people view is
+**person-first** — the page answers "what is each person working on", not "which topics contain this
+name" — with factual involvement only (no workload scoring, percentages, utilization or ranking). See the
+C6 status in [`V2-PLAN.md`](V2-PLAN.md) §6.
+
+**Open.** Which host components to keep for visual consistency vs. bringing our own, whether the detail
+pane should become a route (client-side routing inside the page is ours to implement), and whether a
+chat-side card (`tool:<actionKey>` renderer) is a better home for activity review than the page.
 
 **Questions.** Is "one page + internal views" acceptable, or does the layout you want need surfaces
 the platform does not offer? Should the page be optimised for scanning (many projects, little detail)

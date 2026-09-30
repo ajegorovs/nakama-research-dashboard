@@ -37,6 +37,11 @@ var WINDOW_OPTIONS = [
 ];
 var COUNTED_STATES = ["blocked", "active", "draft", "parked"];
 var OTHER_STATES = ["completed", "abandoned"];
+var VIEW_OPTIONS = [
+  { label: "Topics", value: "topics" },
+  { label: "People", value: "people" },
+  { label: "Repositories", value: "repositories" }
+];
 var LEAD_AXES = 3;
 var css = `
 [data-plugin-id="research-dashboard"] .rd-stack { display: grid; gap: 14px; }
@@ -101,6 +106,7 @@ var css = `
   font-weight: 600;
 }
 [data-plugin-id="research-dashboard"] .rd-window [aria-pressed="true"] { font-weight: 600; }
+[data-plugin-id="research-dashboard"] .rd-views [aria-pressed="true"] { font-weight: 600; }
 [data-plugin-id="research-dashboard"] .rd-newtopic { flex-wrap: nowrap; }
 [data-plugin-id="research-dashboard"] .rd-newtopic input { width: 18rem; }
 [data-plugin-id="research-dashboard"] .rd-activity { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
@@ -181,6 +187,53 @@ var css = `
   display: grid;
   gap: 6px;
 }
+/* C6: the index + panel split both rollup views use. The index stays narrow and the panel takes the
+   rest; below a reading width the two stack instead of squeezing a table into a phone. */
+[data-plugin-id="research-dashboard"] .rd-split {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+[data-plugin-id="research-dashboard"] .rd-index {
+  flex: 0 1 15rem;
+  min-width: 12rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+}
+[data-plugin-id="research-dashboard"] .rd-index-item {
+  width: 100%;
+  text-align: left;
+  display: grid;
+  gap: 2px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+[data-plugin-id="research-dashboard"] .rd-index-item:hover {
+  border-color: var(--border);
+}
+[data-plugin-id="research-dashboard"] .rd-index-item[aria-pressed="true"] {
+  border-color: var(--border);
+  background: var(--muted, rgba(127, 127, 127, 0.1));
+}
+[data-plugin-id="research-dashboard"] .rd-panel {
+  flex: 1 1 22rem;
+  min-width: 16rem;
+}
+[data-plugin-id="research-dashboard"] .rd-view { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+[data-plugin-id="research-dashboard"] .rd-involvement {
+  border-left: 2px solid var(--border);
+  padding: 0 0 0 10px;
+  display: grid;
+  gap: 6px;
+}
+[data-plugin-id="research-dashboard"] .rd-involvement > ul { margin: 0; }
 `;
 function draftFrom(axis, note = "") {
   return {
@@ -296,6 +349,25 @@ function apply(ctx) {
       disabled,
       key: option.days,
       onClick: () => onChange(option.days),
+      size: "sm",
+      variant: "outline"
+    }, option.label)));
+  }
+  function ViewControl({
+    value,
+    onChange,
+    disabled
+  }) {
+    return /* @__PURE__ */ React.createElement("div", {
+      "aria-label": "Dashboard view",
+      className: "rd-cluster rd-views",
+      role: "group"
+    }, VIEW_OPTIONS.map((option) => /* @__PURE__ */ React.createElement(Button, {
+      "aria-pressed": option.value === value,
+      "data-rd-view-option": option.value,
+      disabled,
+      key: option.value,
+      onClick: () => onChange(option.value),
       size: "sm",
       variant: "outline"
     }, option.label)));
@@ -611,8 +683,228 @@ function apply(ctx) {
       className: "rd-muted"
     }, "Saved against v", axis.version, "; a change made since then comes back as a conflict instead of overwriting it."))) : null);
   }
+  function involvementLine(entry) {
+    const parts = [];
+    if (entry.axisCounts.active > 0) {
+      parts.push(`${entry.axisCounts.active} active`);
+    }
+    if (entry.axisCounts.blocked > 0) {
+      parts.push(`${entry.axisCounts.blocked} blocked`);
+    }
+    parts.push(countLabel(entry.axes.length, "axis", "axes"));
+    parts.push(countLabel(entry.topics.length, "topic", "topics"));
+    return parts.join(" · ");
+  }
+  function AxisScanItem({ axis }) {
+    const where = [
+      axis.repositories.map((repository) => repository.fullName).join(", "),
+      axis.branch,
+      axis.prNumber === null ? "" : `PR #${axis.prNumber}`
+    ].filter((value) => value !== "").join(" · ");
+    return /* @__PURE__ */ React.createElement("li", {
+      className: "rd-axis",
+      "data-rd-axis-state": axis.state,
+      "data-rd-scan-axis": axis.title
+    }, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-row"
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-cluster"
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-state",
+      "data-rd-state": axis.state
+    }, axis.state), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-strong"
+    }, axis.title)), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-muted"
+    }, axis.kind)), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, where || "no repository or branch recorded"), axis.blocker ? /* @__PURE__ */ React.createElement("span", {
+      className: "rd-blocker",
+      "data-rd-strong": axis.blockerConfidence === "confirmed"
+    }, axis.blocker, axis.blockerConfidence ? ` · ${axis.blockerConfidence}` : "") : null);
+  }
+  function ActivityList({
+    dataAttr,
+    items,
+    windowDays
+  }) {
+    return /* @__PURE__ */ React.createElement("ul", {
+      className: "rd-activity",
+      ...{ [dataAttr]: items.length }
+    }, items.map((item) => /* @__PURE__ */ React.createElement("li", {
+      key: item.id
+    }, /* @__PURE__ */ React.createElement("div", null, item.summary), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, SOURCE_OPTIONS.find((option) => option.value === item.sourceType)?.label ?? item.sourceType, item.sourceRef ? ` · ${item.sourceRef}` : "", " ·", " ", item.occurredAt.slice(0, 10)))), items.length === 0 ? /* @__PURE__ */ React.createElement("li", {
+      className: "rd-muted"
+    }, "Nothing recorded in", " ", windowDays === 0 ? "any window" : `the last ${countLabel(windowDays, "day", "days")}`, ".") : null);
+  }
+  function PersonPanel({
+    entry,
+    windowDays
+  }) {
+    return /* @__PURE__ */ React.createElement(Card, {
+      className: "rd-panel",
+      "data-rd-person-panel": entry.person.displayName
+    }, /* @__PURE__ */ React.createElement(CardHeader, null, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-row"
+    }, /* @__PURE__ */ React.createElement(CardTitle, null, entry.person.displayName), entry.person.githubLogin ? /* @__PURE__ */ React.createElement("span", {
+      className: "rd-muted"
+    }, "@", entry.person.githubLogin) : null), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta",
+      "data-rd-person-counts": "true"
+    }, involvementLine(entry))), /* @__PURE__ */ React.createElement(CardContent, null, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-form"
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-section"
+    }, "Topics they are on"), /* @__PURE__ */ React.createElement("ul", {
+      className: "rd-view",
+      "data-rd-person-topics": entry.topics.length
+    }, entry.topics.map((involvement) => /* @__PURE__ */ React.createElement("li", {
+      className: "rd-involvement",
+      "data-rd-involvement": involvement.topic.name,
+      key: involvement.topic.id
+    }, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-row"
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-strong"
+    }, involvement.topic.name), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-muted"
+    }, involvement.role ? `${involvement.topic.status} · ${involvement.role}` : involvement.topic.status)), involvement.axes.length === 0 ? /* @__PURE__ */ React.createElement("span", {
+      className: "rd-muted"
+    }, "no axis of theirs here") : /* @__PURE__ */ React.createElement("ul", {
+      className: "rd-axes"
+    }, involvement.axes.map((axis) => /* @__PURE__ */ React.createElement(AxisScanItem, {
+      axis,
+      key: axis.id
+    }))))), entry.topics.length === 0 ? /* @__PURE__ */ React.createElement("li", {
+      className: "rd-muted"
+    }, "Not linked to a topic yet — the link is what puts work on this page.") : null), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-section"
+    }, "Activity attributable to them"), entry.attributable ? /* @__PURE__ */ React.createElement(ActivityList, {
+      dataAttr: "data-rd-person-activity",
+      items: entry.recentActivity,
+      windowDays
+    }) : /* @__PURE__ */ React.createElement("p", {
+      className: "rd-muted",
+      "data-rd-attributable": "false"
+    }, "No account is mapped to this person, so no recorded event can be attributed to them. That is a missing link, not an absence of work."), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta",
+      "data-rd-person-last": "true"
+    }, entry.lastActivityAt ? `last activity ${describeAge(entry.lastActivityAt)}` : "no attributable activity yet", entry.lastReviewedAt ? ` · last reviewed ${describeAge(entry.lastReviewedAt)}` : " · never reviewed"))));
+  }
+  function PeopleView({
+    people,
+    truncated,
+    windowDays
+  }) {
+    const [selectedId, setSelectedId] = React.useState(null);
+    const selected = people.find((entry) => entry.person.id === selectedId) ?? people[0] ?? null;
+    if (people.length === 0) {
+      return /* @__PURE__ */ React.createElement(Card, null, /* @__PURE__ */ React.createElement(CardContent, null, /* @__PURE__ */ React.createElement("p", {
+        className: "rd-muted"
+      }, "Nobody is linked yet. People appear here once a topic or an axis names them.")));
+    }
+    return /* @__PURE__ */ React.createElement("div", {
+      className: "rd-split",
+      "data-rd-view": "people"
+    }, /* @__PURE__ */ React.createElement("ul", {
+      className: "rd-index",
+      "data-rd-people": people.length,
+      "data-rd-people-truncated": truncated
+    }, people.map((entry) => /* @__PURE__ */ React.createElement("li", {
+      key: entry.person.id
+    }, /* @__PURE__ */ React.createElement("button", {
+      "aria-pressed": selected?.person.id === entry.person.id,
+      className: "rd-index-item",
+      "data-rd-person": entry.person.displayName,
+      onClick: () => setSelectedId(entry.person.id),
+      type: "button"
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-strong"
+    }, entry.person.displayName), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, involvementLine(entry)))))), selected ? /* @__PURE__ */ React.createElement(PersonPanel, {
+      entry: selected,
+      windowDays
+    }) : null);
+  }
+  function RepositoriesView({
+    repositories,
+    truncated,
+    windowDays
+  }) {
+    const [selectedId, setSelectedId] = React.useState(null);
+    const selected = repositories.find((entry) => entry.repository.id === selectedId) ?? repositories[0] ?? null;
+    if (repositories.length === 0) {
+      return /* @__PURE__ */ React.createElement(Card, null, /* @__PURE__ */ React.createElement(CardContent, null, /* @__PURE__ */ React.createElement("p", {
+        className: "rd-muted"
+      }, "No repository is attached yet. A topic or an axis names one and it appears here.")));
+    }
+    return /* @__PURE__ */ React.createElement("div", {
+      className: "rd-split",
+      "data-rd-view": "repositories"
+    }, /* @__PURE__ */ React.createElement("ul", {
+      className: "rd-index",
+      "data-rd-repositories": repositories.length,
+      "data-rd-repositories-truncated": truncated
+    }, repositories.map((entry) => /* @__PURE__ */ React.createElement("li", {
+      key: entry.repository.id
+    }, /* @__PURE__ */ React.createElement("button", {
+      "aria-pressed": selected?.repository.id === entry.repository.id,
+      className: "rd-index-item",
+      "data-rd-repository": entry.repository.fullName,
+      onClick: () => setSelectedId(entry.repository.id),
+      type: "button"
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-strong"
+    }, entry.repository.fullName), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, involvementLine(entry)))))), selected ? /* @__PURE__ */ React.createElement(Card, {
+      className: "rd-panel",
+      "data-rd-repository-panel": selected.repository.fullName
+    }, /* @__PURE__ */ React.createElement(CardHeader, null, /* @__PURE__ */ React.createElement(CardTitle, null, selected.repository.fullName), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, selected.repository.description || "no description recorded", selected.repository.defaultBranch ? ` · default branch ${selected.repository.defaultBranch}` : "")), /* @__PURE__ */ React.createElement(CardContent, null, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-form"
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-section"
+    }, "Supports"), /* @__PURE__ */ React.createElement("ul", {
+      className: "rd-view",
+      "data-rd-repository-topics": selected.topics.length
+    }, selected.topics.map((link) => /* @__PURE__ */ React.createElement("li", {
+      className: "rd-cluster",
+      key: link.topic.id
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-strong"
+    }, link.topic.name), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-muted"
+    }, "· ", link.relationship))), selected.topics.length === 0 ? /* @__PURE__ */ React.createElement("li", {
+      className: "rd-muted"
+    }, "no topic names it yet") : null), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-section"
+    }, "Current work"), /* @__PURE__ */ React.createElement("ul", {
+      className: "rd-axes",
+      "data-rd-repository-axes": selected.axes.length
+    }, selected.axes.map((axis) => /* @__PURE__ */ React.createElement(AxisScanItem, {
+      axis,
+      key: axis.id
+    })), selected.axes.length === 0 ? /* @__PURE__ */ React.createElement("li", {
+      className: "rd-muted"
+    }, "no axis names this repository") : null), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-section"
+    }, "Recent activity"), /* @__PURE__ */ React.createElement(ActivityList, {
+      dataAttr: "data-rd-repository-activity",
+      items: selected.recentActivity,
+      windowDays
+    }), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta",
+      "data-rd-repository-last": "true"
+    }, selected.lastActivityAt ? `last activity ${describeAge(selected.lastActivityAt)}` : "no activity recorded yet")))) : null);
+  }
   function ResearchPage() {
     const [overview, setOverview] = React.useState(null);
+    const [view, setView] = React.useState("topics");
     const [windowDays, setWindowDays] = React.useState(14);
     const [includeArchived, setIncludeArchived] = React.useState(false);
     const [expandedId, setExpandedId] = React.useState(null);
@@ -859,7 +1151,11 @@ function apply(ctx) {
       style: { margin: 0 }
     }, "Research overview"), /* @__PURE__ */ React.createElement("div", {
       className: "rd-cluster"
-    }, /* @__PURE__ */ React.createElement(WindowControl, {
+    }, /* @__PURE__ */ React.createElement(ViewControl, {
+      disabled: busy,
+      onChange: setView,
+      value: view
+    }), /* @__PURE__ */ React.createElement(WindowControl, {
       disabled: busy,
       onChange: setWindowDays,
       value: windowDays
@@ -886,7 +1182,7 @@ function apply(ctx) {
       className: "rd-row"
     }, /* @__PURE__ */ React.createElement("div", {
       className: "rd-cluster"
-    }, /* @__PURE__ */ React.createElement("form", {
+    }, view === "topics" ? /* @__PURE__ */ React.createElement("form", {
       className: "rd-cluster rd-newtopic",
       onSubmit: (event) => {
         createTopic(event);
@@ -901,14 +1197,14 @@ function apply(ctx) {
     }), /* @__PURE__ */ React.createElement(Button, {
       disabled: busy || !newName.trim(),
       type: "submit"
-    }, "Add topic"))), /* @__PURE__ */ React.createElement("span", {
+    }, "Add topic")) : null), /* @__PURE__ */ React.createElement("span", {
       className: "rd-muted"
     }, counts ? [
       countLabel(counts.topics, "topic", "topics"),
       countLabel(counts.axes, "axis", "axes"),
       countLabel(counts.people, "person", "people"),
       countLabel(counts.repositories, "repository", "repositories")
-    ].join(" · ") : "loading…")), topics.map((entry) => {
+    ].join(" · ") : "loading…")), view === "topics" ? topics.map((entry) => {
       const hasBlocked = entry.axisCounts.blocked > 0;
       const expanded = entry.topic.id === expandedId;
       const shown = expanded ? entry.axes : entry.axes.slice(0, LEAD_AXES);
@@ -1150,7 +1446,15 @@ function apply(ctx) {
       }, "Save"), /* @__PURE__ */ React.createElement("span", {
         className: "rd-muted"
       }, "The status change and its note land in one call."))) : null)));
-    }), overview && topics.length === 0 ? /* @__PURE__ */ React.createElement(Card, null, /* @__PURE__ */ React.createElement(CardContent, null, /* @__PURE__ */ React.createElement("p", {
+    }) : null, view === "people" ? /* @__PURE__ */ React.createElement(PeopleView, {
+      people: overview?.people ?? [],
+      truncated: overview?.peopleTruncated === true,
+      windowDays
+    }) : null, view === "repositories" ? /* @__PURE__ */ React.createElement(RepositoriesView, {
+      repositories: overview?.repositories ?? [],
+      truncated: overview?.repositoriesTruncated === true,
+      windowDays
+    }) : null, view === "topics" && overview && topics.length === 0 ? /* @__PURE__ */ React.createElement(Card, null, /* @__PURE__ */ React.createElement(CardContent, null, /* @__PURE__ */ React.createElement("p", {
       className: "rd-muted"
     }, "No topics yet. Add one above, or let the agent record what the group is working on."))) : null);
   }

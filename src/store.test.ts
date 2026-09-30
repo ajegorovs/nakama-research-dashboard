@@ -14,6 +14,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   type Axis,
+  MAX_ROLLUP_LIMIT,
   ResearchStore,
   ResearchStoreConflictError,
   ResearchStoreError,
@@ -1301,6 +1302,247 @@ describe("ResearchStore topic detail and evidence (C5)", () => {
       "run 2",
     ]);
     expect(detail.counts.activities).toBe(4);
+  });
+});
+
+describe("ResearchStore people and repository rollups (C6)", () => {
+  test("a person is one row, with everything they are on grouped underneath", () => {
+    const { path, store } = openStore();
+    const signal = store.createTopic({ name: "Signal Processing" });
+    const acquisition = store.createTopic({ name: "Acquisition Automation" });
+    store.reconcileTopic({
+      // Topic-level involvement with a role, and an axis of their own.
+      axes: [
+        { people: [{ displayName: "Researcher A" }], title: "Signal explorer" },
+      ],
+      people: [{ displayName: "Researcher A", role: "owner" }],
+      topicId: signal.id,
+    });
+    store.reconcileTopic({
+      axes: [
+        { people: [{ displayName: "Researcher A" }], title: "Rig control" },
+        {
+          people: [{ displayName: "Researcher B" }],
+          title: "Parameter automation",
+        },
+      ],
+      topicId: acquisition.id,
+    });
+    // A topic-level link with no axis of their own: involvement the rollup must not inflate.
+    const metrics = store.createTopic({ name: "Metrics Review" });
+    store.reconcileTopic({
+      people: [{ displayName: "Researcher A" }],
+      topicId: metrics.id,
+    });
+
+    const overview = store.getOverview();
+    // The criterion C4 taught us to state: six links, two people, two rows.
+    expect(overview.people).toHaveLength(2);
+    expect(overview.counts.people).toBe(2);
+    expect(count(path, "people")).toBe(2);
+
+    const a = overview.people.find(
+      (entry) => entry.person.displayName === "Researcher A"
+    );
+    // Every axis they are on, across topics, in attention order.
+    expect(a?.axes.map((axis) => axis.title)).toEqual([
+      "Rig control",
+      "Signal explorer",
+    ]);
+    // Grouped by topic, and the topic they are on without an axis of their own still appears.
+    expect(a?.topics.map((entry) => entry.topic.name)).toEqual([
+      "Acquisition Automation",
+      "Metrics Review",
+      "Signal Processing",
+    ]);
+    const axesUnder = (name: string) =>
+      a?.topics
+        .find((entry) => entry.topic.name === name)
+        ?.axes.map((axis) => axis.title);
+    expect(axesUnder("Signal Processing")).toEqual(["Signal explorer"]);
+    expect(axesUnder("Acquisition Automation")).toEqual(["Rig control"]);
+    expect(axesUnder("Metrics Review")).toEqual([]);
+    expect(
+      a?.topics.find((entry) => entry.topic.name === "Signal Processing")
+        ?.role
+    ).toBe("owner");
+    expect(a?.axes.find((axis) => axis.title === "Rig control")?.topicId).toBe(
+      acquisition.id
+    );
+    expect(a?.axisCounts.active).toBe(2);
+  });
+
+  test("attributes an event only when the person's own account recorded it", () => {
+    const { store } = openStore();
+    const topic = store.createTopic({ name: "Signal Processing" });
+    store.reconcileTopic({
+      axes: [{ branch: "feat/signal", title: "Signal explorer" }],
+      topicId: topic.id,
+    });
+    const known = store.registerPerson({
+      displayName: "Researcher A",
+      nakamaUserId: "user-1",
+    });
+    store.registerPerson({ displayName: "Researcher B" });
+    const axis = store.getTopicDetail(topic.id).axes[0];
+
+    store.addActivity({
+      actorId: "user-1",
+      actorType: "human",
+      axisId: axis?.id,
+      sourceRef: "PR #72",
+      sourceType: "github_pr",
+      summary: "merged the sampler refactor",
+      topicId: topic.id,
+    });
+    // An actor the dashboard does not know as a person owns nothing: no invented attribution.
+    store.addActivity({
+      actorId: "ghost",
+      actorType: "human",
+      summary: "recorded by somebody nobody mapped",
+      topicId: topic.id,
+    });
+
+    const overview = store.getOverview();
+    const a = overview.people.find(
+      (entry) => entry.person.id === known.person.id
+    );
+    const b = overview.people.find(
+      (entry) => entry.person.displayName === "Researcher B"
+    );
+    expect(a?.attributable).toBe(true);
+    expect(a?.recentActivity.map((event) => event.sourceRef)).toEqual([
+      "PR #72",
+    ]);
+    expect(a?.lastActivityAt).not.toBeNull();
+    // "Cannot be attributed" is a different fact from "recorded nothing", and the rollup distinguishes
+    // them instead of rendering an empty log that reads as idleness.
+    expect(b?.attributable).toBe(false);
+    expect(b?.recentActivity).toEqual([]);
+    expect(b?.lastActivityAt).toBeNull();
+    // Nobody owns the unmapped actor's event.
+    expect(
+      overview.people
+        .flatMap((entry) => entry.recentActivity)
+        .map((event) => event.summary)
+    ).toEqual(["merged the sampler refactor"]);
+  });
+
+  test("reads a repository as what it supports and what is happening in it", () => {
+    const { store } = openStore();
+    const topic = store.createTopic({ name: "Signal Processing" });
+    store.reconcileTopic({
+      axes: [
+        {
+          branch: "feat/signal",
+          people: [{ displayName: "Researcher A" }],
+          prNumber: 42,
+          repositories: [
+            {
+              fullName: "group/processing-pipeline",
+              relationship: "primary",
+            },
+          ],
+          title: "Signal explorer",
+        },
+        {
+          blocker: "needs labelled data",
+          blockerConfidence: "inferred",
+          repositories: [{ fullName: "group/processing-pipeline" }],
+          state: "blocked",
+          stateConfidence: "inferred",
+          title: "Filtering comparison",
+        },
+      ],
+      repositories: [
+        {
+          fullName: "group/processing-pipeline",
+          relationship: "primary",
+        },
+      ],
+      topicId: topic.id,
+    });
+    store.addActivity({
+      repositoryFullName: "group/processing-pipeline",
+      sourceRef: "PR #42",
+      sourceType: "github_pr",
+      summary: "opened the PR",
+      topicId: topic.id,
+    });
+    // The common case: an event names the *work*, not the repository. The axis link is what puts it on
+    // the codebase — and this is the read that silently showed nothing when the lookup was inverted.
+    const signalAxis = store
+      .getTopicDetail(topic.id)
+      .axes.find((axis) => axis.title === "Signal explorer");
+    store.addActivity({
+      axisId: signalAxis?.id,
+      sourceRef: "run 2026-09-30-a",
+      sourceType: "experiment",
+      summary: "filtering prototype run over the evaluation set",
+      topicId: topic.id,
+    });
+
+    const overview = store.getOverview();
+    expect(overview.repositories).toHaveLength(1);
+    const pipeline = overview.repositories[0];
+    expect(pipeline?.repository.fullName).toBe("group/processing-pipeline");
+    expect(
+      pipeline?.topics.map(
+        (entry) => `${entry.topic.name} (${entry.relationship})`
+      )
+    ).toEqual(["Signal Processing (primary)"]);
+    // The same attention order as the topic view, so a blocked axis leads here too.
+    expect(pipeline?.axes.map((axis) => axis.title)).toEqual([
+      "Filtering comparison",
+      "Signal explorer",
+    ]);
+    expect(pipeline?.axes[1]?.prNumber).toBe(42);
+    // The phantom-confidence rule, carried into the rollups: an axis claiming nothing reports no
+    // confidence for it, while a claim marked `inferred` stays `inferred`.
+    expect(pipeline?.axes[0]?.blockerConfidence).toBe("inferred");
+    expect(pipeline?.axes[1]?.blockerConfidence).toBeNull();
+    expect(pipeline?.axisCounts).toMatchObject({ active: 1, blocked: 1 });
+    expect(pipeline?.recentActivity.map((event) => event.sourceRef)).toEqual([
+      "run 2026-09-30-a",
+      "PR #42",
+    ]);
+    expect(pipeline?.lastActivityAt).not.toBeNull();
+  });
+
+  test("windows the event list without erasing history, and reports truncation", () => {
+    const { store } = openStore();
+    const topic = store.createTopic({ name: "Signal Processing" });
+    store.reconcileTopic({
+      axes: [{ title: "Signal explorer" }],
+      people: [{ displayName: "Researcher A" }],
+      topicId: topic.id,
+    });
+    const person = store.registerPerson({
+      displayName: "Researcher A",
+      nakamaUserId: "user-1",
+    });
+    store.addActivity({
+      actorId: "user-1",
+      actorType: "human",
+      occurredAt: "2026-08-01T09:00:00.000Z",
+      summary: "a month before the window",
+      topicId: topic.id,
+    });
+
+    const windowed = store
+      .getOverview({ activitySinceDays: 14 })
+      .people.find((entry) => entry.person.id === person.person.id);
+    expect(windowed?.recentActivity).toEqual([]);
+    // The window decides what to show, not what happened: "last activity" still reports the event.
+    expect(windowed?.lastActivityAt).toBe("2026-08-01T09:00:00.000Z");
+
+    for (let index = 0; index <= MAX_ROLLUP_LIMIT; index += 1) {
+      store.registerPerson({ displayName: `Person ${index}` });
+    }
+    const capped = store.getOverview();
+    expect(capped.people).toHaveLength(MAX_ROLLUP_LIMIT);
+    expect(capped.peopleTruncated).toBe(true);
+    expect(capped.repositoriesTruncated).toBe(false);
   });
 });
 

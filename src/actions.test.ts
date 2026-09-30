@@ -224,6 +224,7 @@ describe("read actions", () => {
         axes: [
           {
             branch: "feat/acquisition-control",
+            people: [{ displayName: "Researcher A" }],
             repositories: [
               {
                 fullName: "group/processing-pipeline",
@@ -232,7 +233,16 @@ describe("read actions", () => {
             ],
             title: "Parameter automation",
           },
-          { blocker: "rig firmware", state: "blocked", title: "Rig control" },
+          {
+            blocker: "rig firmware",
+            repositories: [{ fullName: "group/rig-tools" }],
+            state: "blocked",
+            title: "Rig control",
+          },
+        ],
+        people: [{ displayName: "Researcher A", role: "owner" }],
+        repositories: [
+          { fullName: "group/processing-pipeline", relationship: "primary" },
         ],
         topic: { summary: "under review" },
         topicName: "Acquisition Automation",
@@ -273,6 +283,49 @@ describe("read actions", () => {
       axisCounts: { active: 1, blocked: 1 },
       topic: { name: "Acquisition Automation" },
     });
+
+    // C6: the same call also carries the other two views — person-first and repository-first — grouped
+    // by identity rather than by link, so one person on a topic and an axis is one row, not two.
+    const person = (result.people as Array<Record<string, unknown>>)[0];
+    expect(result.people).toHaveLength(1);
+    expect(result.peopleTruncated).toBe(false);
+    expect(person).toMatchObject({
+      axes: [{ title: "Parameter automation" }],
+      person: { displayName: "Researcher A" },
+      topics: [{ role: "owner", topic: { name: "Acquisition Automation" } }],
+    });
+    const repository = (
+      result.repositories as Array<Record<string, unknown>>
+    ).find(
+      (entry) =>
+        (entry.repository as Record<string, unknown>).fullName ===
+        "group/processing-pipeline"
+    );
+    expect(result.repositoriesTruncated).toBe(false);
+    expect(repository).toMatchObject({
+      repository: { fullName: "group/processing-pipeline" },
+      topics: [
+        {
+          relationship: "primary",
+          topic: { name: "Acquisition Automation" },
+        },
+      ],
+    });
+    // "Supports" is what a topic declared, not what we can infer: the axis-only repository below has no
+    // support link, and the view shows it under the work that names it instead of inventing one.
+    const axisOnly = (
+      result.repositories as Array<Record<string, unknown>>
+    ).find(
+      (entry) =>
+        (entry.repository as Record<string, unknown>).fullName ===
+        "group/rig-tools"
+    );
+    expect(axisOnly).toMatchObject({
+      axes: [{ title: "Rig control" }],
+      topics: [],
+    });
+    // The repository view scans the axes that name it, in the same attention order as the topic view.
+    expect((repository?.axes as Array<Record<string, unknown>>).length).toBe(1);
 
     // The window is a query parameter, not stored state — and `0` is the page's "all time".
     const allTime = await call(

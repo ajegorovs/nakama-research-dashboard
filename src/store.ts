@@ -234,6 +234,10 @@ export const DEFAULT_ACTIVITY_LIMIT = 25;
 export const MAX_ACTIVITY_LIMIT = 100;
 export const DEFAULT_ANNOTATION_LIMIT = 25;
 export const MAX_ANNOTATION_LIMIT = 100;
+/** How many people (and how many repositories) a rollup names before it reports a truncation. */
+export const MAX_ROLLUP_LIMIT = 50;
+/** How many attributable events one person / repository rollup carries inside the window. */
+export const DEFAULT_ROLLUP_ACTIVITY_LIMIT = 5;
 /** How many recorded items of one kind count towards an axis's evidence line (activities, notes). */
 export const EVIDENCE_ITEM_LIMIT = 5;
 /** Per-axis history on the detail view: enough to see the arc of the work without paging. */
@@ -372,6 +376,43 @@ function toAxis(row: AxisRow): Axis {
     updatedAt: row.updated_at,
     version: row.version,
   };
+}
+
+/**
+ * An axis as the C6 rollups scan it: the fields a "what is this person / this codebase doing" line
+ * needs, plus its repositories. Same provenance rules as `toAxis` — a blocker nobody claimed keeps a
+ * null confidence rather than reading as confirmed.
+ */
+function toAxisScan(axis: Axis, repositories: LinkedRepository[]): AxisScan {
+  return {
+    blocker: axis.blocker,
+    blockerConfidence: axis.blockerConfidence,
+    branch: axis.branch,
+    id: axis.id,
+    kind: axis.kind,
+    lastReviewedAt: axis.lastReviewedAt,
+    prNumber: axis.prNumber,
+    prUrl: axis.prUrl,
+    repositories,
+    state: axis.state,
+    title: axis.title,
+    topicId: axis.topicId,
+    updatedAt: axis.updatedAt,
+    version: axis.version,
+  };
+}
+
+/** "3 active · 1 blocked" is computed the same way on the front page and in both C6 rollups. */
+function countAxesByState(
+  axes: Array<{ state: AxisState }>
+): Record<AxisState, number> {
+  const counts = Object.fromEntries(
+    AXIS_STATES.map((state) => [state, 0])
+  ) as Record<AxisState, number>;
+  for (const axis of axes) {
+    counts[axis.state] += 1;
+  }
+  return counts;
 }
 
 function toActivity(row: ActivityRow): Activity {
@@ -568,6 +609,14 @@ export type Overview = {
   }>;
   recentTopics: Topic[];
   recentActivity: Activity[];
+  /**
+   * The other two views of the same data, in the same call (C6): person-first and repository-first.
+   * Same window, same archived rule — one dashboard, one read.
+   */
+  people: PersonRollup[];
+  peopleTruncated: boolean;
+  repositories: RepositoryRollup[];
+  repositoriesTruncated: boolean;
 };
 
 /** Evidence reads as a phrase, not as an enum value: "PR #88", "agent review", "repo document". */
@@ -648,6 +697,83 @@ export type TopicDetail = {
   };
 };
 
+/** A topic as a rollup names it: enough to link and label it, not a second copy of the topic. */
+export type TopicRef = {
+  id: string;
+  name: string;
+  status: TopicStatus;
+};
+
+/**
+ * The lean axis shape a person / repository rollup scans. Deliberately not `AxisOverview`: the rollup
+ * is a scan line ("title · state · repo · branch · PR", plus the blocker where there is one), and the
+ * topic detail is where full metadata lives. The overview already returns every axis once; sending
+ * each of them twice in full would double the payload an agent pays for on the front page.
+ */
+export type AxisScan = {
+  id: string;
+  topicId: string;
+  title: string;
+  kind: AxisKind;
+  state: AxisState;
+  blocker: string;
+  /** Null where the claim itself is absent — the same rule `toAxis` applies. */
+  blockerConfidence: Confidence | null;
+  branch: string;
+  prNumber: number | null;
+  prUrl: string;
+  version: number;
+  updatedAt: string;
+  lastReviewedAt: string | null;
+  repositories: LinkedRepository[];
+};
+
+/** One topic a person is involved in, with only the axes they are actually on inside it. */
+export type PersonTopicInvolvement = {
+  topic: TopicRef;
+  /** The role carried on the topic link (empty when the link carries none). */
+  role: string;
+  axes: AxisScan[];
+};
+
+/**
+ * What one person is working on (C6). Built from the links the store already holds — `topic_people`
+ * and `axis_people` — plus the activity it can attribute, which is activity whose actor maps to this
+ * person's account. Nothing here is scored, ranked or turned into a percentage: the dashboard reports
+ * involvement, not utilisation.
+ */
+export type PersonRollup = {
+  person: Person;
+  /**
+   * False when the person has no account mapped, i.e. **no** activity can ever be attributed to them.
+   * The page says so instead of rendering an empty list that looks like idleness.
+   */
+  attributable: boolean;
+  /** Topics they are linked to, and their own axes inside each; topics with no axes for them remain. */
+  topics: PersonTopicInvolvement[];
+  /** Every axis they are on, attention order — the "3 active · 1 blocked" counts come from here. */
+  axes: AxisScan[];
+  axisCounts: Record<AxisState, number>;
+  /** Their own recorded events inside the window, newest first. Never another person's. */
+  recentActivity: Activity[];
+  lastActivityAt: string | null;
+  /** The most recent `lastReviewedAt` across their axes — "last reviewed", never a workload score. */
+  lastReviewedAt: string | null;
+};
+
+/** One repository as its own view presents it: what it supports, what is happening in it. */
+export type RepositoryRollup = {
+  repository: Repository;
+  /** The topics it is attached to, primary first, with the relationship on each link. */
+  topics: Array<{ relationship: Relationship; topic: TopicRef }>;
+  /** The axes that name it, attention order, so "what work is happening in this codebase" is one read. */
+  axes: AxisScan[];
+  axisCounts: Record<AxisState, number>;
+  /** Events recorded against this repository or against one of its axes, newest first. */
+  recentActivity: Activity[];
+  lastActivityAt: string | null;
+};
+
 /**
  * Attention order for axes on the overview: what needs a human first, then the rest of the work.
  * Completed and abandoned work sinks to the bottom instead of disappearing.
@@ -669,7 +795,10 @@ const TOPIC_STATUS_ATTENTION: Record<TopicStatus, number> = {
   paused: 1,
 };
 
-function compareAxesForAttention(a: Axis, b: Axis): number {
+function compareAxesForAttention(
+  a: Pick<Axis, "state" | "title" | "updatedAt">,
+  b: Pick<Axis, "state" | "title" | "updatedAt">
+): number {
   const byState = AXIS_STATE_ATTENTION[a.state] - AXIS_STATE_ATTENTION[b.state];
   if (byState !== 0) {
     return byState;
@@ -1223,6 +1352,12 @@ export class ResearchStore {
         )
         .all() as Array<AxisRow & { topic_name: string }>;
 
+      const rollups = this.involvementRollups(
+        includeArchived,
+        since,
+        MAX_ROLLUP_LIMIT
+      );
+
       return {
         activitySinceDays,
         axesByState,
@@ -1239,6 +1374,8 @@ export class ResearchStore {
         })),
         counts: { ...counts, topicsByStatus },
         generatedAt: nowIso(),
+        people: rollups.people,
+        peopleTruncated: rollups.peopleTruncated,
         recentActivity: this.listActivity({
           limit: 25,
           sinceDays: activitySinceDays > 0 ? activitySinceDays : undefined,
@@ -1250,6 +1387,8 @@ export class ResearchStore {
             )
             .all(limit) as TopicRow[]
         ).map(toTopic),
+        repositories: rollups.repositories,
+        repositoriesTruncated: rollups.repositoriesTruncated,
         topics: this.topicOverviews(includeArchived, since),
       };
     });
@@ -1265,23 +1404,7 @@ export class ResearchStore {
     since: string | null
   ): TopicOverview[] {
     const axesByTopic = new Map<string, AxisOverview[]>();
-    const repositoriesByAxis = new Map<string, LinkedRepository[]>();
-    for (const row of this.db
-      .query(
-        `SELECT l.axis_id AS axis_id, r.*, l.relationship AS relationship
-         FROM axis_repositories l JOIN repositories r ON r.id = l.repository_id
-         ORDER BY (l.relationship = 'primary') DESC, r.full_name COLLATE NOCASE ASC`
-      )
-      .all() as Array<
-      RepositoryRow & { axis_id: string; relationship: string }
-    >) {
-      const linked = repositoriesByAxis.get(row.axis_id) ?? [];
-      linked.push({
-        ...toRepository(row),
-        relationship: row.relationship as Relationship,
-      });
-      repositoriesByAxis.set(row.axis_id, linked);
-    }
+    const repositoriesByAxis = this.repositoriesByAxis();
     for (const row of this.db
       .query("SELECT * FROM development_axes")
       .all() as AxisRow[]) {
@@ -1349,12 +1472,7 @@ export class ResearchStore {
         const axes = (axesByTopic.get(topic.id) ?? []).sort(
           compareAxesForAttention
         );
-        const axisCounts = Object.fromEntries(
-          AXIS_STATES.map((state) => [state, 0])
-        ) as Record<AxisState, number>;
-        for (const axis of axes) {
-          axisCounts[axis.state] += 1;
-        }
+        const axisCounts = countAxesByState(axes);
         const activity = activityByTopic.get(topic.id);
         return {
           activityCount: activity?.n ?? 0,
@@ -1367,6 +1485,341 @@ export class ResearchStore {
         };
       })
       .sort(compareTopicsForAttention);
+  }
+
+  /**
+   * The repository attachments for **every** linked axis, in one query: `axisId → repositories`, primary
+   * first. Shared by the topic overview and the C6 rollups so the two cannot drift apart.
+   */
+  private repositoriesByAxis(): Map<string, LinkedRepository[]> {
+    const map = new Map<string, LinkedRepository[]>();
+    for (const row of this.db
+      .query(
+        `SELECT l.axis_id AS axis_id, r.*, l.relationship AS relationship
+         FROM axis_repositories l JOIN repositories r ON r.id = l.repository_id
+         ORDER BY (l.relationship = 'primary') DESC, r.full_name COLLATE NOCASE ASC`
+      )
+      .all() as Array<RepositoryRow & { axis_id: string; relationship: string }>) {
+      const linked = map.get(row.axis_id) ?? [];
+      linked.push({
+        ...toRepository(row),
+        relationship: row.relationship as Relationship,
+      });
+      map.set(row.axis_id, linked);
+    }
+    return map;
+  }
+
+  /**
+   * The person-first and repository-first views of the same data (C6), riding along in the call the
+   * front page already makes: one dashboard, one read, and no new action for an agent to learn.
+   *
+   * Two rules are worth stating, because they are the two a reader should not have to trust.
+   *
+   * 1. **A person is one row.** Grouping is by `people.id`, never by display name: someone on three
+   *    topics and two axes appears once, with their involvement grouped underneath. The identity
+   *    duplication C4 hit was a read-model bug, and this is the read model that must not repeat it.
+   * 2. **Attribution is narrow, and says so.** An event belongs to a person only when the activity's
+   *    `actor_id` maps to their account (`people.nakama_user_id`); an unmapped or unknown actor owns
+   *    nothing, and a person with no account can never own anything — hence `attributable: false`
+   *    instead of an empty log that would read as idleness.
+   *
+   * Nothing here is scored, ranked or expressed as a percentage: this reports involvement, and the
+   * only time-shaped facts are when something was last recorded and when an axis was last reviewed.
+   */
+  private involvementRollups(
+    includeArchived: boolean,
+    since: string | null,
+    limit: number
+  ): {
+    people: PersonRollup[];
+    peopleTruncated: boolean;
+    repositories: RepositoryRollup[];
+    repositoriesTruncated: boolean;
+  } {
+    const topicRefs = new Map<string, TopicRef>();
+    for (const row of this.db
+      .query("SELECT id, name, status FROM topics")
+      .all() as Array<{ id: string; name: string; status: string }>) {
+      if (isTopicStatus(row.status)) {
+        topicRefs.set(row.id, { id: row.id, name: row.name, status: row.status });
+      }
+    }
+    // Archived work is hidden unless the page asks for it, exactly as on the front page.
+    const visible = (topicId: string): boolean => {
+      const ref = topicRefs.get(topicId);
+      return Boolean(ref) && (includeArchived || ref?.status !== "archived");
+    };
+
+    const repositoriesByAxis = this.repositoriesByAxis();
+    const scans = new Map<string, AxisScan>();
+    for (const row of this.db
+      .query("SELECT * FROM development_axes")
+      .all() as AxisRow[]) {
+      if (visible(row.topic_id)) {
+        scans.set(
+          row.id,
+          toAxisScan(toAxis(row), repositoriesByAxis.get(row.id) ?? [])
+        );
+      }
+    }
+
+    // Every event inside the window, read once: the two rollups slice it differently.
+    const events = (
+      this.db
+        .query(
+          `SELECT * FROM activities
+           WHERE (? IS NULL OR occurred_at >= ?)
+           ORDER BY occurred_at DESC, rowid DESC`
+        )
+        .all(since, since) as ActivityRow[]
+    ).map(toActivity);
+
+    // ---------------------------------------------------------------------------- people
+    const people = this.db
+      .query("SELECT * FROM people ORDER BY display_name COLLATE NOCASE ASC")
+      .all() as PersonRow[];
+    const idByAccount = new Map<string, string>();
+    for (const row of people) {
+      if (row.nakama_user_id) {
+        idByAccount.set(row.nakama_user_id, row.id);
+      }
+    }
+
+    const activityByPerson = new Map<string, Activity[]>();
+    for (const event of events) {
+      const personId = event.actorId
+        ? idByAccount.get(event.actorId)
+        : undefined;
+      if (!personId) {
+        continue;
+      }
+      const own = activityByPerson.get(personId) ?? [];
+      if (own.length < DEFAULT_ROLLUP_ACTIVITY_LIMIT) {
+        own.push(event);
+        activityByPerson.set(personId, own);
+      }
+    }
+    // "Last activity" ignores the window on purpose: someone whose last event was three weeks ago has
+    // not recorded nothing, and the page should not imply they had.
+    const lastByAccount = new Map<string, string>();
+    for (const row of this.db
+      .query(
+        "SELECT actor_id, max(occurred_at) AS last FROM activities WHERE actor_id <> '' GROUP BY actor_id"
+      )
+      .all() as Array<{ actor_id: string; last: string }>) {
+      lastByAccount.set(row.actor_id, row.last);
+    }
+
+    const axesByPerson = new Map<string, AxisScan[]>();
+    for (const row of this.db
+      .query("SELECT person_id, axis_id FROM axis_people")
+      .all() as Array<{ axis_id: string; person_id: string }>) {
+      const axis = scans.get(row.axis_id);
+      if (!axis) {
+        continue;
+      }
+      const own = axesByPerson.get(row.person_id) ?? [];
+      own.push(axis);
+      axesByPerson.set(row.person_id, own);
+    }
+
+    const involvementsByPerson = new Map<
+      string,
+      Map<string, PersonTopicInvolvement>
+    >();
+    // Topic links first: someone can be on a topic without being on any of its axes.
+    for (const row of this.db
+      .query("SELECT person_id, topic_id, role FROM topic_people")
+      .all() as Array<{ person_id: string; role: string; topic_id: string }>) {
+      const topic = topicRefs.get(row.topic_id);
+      if (!(topic && visible(row.topic_id))) {
+        continue;
+      }
+      const own =
+        involvementsByPerson.get(row.person_id) ??
+        new Map<string, PersonTopicInvolvement>();
+      own.set(row.topic_id, { axes: [], role: row.role, topic });
+      involvementsByPerson.set(row.person_id, own);
+    }
+    // Then the axes, which may name a topic the person was never linked to directly.
+    for (const [personId, own] of axesByPerson) {
+      const involvements =
+        involvementsByPerson.get(personId) ??
+        new Map<string, PersonTopicInvolvement>();
+      for (const axis of own) {
+        const topic = topicRefs.get(axis.topicId);
+        if (!topic) {
+          continue;
+        }
+        const entry = involvements.get(axis.topicId) ?? {
+          axes: [],
+          role: "",
+          topic,
+        };
+        entry.axes.push(axis);
+        involvements.set(axis.topicId, entry);
+      }
+      involvementsByPerson.set(personId, involvements);
+    }
+
+    const personRollups: PersonRollup[] = people.slice(0, limit).map((row) => {
+      const person = toPerson(row);
+      const own = (axesByPerson.get(person.id) ?? []).sort(
+        compareAxesForAttention
+      );
+      const reviewed = own
+        .map((axis) => axis.lastReviewedAt)
+        .filter((value): value is string => Boolean(value));
+      return {
+        attributable: Boolean(person.nakamaUserId),
+        axes: own,
+        axisCounts: countAxesByState(own),
+        lastActivityAt: person.nakamaUserId
+          ? (lastByAccount.get(person.nakamaUserId) ?? null)
+          : null,
+        lastReviewedAt:
+          reviewed.length > 0 ? (reviewed.sort().at(-1) ?? null) : null,
+        person,
+        recentActivity: activityByPerson.get(person.id) ?? [],
+        topics: [...(involvementsByPerson.get(person.id)?.values() ?? [])]
+          .map((entry) => ({
+            ...entry,
+            axes: entry.axes.sort(compareAxesForAttention),
+          }))
+          .sort((a, b) => a.topic.name.localeCompare(b.topic.name)),
+      };
+    });
+
+    // ---------------------------------------------------------------------- repositories
+    /**
+     * axisId → the repositories that axis names, so an event recorded against an axis alone still
+     * belongs to the codebase that axis points at. (The map below is the other direction: the axes a
+     * repository has, which is what the rollup's axis list reads.)
+     */
+    const repositoryIdsByAxis = new Map<string, string[]>();
+    const axisIdsByRepository = new Map<string, string[]>();
+    for (const [axisId, linked] of repositoriesByAxis) {
+      repositoryIdsByAxis.set(
+        axisId,
+        linked.map((repository) => repository.id)
+      );
+      for (const repository of linked) {
+        const own = axisIdsByRepository.get(repository.id) ?? [];
+        own.push(axisId);
+        axisIdsByRepository.set(repository.id, own);
+      }
+    }
+
+    const activityByRepository = new Map<string, Activity[]>();
+    const addRepositoryEvent = (repositoryId: string, event: Activity): void => {
+      const own = activityByRepository.get(repositoryId) ?? [];
+      if (
+        own.length < DEFAULT_ROLLUP_ACTIVITY_LIMIT &&
+        !own.some((item) => item.id === event.id)
+      ) {
+        own.push(event);
+        activityByRepository.set(repositoryId, own);
+      }
+    };
+    for (const event of events) {
+      if (event.repositoryId) {
+        addRepositoryEvent(event.repositoryId, event);
+      }
+      // An event recorded against an axis also belongs to the codebase that axis names, even when the
+      // recorder only filled in the axis. This is the common case: an activity recorder names the work,
+      // not the repository, and the link is what makes the repository view show anything at all.
+      for (const repositoryId of repositoryIdsByAxis.get(event.axisId ?? "") ??
+        []) {
+        addRepositoryEvent(repositoryId, event);
+      }
+    }
+
+    const lastByRepository = new Map<string, string>();
+    const noteLast = (repositoryId: string, at: string): void => {
+      const current = lastByRepository.get(repositoryId);
+      if (!current || at > current) {
+        lastByRepository.set(repositoryId, at);
+      }
+    };
+    for (const row of this.db
+      .query(
+        `SELECT repository_id, max(occurred_at) AS last FROM activities
+         WHERE repository_id IS NOT NULL GROUP BY repository_id`
+      )
+      .all() as Array<{ last: string; repository_id: string }>) {
+      noteLast(row.repository_id, row.last);
+    }
+    for (const row of this.db
+      .query(
+        `SELECT ar.repository_id AS repository_id, max(x.occurred_at) AS last
+         FROM activities x JOIN axis_repositories ar ON ar.axis_id = x.axis_id
+         GROUP BY ar.repository_id`
+      )
+      .all() as Array<{ last: string; repository_id: string }>) {
+      noteLast(row.repository_id, row.last);
+    }
+
+    const topicsByRepository = new Map<
+      string,
+      Array<{ relationship: Relationship; topic: TopicRef }>
+    >();
+    for (const row of this.db
+      .query("SELECT topic_id, repository_id, relationship FROM topic_repositories")
+      .all() as Array<{
+      relationship: string;
+      repository_id: string;
+      topic_id: string;
+    }>) {
+      const topic = topicRefs.get(row.topic_id);
+      if (!(topic && visible(row.topic_id))) {
+        continue;
+      }
+      const own = topicsByRepository.get(row.repository_id) ?? [];
+      own.push({ relationship: row.relationship as Relationship, topic });
+      topicsByRepository.set(row.repository_id, own);
+    }
+    const compareTopicLinks = (
+      a: { relationship: Relationship; topic: TopicRef },
+      b: { relationship: Relationship; topic: TopicRef }
+    ): number => {
+      const byPrimary =
+        Number(b.relationship === "primary") -
+        Number(a.relationship === "primary");
+      return byPrimary === 0
+        ? a.topic.name.localeCompare(b.topic.name)
+        : byPrimary;
+    };
+
+    const repositoryRows = this.db
+      .query("SELECT * FROM repositories ORDER BY full_name COLLATE NOCASE ASC")
+      .all() as RepositoryRow[];
+    const repositoryRollups: RepositoryRollup[] = repositoryRows
+      .slice(0, limit)
+      .map((row) => {
+        const repository = toRepository(row);
+        const own = (axisIdsByRepository.get(repository.id) ?? [])
+          .map((axisId) => scans.get(axisId))
+          .filter((axis): axis is AxisScan => Boolean(axis))
+          .sort(compareAxesForAttention);
+        return {
+          axes: own,
+          axisCounts: countAxesByState(own),
+          lastActivityAt: lastByRepository.get(repository.id) ?? null,
+          recentActivity: activityByRepository.get(repository.id) ?? [],
+          repository,
+          topics: (topicsByRepository.get(repository.id) ?? []).sort(
+            compareTopicLinks
+          ),
+        };
+      });
+
+    return {
+      people: personRollups,
+      peopleTruncated: people.length > limit,
+      repositories: repositoryRollups,
+      repositoriesTruncated: repositoryRows.length > limit,
+    };
   }
 
   /**

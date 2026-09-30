@@ -1,8 +1,8 @@
 # V2 plan — coordination model (topics → development axes → evidence)
 
 **Status:** in progress — **C0 (decisions), C1 (migration 002 + tests), C2 (store v2), C3 (action
-surface v2), C4 (overview UI) and C5 (topic detail) are done and verified**; C6 (people and repositories
-views) is next. See the status line at the end of each chunk.
+surface v2), C4 (overview UI), C5 (topic detail) and C6 (people and repositories views) are done and
+verified**; C7 (optimistic concurrency end-to-end) is next. See the status line at the end of each chunk.
 **Input:** [`reviews/2026-09-30-v2-structural-redesign.md`](reviews/2026-09-30-v2-structural-redesign.md)
 (external review of V1, kept verbatim; §16 lists its suggested sequence).
 **Written:** 2026-09-30, checked against Nakama v0.4.31 and this repo at `8688a08`.
@@ -22,8 +22,8 @@ in-tree copy on the Nakama clone's `research-dashboard` branch are **not** touch
    **D6** is resolved too (real topic names are genericised throughout, screenshots included).
 3. Work §6 in order. Each chunk is self-contained: deliverable, files, acceptance test, evidence
    command, dependencies. Do not start a chunk whose dependencies are unmet — most of the risk here
-   is in the seams between chunks, not inside them. **C1–C5 are done; start at C6** (people and
-   repositories views).
+   is in the seams between chunks, not inside them. **C1–C6 are done; start at C7** (optimistic
+   concurrency end-to-end).
    The gen-1 surface is gone — `src/actions.ts` is the v2 surface, `src/ui.tsx` renders the overview
    on top of it, and the shipped `research-coordinator` skill documents its five tools.
 4. Reinstall on the dev instance to exercise migrations end-to-end (`plugin-smoke.sh`).
@@ -550,14 +550,50 @@ a working conflict banner read as missing — worth knowing when an assertion "f
 looks right. And the C4 count-line regex was `repositories?`, which matches "repositorie(s)" but not the
 singular "1 repository" `countLabel` produces.
 
-### C6 — People and Repositories views · depends on C5 · review steps 7, 11, 12
+### C6 — People and Repositories views · depends on C5 · review steps 7, 11, 12 · **done 2026-09-30**
 
-Deliverable: two internal views of the same page (the platform allows exactly one page slot, so these
-are tabs/routes inside it). People: what this person is working on now + recent activity. Repositories:
-which topics the repo supports, which axes/branches it carries, recent activity.
+Deliverable: the other two views of the same page (the platform allows exactly one page slot, so they are
+views inside it, switched in the header: **Topics · People · Repositories**). People is person-first — a
+compact index on the left ("3 active · 1 blocked · 2 axes · 2 topics"), the selected person's work on the
+right. Repositories is the same shape, repository-first.
 
-Acceptance: the people list answers "what is X working on" in one query; a repo serving two topics
-shows both; people/repo filters compose with the C4 window.
+The review settled the open layout question (**person-first** — the dashboard answers "what is each person
+working on", not "which topics contain this name") and set the rules this chunk follows: factual
+involvement only, **no workload scoring, percentages, utilization or ranking**; read-only first; and the
+acceptance test that a person on several topics/axes is **one row** with their involvement grouped
+underneath.
+
+| Check | Evidence |
+|---|---|
+| One person is one row, grouped | Store test: a person on two topics and two axes yields one entry whose `topics[].axes` carry only *their* axes; the harness reads the rendered index and finds exactly one row named `Researcher A`, with two involvement blocks |
+| Every person the header counts is listed once | Harness: the index length equals the header's "N people", with no duplicated name |
+| Attribution is narrow, and says when it cannot attribute | Store test: an event belongs only to the person whose account wrote it; an unmapped actor's event belongs to nobody; a person without an account reports `attributable: false`, a null `lastActivityAt` and the panel says *"That is a missing link, not an absence of work"* instead of an empty log |
+| Repository-first, three questions | Store test + harness: the topics it **supports** (declared link, `primary` first), the axes **naming it** in attention order with branch/PR/blocker, and the activity recorded against it **or against one of its axes** |
+| No new tool, no new schema | `get_overview` carries both rollups (the actions test asserts the grouped shapes in the same response); the manifest still declares C3's five tools, only `get_overview`'s description changed; migration 002 is still the newest |
+| The window composes, absolutes stay absolute | Store test: `activitySinceDays` windows the event list while "last activity"/"last reviewed" stay absolute — a person quiet for a month is not shown as never having recorded anything |
+| Truncation is reported, never silent | `people`/`repositories` cap at `MAX_ROLLUP_LIMIT` with `peopleTruncated`/`repositoriesTruncated` flags (store test) |
+| Archived work stays hidden | Rollups obey the same `includeArchived` rule as the topic list |
+
+Payload cost: the rollups carry a lean axis projection (`AxisScan` — no description, no confidence
+metadata) instead of a second copy of `AxisOverview`, so the one call that now serves three views does not
+double in size.
+
+Evidence: 72 store/action tests pass (4 new C6 store tests, the actions test extended); `plugin-smoke.sh`
+31/31 (3 new); the page harness is 34 read checks and 46 with `--write` (6 new); screenshots
+`docs/screenshots/dashboard-people.png` and `docs/screenshots/dashboard-repositories.png`; installed
+release `0.2.0+dev.8dfb2b80838e`.
+
+One real bug, found by *looking at the rendered page* rather than at the tests:
+
+1. **An event recorded against an axis never reached its codebase.** The repository activity path looked
+   the axis→repository relation up the wrong way round, so only events that filled in a repository
+   explicitly (rare) showed up. The demo panel said "last activity today" and "Nothing recorded in the
+   7 days" at once — the tell. Fixed, with the axis-only case now a store test. The general lesson: the
+   read models were asserted on the shape I *seeded*, and the seeded shape was the easy one.
+
+Also a data finding: the demo seed linked people only at topic level, so the first People view showed
+topics with no axes under them. The seed now links people to the axes they work on (a fixture fix — the
+axis-level link path already worked, as the smoke fixture proves).
 
 ### C7 — Optimistic concurrency end-to-end + multi-user test · depends on C5 · review steps 8, 9
 

@@ -20,14 +20,19 @@ here: `vendor/` holds the recipe that puts the plugin into a checkout, because N
 >
 > **The V2 rework this review triggered is planned in [`docs/V2-PLAN.md`](docs/V2-PLAN.md)** — chunked
 > work packages with acceptance tests, the platform facts that changed three points of the proposal,
-> and the open decisions. **Progress: C0–C5 are done** — migration 002 applied and verified on a live
+> and the open decisions. **Progress: C0–C6 are done** — migration 002 applied and verified on a live
 > instance, the store rewritten around the new model (rollback, version-conflict and cross-process
 > contention tests), the action surface rebuilt as **five exposed agent tools** over one atomic write
 > path, the **overview** now the default screen (one card per topic, axes grouped under it in
-> attention order, an activity window that is a query parameter), and the **topic detail** now carrying
+> attention order, an activity window that is a query parameter), the **topic detail** now carrying
 > the depth: every axis with its full metadata and per-claim confidence, its own history and notes
 > expanding inside it, an evidence line in words beside each inferred claim, and the correction form
-> that refuses a stale write in place instead of overwriting it (`bun run check` → 68 pass).
+> that refuses a stale write in place instead of overwriting it, and the other two views of the same
+> payload now switched in the header: **People** (person-first — a compact index, the selected
+> person's topics and axes, and only the activity that can actually be attributed to their account)
+> and **Repositories** (repository-first — what it supports, the axes naming it, its recorded events).
+> One person on several topics is one row with their involvement grouped underneath; nothing is scored
+> or ranked (`bun run check` → 72 pass).
 > What the agent side actually does is checked against the
 > platform, not the manifest: `GET /v1/tools` lists exactly the five tool rows, and a live three-turn
 > run used all five (`find_tools` → `get_overview`; `find_tools` → `search_dashboard` ∥ `get_topic` →
@@ -56,9 +61,9 @@ here: `vendor/` holds the recipe that puts the plugin into a checkout, because N
 
 The page as it renders today (a seeded demo dataset, not real group data):
 
-| ![overview on load](docs/screenshots/dashboard.png) | ![a topic card expanded](docs/screenshots/dashboard-detail.png) | ![command palette route](docs/screenshots/navigation.png) |
-|---|---|---|
-| `dashboard.png` — the overview: one card per topic, axes grouped under it in attention order (blocked first), people, state counts, repo/branch/PR line, blocker and a recent-activity summary. The window control is the only query-level control. | `dashboard-detail.png` — a topic expanded: the whole detail in one `get_topic` call — description and approved summary, counts, corrections/notes kept apart from the activity log, and every axis with its full metadata, per-claim confidence, evidence line and its own history and notes behind `History (n)` | `navigation.png` — how a member reaches it: command palette → Plugins → Research (no sidebar entry in v0.4.31) |
+| ![overview on load](docs/screenshots/dashboard.png) | ![a topic card expanded](docs/screenshots/dashboard-detail.png) | ![the People view](docs/screenshots/dashboard-people.png) | ![the Repositories view](docs/screenshots/dashboard-repositories.png) | ![command palette route](docs/screenshots/navigation.png) |
+|---|---|---|---|---|
+| `dashboard.png` — the overview: one card per topic, axes grouped under it in attention order (blocked first), people, state counts, repo/branch/PR line, blocker and a recent-activity summary. The window control is the only query-level control. | `dashboard-detail.png` — a topic expanded: the whole detail in one `get_topic` call — description and approved summary, counts, corrections/notes kept apart from the activity log, and every axis with its full metadata, per-claim confidence, evidence line and its own history and notes behind `History (n)` | `dashboard-people.png` — the People view (C6), person-first: the index on the left, the selected person's topics with their own axes on the right. Activity is listed only where the store can attribute it, and a person with no mapped account says so instead of showing an empty log. | `dashboard-repositories.png` — the Repositories view (C6), repository-first: the topics it supports (declared link), the axes naming it, and the events recorded against it or against one of those axes. | `navigation.png` — how a member reaches it: command palette → Plugins → Research (no sidebar entry in v0.4.31) |
 
 ## Why not published to npm
 
@@ -91,7 +96,7 @@ nakama.plugin.json      manifest: actions, skill, migration, UI entry, schemas
 migrations/             SQL applied to the organization's plugin database generation
 src/store.ts            bun:sqlite data access (topics, axes, repositories, people, activities, annotations)
 src/actions.ts          the action surface: five agent tools + page/admin actions, no transaction logic
-src/ui.tsx              the single plugin page: the overview (C4) with the editing surface underneath
+src/ui.tsx              the single plugin page: the three views (C4 overview, C5 topic detail, C6 people/repositories) with the editing surface underneath
 src/store.test.ts       store tests (migrations applied, no host)
 src/actions.test.ts     action + manifest tests (result shapes, provenance, schema allowlist)
 skills/research-coordinator/SKILL.md   what the agent is told about this plugin
@@ -149,8 +154,9 @@ imply from `plugin_<id>__<key>`. Quote the underscore form in skills and prompts
 ## Scope
 
 Deliberately thin: the coordination tables (`topics`, `development_axes`, repositories, people, link
-tables, `activities`, `annotations`), five agent tools over one atomic write path, one page. The
-page's V2 overview (C4) and its editing surface are in; provenance marking in the UI (C8), topic
-detail (C5), people/repository views (C6), the optimistic-concurrency round-trip (C7) and
-GitHub/repository automation (C11) are **not** — see `docs/V2-PLAN.md`. `topics.summary` is the only
-place an interpretation lives, and it is meant to be human-approved.
+tables, `activities`, `annotations`), five agent tools over one atomic write path, one page. All three
+views are in — the C4 overview with its editing surface, the C5 topic detail, and the C6 people and
+repositories views, which are read-only and ride the same `get_overview` call; provenance marking in the
+UI (C8), the optimistic-concurrency round-trip (C7) and GitHub/repository automation (C11) are **not** —
+see `docs/V2-PLAN.md`. `topics.summary` is the only place an interpretation lives, and it is meant to be
+human-approved.
