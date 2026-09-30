@@ -69,3 +69,5 @@ Then put the instance back the way you found it (wipe at row level, re-seed `doc
   fixture convenience, not a naming convention for real data.
 - **Not a substitute for the corpus.** If a claim can be checked against the real dataset, check it
   there.
+- **`Fixture Alpha` carries the dev instance's own actor id** (`user_admin`, the same id the corpus
+  transcript shows). That is what makes the person *attributable*; no personal account is referenced.
