@@ -710,6 +710,55 @@ describe("ResearchStore repositories and people", () => {
       "researcher-b"
     );
   });
+
+  test("reconcile attaches a bare display name to the same person, not a new one each call", () => {
+    const { path, store } = openStore();
+    const topic = store.createTopic({ name: "Signal Processing" });
+    // The librarian's form: a name from the conversation, no account identity. Reconciling the same
+    // topic twice must not multiply the person — the overview lists the people tagged to a topic.
+    const reconcile = () =>
+      store.reconcileTopic({
+        axes: [
+          {
+            people: [{ displayName: "Researcher A" }],
+            title: "Signal explorer",
+          },
+        ],
+        people: [{ displayName: "Researcher A", role: "owner" }],
+        topicId: topic.id,
+      });
+
+    expect(reconcile().created.people).toBe(1);
+    expect(reconcile().created.people).toBe(0);
+
+    expect(count(path, "people")).toBe(1);
+    expect(count(path, "topic_people")).toBe(1);
+    expect(count(path, "axis_people")).toBe(1);
+    expect(
+      store.listTopicPeople(topic.id).map((person) => person.displayName)
+    ).toEqual(["Researcher A"]);
+  });
+
+  test("a name is still not an identity: the primitive registers, and an ambiguous link refuses", () => {
+    const { store } = openStore();
+    // `registerPerson` maps an account to a person; two people may legitimately share a display name,
+    // so the primitive keeps creating rows for a bare name.
+    expect(store.registerPerson({ displayName: "Researcher A" }).created).toBe(
+      true
+    );
+    expect(store.registerPerson({ displayName: "Researcher A" }).created).toBe(
+      true
+    );
+
+    // Once the name is ambiguous the link path refuses instead of guessing or adding a third row.
+    const topic = store.createTopic({ name: "Signal Processing" });
+    expect(() =>
+      store.reconcileTopic({
+        people: [{ displayName: "Researcher A" }],
+        topicId: topic.id,
+      })
+    ).toThrow(/2 people are named/);
+  });
 });
 
 describe("ResearchStore overview and search", () => {
@@ -766,6 +815,129 @@ describe("ResearchStore overview and search", () => {
     expect(overview.recentActivity[0]?.summary).toBe("sweep queued");
     expect(overview.recentTopics).toHaveLength(2);
     expect(overview.generatedAt).toBeTruthy();
+
+    // The front page proper (C4): axes grouped under their topic, not one flat list across the board.
+    expect(overview.topics).toHaveLength(2);
+    const signal = overview.topics.find(
+      (entry) => entry.topic.name === "Signal Processing"
+    );
+    expect(signal?.axisCounts).toMatchObject({ active: 1, blocked: 1 });
+    // Blocked work is listed before ongoing work, whatever order the rows were written in.
+    expect(signal?.axes.map((axis) => axis.title)).toEqual([
+      "Rig control",
+      "Parameter automation",
+    ]);
+    expect(signal?.people.map((person) => person.displayName)).toEqual([
+      "Researcher A",
+    ]);
+    expect(signal?.repositories[0]?.fullName).toBe("group/processing-pipeline");
+    // "Recent: 1 event · last activity today" — the summary line the card shows.
+    expect(signal?.activityCount).toBe(1);
+    expect(signal?.lastActivityAt).toBeTruthy();
+    // A topic carrying a blocker leads the page.
+    expect(overview.topics[0]?.topic.name).toBe("Signal Processing");
+    // A topic with no axes still gets a card, with empty counts rather than a missing row.
+    expect(overview.topics[1]?.axes).toEqual([]);
+    expect(overview.topics[1]?.axisCounts.blocked).toBe(0);
+  });
+
+  test("groups axes under their topic in attention order", () => {
+    const { store } = openStore();
+    const topic = store.createTopic({ name: "Signal Processing" });
+    // Written in an order that is not the display order, so the assertion cannot pass by accident.
+    // Nothing backs these states, so they are labelled honestly instead of claimed as confirmed.
+    store.reconcileTopic({
+      axes: [
+        {
+          state: "parked",
+          stateConfidence: "inferred",
+          title: "Parked exploration",
+        },
+        {
+          state: "completed",
+          stateConfidence: "inferred",
+          title: "Finished sweep",
+        },
+      ],
+      topicId: topic.id,
+    });
+    store.reconcileTopic({
+      axes: [
+        {
+          state: "draft",
+          stateConfidence: "inferred",
+          title: "Draft proposal",
+        },
+        {
+          state: "abandoned",
+          stateConfidence: "inferred",
+          title: "Dropped idea",
+        },
+      ],
+      topicId: topic.id,
+    });
+    store.reconcileTopic({
+      // The annotation is the evidence the blocked claim needs, in the same call.
+      annotations: [{ axisTitle: "Blocked rig", text: "waiting on the rig" }],
+      axes: [
+        { blocker: "rig firmware", state: "blocked", title: "Blocked rig" },
+      ],
+      topicId: topic.id,
+    });
+    store.reconcileTopic({
+      axes: [{ title: "Live work" }],
+      topicId: topic.id,
+    });
+
+    const entry = store.getOverview().topics[0];
+    expect(entry?.axes.map((axis) => axis.state)).toEqual([
+      "blocked",
+      "active",
+      "draft",
+      "parked",
+      "completed",
+      "abandoned",
+    ]);
+  });
+
+  test("hides archived topics from the front page unless asked, and windows activity", () => {
+    const { store } = openStore();
+    const live = store.createTopic({ name: "Signal Processing" });
+    const retired = store.createTopic({ name: "Retired direction" });
+    store.reconcileTopic({
+      topic: { status: "archived" },
+      topicId: retired.id,
+    });
+    const longAgo = new Date(
+      Date.now() - 45 * 24 * 60 * 60 * 1000
+    ).toISOString();
+    store.addActivity({
+      occurredAt: longAgo,
+      summary: "old run",
+      topicId: live.id,
+    });
+    store.addActivity({ summary: "recent run", topicId: live.id });
+
+    const front = store.getOverview();
+    expect(front.topics.map((entry) => entry.topic.name)).toEqual([
+      "Signal Processing",
+    ]);
+    expect(front.topics[0]?.activityCount).toBe(1); // only the event inside the 14-day window
+    expect(front.topics[0]?.lastActivityAt).toBeTruthy();
+
+    const archived = store.getOverview({ includeArchived: true });
+    expect(archived.topics).toHaveLength(2);
+
+    // `0` is the "all time" window the page's last control sends: no lower bound at all.
+    const allTime = store.getOverview({
+      activitySinceDays: 0,
+      includeArchived: true,
+    });
+    expect(allTime.activitySinceDays).toBe(0);
+    expect(
+      allTime.topics.find((entry) => entry.topic.name === "Signal Processing")
+        ?.activityCount
+    ).toBe(2);
   });
 
   test("treats activitySinceDays as a query parameter, not stored state", () => {

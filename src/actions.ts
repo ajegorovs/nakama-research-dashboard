@@ -220,12 +220,14 @@ async function dispatch(
       return {
         ok: true,
         ...store.getOverview({
+          // 0 is "all time"; the window is a query parameter, never stored state.
           activitySinceDays: optionalInt(
             input.activitySinceDays,
             "activitySinceDays",
-            1,
+            0,
             365
           ),
+          includeArchived: input.includeArchived === true,
           limit: optionalInt(input.limit, "limit", 1, 50),
         }),
       };

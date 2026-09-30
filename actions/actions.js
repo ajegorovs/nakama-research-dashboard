@@ -160,6 +160,40 @@ function toAnnotation(row) {
     topicId: row.topic_id
   };
 }
+var AXIS_STATE_ATTENTION = {
+  abandoned: 5,
+  active: 1,
+  blocked: 0,
+  completed: 4,
+  draft: 2,
+  parked: 3
+};
+var TOPIC_STATUS_ATTENTION = {
+  active: 0,
+  archived: 3,
+  completed: 2,
+  paused: 1
+};
+function compareAxesForAttention(a, b) {
+  const byState = AXIS_STATE_ATTENTION[a.state] - AXIS_STATE_ATTENTION[b.state];
+  if (byState !== 0) {
+    return byState;
+  }
+  const byUpdated = b.updatedAt.localeCompare(a.updatedAt);
+  return byUpdated === 0 ? a.title.localeCompare(b.title) : byUpdated;
+}
+function compareTopicsForAttention(a, b) {
+  const byStatus = TOPIC_STATUS_ATTENTION[a.topic.status] - TOPIC_STATUS_ATTENTION[b.topic.status];
+  if (byStatus !== 0) {
+    return byStatus;
+  }
+  const byBlocked = Number(b.axisCounts.blocked > 0) - Number(a.axisCounts.blocked > 0);
+  if (byBlocked !== 0) {
+    return byBlocked;
+  }
+  const byUpdated = b.topic.updatedAt.localeCompare(a.topic.updatedAt);
+  return byUpdated === 0 ? a.topic.name.localeCompare(b.topic.name) : byUpdated;
+}
 var NO_CLAIMS = new Set;
 function assertedClaims(input) {
   return new Set(input.state === undefined ? [] : ["state"]);
@@ -320,7 +354,9 @@ class ResearchStore {
   getOverview(options) {
     return this.snapshot(() => {
       const activitySinceDays = options?.activitySinceDays ?? 14;
+      const includeArchived = options?.includeArchived ?? false;
       const limit = clampLimit(options?.limit, 10, 50);
+      const since = activitySinceDays > 0 ? isoDaysAgo(activitySinceDays) : null;
       const topicsByStatus = Object.fromEntries(TOPIC_STATUSES.map((status) => [status, 0]));
       for (const row of this.db.query("SELECT status, count(*) AS n FROM topics GROUP BY status").all()) {
         if (isTopicStatus(row.status)) {
@@ -358,11 +394,79 @@ class ResearchStore {
         generatedAt: nowIso(),
         recentActivity: this.listActivity({
           limit: 25,
-          sinceDays: activitySinceDays
+          sinceDays: activitySinceDays > 0 ? activitySinceDays : undefined
         }),
-        recentTopics: this.db.query("SELECT * FROM topics ORDER BY updated_at DESC, name ASC LIMIT ?").all(limit).map(toTopic)
+        recentTopics: this.db.query("SELECT * FROM topics ORDER BY updated_at DESC, name ASC LIMIT ?").all(limit).map(toTopic),
+        topics: this.topicOverviews(includeArchived, since)
       };
     });
+  }
+  topicOverviews(includeArchived, since) {
+    const axesByTopic = new Map;
+    const repositoriesByAxis = new Map;
+    for (const row of this.db.query(`SELECT l.axis_id AS axis_id, r.*, l.relationship AS relationship
+         FROM axis_repositories l JOIN repositories r ON r.id = l.repository_id
+         ORDER BY (l.relationship = 'primary') DESC, r.full_name COLLATE NOCASE ASC`).all()) {
+      const linked = repositoriesByAxis.get(row.axis_id) ?? [];
+      linked.push({
+        ...toRepository(row),
+        relationship: row.relationship
+      });
+      repositoriesByAxis.set(row.axis_id, linked);
+    }
+    for (const row of this.db.query("SELECT * FROM development_axes").all()) {
+      const axis = toAxis(row);
+      const grouped = axesByTopic.get(axis.topicId) ?? [];
+      grouped.push({
+        ...axis,
+        repositories: repositoriesByAxis.get(axis.id) ?? []
+      });
+      axesByTopic.set(axis.topicId, grouped);
+    }
+    const peopleByTopic = new Map;
+    for (const row of this.db.query(`SELECT l.topic_id AS topic_id, p.*, l.role AS role
+         FROM topic_people l JOIN people p ON p.id = l.person_id
+         ORDER BY p.display_name COLLATE NOCASE ASC`).all()) {
+      const linked = peopleByTopic.get(row.topic_id) ?? [];
+      linked.push({ ...toPerson(row), role: row.role });
+      peopleByTopic.set(row.topic_id, linked);
+    }
+    const repositoriesByTopic = new Map;
+    for (const row of this.db.query(`SELECT l.topic_id AS topic_id, r.*, l.relationship AS relationship
+         FROM topic_repositories l JOIN repositories r ON r.id = l.repository_id
+         ORDER BY (l.relationship = 'primary') DESC, r.full_name COLLATE NOCASE ASC`).all()) {
+      const linked = repositoriesByTopic.get(row.topic_id) ?? [];
+      linked.push({
+        ...toRepository(row),
+        relationship: row.relationship
+      });
+      repositoriesByTopic.set(row.topic_id, linked);
+    }
+    const activityByTopic = new Map;
+    for (const row of this.db.query(`SELECT topic_id,
+                sum(CASE WHEN ? IS NULL OR occurred_at >= ? THEN 1 ELSE 0 END) AS n,
+                max(occurred_at) AS last
+         FROM activities WHERE topic_id IS NOT NULL
+         GROUP BY topic_id`).all(since, since)) {
+      activityByTopic.set(row.topic_id, { last: row.last, n: row.n });
+    }
+    return this.listTopics().filter((topic) => includeArchived || topic.status !== "archived").map((topic) => {
+      const axes = (axesByTopic.get(topic.id) ?? []).sort(compareAxesForAttention);
+      const axisCounts = Object.fromEntries(AXIS_STATES.map((state) => [state, 0]));
+      for (const axis of axes) {
+        axisCounts[axis.state] += 1;
+      }
+      const activity = activityByTopic.get(topic.id);
+      return {
+        activityCount: activity?.n ?? 0,
+        axes,
+        axisCounts,
+        lastActivityAt: activity?.last ?? null,
+        people: peopleByTopic.get(topic.id) ?? [],
+        repositories: repositoriesByTopic.get(topic.id) ?? [],
+        topic
+      };
+    }).sort(compareTopicsForAttention);
   }
   searchDashboard(options) {
     const query = required(options.query, "query");
@@ -639,7 +743,7 @@ class ResearchStore {
       const activities = [];
       const annotations = [];
       for (const person of input.people ?? []) {
-        const result = this.upsertPerson(person);
+        const result = this.resolvePersonForLink(person);
         if (result.created) {
           created.people += 1;
         }
@@ -680,7 +784,7 @@ class ResearchStore {
           this.linkRepository("axis_repositories", "axis_id", axis.id, result.repository.id, repository.relationship ?? "supporting");
         }
         for (const person of axisInput.people ?? []) {
-          const result = this.upsertPerson(person);
+          const result = this.resolvePersonForLink(person);
           if (result.created) {
             created.people += 1;
           }
@@ -852,6 +956,20 @@ class ResearchStore {
       created: true,
       repository: this.getRepositoryByFullName(fullName)
     };
+  }
+  resolvePersonForLink(input) {
+    const displayName = required(input.displayName, "person.displayName");
+    const hasIdentity = Boolean(input.nakamaUserId?.trim() || input.githubLogin?.trim());
+    if (!hasIdentity) {
+      const matches = this.db.query("SELECT * FROM people WHERE display_name = ? COLLATE NOCASE").all(displayName);
+      if (matches.length === 1) {
+        return { created: false, person: toPerson(matches[0]) };
+      }
+      if (matches.length > 1) {
+        throw new ResearchStoreError(`${matches.length} people are named "${displayName}" \u2014 link the right one with a githubLogin or nakamaUserId.`);
+      }
+    }
+    return this.upsertPerson(input);
   }
   upsertPerson(input) {
     const displayName = required(input.displayName, "person.displayName");
@@ -1076,7 +1194,8 @@ async function dispatch(input, context, store) {
       return {
         ok: true,
         ...store.getOverview({
-          activitySinceDays: optionalInt(input.activitySinceDays, "activitySinceDays", 1, 365),
+          activitySinceDays: optionalInt(input.activitySinceDays, "activitySinceDays", 0, 365),
+          includeArchived: input.includeArchived === true,
           limit: optionalInt(input.limit, "limit", 1, 50)
         })
       };

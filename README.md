@@ -1,7 +1,9 @@
 # Research dashboard — Nakama plugin
 
-A dashboard page plus agent tools over **shared project + activity state** for a self-hosted Nakama
-instance. One page (project list + detail), five actions, one skill, org-scoped SQLite storage.
+A dashboard page plus agent tools over **shared coordination state** — topics, development axes and
+the evidence attached to them — for a self-hosted Nakama instance. One page (the overview, with the
+editing surface underneath it), eight actions of which **five are agent tools**, one skill,
+org-scoped SQLite storage.
 
 This repository is the **source of truth** for the plugin. The Nakama server tree is not vendored
 here: `vendor/` holds the recipe that puts the plugin into a checkout, because Nakama's bundled
@@ -18,10 +20,12 @@ here: `vendor/` holds the recipe that puts the plugin into a checkout, because N
 >
 > **The V2 rework this review triggered is planned in [`docs/V2-PLAN.md`](docs/V2-PLAN.md)** — chunked
 > work packages with acceptance tests, the platform facts that changed three points of the proposal,
-> and the open decisions. **Progress: C0–C3 are done** — migration 002 applied and verified on a live
+> and the open decisions. **Progress: C0–C4 are done** — migration 002 applied and verified on a live
 > instance, the store rewritten around the new model (rollback, version-conflict and cross-process
-> contention tests), and the action surface rebuilt as **five exposed agent tools** over one atomic
-> write path (`bun run check` → 57 pass). What the agent side actually does is checked against the
+> contention tests), the action surface rebuilt as **five exposed agent tools** over one atomic write
+> path, and the **overview** now the default screen: one card per topic, axes grouped under it in
+> attention order, an activity window that is a query parameter (`bun run check` → 61 pass).
+> What the agent side actually does is checked against the
 > platform, not the manifest: `GET /v1/tools` lists exactly the five tool rows, and a live three-turn
 > run used all five (`find_tools` → `get_overview`; `find_tools` → `search_dashboard` ∥ `get_topic` →
 > `reconcile_topic`; `find_tools` → `get_topic` → `search_dashboard` → `record_activity`) with both
@@ -37,14 +41,20 @@ here: `vendor/` holds the recipe that puts the plugin into a checkout, because N
 > one of our claims was corrected — the platform *does* validate `inputSchema` at runtime. The last
 > open item (real topic names in a public repo) was resolved the same day: every example — docs, test
 > fixtures and the screenshots — now uses neutral data.
+>
+> **Answered again after C3** — the two questions the C3 handoff left open
+> ([`docs/reviews/2026-09-30-c4-c8-answers.md`](docs/reviews/2026-09-30-c4-c8-answers.md)): a manual
+> status change carries an **optional** note (D8, C8's work), and the overview presents **axes grouped
+> under topics** with `blocked → active → draft → parked → completed → abandoned` ordering (D9, which
+> shaped C4). Neither needed a schema change.
 
 ## Current look
 
 The page as it renders today (a seeded demo dataset, not real group data):
 
-| ![page on load](docs/screenshots/dashboard.png) | ![project selected](docs/screenshots/dashboard-detail.png) | ![command palette route](docs/screenshots/navigation.png) |
+| ![overview on load](docs/screenshots/dashboard.png) | ![a topic card expanded](docs/screenshots/dashboard-detail.png) | ![command palette route](docs/screenshots/navigation.png) |
 |---|---|---|
-| `dashboard.png` — the page on load: project list, empty detail pane | `dashboard-detail.png` — a project selected: status control, description, approved summary, activity feed, record-activity form | `navigation.png` — how a member reaches it: command palette → Plugins → Research (no sidebar entry in v0.4.31) |
+| `dashboard.png` — the overview: one card per topic, axes grouped under it in attention order (blocked first), people, state counts, repo/branch/PR line, blocker and a recent-activity summary. The window control is the only query-level control. | `dashboard-detail.png` — a card expanded: the remaining axes plus the unchanged generation-1 editing surface (description, approved summary, status, activity feed and the record-activity form) | `navigation.png` — how a member reaches it: command palette → Plugins → Research (no sidebar entry in v0.4.31) |
 
 ## Why not published to npm
 
@@ -77,7 +87,7 @@ nakama.plugin.json      manifest: actions, skill, migration, UI entry, schemas
 migrations/             SQL applied to the organization's plugin database generation
 src/store.ts            bun:sqlite data access (topics, axes, repositories, people, activities, annotations)
 src/actions.ts          the action surface: five agent tools + page/admin actions, no transaction logic
-src/ui.tsx              the single plugin page (list + detail)
+src/ui.tsx              the single plugin page: the overview (C4) with the editing surface underneath
 src/store.test.ts       store tests (migrations applied, no host)
 src/actions.test.ts     action + manifest tests (result shapes, provenance, schema allowlist)
 skills/research-coordinator/SKILL.md   what the agent is told about this plugin
@@ -129,11 +139,14 @@ earlier by the host as `{"error":"invalid_input"}` (HTTP 400).
 ## Tool naming
 
 Agent tool names replace the hyphen in the plugin id with an underscore —
-`plugin_research_dashboard__list_projects`, not `plugin_research-dashboard__…` as the upstream docs
+`plugin_research_dashboard__get_overview`, not `plugin_research-dashboard__…` as the upstream docs
 imply from `plugin_<id>__<key>`. Quote the underscore form in skills and prompts.
 
 ## Scope
 
-Deliberately thin: two tables (`projects`, `activities`), five actions, one page. Blockers, people,
-review items and GitHub event ingestion are **not** implemented. `projects.summary` is the only place
-an interpretation lives, and it is meant to be human-approved.
+Deliberately thin: the coordination tables (`topics`, `development_axes`, repositories, people, link
+tables, `activities`, `annotations`), five agent tools over one atomic write path, one page. The
+page's V2 overview (C4) and its editing surface are in; provenance marking in the UI (C8), topic
+detail (C5), people/repository views (C6), the optimistic-concurrency round-trip (C7) and
+GitHub/repository automation (C11) are **not** — see `docs/V2-PLAN.md`. `topics.summary` is the only
+place an interpretation lives, and it is meant to be human-approved.

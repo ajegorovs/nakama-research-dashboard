@@ -1,8 +1,8 @@
 # V2 plan — coordination model (topics → development axes → evidence)
 
-**Status:** in progress — **C0 (decisions), C1 (migration 002 + tests), C2 (store v2) and C3 (action
-surface v2) are done and verified**; C4 (overview UI) is next. See the status line at the end of each
-chunk.
+**Status:** in progress — **C0 (decisions), C1 (migration 002 + tests), C2 (store v2), C3 (action
+surface v2) and C4 (overview UI) are done and verified**; C5 (topic detail) is next. See the status
+line at the end of each chunk.
 **Input:** [`reviews/2026-09-30-v2-structural-redesign.md`](reviews/2026-09-30-v2-structural-redesign.md)
 (external review of V1, kept verbatim; §16 lists its suggested sequence).
 **Written:** 2026-09-30, checked against Nakama v0.4.31 and this repo at `8688a08`.
@@ -22,9 +22,9 @@ in-tree copy on the Nakama clone's `research-dashboard` branch are **not** touch
    **D6** is resolved too (real topic names are genericised throughout, screenshots included).
 3. Work §6 in order. Each chunk is self-contained: deliverable, files, acceptance test, evidence
    command, dependencies. Do not start a chunk whose dependencies are unmet — most of the risk here
-   is in the seams between chunks, not inside them. **C1, C2 and C3 are done; start at C4** (the
-   overview UI). The gen-1 surface is gone — `src/actions.ts` is the v2 surface, `src/ui.tsx` speaks
-   it too, and the shipped `research-coordinator` skill documents its five tools.
+   is in the seams between chunks, not inside them. **C1–C4 are done; start at C5** (topic detail).
+   The gen-1 surface is gone — `src/actions.ts` is the v2 surface, `src/ui.tsx` renders the overview
+   on top of it, and the shipped `research-coordinator` skill documents its five tools.
 4. Reinstall on the dev instance to exercise migrations end-to-end (`plugin-smoke.sh`).
    `scratch/reinstall-002.sh` shows the shape of that call: the body needs
    `{"expectedRevision": <number>}` — the plugin detail's `revision` field is an integer, and a string
@@ -445,6 +445,65 @@ with a blocked axis is visually distinct; no personal identifiers beyond display
 itself entered.
 Evidence: `verify-plugin-page.mjs --write` + screenshots in `docs/screenshots/`.
 
+**Status: ✅ done (2026-09-30).** The default screen is the overview; the generation-1 list/detail pane
+survives underneath it as each card's expanded editor, which is where C5 and C8 deepen it.
+
+The reviewer answered the two open C8 questions before this chunk started
+([verbatim](reviews/2026-09-30-c4-c8-answers.md)), and both changed it:
+
+- **D8 — a manual status change carries an optional note.** Not required for every human edit, but the
+  UI must make a short rationale easy to attach, because the librarian reads annotations and should not
+  have to re-infer `blocked`. **C8 implements it** — this chunk keeps the existing status control
+  unchanged, deliberately, so C8 owns the write-side shape (the store's evidence rule is untouched).
+- **D9 — the overview groups axes under topics, never one flat list.** The scan order is topic name →
+  people → state counts (active/blocked/draft/parked) → the 2–4 most relevant axes → a recent-activity
+  summary → expand for all axes and history; axes order `blocked → active → draft → parked →
+  completed → abandoned`, most recently updated within each group. Implemented in `getOverview`'s
+  `topics` rollup and the page; **no schema change was needed**, as the reviewer expected.
+
+What landed:
+
+- `getOverview` returns a `topics` rollup — per topic: its `people`, `repositories`, `axisCounts`, its
+  axes **in attention order** with the repositories each touches, `activityCount` for the window and
+  `lastActivityAt` — built from a handful of grouped queries rather than a read per topic, because the
+  front page is one call by contract. `activitySinceDays` now accepts `0` as "all time", and
+  `includeArchived` keeps retired topics off the page until asked for.
+- `src/ui.tsx` renders it: header (title, window control, archived toggle, refresh, new-topic form,
+  count line), one card per topic in the D9 scan order, `data-rd-blocked` plus a red left border on a
+  topic carrying a blocker, and the expanded editor. The window control is the only thing that
+  re-queries.
+- Acceptance, all met (`bun run check` → **61 pass / 0 fail**; `plugin-smoke.sh` → **24/24**;
+  Reinstall → `0.2.0+dev.6e578ac51756`):
+
+| Check | Evidence |
+|---|---|
+| One `get_overview` call | The harness counts the action requests: exactly one `get_overview` (`{"activitySinceDays":14}`) on mount, and no `list_topics`/`list_activity` on first paint |
+| The window changes only the query | Clicking "7 days" produces exactly one further call with input `{"activitySinceDays":7}` and nothing else in the body |
+| Blocked is visually distinct | The card parses `data-rd-blocked="true"` and computes `border-left-width: 3px`; the non-blocked card is `false`/0 |
+| Axes grouped, not flat | Each card's text contains its own axis titles and none of another topic's |
+| Expand shows everything | "All 4 axes" yields 4 axis rows and removes the "N more axes hidden" hint |
+| Neutral data only | Seed, fixtures and screenshots use `Signal Processing` / `Acquisition Automation` / `Researcher A`-style placeholders |
+
+Two findings, both fixed rather than papered over:
+
+1. **`reconcile_topic` minted a new person row per call.** `upsertPerson` matched only on
+   `nakama_user_id`/`github_login`, so the librarian's natural form — `people: [{displayName: "…"}]` —
+   created a fresh `people` row on every reconcile (the demo database had **11 rows for 5 names**, and
+   the topic card rendered "Researcher A, Researcher A, Researcher A"). Invisible until this chunk put
+   the people line on the front page. `resolvePersonForLink` now reuses an **unambiguous** exact-name
+   match for the link path; `registerPerson` (the identity primitive) still treats a name as a
+   non-identity, and an ambiguous name is refused rather than guessed at or multiplied. Tests cover all
+   three behaviours.
+2. **The demo seed silently swallowed a refused write.** `Noise study` carried a non-empty
+   `currentState` while only its `stateConfidence` was `inferred`, so the evidence rule refused the
+   whole atomic reconcile and the seed's `curl … > /dev/null` hid it. The seed now fails loudly on
+   `{ok:false}` — which is how the duplicate-person bug above surfaced too.
+
+Also worth keeping: `page.screenshot({fullPage: true})` **does not capture the plugin page**. The host
+scrolls it inside its own container, so a document-level shot shows whichever slice is scrolled into
+view and silently drops the header — the first C4 screenshot was missing the window control entirely.
+`verify-plugin-page.mjs` captures the plugin root element instead.
+
 ### C5 — Topic detail (axes + per-axis history) · depends on C4 · review steps 5, 6, 10
 
 Deliverable: topic view with description, people, repositories, and one card per axis (state, kind,
@@ -542,6 +601,8 @@ a platform-admin concern, not a plugin one.
 | **D5** | Legacy V1 data | ✅ **(a) copy it** — the rename/copy strategy of F1, `commit`→`github_commit`, `document`→`repo_document`, `recorded_at = occurred_at` |
 | **D6** | Real topic names in the public repo | ✅ **(b) genericise** (reviewer, 2026-09-30): neutral examples only — `Signal Processing`, `Acquisition Automation`, `Topic Alpha`. Applied to the review document, the test fixture **and** the screenshots (dev DB re-seeded neutral, images re-captured), not just the plan |
 | **D7** | Provenance breadth | ✅ **bounded** — three confidence fields + activities + annotations + actor/source metadata on changes that matter; no per-field provenance in V2 |
+| **D8** | Evidence for a manual status change (C8) | ✅ **optional note, easy to attach** (reviewer, 2026-09-30): the page records the person's own rationale alongside the change — a short note like "waiting intentionally for October hardware slot" is what the librarian reads instead of re-inferring `blocked`. Not required for every human edit. **Implemented in C8**, so C4 deliberately left the write shape alone |
+| **D9** | Overview information architecture (C4) | ✅ **axes grouped under topics, never one flat list** (reviewer, 2026-09-30): topic name → people → counts (active/blocked/draft/parked) → 2–4 most relevant axes → recent-activity summary → expand for all axes/history; within a topic `blocked → active → draft → parked → completed → abandoned`, then most recently updated. **Implemented in C4**; no schema change |
 
 **Answered 2026-09-30.** The reviewer's answers are kept verbatim in
 [`reviews/2026-09-30-v2-plan-answer.md`](reviews/2026-09-30-v2-plan-answer.md) and folded into the table
@@ -549,6 +610,11 @@ above. Two changed the plan materially: the **`inputSchema` correction (F7)** �
 validate, so `CHECK` constraints are defence in depth rather than the only barrier, and the two failure
 shapes are now an acceptance criterion — and the **five-tool contract (D4)**, which removed three
 `find_tools` round-trips from every librarian session.
+
+**Answered again 2026-09-30, after C3** — the two C8 questions, kept verbatim in
+[`reviews/2026-09-30-c4-c8-answers.md`](reviews/2026-09-30-c4-c8-answers.md) and recorded as **D8**
+(a manual status change carries an optional note) and **D9** (the overview groups axes under topics).
+Neither needed a schema change; D9 shaped C4 and D8 is C8's write-side work.
 
 ## 8. Non-goals
 

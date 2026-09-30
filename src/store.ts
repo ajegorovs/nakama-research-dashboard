@@ -496,6 +496,34 @@ export type SearchResults = {
   truncated: boolean;
 };
 
+/**
+ * An axis as the overview shows it: the axis plus the repositories it touches, primary first. The
+ * overview's scan line is "repo · branch · PR", and the repository lives on the link table (D2), so a
+ * topic rollup would otherwise need a second read per axis.
+ */
+export type AxisOverview = Axis & {
+  repositories: LinkedRepository[];
+};
+
+/**
+ * One topic as the front page presents it, in the scan order C4 settled: topic → people → state
+ * counts → axes (attention order) → recent-activity summary. `axes` is complete and ordered, so the
+ * page shows the first few and expands to the rest without another read.
+ */
+export type TopicOverview = {
+  topic: Topic;
+  people: LinkedPerson[];
+  repositories: LinkedRepository[];
+  /** How many axes sit in each state — the reviewer's "active / blocked / draft / parked" row. */
+  axisCounts: Record<AxisState, number>;
+  /** Every axis, blocked first, then most recently updated inside each state. */
+  axes: AxisOverview[];
+  /** Activity inside the requested window, for "6 events · last activity today". */
+  activityCount: number;
+  /** When this topic last saw any activity at all, window or not (null when it never has). */
+  lastActivityAt: string | null;
+};
+
 /** The dashboard front page in one call. */
 export type Overview = {
   generatedAt: string;
@@ -508,6 +536,11 @@ export type Overview = {
     topicsByStatus: Record<TopicStatus, number>;
   };
   axesByState: Record<AxisState, number>;
+  /**
+   * The front page proper: one entry per topic with its axes grouped underneath. Archived topics are
+   * excluded unless the caller asks for them.
+   */
+  topics: TopicOverview[];
   blocked: Array<{
     axisId: string;
     topicId: string;
@@ -521,6 +554,52 @@ export type Overview = {
   recentTopics: Topic[];
   recentActivity: Activity[];
 };
+
+/**
+ * Attention order for axes on the overview: what needs a human first, then the rest of the work.
+ * Completed and abandoned work sinks to the bottom instead of disappearing.
+ */
+const AXIS_STATE_ATTENTION: Record<AxisState, number> = {
+  abandoned: 5,
+  active: 1,
+  blocked: 0,
+  completed: 4,
+  draft: 2,
+  parked: 3,
+};
+
+/** Topic lifecycle order on the front page, so retired topics do not float above live work. */
+const TOPIC_STATUS_ATTENTION: Record<TopicStatus, number> = {
+  active: 0,
+  archived: 3,
+  completed: 2,
+  paused: 1,
+};
+
+function compareAxesForAttention(a: Axis, b: Axis): number {
+  const byState = AXIS_STATE_ATTENTION[a.state] - AXIS_STATE_ATTENTION[b.state];
+  if (byState !== 0) {
+    return byState;
+  }
+  const byUpdated = b.updatedAt.localeCompare(a.updatedAt);
+  return byUpdated === 0 ? a.title.localeCompare(b.title) : byUpdated;
+}
+
+function compareTopicsForAttention(a: TopicOverview, b: TopicOverview): number {
+  const byStatus =
+    TOPIC_STATUS_ATTENTION[a.topic.status] - TOPIC_STATUS_ATTENTION[b.topic.status];
+  if (byStatus !== 0) {
+    return byStatus;
+  }
+  // Inside the same lifecycle, a topic carrying a blocker is the one to look at first.
+  const byBlocked =
+    Number(b.axisCounts.blocked > 0) - Number(a.axisCounts.blocked > 0);
+  if (byBlocked !== 0) {
+    return byBlocked;
+  }
+  const byUpdated = b.topic.updatedAt.localeCompare(a.topic.updatedAt);
+  return byUpdated === 0 ? a.topic.name.localeCompare(b.topic.name) : byUpdated;
+}
 
 /** The three fields an axis can make a claim about. */
 type ClaimField = "blocker" | "current_state" | "state";
@@ -817,15 +896,22 @@ export class ResearchStore {
   /**
    * The dashboard front page: what exists, what is blocked and who is waiting on what, what moved
    * recently. `activitySinceDays` is a query parameter, never stored state — the same call answers
-   * "what happened this week" and "what happened this quarter".
+   * "what happened this week" and "what happened this quarter"; `0` means no lower bound at all.
+   *
+   * The `topics` rollup is what the page renders: axes grouped under their topic in attention order,
+   * with people, repositories and an activity summary, all in this one call.
    */
   getOverview(options?: {
     activitySinceDays?: number;
+    includeArchived?: boolean;
     limit?: number;
   }): Overview {
     return this.snapshot(() => {
       const activitySinceDays = options?.activitySinceDays ?? 14;
+      const includeArchived = options?.includeArchived ?? false;
       const limit = clampLimit(options?.limit, 10, 50);
+      // 0 means "all time": no lower bound on the window (the same convention as listActivity).
+      const since = activitySinceDays > 0 ? isoDaysAgo(activitySinceDays) : null;
 
       const topicsByStatus = Object.fromEntries(
         TOPIC_STATUSES.map((status) => [status, 0])
@@ -892,7 +978,7 @@ export class ResearchStore {
         generatedAt: nowIso(),
         recentActivity: this.listActivity({
           limit: 25,
-          sinceDays: activitySinceDays,
+          sinceDays: activitySinceDays > 0 ? activitySinceDays : undefined,
         }),
         recentTopics: (
           this.db
@@ -901,8 +987,119 @@ export class ResearchStore {
             )
             .all(limit) as TopicRow[]
         ).map(toTopic),
+        topics: this.topicOverviews(includeArchived, since),
       };
     });
+  }
+
+  /**
+   * One entry per topic, axes grouped underneath in attention order. Built from a handful of grouped
+   * queries rather than a read per topic: the front page is one call by contract, and an N+1 here
+   * would be paid on every page load.
+   */
+  private topicOverviews(
+    includeArchived: boolean,
+    since: string | null
+  ): TopicOverview[] {
+    const axesByTopic = new Map<string, AxisOverview[]>();
+    const repositoriesByAxis = new Map<string, LinkedRepository[]>();
+    for (const row of this.db
+      .query(
+        `SELECT l.axis_id AS axis_id, r.*, l.relationship AS relationship
+         FROM axis_repositories l JOIN repositories r ON r.id = l.repository_id
+         ORDER BY (l.relationship = 'primary') DESC, r.full_name COLLATE NOCASE ASC`
+      )
+      .all() as Array<
+      RepositoryRow & { axis_id: string; relationship: string }
+    >) {
+      const linked = repositoriesByAxis.get(row.axis_id) ?? [];
+      linked.push({
+        ...toRepository(row),
+        relationship: row.relationship as Relationship,
+      });
+      repositoriesByAxis.set(row.axis_id, linked);
+    }
+    for (const row of this.db
+      .query("SELECT * FROM development_axes")
+      .all() as AxisRow[]) {
+      const axis = toAxis(row);
+      const grouped = axesByTopic.get(axis.topicId) ?? [];
+      grouped.push({
+        ...axis,
+        repositories: repositoriesByAxis.get(axis.id) ?? [],
+      });
+      axesByTopic.set(axis.topicId, grouped);
+    }
+
+    const peopleByTopic = new Map<string, LinkedPerson[]>();
+    for (const row of this.db
+      .query(
+        `SELECT l.topic_id AS topic_id, p.*, l.role AS role
+         FROM topic_people l JOIN people p ON p.id = l.person_id
+         ORDER BY p.display_name COLLATE NOCASE ASC`
+      )
+      .all() as Array<PersonRow & { role: string; topic_id: string }>) {
+      const linked = peopleByTopic.get(row.topic_id) ?? [];
+      linked.push({ ...toPerson(row), role: row.role });
+      peopleByTopic.set(row.topic_id, linked);
+    }
+
+    const repositoriesByTopic = new Map<string, LinkedRepository[]>();
+    for (const row of this.db
+      .query(
+        `SELECT l.topic_id AS topic_id, r.*, l.relationship AS relationship
+         FROM topic_repositories l JOIN repositories r ON r.id = l.repository_id
+         ORDER BY (l.relationship = 'primary') DESC, r.full_name COLLATE NOCASE ASC`
+      )
+      .all() as Array<
+      RepositoryRow & { relationship: string; topic_id: string }
+    >) {
+      const linked = repositoriesByTopic.get(row.topic_id) ?? [];
+      linked.push({
+        ...toRepository(row),
+        relationship: row.relationship as Relationship,
+      });
+      repositoriesByTopic.set(row.topic_id, linked);
+    }
+
+    // One grouped query: events inside the window (for the count) and the latest ever (for the age).
+    const activityByTopic = new Map<string, { last: string; n: number }>();
+    for (const row of this.db
+      .query(
+        `SELECT topic_id,
+                sum(CASE WHEN ? IS NULL OR occurred_at >= ? THEN 1 ELSE 0 END) AS n,
+                max(occurred_at) AS last
+         FROM activities WHERE topic_id IS NOT NULL
+         GROUP BY topic_id`
+      )
+      .all(since, since) as Array<{ last: string; n: number; topic_id: string }>) {
+      activityByTopic.set(row.topic_id, { last: row.last, n: row.n });
+    }
+
+    return this.listTopics()
+      .filter((topic) => includeArchived || topic.status !== "archived")
+      .map((topic) => {
+        const axes = (axesByTopic.get(topic.id) ?? []).sort(
+          compareAxesForAttention
+        );
+        const axisCounts = Object.fromEntries(
+          AXIS_STATES.map((state) => [state, 0])
+        ) as Record<AxisState, number>;
+        for (const axis of axes) {
+          axisCounts[axis.state] += 1;
+        }
+        const activity = activityByTopic.get(topic.id);
+        return {
+          activityCount: activity?.n ?? 0,
+          axes,
+          axisCounts,
+          lastActivityAt: activity?.last ?? null,
+          people: peopleByTopic.get(topic.id) ?? [],
+          repositories: repositoriesByTopic.get(topic.id) ?? [],
+          topic,
+        };
+      })
+      .sort(compareTopicsForAttention);
   }
 
   /**
@@ -1389,7 +1586,7 @@ export class ResearchStore {
 
       // Topic-level links first: the topic-level people/repositories are what the axes below refine.
       for (const person of input.people ?? []) {
-        const result = this.upsertPerson(person);
+        const result = this.resolvePersonForLink(person);
         if (result.created) {
           created.people += 1;
         }
@@ -1455,7 +1652,7 @@ export class ResearchStore {
           );
         }
         for (const person of axisInput.people ?? []) {
-          const result = this.upsertPerson(person);
+          const result = this.resolvePersonForLink(person);
           if (result.created) {
             created.people += 1;
           }
@@ -1825,6 +2022,45 @@ export class ResearchStore {
       created: true,
       repository: this.getRepositoryByFullName(fullName) as Repository,
     };
+  }
+
+  /**
+   * The person a reconcile's `people` entry should link.
+   *
+   * Identity columns are matched first, exactly as `registerPerson` does. A bare `displayName` — the
+   * form a librarian uses when the group named someone in conversation — falls back to an
+   * **unambiguous** exact-name match, so reconciling the same topic twice attaches to one person
+   * instead of minting a new row per call. That is a real defect otherwise: the overview lists the
+   * people tagged to a topic, and the duplicates show up there.
+   *
+   * Deliberately narrower than the primitive: `registerPerson` still treats a name as a non-identity
+   * (two people may share one). Here an ambiguous name is refused rather than guessed at or
+   * multiplied — the caller disambiguates with `githubLogin` or `nakamaUserId`.
+   */
+  private resolvePersonForLink(input: {
+    displayName: string;
+    githubLogin?: string;
+    nakamaUserId?: string;
+    notes?: string;
+  }): { created: boolean; person: Person } {
+    const displayName = required(input.displayName, "person.displayName");
+    const hasIdentity = Boolean(
+      input.nakamaUserId?.trim() || input.githubLogin?.trim()
+    );
+    if (!hasIdentity) {
+      const matches = this.db
+        .query("SELECT * FROM people WHERE display_name = ? COLLATE NOCASE")
+        .all(displayName) as PersonRow[];
+      if (matches.length === 1) {
+        return { created: false, person: toPerson(matches[0]) };
+      }
+      if (matches.length > 1) {
+        throw new ResearchStoreError(
+          `${matches.length} people are named "${displayName}" — link the right one with a githubLogin or nakamaUserId.`
+        );
+      }
+    }
+    return this.upsertPerson(input);
   }
 
   private upsertPerson(input: {

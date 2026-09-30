@@ -14,15 +14,18 @@
       "effect": "read",
       "entry": "actions/actions.js",
       "exposeAsTool": true,
-      "description": "Dashboard summary: how many topics and axes exist and in which states, every blocked axis with its topic and blocker text, the most recently touched topics and recent activity. Start here for 'what is going on' questions, then call get_topic for the one topic that matters.",
+      "description": "Dashboard summary: counts by state, then one entry per topic with its people, the state counts of its development axes, the axes themselves in attention order (blocked → active → draft → parked → completed → abandoned) with their repository/branch/PR line, current state and blocker, and how much activity each topic saw in the window. Also every blocked axis with its topic and blocker text, the most recently touched topics and recent activity. Start here for 'what is going on' questions, then call get_topic for the one topic that matters.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
           "activitySinceDays": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 0,
             "maximum": 365
+          },
+          "includeArchived": {
+            "type": "boolean"
           },
           "limit": {
             "type": "integer",
