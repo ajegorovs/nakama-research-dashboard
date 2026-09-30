@@ -4,6 +4,12 @@
 **Our response:** [`../V2-PLAN.md`](../V2-PLAN.md) — the scope assessment, the verified platform facts,
 and the eleven chunks. Nothing is implemented yet.
 
+**Status: answered 2026-09-30.** The answers are kept verbatim in
+[`2026-09-30-v2-plan-answer.md`](2026-09-30-v2-plan-answer.md) and folded into [`../V2-PLAN.md`](../V2-PLAN.md)
+§7: D1 → three confidence columns; D2 → `axis_repositories`, single repo FK dropped; D3 → those four
+states; the 002 rename/copy mechanism → confirmed; C9a/C9b → confirmed; D4 → five tools, not eight. One
+claim of ours was **wrong** and is corrected in item 3 — the platform *does* validate `inputSchema`.
+
 ## What we are *not* asking
 
 Please don't re-read §1–§6 of the plan. Your proposal's model is accepted as written (topics as the
@@ -57,10 +63,11 @@ Axes get six states; topics get `DEFAULT 'active'` and no list. We'd use
 `active | paused | completed | archived` (a topic isn't "blocked" — its axes are). If you'd rather
 topics reuse the axis vocabulary, say so.
 
-Related decision we've taken: since the platform does **not** validate `inputSchema` (it is
-documentation for the model — `PluginActionContribution.inputSchema: unknown`), the enums get `CHECK`
-constraints in the DDL as well as constants in the store. That is the only place a bad value can be
-stopped.
+Related decision we've taken: the enums get `CHECK` constraints in the DDL as well as constants in the
+store. *(Corrected 2026-09-30: this item originally claimed the platform does **not** validate
+`inputSchema`. It does — `plugin-service.ts:616-619`, on both the HTTP and the agent-tool path — so the
+`CHECK`s are defence in depth for writes that bypass the action layer, not the only barrier. The
+reviewer caught it; `F7` in the plan carries the corrected detail.)*
 
 ### 4. §15's migration needs a different mechanism than §2 implies
 

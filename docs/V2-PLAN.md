@@ -11,8 +11,13 @@ in-tree copy on the Nakama clone's `research-dashboard` branch are **not** touch
 ## 0. How to resume
 
 1. Read §2. Three findings there change the review's plan, and one of them (`F1`) means migration 002
-   as written in the review **would fail**.
-2. Answer §7 (open decisions). **C1 cannot start without D1–D3**; C3 can't start without D4.
+   as written in the review **would fail**. `F7` was corrected after review — the note under it says
+   what was wrong and why.
+2. §7 decisions are **resolved** (reviewer, 2026-09-30 — answers kept verbatim in
+   [`reviews/2026-09-30-v2-plan-answer.md`](reviews/2026-09-30-v2-plan-answer.md)): D1 → three
+   confidence columns; D2 → `axis_repositories`, the single repo FK dropped; D3 →
+   `active/paused/completed/archived`; D4 → **five** exposed tools, not eight; D5 → copy the V1 data.
+   Only **D6** (topic names in a public repo) is open, and it blocks nothing.
 3. Work §6 in order. Each chunk is self-contained: deliverable, files, acceptance test, evidence
    command, dependencies. Do not start a chunk whose dependencies are unmet — most of the risk here
    is in the seams between chunks, not inside them.
@@ -82,10 +87,28 @@ change, not a plugin change — record it, don't design around it.
 therefore always arrive through the action layer, which is also the only trustworthy route: the host
 strips spoofed context keys out of `input` before the plugin sees them.
 
-**F7 — `inputSchema` is not validated by the platform.** `PluginActionContribution.inputSchema:
-unknown`; it is passed to the model as documentation. A nested `reconcile_topic` payload therefore
-needs hand-written validation in `src/actions.ts` (the existing pattern) **and a test** — otherwise a
-malformed nested payload reaches the store.
+**F7 — `inputSchema` *is* enforced at runtime, on both entry paths.** *(Corrected 2026-09-30: an earlier
+draft of this plan claimed the opposite — `PluginActionContribution.inputSchema: unknown` is only the
+TypeScript type — because the search behind that claim was truncated with `head`. The reviewer caught
+it; the production call sites are below.)* The host validates the declared schema in
+`apps/server/src/services/plugin-service.ts:616-619` (`stripSpoofedInput` → `validatePluginJsonInstance`
+→ `PluginHostError("invalid_input")` → HTTP 400 at `apps/server/src/http/routes/plugins.ts:740`) **and**
+on the agent-tool path, which passes the same schema as the tool's `parameters`
+(`apps/server/src/services/tool-resolver.ts:206-216`).
+
+What that buys us (recursive — `packages/core/src/plugins.ts:334-434`): `type`, `enum`,
+`minLength`/`maxLength`, `minimum`/`maximum`/`exclusive*`, `minItems`/`maxItems`, `required` presence,
+nested `properties` and `items` (so a deep `reconcile_topic` payload is shape-checked), and
+`additionalProperties: false` rejecting unknown keys (line 419).
+
+What it does **not** buy us: anything outside the 14-key allowlist (`ALLOWED_SCHEMA_KEYS`,
+`plugins.ts:24-38` — no `oneOf`/`anyOf`/`$ref`/`pattern`/`format`/`default`; an unsupported keyword
+makes the **manifest** invalid rather than being silently ignored), and semantics — cross-field
+coherence, whether a referenced id exists, "a blocked axis needs blocker text", "a confirmed claim needs
+evidence". Those stay hand-written in `src/actions.ts`, and the two failure shapes must stay
+distinguishable: **schema violation → HTTP 400 host rejection**, **business rule → `{ok:false,error}`
+result**. Our harness already asserts both (`services/nakama/scripts/plugin-smoke.sh:78-81`, green
+2026-09-30).
 
 ## 3. Where I would push back on the review's schema
 
@@ -105,6 +128,9 @@ all share one value. Options:
 **Recommendation: (b) now, (c) only if the librarian starts revising claims often.** (c) is the
 honest model but it doubles the write path for a feature nobody has asked for yet.
 
+**Resolved (reviewer, 2026-09-30): (b) — three columns, no `axis_claims` yet.** People assignment
+carries no confidence: it is corrected explicitly instead.
+
 **P2 — `development_axes.repository_id` contradicts the model's own premise.** The whole point of §1
 is that work spans repositories, but an axis can name exactly one repo. An axis touching a model repo
 and a data repo has nowhere to go. → Add `axis_repositories(axis_id, repository_id, relationship)`,
@@ -112,11 +138,21 @@ the same five-line shape as `topic_repositories`, and drop `repository_id` from 
 as the "primary" repo for display). Recommendation: add the join table; keep `repository_id` as the
 display default.
 
+**Resolved (reviewer, 2026-09-30): add `axis_repositories` and drop `development_axes.repository_id`
+entirely** — a duplicated display default would need synchronising. The join row carries
+`relationship`, with exactly one row optionally marked `primary`, and the UI takes the primary
+repository from there.
+
 **P3 — `topics.status` has no vocabulary.** The review declares `DEFAULT 'active'` and stops. V1 uses
 `active|paused|done`; axes get `active|draft|blocked|parked|completed|abandoned`. Two overlapping
 vocabularies on one screen is how drift starts.
 → Topics: `active | paused | completed | archived`. A topic is not "blocked" — its axes are. Declare
 the list once (manifest enum + store constant) and have the UI switch on the same constant.
+
+**Resolved (reviewer, 2026-09-30): exactly those four, and topic lifecycle deliberately does not reuse
+the axis vocabulary.** The `CHECK` constraints stay in the DDL — but as defence in depth for writes that
+never pass through the action layer (migrations, future code, direct DB access), now that `F7` shows the
+action layer is a real barrier rather than the only one.
 
 ## 4. Vocabulary (as reviewed — locked unless §7 says otherwise)
 
@@ -165,12 +201,15 @@ Traceability to the review's §16 sequence is in the last column.
 Deliverable: answers to D1–D5 in §7, recorded in this file (edit §7, don't leave it tribal).
 Acceptance: §7 has no open question that C1/C3 depends on.
 
-### C1 — Migration `002-coordination-model.sql` + migration tests · depends on D1, D2, D3 · review step 1
+### C1 — Migration `002-coordination-model.sql` + migration tests · D1–D3 resolved · review step 1
 
 Deliverable: `migrations/002-coordination-model.sql`, a manifest entry, `src/migration.test.ts`.
-Must contain: rename `projects`→`projects_v1`, `activities`→`activities_v1` (F1); the new schema with
-`confidence` columns per D1, `axis_repositories` per D2, topic states per D3; the V1→V2 copy with the
-source-type map (F2) and `recorded_at = occurred_at` (F3); indexes.
+Must contain: rename `projects`→`projects_v1`, `activities`→`activities_v1` (F1); the new schema —
+**three confidence columns on the axes** (`state_confidence`, `current_state_confidence`,
+`blocker_confidence`), **`axis_repositories` with `relationship` (one row optionally `primary`) and no
+`repository_id` on the axis**, topic status **`active|paused|completed|archived`**, and `CHECK`
+constraints mirroring every enum; the V1→V2 copy with the source-type map (F2) and
+`recorded_at = occurred_at` (F3); indexes.
 
 Acceptance (all automated):
 - Build a V1 database by applying 001, insert 2 projects + ≥3 activities covering every legacy
@@ -206,20 +245,29 @@ Evidence: `bun test`; the concurrency test is the one that would have caught V1'
 Risk: low, but the pragma choice interacts with how the platform opens the DB for **migrations** — if
 FK enforcement is on during 002, insert order matters (parents first). Either way the test must pass.
 
-### C3 — Action surface v2 (+ provenance, + actors) · depends on C2, D4 · ships with C9 · review steps 3, 4
+### C3 — Action surface v2 (+ provenance, + actors) · depends on C2 · D4 resolved (five tools) · ships with C9 · review steps 3, 4
 
 Deliverable: `nakama.plugin.json` actions rewritten; `src/actions.ts` rewritten; `src/actions.test.ts`.
 
-Must contain: the semantic toolset (`get_overview`, `get_topic`, `search_dashboard`,
-`reconcile_topic`, `record_activity`, `add_annotation`, `register_repository`, `register_person`) with
-`exposeAsTool` per D4; UI-only CRUD actions with `exposeAsTool: false`; hand-written validation for
-the nested `reconcile_topic` payload (F7); `context.actor.id` recorded on annotations/activities and
+Must contain: **five exposed tools** — `get_overview`, `get_topic`, `search_dashboard`,
+`reconcile_topic`, `record_activity` (D4) — with `exposeAsTool: false` for everything else:
+`add_annotation` and the CRUD used by the UI, with `register_person`/`register_repository` kept as
+non-agent UI/admin actions (or folded into `reconcile_topic`'s payload). A **fully nested
+`reconcile_topic` schema** is declared so the host enforces shape in depth (F7) — hand-written code in
+`src/actions.ts` then covers only semantics; `context.actor.id` recorded on annotations/activities and
 used to link the acting user to a `people` row when one exists (F6 — never trust identity from
 `input`); `activitySinceDays` on `get_overview` (default 14) as a query parameter, not stored state.
 
 Acceptance:
-- Action tests: every action returns `{ok:true,…}` on valid input; malformed nested payload, unknown
-  id, and bad enum each return `{ok:false,error}` rather than throwing.
+- Action tests: every action returns `{ok:true,…}` on valid input; **schema/shape violations are host
+  rejections (HTTP 400)** while **business rules** (unknown id, `blocked` without blocker text,
+  `confirmed` without an evidence ref) return `{ok:false,error}`. The two failure shapes must stay
+  distinguishable, and `plugin-smoke.sh` keeps asserting both sides (F7).
+- The declared `reconcile_topic` schema survives the host's subset check (`ALLOWED_SCHEMA_KEYS`); a
+  keyword outside that allowlist makes the **manifest** fail to install, so a Reinstall on the dev
+  instance belongs to this chunk's acceptance.
+- Exactly **five** actions carry `exposeAsTool: true`, asserted by a test — a sixth tool would silently
+  cost the agent a second `find_tools` round-trip.
 - `reconcile_topic` is atomic (inherits C2's rollback test at the action level) and is the **only**
   write path the librarian needs for a topic update.
 - Actor attribution: an action invoked by a known Nakama user records that user; an unknown one
@@ -277,6 +325,10 @@ Acceptance: an axis with `confidence: inferred` cannot be mistaken for confirmed
 `confirmed` requires a human or an explicit evidence source, and the store rejects a `confirmed` claim
 that carries no evidence ref.
 
+**Scope guard (reviewer, 2026-09-30):** provenance stays bounded — the three confidence fields, plus
+activities, annotations, and actor/source metadata on the changes that matter. Do not turn every field
+into a provenance system in V2 (D7).
+
 ### C9 — Librarian skill rewrite · ships with C3 · review step 8 (split, see below)
 
 Deliverable: `skills/research-coordinator/SKILL.md` rewritten for reconciliation: read dashboard state
@@ -324,18 +376,22 @@ a platform-admin concern, not a plugin one.
 
 ## 7. Open decisions
 
-| # | Decision | Options | Recommendation |
-|---|---|---|---|
-| **D1** | Confidence granularity (P1) | (a) one per axis · (b) three columns · (c) `axis_claims` table | **(b)**; (c) only if claims get revised often |
-| **D2** | Axis ↔ repository cardinality (P2) | (a) one repo per axis · (b) add `axis_repositories`, keep `repository_id` as display default | **(b)** |
-| **D3** | Topic status vocabulary (P3) | (a) undefined as reviewed · (b) `active/paused/completed/archived` · (c) reuse the axis states | **(b)** |
-| **D4** | Exposed tool count | (a) 8 as reviewed (two `find_tools` loads) · (b) consolidate to ≤5 (fold `register_person`/`register_repository` into `reconcile_topic`) | **(a)** first and measure the agent run; only consolidate if discovery friction shows |
-| **D5** | Legacy V1 data | (a) copy it (C1 as written) · (b) skip the copy, start clean (the dev data is seeded demo data) | **(a)** — the copy costs one test and keeps the option of migrating a real instance later |
-| **D6** | This plan is in the public repo and names the group's topics | (a) keep · (b) genericise topic names to `Topic A/B` | your call — placeholders are already applied to people and private repo owners |
+| # | Decision | Resolution (2026-09-30) |
+|---|---|---|
+| **D1** | Confidence granularity (P1) | ✅ **(b) three columns** — `state_confidence`, `current_state_confidence`, `blocker_confidence`; no `axis_claims` yet; people assignment carries no confidence |
+| **D2** | Axis ↔ repository cardinality (P2) | ✅ **add `axis_repositories`, drop the axis's `repository_id`**; `relationship` on the join row, exactly one optionally `primary`; the UI reads the primary from there |
+| **D3** | Topic status vocabulary (P3) | ✅ **`active` / `paused` / `completed` / `archived`** — deliberately not the axis states; `CHECK` constraints as defence in depth behind the host's schema validation (F7) |
+| **D4** | Exposed tool count | ✅ **five now**: `get_overview`, `get_topic`, `search_dashboard`, `reconcile_topic`, `record_activity`. Registration becomes non-exposed UI/admin actions, optionally folded into `reconcile_topic` |
+| **D5** | Legacy V1 data | ✅ **(a) copy it** — the rename/copy strategy of F1, `commit`→`github_commit`, `document`→`repo_document`, `recorded_at = occurred_at` |
+| **D6** | This plan is in the public repo and names the group's topics | ⏳ **open — owner's call**: (a) keep · (b) genericise to `Topic A/B`. Blocks nothing |
+| **D7** | Provenance breadth | ✅ **bounded** — three confidence fields + activities + annotations + actor/source metadata on changes that matter; no per-field provenance in V2 |
 
-**Frame sent to the reviewer:** [`reviews/2026-09-30-v2-plan-review-request.md`](reviews/2026-09-30-v2-plan-review-request.md)
-— the six delta questions only (D1, D2, D3, the 002 mechanism, the C9 split, D4), each with the exact
-SQL of the recommended option, plus an explicit "don't re-read the model" note. Their answers land here.
+**Answered 2026-09-30.** The reviewer's answers are kept verbatim in
+[`reviews/2026-09-30-v2-plan-answer.md`](reviews/2026-09-30-v2-plan-answer.md) and folded into the table
+above. Two changed the plan materially: the **`inputSchema` correction (F7)** — the platform does
+validate, so `CHECK` constraints are defence in depth rather than the only barrier, and the two failure
+shapes are now an acceptance criterion — and the **five-tool contract (D4)**, which removed three
+`find_tools` round-trips from every librarian session.
 
 ## 8. Non-goals
 
