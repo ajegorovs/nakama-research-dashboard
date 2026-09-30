@@ -1598,7 +1598,10 @@ export class ResearchStore {
   }
 
   /** account id → the person it maps to. The one attribution map; the C6 rollups and C7 both read it. */
-  private personRefByAccount(): Map<string, { displayName: string; id: string }> {
+  private personRefByAccount(): Map<
+    string,
+    { displayName: string; id: string }
+  > {
     const map = new Map<string, { displayName: string; id: string }>();
     for (const row of this.db
       .query("SELECT id, display_name, nakama_user_id FROM people")
@@ -1680,7 +1683,10 @@ export class ResearchStore {
       });
       groups.push({
         axes,
-        eventCount: axes.reduce((total, bucket) => total + bucket.eventCount, 0),
+        eventCount: axes.reduce(
+          (total, bucket) => total + bucket.eventCount,
+          0
+        ),
         lastActivityAt: axes[0]?.events[0]?.occurredAt ?? null,
         topic,
       });

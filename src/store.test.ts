@@ -1605,9 +1605,9 @@ describe("ResearchStore progress timeline (C7)", () => {
     expect(signalGroup?.axes[0]?.axis?.repositories[0]?.fullName).toBe(
       "group/processing-pipeline"
     );
-    expect(signalGroup?.axes[0]?.events.map((event) => event.sourceRef)).toEqual(
-      ["PR #88"]
-    );
+    expect(
+      signalGroup?.axes[0]?.events.map((event) => event.sourceRef)
+    ).toEqual(["PR #88"]);
     expect(signalGroup?.eventCount).toBe(1);
     expect(signalGroup?.lastActivityAt).not.toBeNull();
     // The blocked axis sorts first inside its own topic, and a topic-level event keeps its own group.
@@ -1622,14 +1622,13 @@ describe("ResearchStore progress timeline (C7)", () => {
       summary: "topic-level note with no axis",
       topicId: signal.id,
     });
-    const withTopicLevel = store.getOverview().timeline.find(
-      (group) => group.topic.name === "Signal Processing"
-    );
+    const withTopicLevel = store
+      .getOverview()
+      .timeline.find((group) => group.topic.name === "Signal Processing");
     // Kept, ordered last, and never merged into the axis it does not name.
-    expect(withTopicLevel?.axes.map((bucket) => bucket.axis?.title ?? null)).toEqual([
-      "Signal explorer",
-      null,
-    ]);
+    expect(
+      withTopicLevel?.axes.map((bucket) => bucket.axis?.title ?? null)
+    ).toEqual(["Signal explorer", null]);
     expect(withTopicLevel?.eventCount).toBe(2);
   });
 
@@ -1668,9 +1667,9 @@ describe("ResearchStore progress timeline (C7)", () => {
       summary: "recorded a month before the window",
     });
 
-    const events = (store.getOverview().timeline[0]?.axes[0]?.events ?? []).filter(
-      (event) => event.summary !== "run recorded by an unmapped actor"
-    );
+    const events = (
+      store.getOverview().timeline[0]?.axes[0]?.events ?? []
+    ).filter((event) => event.summary !== "run recorded by an unmapped actor");
     const known = events.find(
       (event) => event.summary === "run recorded by a known account"
     );
@@ -1685,7 +1684,9 @@ describe("ResearchStore progress timeline (C7)", () => {
     // The window narrows the timeline; it does not rewrite history (the axis detail still has all three).
     const windowed = store.getOverview({ activitySinceDays: 14 });
     expect(
-      (windowed.timeline[0]?.axes[0]?.events ?? []).map((event) => event.summary)
+      (windowed.timeline[0]?.axes[0]?.events ?? []).map(
+        (event) => event.summary
+      )
     ).not.toContain("recorded a month before the window");
     expect(store.getTopicDetail(topic.id).axes[0]?.history.length).toBe(3);
   });
