@@ -587,7 +587,8 @@ function compareAxesForAttention(a: Axis, b: Axis): number {
 
 function compareTopicsForAttention(a: TopicOverview, b: TopicOverview): number {
   const byStatus =
-    TOPIC_STATUS_ATTENTION[a.topic.status] - TOPIC_STATUS_ATTENTION[b.topic.status];
+    TOPIC_STATUS_ATTENTION[a.topic.status] -
+    TOPIC_STATUS_ATTENTION[b.topic.status];
   if (byStatus !== 0) {
     return byStatus;
   }
@@ -911,7 +912,8 @@ export class ResearchStore {
       const includeArchived = options?.includeArchived ?? false;
       const limit = clampLimit(options?.limit, 10, 50);
       // 0 means "all time": no lower bound on the window (the same convention as listActivity).
-      const since = activitySinceDays > 0 ? isoDaysAgo(activitySinceDays) : null;
+      const since =
+        activitySinceDays > 0 ? isoDaysAgo(activitySinceDays) : null;
 
       const topicsByStatus = Object.fromEntries(
         TOPIC_STATUSES.map((status) => [status, 0])
@@ -1072,7 +1074,11 @@ export class ResearchStore {
          FROM activities WHERE topic_id IS NOT NULL
          GROUP BY topic_id`
       )
-      .all(since, since) as Array<{ last: string; n: number; topic_id: string }>) {
+      .all(since, since) as Array<{
+      last: string;
+      n: number;
+      topic_id: string;
+    }>) {
       activityByTopic.set(row.topic_id, { last: row.last, n: row.n });
     }
 

@@ -196,7 +196,10 @@ describe("read actions", () => {
           {
             branch: "feat/acquisition-control",
             repositories: [
-              { fullName: "group/processing-pipeline", relationship: "primary" },
+              {
+                fullName: "group/processing-pipeline",
+                relationship: "primary",
+              },
             ],
             title: "Parameter automation",
           },
@@ -222,27 +225,32 @@ describe("read actions", () => {
     expect(result.recentTopics).toHaveLength(1);
 
     // The page's front page comes from this same call (C4): axes grouped under their topic, in
-    // attention order, rather than one flat list across the whole board.
+    // attention order and carrying the repositories each touches, rather than one flat list across
+    // the whole board. One nested match asserts the order *and* the "repo · branch · PR" data.
     const entry = (result.topics as Array<Record<string, unknown>>)[0];
-    expect(entry?.topic).toMatchObject({ name: "Acquisition Automation" });
-    expect(
-      (entry?.axes as Array<Record<string, unknown>>).map((axis) => axis.title)
-    ).toEqual(["Rig control", "Parameter automation"]);
-    expect(entry?.axisCounts).toMatchObject({ active: 1, blocked: 1 });
-    // An axis carries the repositories it touches, so the card's "repo · branch · PR" line needs no
-    // second read.
-    const parameter = (
-      entry?.axes as Array<Record<string, unknown>>
-    )[1] as Record<string, unknown>;
-    expect(
-      (parameter?.repositories as Array<Record<string, unknown>>)[0]
-    ).toMatchObject({
-      fullName: "group/processing-pipeline",
-      relationship: "primary",
+    expect(entry).toMatchObject({
+      axes: [
+        { title: "Rig control" },
+        {
+          repositories: [
+            {
+              fullName: "group/processing-pipeline",
+              relationship: "primary",
+            },
+          ],
+          title: "Parameter automation",
+        },
+      ],
+      axisCounts: { active: 1, blocked: 1 },
+      topic: { name: "Acquisition Automation" },
     });
 
     // The window is a query parameter, not stored state — and `0` is the page's "all time".
-    const allTime = await call("get_overview", { activitySinceDays: 0 }, { path });
+    const allTime = await call(
+      "get_overview",
+      { activitySinceDays: 0 },
+      { path }
+    );
     expect(allTime.activitySinceDays).toBe(0);
     // Archived topics stay off the front page unless the caller asks for them.
     const withArchived = await call(

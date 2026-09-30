@@ -195,9 +195,9 @@ function apply(ctx) {
     disabled
   }) {
     return /* @__PURE__ */ React.createElement("div", {
+      "aria-label": "Activity window",
       className: "rd-cluster rd-window",
-      role: "group",
-      "aria-label": "Activity window"
+      role: "group"
     }, WINDOW_OPTIONS.map((option) => /* @__PURE__ */ React.createElement(Button, {
       "aria-pressed": option.days === value,
       "data-rd-window": option.days,

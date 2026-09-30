@@ -383,7 +383,11 @@ export function apply(ctx: Context) {
     disabled: boolean;
   }) {
     return (
-      <div className="rd-cluster rd-window" role="group" aria-label="Activity window">
+      <div
+        aria-label="Activity window"
+        className="rd-cluster rd-window"
+        role="group"
+      >
         {WINDOW_OPTIONS.map((option) => (
           <Button
             aria-pressed={option.days === value}
@@ -719,11 +723,7 @@ export function apply(ctx: Context) {
                   countLabel(counts.topics, "topic", "topics"),
                   countLabel(counts.axes, "axis", "axes"),
                   countLabel(counts.people, "person", "people"),
-                  countLabel(
-                    counts.repositories,
-                    "repository",
-                    "repositories"
-                  ),
+                  countLabel(counts.repositories, "repository", "repositories"),
                 ].join(" · ")
               : "loading…"}
           </span>
@@ -732,9 +732,7 @@ export function apply(ctx: Context) {
         {topics.map((entry) => {
           const hasBlocked = entry.axisCounts.blocked > 0;
           const expanded = entry.topic.id === expandedId;
-          const shown = expanded
-            ? entry.axes
-            : entry.axes.slice(0, LEAD_AXES);
+          const shown = expanded ? entry.axes : entry.axes.slice(0, LEAD_AXES);
           const hidden = entry.axes.length - shown.length;
           const editingThis = editing?.topicId === entry.topic.id;
           return (
