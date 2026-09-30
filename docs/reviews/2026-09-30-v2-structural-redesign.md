@@ -4,9 +4,11 @@
 **Scope:** the whole dashboard model — schema, action surface, UI, librarian behaviour.
 **Our response and the resulting work packages:** [`../V2-PLAN.md`](../V2-PLAN.md).
 
-Verbatim below, with two classes of edit for this public repo: personal names and the owner of a
-private repository are replaced with placeholders (`<person-a>`, `<group>/…`). Research topic names
-are left as written. No other changes.
+Verbatim below, with these edits for this public repo: personal names and private-repository owners
+are replaced with placeholders (`<person-a>`, `<group>/…`), and the illustrative topic, repository
+and branch names are neutralised (`Signal Processing`, `Acquisition Automation`,
+`<group>/processing-pipeline`) — the argument is structural, so the real names carry no value here
+and only couple public code to internal research state. No other changes.
 
 ---
 
@@ -42,7 +44,7 @@ Topic A ──┬── Repo 1
 Topic B ───── Repo 1
 ```
 
-So `udv-echo-process` can support both acquisition automation and signal-processing topics without duplication.
+So `processing-pipeline` can support both acquisition automation and signal-processing topics without duplication.
 
 ---
 
@@ -511,7 +513,7 @@ The default screen should instead look approximately like:
 ```text
 Research Overview                       Last 14 days
 
-CS-UDV SIGNAL PROCESSING
+Signal Processing
 A, B
 
   ● Signal explorer
@@ -529,13 +531,13 @@ A, B
   Recent: 6 events · last activity today
 
 
-CS-UDV ACQUISITION
+Acquisition Automation
 A, C
 
   ● Parameter automation
     active
 
-  ! DOP UI automation
+  ! UI automation
     blocked
     Blocker: live Windows machine unavailable
 
@@ -551,7 +553,7 @@ This should be the manager's **10-second view**.
 Clicking a topic opens:
 
 ```text
-CS-UDV Signal Processing
+Signal Processing
 
 Description
 People
@@ -562,7 +564,7 @@ Development
 
 Signal explorer                 ACTIVE
 feature
-repo: udv-echo-process
+repo: processing-pipeline
 branch: feat/signal-explorer
 PR #45
 
@@ -592,17 +594,17 @@ Repositories deserve their own view, but they aren't the organizational hierarch
 For example:
 
 ```text
-<group>/udv-echo-process
+<group>/processing-pipeline
 
 Supports:
-  CS-UDV acquisition
-  CS-UDV signal processing
+  Acquisition Automation
+  Signal Processing
 
 Branches/axes represented:
   feat/signal-explorer
       → Signal processing
 
-  feat/emissions-control
+  feat/acquisition-control
       → Acquisition automation
 
 Recent activity:
@@ -623,10 +625,10 @@ Keep this simple:
 
 Currently involved in
 
-CS-UDV Signal Processing
+Signal Processing
   Signal explorer            active
 
-CS-UDV Acquisition
+Acquisition Automation
   Parameter automation       active
 
 Recent activity

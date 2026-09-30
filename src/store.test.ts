@@ -21,7 +21,7 @@ describe("ResearchStore", () => {
   test("creates and lists projects newest first", () => {
     const subject = store();
     try {
-      const first = subject.createProject({ name: "CS-UDV" });
+      const first = subject.createProject({ name: "Topic Alpha" });
       const second = subject.createProject({
         name: "OpenFOAM validation",
         status: "paused",
@@ -68,7 +68,7 @@ describe("ResearchStore", () => {
   test("records activity with provenance and filters by project", () => {
     const subject = store();
     try {
-      const project = subject.createProject({ name: "CS-UDV" });
+      const project = subject.createProject({ name: "Topic Alpha" });
       const other = subject.createProject({ name: "COMSOL DoE" });
       subject.addActivity({
         projectId: project.id,

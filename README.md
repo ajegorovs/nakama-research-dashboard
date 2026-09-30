@@ -25,7 +25,9 @@ here: `vendor/` holds the recipe that puts the plugin into a checkout, because N
 > [`docs/reviews/2026-09-30-v2-plan-answer.md`](docs/reviews/2026-09-30-v2-plan-answer.md). Five
 > decisions landed (three confidence columns; `axis_repositories` replacing the single repo FK; topic
 > states `active/paused/completed/archived`; five exposed tools instead of eight; copy the V1 data), and
-> one of our claims was corrected — the platform *does* validate `inputSchema` at runtime.
+> one of our claims was corrected — the platform *does* validate `inputSchema` at runtime. The last
+> open item (real topic names in a public repo) was resolved the same day: every example — docs, test
+> fixtures and the screenshots — now uses neutral data.
 
 ## Current look
 

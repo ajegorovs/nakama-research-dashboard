@@ -383,7 +383,7 @@ a platform-admin concern, not a plugin one.
 | **D3** | Topic status vocabulary (P3) | ✅ **`active` / `paused` / `completed` / `archived`** — deliberately not the axis states; `CHECK` constraints as defence in depth behind the host's schema validation (F7) |
 | **D4** | Exposed tool count | ✅ **five now**: `get_overview`, `get_topic`, `search_dashboard`, `reconcile_topic`, `record_activity`. Registration becomes non-exposed UI/admin actions, optionally folded into `reconcile_topic` |
 | **D5** | Legacy V1 data | ✅ **(a) copy it** — the rename/copy strategy of F1, `commit`→`github_commit`, `document`→`repo_document`, `recorded_at = occurred_at` |
-| **D6** | This plan is in the public repo and names the group's topics | ⏳ **open — owner's call**: (a) keep · (b) genericise to `Topic A/B`. Blocks nothing |
+| **D6** | Real topic names in the public repo | ✅ **(b) genericise** (reviewer, 2026-09-30): neutral examples only — `Signal Processing`, `Acquisition Automation`, `Topic Alpha`. Applied to the review document, the test fixture **and** the screenshots (dev DB re-seeded neutral, images re-captured), not just the plan |
 | **D7** | Provenance breadth | ✅ **bounded** — three confidence fields + activities + annotations + actor/source metadata on changes that matter; no per-field provenance in V2 |
 
 **Answered 2026-09-30.** The reviewer's answers are kept verbatim in
