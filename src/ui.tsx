@@ -425,6 +425,26 @@ const css = `
   border-left-color: var(--destructive, #b91c1c);
 }
 [data-plugin-id="research-dashboard"] .rd-axis-title { font-weight: 600; }
+/* Step 3: one primary row per axis (state claim + name, kind receding), one subordinate line for where
+   the work lives and what it says about itself. The title carries the weight; everything else in the row
+   is deliberately quieter than it. */
+[data-plugin-id="research-dashboard"] .rd-axis-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+[data-plugin-id="research-dashboard"] .rd-axis-kind {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  opacity: 0.55;
+}
+[data-plugin-id="research-dashboard"] .rd-axis-secondary {
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  opacity: 0.65;
+}
 [data-plugin-id="research-dashboard"] .rd-state {
   font-size: 11px;
   text-transform: uppercase;
@@ -858,7 +878,7 @@ export function apply(ctx: Context) {
 
   function AxisItem({ axis }: { axis: AxisOverview }) {
     const primary = axis.repositories[0]?.fullName ?? "";
-    const line = [
+    const where = [
       primary,
       axis.branch,
       axis.prNumber ? `PR #${axis.prNumber}` : "",
@@ -868,14 +888,19 @@ export function apply(ctx: Context) {
     const blocked = axis.state === "blocked";
     return (
       <li className="rd-axis" data-rd-axis-state={axis.state}>
-        <div className="rd-cluster">
+        {/* Two levels, not four. The first row is what a reader scans: the state claim and the axis
+            name dominate, and the kind recedes to the end of the row. Where the work lives and what it
+            says about itself are one subordinate line underneath. A blocker is the exception — it stays
+            on its own line, immediately visible, because it is the thing that needs acting on. */}
+        <div className="rd-axis-head">
           <StateBadge confidence={axis.stateConfidence} state={axis.state} />
-          <span className="rd-muted">{axis.kind}</span>
+          <span className="rd-axis-title">{axis.title}</span>
+          <span className="rd-axis-kind">{axis.kind}</span>
         </div>
-        <div className="rd-axis-title">{axis.title}</div>
-        {line ? <span className="rd-meta">{line}</span> : null}
-        {axis.currentState ? (
-          <div className="rd-meta">{axis.currentState}</div>
+        {where || axis.currentState ? (
+          <p className="rd-axis-secondary">
+            {[where, axis.currentState].filter(Boolean).join(" · ")}
+          </p>
         ) : null}
         {axis.blocker ? (
           <div className="rd-blocker" data-rd-strong={blocked}>
@@ -1088,17 +1113,24 @@ export function apply(ctx: Context) {
         data-rd-axis-title={axis.title}
         data-rd-axis-version={axis.version}
       >
-        <div className="rd-cluster">
+        {/* The same two levels as a lead row in a collapsed card: the state claim and the name on one
+            line, with kind and version receding to the end of it; everything else about the axis on one
+            subordinate line underneath. Four equal-weight lines is what step 3 exists to remove, and the
+            detail is where they cost the most height. */}
+        <div className="rd-axis-head">
           <StateBadge confidence={axis.stateConfidence} state={axis.state} />
-          <span className="rd-muted">{axis.kind}</span>
           <span className="rd-axis-title">{axis.title}</span>
-          <span className="rd-muted">v{axis.version}</span>
+          <span className="rd-axis-kind">
+            {axis.kind} · v{axis.version}
+          </span>
         </div>
-        {axis.description ? (
-          <span className="rd-meta">{axis.description}</span>
+        {line || axis.description || people ? (
+          <p className="rd-axis-secondary">
+            {[line, axis.description, people ? `people: ${people}` : ""]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
         ) : null}
-        {line ? <span className="rd-meta">{line}</span> : null}
-        {people ? <span className="rd-meta">people: {people}</span> : null}
 
         <div className="rd-claim">
           <span className="rd-claim-value" data-rd-claim="current_state">
@@ -2412,18 +2444,6 @@ export function apply(ctx: Context) {
                           {describeAge(entry.lastActivityAt)}
                         </span>
                         <div className="rd-cluster">
-                          {entry.axes.length > LEAD_AXES ? (
-                            <Button
-                              disabled={busy}
-                              onClick={() => toggle(entry.topic.id)}
-                              size="sm"
-                              variant="outline"
-                            >
-                              {expanded
-                                ? "Show fewer axes"
-                                : `All ${entry.axes.length} axes`}
-                            </Button>
-                          ) : null}
                           {/* Reading and editing are two ways into the same card, not one. Reading is
                               the primary action and renders the detail with no form at all; the form
                               appears only from `Edit fields`. Closing collapses the card; finishing an
@@ -2464,8 +2484,12 @@ export function apply(ctx: Context) {
                       </div>
 
                       {hidden > 0 && !expanded ? (
-                        <span className="rd-muted">
-                          {hidden} more axe{hidden === 1 ? "" : "s"} hidden
+                        // Stated, not offered. `Read topic` is the only topic-level disclosure control,
+                        // so a second way to expand would be two controls driving one piece of state —
+                        // which is what the old `All n axes` button was. This says what is out of view
+                        // without inviting a second path to it.
+                        <span className="rd-muted" data-rd-hidden-axes={hidden}>
+                          {shown.length} of {entry.axes.length} axes shown · {hidden} more
                         </span>
                       ) : null}
 

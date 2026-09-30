@@ -1,6 +1,6 @@
 # verify-plugin-page.mjs — read pass, dev instance at http://100.122.4.42:3003
 # viewport: 1280x800
-# generated: 2026-10-01T02:18:02+03:00
+# generated: 2026-10-01T02:30:18+03:00
 
 PASS  login — status 200
 corpus: {"axes":3,"blocked":0,"people":1,"repositories":1,"topic":"UDV Echo Process","windowEvents":30}
@@ -19,8 +19,10 @@ SKIP  a topic with a blocked axis is visually distinct — no axis in this corpu
 PASS  each topic card reports its recent-activity summary — Recent: 607 events · last activity 2 days ago 
 PASS  the window control re-issues get_overview with the new window only — {"activitySinceDays":7}
 PASS  the page still renders after the window change
-SKIP  a card offers to expand when it hides axes — the topic leads with all 3 axes (LEAD_AXES is 3), so none are hidden
-PASS  opening a topic reads it once, in one get_topic call — saw 1: [{"topicId":"950e5234-f00b-49a2-8840-b9e8a8317642"}]
+PASS  the topic card offers one disclosure control, not two — card buttons ["Read topic","Edit fields"]
+SKIP  a card that hides axes states it rather than offering a second way in — the topic leads with all 3 axes (LEAD_AXES is 3), so none are hidden
+PASS  reading a card shows every axis it holds — 3 axis rows for 3 axes
+PASS  opening a topic reads it once, in one get_topic call — saw 1: [{"topicId":"e4dc8ec6-6904-494a-8c5d-eb675d9944b3"}]
 PASS  reading a topic does not open the editor — mode read, editor rendered false
 PASS  the form appears only from Edit fields — mode edit, editor rendered true
 PASS  finishing an edit returns to reading, with the card still open — mode read, editor rendered false
@@ -63,7 +65,7 @@ read pass: all checks passed; 7 skipped for want of a subject in this corpus
 skipped (each with its reason):
   - the blocked axis shows its blocker text — no axis in this corpus is blocked
   - a topic with a blocked axis is visually distinct — no axis in this corpus is blocked, so the attention styling has no subject here
-  - a card offers to expand when it hides axes — the topic leads with all 3 axes (LEAD_AXES is 3), so none are hidden
+  - a card that hides axes states it rather than offering a second way in — the topic leads with all 3 axes (LEAD_AXES is 3), so none are hidden
   - an axis with no evidence says so and shows no confirmed claim — all 3 axes in this dataset carry evidence, so nothing here shows the bare state
   - an axis that states no progress carries no confidence for it — all 3 axes in this dataset carry evidence, so nothing here shows the bare state
   - one person on several topics shows each topic with its own axes underneath — this corpus links ajegorovs to 1 topic(s), so the grouping has one entry

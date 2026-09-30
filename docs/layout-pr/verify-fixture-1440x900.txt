@@ -1,6 +1,6 @@
 # verify-plugin-page.mjs — read pass, dev instance at http://100.122.4.42:3003
 # viewport: 1440x900
-# generated: 2026-10-01T02:15:53+03:00
+# generated: 2026-10-01T02:27:48+03:00
 
 PASS  login — status 200
 corpus: {"axes":5,"blocked":1,"people":2,"repositories":2,"topic":"Layout fixture — crowded card","windowEvents":5}
@@ -14,21 +14,23 @@ PASS  the header carries the title, window control, archived toggle and count li
 PASS  the count line reads correctly when the count is one — 2 repositories
 PASS  every topic in the payload has one card, carrying its own axes and none of another topic's — 2 cards for 2 topics; no leaks
 PASS  a topic card leads with people and its state counts — Fixture Alpha on Layout fixture — crowded card; payload states ["1 active","1 draft","1 blocked","1 parked","1 completed"]; card counts ["1 blocked","1 active","1 draft","1 parked","1 completed"]
-PASS  the blocked axis shows its blocker text — Layout fixture — crowded card active Fixture Alpha · fixture/crowded-card 1 blocked 1 active 1 draft 1 parked 1 completed BLOCKED experiment Fixture: blocked axis (blocked + blocker text) fixture/crow
+PASS  the blocked axis shows its blocker text — Layout fixture — crowded card active Fixture Alpha · fixture/crowded-card 1 blocked 1 active 1 draft 1 parked 1 completed BLOCKED Fixture: blocked axis (blocked + blocker text) experiment fixture/crow
 PASS  a topic with a blocked axis is visually distinct — Layout fixture — crowded card: true/3px oklch(0.577 0.245 27.325); Layout fixture — second topic: false
 PASS  each topic card reports its recent-activity summary — Recent: 4 events · last activity today 
 PASS  the window control re-issues get_overview with the new window only — {"activitySinceDays":7}
 PASS  the page still renders after the window change
-PASS  expanding a card shows every axis it holds — 5 axis rows for 5 axes
-PASS  opening a topic reads it once, in one get_topic call — saw 1: [{"topicId":"1fa4b9f5-bf80-4da5-8ed1-efc633a2a2b8"}]
+PASS  the topic card offers one disclosure control, not two — card buttons ["Read topic","Edit fields"]
+PASS  a card that hides axes states it rather than offering a second way in — note "3 of 5 axes shown · 2 more" (data-rd-hidden-axes=2), 3 rows for 5 axes, 2 hidden
+PASS  reading a card shows every axis it holds — 5 axis rows for 5 axes
+PASS  opening a topic reads it once, in one get_topic call — saw 1: [{"topicId":"c485afd7-5300-4b67-ba84-9990ff44808b"}]
 PASS  reading a topic does not open the editor — mode read, editor rendered false
 PASS  the form appears only from Edit fields — mode edit, editor rendered true
 PASS  finishing an edit returns to reading, with the card still open — mode read, editor rendered false
 PASS  the toolbar controls form groups rather than one strip — groups ["views","window","actions"], holding 10 controls
 PASS  the expanded card renders the topic detail, one block per axis — 5 axes, detail block: true (payload holds 5)
 PASS  the detail shows the topic's fields, its notes and its activity separately — topic notes in payload 1 → rendered 1; activity rows 4
-PASS  each axis shows full metadata with its own state and per-claim confidence — Fixture: blocked axis (blocked + blocker text): conf=[confirmed,confirmed,confirmed] | Fixture: active axis (with evidence): conf=[confirmed,confirmed] | Fixture: completed axis: conf=[confirmed,confirmed] | Fixture: parked axis (inferred state): conf=[inferred,inferred] | Fixture: evidence-free axis (inferred, nothing behind it): conf=[inferred]
-PASS  every axis carries an evidence line, in words — Fixture: blocked axis (blocked + blocker text): 3, Fixture: active axis (with evidence): 2, Fixture: completed axis: 2, Fixture: parked axis (inferred state): 2, Fixture: evidence-free axis (inferred, nothing behind it): 0
+PASS  each axis shows full metadata with its own state and per-claim confidence — Fixture: blocked axis (blocked + blocker text): conf=[confirmed,confirmed,confirmed] | Fixture: completed axis: conf=[confirmed,confirmed] | Fixture: parked axis (inferred state): conf=[inferred,inferred] | Fixture: active axis (with evidence): conf=[confirmed,confirmed] | Fixture: evidence-free axis (inferred, nothing behind it): conf=[inferred]
+PASS  every axis carries an evidence line, in words — Fixture: blocked axis (blocked + blocker text): 3, Fixture: completed axis: 2, Fixture: parked axis (inferred state): 2, Fixture: active axis (with evidence): 2, Fixture: evidence-free axis (inferred, nothing behind it): 0
 PASS  an axis with no evidence says so and shows no confirmed claim — Fixture: evidence-free axis (inferred, nothing behind it): evidence 0, conf [inferred]
 PASS  an axis that states no progress carries no confidence for it — Fixture: evidence-free axis (inferred, nothing behind it): says "no progress note", conf [inferred]
 PASS  a per-axis history expands inside its own axis — 1 rows for Fixture: blocked axis (blocked + blocker text)

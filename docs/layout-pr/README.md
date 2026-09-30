@@ -1,7 +1,7 @@
 # Layout rework — first increment
 
-Branch `layout/rework`. Steps 1 and 2 of [`docs/layout-rework-brief.md`](../layout-rework-brief.md) —
-the two structural ones.
+Branch `layout/rework`. Steps **1–3** of [`docs/layout-rework-brief.md`](../layout-rework-brief.md), plus
+the disclosure fix the review asked for between steps 2 and 3.
 
 `docs/screenshots/` still holds the **before** set, deliberately: it is what the review was written
 against, and a before/after pair is only useful if both halves stay. On acceptance the new captures are
@@ -18,28 +18,48 @@ promoted into `docs/screenshots/` and `docs/layout-fixtures/screenshots/`, and t
 2. **The toolbar groups its ten controls** into three divided clusters: what you are looking at (the view
    switch), the window you are looking at it through (window buttons + archived), and the actions
    (`Refresh`). The divider is the change; a flat row of ten peers is what it was.
+3. **One disclosure control per card.** The `All n axes` / `Show fewer axes` button is gone: it drove the
+   same state as `Read topic` / `Close`, so a card offered two ways to do one thing. Hidden work is now
+   stated rather than offered — `3 of 5 axes shown · 2 more` (`data-rd-hidden-axes`) — and `Read topic` is
+   the single topic-level disclosure control. A collapsed card's buttons are exactly `Read topic` and
+   `Edit fields`.
+4. **Axis compression.** An axis is one primary row plus one subordinate line, instead of four stacked
+   lines of equal weight:
+
+   ```
+   ACTIVE · inferred   Docs & agent skills                 maintenance
+                       repo · branch · PR #69 · the SA5 slice is published
+   Blocker: …            ← the exception: own line, immediately visible
+   ```
+
+   Applied to the collapsed card's lead rows *and* the detail's axis blocks — the detail is where the
+   four-line stack cost the most height.
 
 ## Measured
 
-Same read pass (43 checks before, 47 now — the four new ones are the two mode invariants, the
-read/edit round-trip and the toolbar grouping), against both datasets at both viewports:
+| | pre-rework | now |
+|---|---|---|
+| corpus detail @1440, read mode | 4496 px | **4374 px** |
+| fixture detail @1440 | 2648 px | **2529 px** |
+| corpus detail, editor open (1440) | 4828 px | n/a — read mode is a separate screen now |
 
 | dataset | 1440×900 | 1280×800 |
 |---|---|---|
-| `docs/corpus/` | all checks passed, 7 skipped | all checks passed, 7 skipped |
-| `docs/layout-fixtures/` | all checks passed, **0 skipped** | all checks passed, **0 skipped** |
+| `docs/corpus/` | 42 pass · 0 fail · 7 skip | 42 pass · 0 fail · 7 skip |
+| `docs/layout-fixtures/` | **49 pass · 0 fail · 0 skip** | **49 pass · 0 fail · 0 skip** |
 
-`bun run check`: **82 pass · 0 fail · 472 expect()**. The corpus detail capture is now read mode —
-1144×4496, against 1144×4828 with the editor open at the same width.
+Read pass 43 → 49 checks across the increment. `bun run check`: **82 pass · 0 fail · 472 expect()**.
 
-Layout is otherwise untouched, on purpose: the detail is still ~4.5k px tall and still stacks four
-equal-weight small-text lines per axis.
+**Honest note on the height.** Axis compression saves ~120 px per dataset. The rows are two levels instead
+of four, but the detail's height is dominated by the per-axis claims (description, summary, current state,
+evidence) and the activity log — not by the axis heads. That bulk is step 4's target (claims and counts
+that restate what is already on screen), not step 3's.
 
 ## What this increment does not do
 
-Steps 3–7: axis compression, the duplicated count strip in cards, one grammar across People /
-Repositories / Progress, then the polish pass. The detail's height and the axis-row stack are the
-numbers to move for step 3; `dashboard.png` in each directory is the density reference for both viewports.
+Steps 4–7: the count strip that restates the rows below it, one grammar across People / Repositories /
+Progress, then the polish pass. `dashboard.png` in each directory is the density reference at both
+viewports.
 
 ## Files
 

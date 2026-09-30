@@ -109,6 +109,26 @@ var css = `
   border-left-color: var(--destructive, #b91c1c);
 }
 [data-plugin-id="research-dashboard"] .rd-axis-title { font-weight: 600; }
+/* Step 3: one primary row per axis (state claim + name, kind receding), one subordinate line for where
+   the work lives and what it says about itself. The title carries the weight; everything else in the row
+   is deliberately quieter than it. */
+[data-plugin-id="research-dashboard"] .rd-axis-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+[data-plugin-id="research-dashboard"] .rd-axis-kind {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  opacity: 0.55;
+}
+[data-plugin-id="research-dashboard"] .rd-axis-secondary {
+  margin: 2px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  opacity: 0.65;
+}
 [data-plugin-id="research-dashboard"] .rd-state {
   font-size: 11px;
   text-transform: uppercase;
@@ -431,7 +451,7 @@ function apply(ctx) {
   }
   function AxisItem({ axis }) {
     const primary = axis.repositories[0]?.fullName ?? "";
-    const line = [
+    const where = [
       primary,
       axis.branch,
       axis.prNumber ? `PR #${axis.prNumber}` : ""
@@ -441,19 +461,17 @@ function apply(ctx) {
       className: "rd-axis",
       "data-rd-axis-state": axis.state
     }, /* @__PURE__ */ React.createElement("div", {
-      className: "rd-cluster"
+      className: "rd-axis-head"
     }, /* @__PURE__ */ React.createElement(StateBadge, {
       confidence: axis.stateConfidence,
       state: axis.state
     }), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-muted"
-    }, axis.kind)), /* @__PURE__ */ React.createElement("div", {
       className: "rd-axis-title"
-    }, axis.title), line ? /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta"
-    }, line) : null, axis.currentState ? /* @__PURE__ */ React.createElement("div", {
-      className: "rd-meta"
-    }, axis.currentState) : null, axis.blocker ? /* @__PURE__ */ React.createElement("div", {
+    }, axis.title), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-axis-kind"
+    }, axis.kind)), where || axis.currentState ? /* @__PURE__ */ React.createElement("p", {
+      className: "rd-axis-secondary"
+    }, [where, axis.currentState].filter(Boolean).join(" · ")) : null, axis.blocker ? /* @__PURE__ */ React.createElement("div", {
       className: "rd-blocker",
       "data-rd-strong": blocked
     }, "Blocker: ", axis.blocker) : null);
@@ -570,23 +588,17 @@ function apply(ctx) {
       "data-rd-axis-title": axis.title,
       "data-rd-axis-version": axis.version
     }, /* @__PURE__ */ React.createElement("div", {
-      className: "rd-cluster"
+      className: "rd-axis-head"
     }, /* @__PURE__ */ React.createElement(StateBadge, {
       confidence: axis.stateConfidence,
       state: axis.state
     }), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-muted"
-    }, axis.kind), /* @__PURE__ */ React.createElement("span", {
       className: "rd-axis-title"
     }, axis.title), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-muted"
-    }, "v", axis.version)), axis.description ? /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta"
-    }, axis.description) : null, line ? /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta"
-    }, line) : null, people ? /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta"
-    }, "people: ", people) : null, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-axis-kind"
+    }, axis.kind, " · v", axis.version)), line || axis.description || people ? /* @__PURE__ */ React.createElement("p", {
+      className: "rd-axis-secondary"
+    }, [line, axis.description, people ? `people: ${people}` : ""].filter(Boolean).join(" · ")) : null, /* @__PURE__ */ React.createElement("div", {
       className: "rd-claim"
     }, /* @__PURE__ */ React.createElement("span", {
       className: "rd-claim-value",
@@ -1470,12 +1482,7 @@ function apply(ctx) {
         className: "rd-muted"
       }, "Recent: ", entry.activityCount, " event", entry.activityCount === 1 ? "" : "s", " · last activity", " ", describeAge(entry.lastActivityAt)), /* @__PURE__ */ React.createElement("div", {
         className: "rd-cluster"
-      }, entry.axes.length > LEAD_AXES ? /* @__PURE__ */ React.createElement(Button, {
-        disabled: busy,
-        onClick: () => toggle(entry.topic.id),
-        size: "sm",
-        variant: "outline"
-      }, expanded ? "Show fewer axes" : `All ${entry.axes.length} axes`) : null, /* @__PURE__ */ React.createElement(Button, {
+      }, /* @__PURE__ */ React.createElement(Button, {
         "data-rd-close": expanded ? "true" : "false",
         "data-rd-read-open": expanded ? "false" : "true",
         disabled: busy,
@@ -1502,8 +1509,9 @@ function apply(ctx) {
         size: "sm",
         variant: editingThis || !expanded ? "outline" : "default"
       }, editingThis ? "Done editing" : "Edit fields"))), hidden > 0 && !expanded ? /* @__PURE__ */ React.createElement("span", {
-        className: "rd-muted"
-      }, hidden, " more axe", hidden === 1 ? "" : "s", " hidden") : null, details ? /* @__PURE__ */ React.createElement("div", {
+        className: "rd-muted",
+        "data-rd-hidden-axes": hidden
+      }, shown.length, " of ", entry.axes.length, " axes shown · ", hidden, " more") : null, details ? /* @__PURE__ */ React.createElement("div", {
         className: "rd-detail rd-divider",
         "data-rd-detail": details.topic.name
       }, /* @__PURE__ */ React.createElement("span", {
