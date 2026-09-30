@@ -955,7 +955,9 @@ export function apply(ctx: Context) {
     if (!ref) {
       return base;
     }
-    return ref.toLowerCase().includes(base.toLowerCase()) ? ref : `${base} · ${ref}`;
+    return ref.toLowerCase().includes(base.toLowerCase())
+      ? ref
+      : `${base} · ${ref}`;
   }
 
   /**
@@ -1885,10 +1887,7 @@ export function apply(ctx: Context) {
                             <span className="rd-strong">{event.summary}</span>
                           </div>
                           <span className="rd-meta">
-                            {describeSource(
-                              event.sourceType,
-                              event.sourceRef
-                            )}{" "}
+                            {describeSource(event.sourceType, event.sourceRef)}{" "}
                             ·{" "}
                             {event.person
                               ? event.person.displayName
