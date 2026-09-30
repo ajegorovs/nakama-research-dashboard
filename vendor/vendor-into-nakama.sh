@@ -27,7 +27,7 @@ fi
 
 DEST="$CHECKOUT/packages/plugins/$PLUGIN_ID"
 mkdir -p "$DEST"
-for item in nakama.plugin.json migrations src skills actions ui README.md; do
+for item in nakama.plugin.json migrations src skills actions ui README.md docs; do
   [ -e "$SRC/$item" ] || continue
   rm -rf "$DEST/$item"
   cp -R "$SRC/$item" "$DEST/$item"

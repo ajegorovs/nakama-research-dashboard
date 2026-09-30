@@ -7,6 +7,15 @@ This repository is the **source of truth** for the plugin. The Nakama server tre
 here: `vendor/` holds the recipe that puts the plugin into a checkout, because Nakama's bundled
 ("official") loader only sees plugins that live inside the server's own tree.
 
+> **Reviewing this?** Start with `docs/PLATFORM-CONTEXT.md` (how the plugin fits into Nakama's
+> platform model, the constraints that shape any rework, current state, known issues, and an explicit
+> *not-verified* list) and `docs/OPEN-QUESTIONS.md` (the five areas we want your judgement on: UI
+> layout, extra functionality, multi-user, service delivery, updates). This README covers build,
+> layout, loading it into Nakama, and a per-file review table.
+>
+> The repository is **private**: request collaborator access rather than expecting an anonymous clone.
+> Everything needed to build is in here — `bun run check` is the whole build and test story.
+
 ## Why not published to npm
 
 Third-party Nakama plugins install **only** from the public npm registry at an exact version — local
