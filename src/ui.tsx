@@ -176,6 +176,7 @@ type AxisScan = {
   title: string;
   kind: string;
   state: AxisState;
+  stateConfidence: Confidence;
   blocker: string;
   blockerConfidence: Confidence | null;
   branch: string;
@@ -299,6 +300,22 @@ const SOURCE_OPTIONS = [
   { label: "Agent review", value: "agent_review" },
 ];
 
+/**
+ * How a source is *said* when it is being reported rather than chosen (C8): a menu offers "Pull request"
+ * because the reader is picking one; a line of record says "PR #88". Lower case, and short enough to sit
+ * beside a date and a summary.
+ */
+const SOURCE_LABELS: Record<string, string> = {
+  agent_review: "agent review",
+  experiment: "experiment",
+  github_commit: "commit",
+  github_issue: "issue",
+  github_pr: "PR",
+  group_chat: "group chat",
+  manual: "manual note",
+  repo_document: "document",
+};
+
 /** Axis states, in the same attention order the overview uses. */
 const STATE_OPTIONS = [
   { label: "Blocked", value: "blocked" },
@@ -419,6 +436,8 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-views [aria-pressed="true"] { font-weight: 600; }
 /* C7: the progress timeline — filters on one line, each axis a labelled rail. */
 [data-plugin-id="research-dashboard"] .rd-filters { flex-wrap: wrap; gap: 8px; }
+/* C8: the qualifier on a state is part of the claim, not decoration — quieter, never optional. */
+[data-plugin-id="research-dashboard"] .rd-claim-suffix { font-weight: 400; opacity: 0.75; }
 [data-plugin-id="research-dashboard"] .rd-timeline-axis {
   border-left: 2px solid var(--border, #e5e7eb);
   display: grid;
@@ -830,9 +849,7 @@ export function apply(ctx: Context) {
     return (
       <li className="rd-axis" data-rd-axis-state={axis.state}>
         <div className="rd-cluster">
-          <span className="rd-state" data-rd-state={axis.state}>
-            {axis.state}
-          </span>
+          <StateBadge confidence={axis.stateConfidence} state={axis.state} />
           <span className="rd-muted">{axis.kind}</span>
         </div>
         <div className="rd-axis-title">{axis.title}</div>
@@ -923,8 +940,49 @@ export function apply(ctx: Context) {
                 item.by ? `${item.label} (${item.by})` : item.label
               )
               .join(" · ")}${more > 0 ? ` +${more} more` : ""}`
-          : "no evidence on record — a 'confirmed' claim is impossible here"}
+          : "no evidence on record"}
       </div>
+    );
+  }
+
+  /**
+   * One way to say where a recorded event came from (C8). "manual note", "agent review", "PR #88" — the
+   * same words the evidence line uses, and a ref that already names its source is not said twice.
+   */
+  function describeSource(sourceType: string, sourceRef: string): string {
+    const base = SOURCE_LABELS[sourceType] ?? sourceType;
+    const ref = sourceRef.trim();
+    if (!ref) {
+      return base;
+    }
+    return ref.toLowerCase().includes(base.toLowerCase()) ? ref : `${base} · ${ref}`;
+  }
+
+  /**
+   * An axis state with the claim attached (C8). A bare "blocked" reads as a fact, and the temporal view
+   * would launder an inference into one — so a state that is not confirmed always says so, in the view
+   * and in the detail alike: "BLOCKED · inferred". A confirmed state stays bare on screen but still
+   * carries `data-rd-state-confidence`, so the two can be told apart from outside without shouting on
+   * every card. Nothing renders a state any other way.
+   */
+  function StateBadge({
+    confidence,
+    state,
+  }: {
+    confidence: Confidence | null;
+    state: AxisState;
+  }) {
+    return (
+      <span
+        className="rd-state"
+        data-rd-state={state}
+        data-rd-state-confidence={confidence ?? "none"}
+      >
+        {state}
+        {confidence && confidence !== "confirmed" ? (
+          <span className="rd-claim-suffix"> · {confidence}</span>
+        ) : null}
+      </span>
     );
   }
 
@@ -941,10 +999,7 @@ export function apply(ctx: Context) {
             <li key={item.id}>
               <div>{item.summary}</div>
               <span className="rd-meta">
-                {SOURCE_OPTIONS.find(
-                  (option) => option.value === item.sourceType
-                )?.label ?? item.sourceType}
-                {item.sourceRef ? ` · ${item.sourceRef}` : ""} ·{" "}
+                {describeSource(item.sourceType, item.sourceRef)} ·{" "}
                 {item.occurredAt.slice(0, 10)}
                 {item.actorType ? ` · ${item.actorType}` : ""}
               </span>
@@ -1012,9 +1067,7 @@ export function apply(ctx: Context) {
         data-rd-axis-version={axis.version}
       >
         <div className="rd-cluster">
-          <span className="rd-state" data-rd-state={axis.state}>
-            {axis.state}
-          </span>
+          <StateBadge confidence={axis.stateConfidence} state={axis.state} />
           <span className="rd-muted">{axis.kind}</span>
           <span className="rd-axis-title">{axis.title}</span>
           <span className="rd-muted">v{axis.version}</span>
@@ -1264,9 +1317,7 @@ export function apply(ctx: Context) {
       >
         <div className="rd-row">
           <span className="rd-cluster">
-            <span className="rd-state" data-rd-state={axis.state}>
-              {axis.state}
-            </span>
+            <StateBadge confidence={axis.stateConfidence} state={axis.state} />
             <span className="rd-strong">{axis.title}</span>
           </span>
           <span className="rd-muted">{axis.kind}</span>
@@ -1306,9 +1357,7 @@ export function apply(ctx: Context) {
           <li key={item.id}>
             <div>{item.summary}</div>
             <span className="rd-meta">
-              {SOURCE_OPTIONS.find((option) => option.value === item.sourceType)
-                ?.label ?? item.sourceType}
-              {item.sourceRef ? ` · ${item.sourceRef}` : ""} ·{" "}
+              {describeSource(item.sourceType, item.sourceRef)} ·{" "}
               {item.occurredAt.slice(0, 10)}
             </span>
           </li>
@@ -1798,12 +1847,10 @@ export function apply(ctx: Context) {
                     <div className="rd-row">
                       <span className="rd-cluster">
                         {bucket.axis ? (
-                          <span
-                            className="rd-state"
-                            data-rd-state={bucket.axis.state}
-                          >
-                            {bucket.axis.state}
-                          </span>
+                          <StateBadge
+                            confidence={bucket.axis.stateConfidence}
+                            state={bucket.axis.state}
+                          />
                         ) : null}
                         <span className="rd-strong">
                           {bucket.axis?.title ?? "topic-level"}
@@ -1838,10 +1885,11 @@ export function apply(ctx: Context) {
                             <span className="rd-strong">{event.summary}</span>
                           </div>
                           <span className="rd-meta">
-                            {SOURCE_OPTIONS.find(
-                              (option) => option.value === event.sourceType
-                            )?.label ?? event.sourceType}
-                            {event.sourceRef ? ` · ${event.sourceRef}` : ""} ·{" "}
+                            {describeSource(
+                              event.sourceType,
+                              event.sourceRef
+                            )}{" "}
+                            ·{" "}
                             {event.person
                               ? event.person.displayName
                               : "no account attributed"}

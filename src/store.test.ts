@@ -1545,6 +1545,73 @@ describe("ResearchStore people and repository rollups (C6)", () => {
   });
 });
 
+describe("ResearchStore two-session concurrency (C8)", () => {
+  test("a second session's write makes the first session's save stale, and the retry lands", () => {
+    const { path, store: sessionA } = openStore();
+    const topic = sessionA.createTopic({
+      name: "Concurrency round trip",
+      status: "active",
+    });
+    sessionA.reconcileTopic({
+      axes: [
+        { state: "active", stateConfidence: "inferred", title: "Shared axis" },
+      ],
+      topicId: topic.id,
+    });
+    const read = sessionA.getTopicDetail(topic.id).axes[0];
+
+    // Session B is a second connection to the same file — the platform runs each action that way.
+    const sessionB = new ResearchStore(path);
+    sessionB.reconcileTopic({
+      axes: [{ description: "bumped by session B", id: read.id }],
+      topicId: topic.id,
+    });
+    const bumped = sessionB.getTopicDetail(topic.id).axes[0];
+    expect(bumped.version).toBeGreaterThan(read.version);
+
+    // A still holds the version it read: its save is refused rather than applied over B's change, and
+    // the refusal carries the prefix the page keys its scoped conflict banner off. The rationale note
+    // rides in the same call, as D8 has it.
+    const note = "parked while the two papers are submitted";
+    const correction = {
+      annotations: [{ axisId: read.id, text: note }],
+      axes: [
+        {
+          expectedVersion: read.version,
+          id: read.id,
+          state: "parked",
+          stateConfidence: "inferred",
+        },
+      ],
+      topicId: topic.id,
+    };
+    let refusal = "";
+    try {
+      sessionA.reconcileTopic(correction);
+    } catch (error) {
+      refusal = error instanceof Error ? error.message : String(error);
+    }
+    expect(refusal.startsWith("conflict:")).toBe(true);
+
+    // Refusing is atomic with the note that rode with it: neither the state nor the rationale landed.
+    const refused = sessionA.getTopicDetail(topic.id).axes[0];
+    expect(refused.state).toBe("active");
+    expect(refused.description).toBe("bumped by session B");
+    expect(JSON.stringify(refused)).not.toContain(note);
+
+    // A re-reads (the page's "Reload this topic") and retries against the version it now sees.
+    sessionA.reconcileTopic({
+      ...correction,
+      axes: [{ ...correction.axes[0], expectedVersion: bumped.version }],
+    });
+    const landed = sessionA.getTopicDetail(topic.id).axes[0];
+    expect(landed.state).toBe("parked");
+    expect(JSON.stringify(landed)).toContain(note);
+    // One file, two sessions: B sees A's write without having re-read anything of its own.
+    expect(sessionB.getTopicDetail(topic.id).axes[0].state).toBe("parked");
+  });
+});
+
 describe("ResearchStore progress timeline (C7)", () => {
   test("groups by topic and axis, with the context implied through the axis", () => {
     const { store } = openStore();

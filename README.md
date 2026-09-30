@@ -35,7 +35,12 @@ here: `vendor/` holds the recipe that puts the plugin into a checkout, because N
 > newest topic first, filterable by topic, person, repository and axis state). All four render from the
 > one payload the page fetches, so switching a view costs no query; one person on several topics is one
 > row with their involvement grouped underneath, and nothing is scored or ranked
-> (`bun run check` → 74 pass).
+> (`bun run check` → 75 pass). C8 finished the provenance pass: one `StateBadge` renders every axis state
+> in every view, so a state that is not `confirmed` says so where it is read (`BLOCKED · inferred`) and a
+> confirmed one is only quiet, never unqualified; one vocabulary says what backs a claim (`PR #88`,
+> `agent review`, `manual note`, `no evidence on record`); and the two-session concurrency round-trip is
+> now an automated test at both levels — the store (A reads, B writes, A is refused, A re-reads and
+> retries) and the page (scoped banner, reload, retry, the rationale note atomic with it).
 > What the agent side actually does is checked against the
 > platform, not the manifest: `GET /v1/tools` lists exactly the five tool rows, and a live three-turn
 > run used all five (`find_tools` → `get_overview`; `find_tools` → `search_dashboard` ∥ `get_topic` →

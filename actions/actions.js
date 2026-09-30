@@ -151,6 +151,7 @@ function toAxisScan(axis, repositories) {
     prUrl: axis.prUrl,
     repositories,
     state: axis.state,
+    stateConfidence: axis.stateConfidence,
     title: axis.title,
     topicId: axis.topicId,
     updatedAt: axis.updatedAt,

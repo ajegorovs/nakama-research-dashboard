@@ -16,6 +16,16 @@ var SOURCE_OPTIONS = [
   { label: "Experiment / run", value: "experiment" },
   { label: "Agent review", value: "agent_review" }
 ];
+var SOURCE_LABELS = {
+  agent_review: "agent review",
+  experiment: "experiment",
+  github_commit: "commit",
+  github_issue: "issue",
+  github_pr: "PR",
+  group_chat: "group chat",
+  manual: "manual note",
+  repo_document: "document"
+};
 var STATE_OPTIONS = [
   { label: "Blocked", value: "blocked" },
   { label: "Active", value: "active" },
@@ -110,6 +120,8 @@ var css = `
 [data-plugin-id="research-dashboard"] .rd-views [aria-pressed="true"] { font-weight: 600; }
 /* C7: the progress timeline — filters on one line, each axis a labelled rail. */
 [data-plugin-id="research-dashboard"] .rd-filters { flex-wrap: wrap; gap: 8px; }
+/* C8: the qualifier on a state is part of the claim, not decoration — quieter, never optional. */
+[data-plugin-id="research-dashboard"] .rd-claim-suffix { font-weight: 400; opacity: 0.75; }
 [data-plugin-id="research-dashboard"] .rd-timeline-axis {
   border-left: 2px solid var(--border, #e5e7eb);
   display: grid;
@@ -410,10 +422,10 @@ function apply(ctx) {
       "data-rd-axis-state": axis.state
     }, /* @__PURE__ */ React.createElement("div", {
       className: "rd-cluster"
-    }, /* @__PURE__ */ React.createElement("span", {
-      className: "rd-state",
-      "data-rd-state": axis.state
-    }, axis.state), /* @__PURE__ */ React.createElement("span", {
+    }, /* @__PURE__ */ React.createElement(StateBadge, {
+      confidence: axis.stateConfidence,
+      state: axis.state
+    }), /* @__PURE__ */ React.createElement("span", {
       className: "rd-muted"
     }, axis.kind)), /* @__PURE__ */ React.createElement("div", {
       className: "rd-axis-title"
@@ -464,7 +476,27 @@ function apply(ctx) {
       className: "rd-evidence",
       "data-rd-evidence-count": evidence.length,
       "data-rd-has-evidence": evidence.length > 0
-    }, evidence.length > 0 ? `evidence: ${shown.map((item) => item.by ? `${item.label} (${item.by})` : item.label).join(" · ")}${more > 0 ? ` +${more} more` : ""}` : "no evidence on record — a 'confirmed' claim is impossible here");
+    }, evidence.length > 0 ? `evidence: ${shown.map((item) => item.by ? `${item.label} (${item.by})` : item.label).join(" · ")}${more > 0 ? ` +${more} more` : ""}` : "no evidence on record");
+  }
+  function describeSource(sourceType, sourceRef) {
+    const base = SOURCE_LABELS[sourceType] ?? sourceType;
+    const ref = sourceRef.trim();
+    if (!ref) {
+      return base;
+    }
+    return ref.toLowerCase().includes(base.toLowerCase()) ? ref : `${base} · ${ref}`;
+  }
+  function StateBadge({
+    confidence,
+    state
+  }) {
+    return /* @__PURE__ */ React.createElement("span", {
+      className: "rd-state",
+      "data-rd-state": state,
+      "data-rd-state-confidence": confidence ?? "none"
+    }, state, confidence && confidence !== "confirmed" ? /* @__PURE__ */ React.createElement("span", {
+      className: "rd-claim-suffix"
+    }, " · ", confidence) : null);
   }
   function AxisHistory({ axis }) {
     return /* @__PURE__ */ React.createElement("div", {
@@ -478,7 +510,7 @@ function apply(ctx) {
       key: item.id
     }, /* @__PURE__ */ React.createElement("div", null, item.summary), /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta"
-    }, SOURCE_OPTIONS.find((option) => option.value === item.sourceType)?.label ?? item.sourceType, item.sourceRef ? ` · ${item.sourceRef}` : "", " ·", " ", item.occurredAt.slice(0, 10), item.actorType ? ` · ${item.actorType}` : ""))), axis.history.length === 0 ? /* @__PURE__ */ React.createElement("li", {
+    }, describeSource(item.sourceType, item.sourceRef), " ·", " ", item.occurredAt.slice(0, 10), item.actorType ? ` · ${item.actorType}` : ""))), axis.history.length === 0 ? /* @__PURE__ */ React.createElement("li", {
       className: "rd-muted"
     }, "No activity on this axis yet.") : null), /* @__PURE__ */ React.createElement("span", {
       className: "rd-section"
@@ -519,10 +551,10 @@ function apply(ctx) {
       "data-rd-axis-version": axis.version
     }, /* @__PURE__ */ React.createElement("div", {
       className: "rd-cluster"
-    }, /* @__PURE__ */ React.createElement("span", {
-      className: "rd-state",
-      "data-rd-state": axis.state
-    }, axis.state), /* @__PURE__ */ React.createElement("span", {
+    }, /* @__PURE__ */ React.createElement(StateBadge, {
+      confidence: axis.stateConfidence,
+      state: axis.state
+    }), /* @__PURE__ */ React.createElement("span", {
       className: "rd-muted"
     }, axis.kind), /* @__PURE__ */ React.createElement("span", {
       className: "rd-axis-title"
@@ -719,10 +751,10 @@ function apply(ctx) {
       className: "rd-row"
     }, /* @__PURE__ */ React.createElement("span", {
       className: "rd-cluster"
-    }, /* @__PURE__ */ React.createElement("span", {
-      className: "rd-state",
-      "data-rd-state": axis.state
-    }, axis.state), /* @__PURE__ */ React.createElement("span", {
+    }, /* @__PURE__ */ React.createElement(StateBadge, {
+      confidence: axis.stateConfidence,
+      state: axis.state
+    }), /* @__PURE__ */ React.createElement("span", {
       className: "rd-strong"
     }, axis.title)), /* @__PURE__ */ React.createElement("span", {
       className: "rd-muted"
@@ -745,7 +777,7 @@ function apply(ctx) {
       key: item.id
     }, /* @__PURE__ */ React.createElement("div", null, item.summary), /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta"
-    }, SOURCE_OPTIONS.find((option) => option.value === item.sourceType)?.label ?? item.sourceType, item.sourceRef ? ` · ${item.sourceRef}` : "", " ·", " ", item.occurredAt.slice(0, 10)))), items.length === 0 ? /* @__PURE__ */ React.createElement("li", {
+    }, describeSource(item.sourceType, item.sourceRef), " ·", " ", item.occurredAt.slice(0, 10)))), items.length === 0 ? /* @__PURE__ */ React.createElement("li", {
       className: "rd-muted"
     }, "Nothing recorded in", " ", windowDays === 0 ? "any window" : `the last ${countLabel(windowDays, "day", "days")}`, ".") : null);
   }
@@ -1024,10 +1056,10 @@ function apply(ctx) {
       className: "rd-row"
     }, /* @__PURE__ */ React.createElement("span", {
       className: "rd-cluster"
-    }, bucket.axis ? /* @__PURE__ */ React.createElement("span", {
-      className: "rd-state",
-      "data-rd-state": bucket.axis.state
-    }, bucket.axis.state) : null, /* @__PURE__ */ React.createElement("span", {
+    }, bucket.axis ? /* @__PURE__ */ React.createElement(StateBadge, {
+      confidence: bucket.axis.stateConfidence,
+      state: bucket.axis.state
+    }) : null, /* @__PURE__ */ React.createElement("span", {
       className: "rd-strong"
     }, bucket.axis?.title ?? "topic-level")), /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta"
@@ -1050,7 +1082,7 @@ function apply(ctx) {
       className: "rd-strong"
     }, event.summary)), /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta"
-    }, SOURCE_OPTIONS.find((option) => option.value === event.sourceType)?.label ?? event.sourceType, event.sourceRef ? ` · ${event.sourceRef}` : "", " ·", " ", event.person ? event.person.displayName : "no account attributed"))), bucket.eventCount > bucket.events.length ? /* @__PURE__ */ React.createElement("li", {
+    }, describeSource(event.sourceType, event.sourceRef), " ", "·", " ", event.person ? event.person.displayName : "no account attributed"))), bucket.eventCount > bucket.events.length ? /* @__PURE__ */ React.createElement("li", {
       className: "rd-muted"
     }, bucket.eventCount - bucket.events.length, " older here — open the topic for the full history") : null))))))));
   }

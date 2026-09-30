@@ -397,6 +397,7 @@ function toAxisScan(axis: Axis, repositories: LinkedRepository[]): AxisScan {
     prUrl: axis.prUrl,
     repositories,
     state: axis.state,
+    stateConfidence: axis.stateConfidence,
     title: axis.title,
     topicId: axis.topicId,
     updatedAt: axis.updatedAt,
@@ -720,6 +721,8 @@ export type AxisScan = {
   title: string;
   kind: AxisKind;
   state: AxisState;
+  /** The state's own claim. A bare "blocked" is an assertion; the record may only hold an inference. */
+  stateConfidence: Confidence;
   blocker: string;
   /** Null where the claim itself is absent — the same rule `toAxis` applies. */
   blockerConfidence: Confidence | null;

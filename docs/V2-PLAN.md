@@ -1,9 +1,9 @@
 # V2 plan — coordination model (topics → development axes → evidence)
 
-**Status:** in progress — **C0–C7 are done and verified** (decisions, migration 002, store v2, the action
-surface, the overview, the topic detail, the people/repositories views, the progress view); **C7b
-(concurrency round-trip, folded into C8) and C8 (editing/detail polish) are next**. See the status line at
-the end of each chunk.
+**Status:** in progress — **C0–C8 are done and verified** (decisions, migration 002, store v2, the action
+surface, the overview, the topic detail, the people/repositories views, the progress view, the provenance
+pass); **C9a (skill audit, only if needed) and C10 (retire the legacy tables) are next**. See the status
+line at the end of each chunk.
 **Input:** [`reviews/2026-09-30-v2-structural-redesign.md`](reviews/2026-09-30-v2-structural-redesign.md)
 (external review of V1, kept verbatim; §16 lists its suggested sequence).
 **Written:** 2026-09-30, checked against Nakama v0.4.31 and this repo at `8688a08`.
@@ -23,8 +23,8 @@ in-tree copy on the Nakama clone's `research-dashboard` branch are **not** touch
    **D6** is resolved too (real topic names are genericised throughout, screenshots included).
 3. Work §6 in order. Each chunk is self-contained: deliverable, files, acceptance test, evidence
    command, dependencies. Do not start a chunk whose dependencies are unmet — most of the risk here
-   is in the seams between chunks, not inside them. **C1–C7 are done; C7b (concurrency round-trip, into
-   C8) and C8 (editing polish) are next.**
+   is in the seams between chunks, not inside them. **C1–C8 are done; C9a (skill audit, only if needed)
+   and C10 (retire the legacy tables) are next.**
    The gen-1 surface is gone — `src/actions.ts` is the v2 surface, `src/ui.tsx` renders the overview
    on top of it, and the shipped `research-coordinator` skill documents its five tools.
 4. Reinstall on the dev instance to exercise migrations end-to-end (`plugin-smoke.sh`).
@@ -641,7 +641,7 @@ browser-level test only if it stays cheap); no silent last-write-wins anywhere. 
 already built and verified (C5's per-axis and topic-level conflict banners, the atomic refusal test); what
 remains is the automated two-session round-trip, which fits the C8 editing pass.
 
-### C8 — Provenance in the UI · depends on C3, C4
+### C8 — Provenance in the UI · depends on C3, C4 · **done 2026-09-30**
 
 Deliverable: inferred/uncertain claims are visibly marked wherever they appear (overview, axis card),
 with their evidence reference; annotations are visually distinct from machine state.
@@ -653,6 +653,34 @@ that carries no evidence ref.
 **Scope guard (reviewer, 2026-09-30):** provenance stays bounded — the three confidence fields, plus
 activities, annotations, and actor/source metadata on the changes that matter. Do not turn every field
 into a provenance system in V2 (D7).
+
+**Resequenced and scoped by the review (2026-09-30):** three things, nothing broader — (1) an
+inferred/uncertain state impossible to mistake for confirmed **everywhere** it appears, (2) one vocabulary
+for what backs a claim, (3) the automated two-session concurrency round-trip. No schema, no tools, no
+styling pass.
+
+| Check | Evidence |
+|---|---|
+| No bare state anywhere | One `StateBadge` renders every state in every view (overview card, topic detail, People/Repositories snippets, Progress), always carrying `data-rd-state-confidence`; a state that is not `confirmed` says so where it is read — harness: **6/6 rendered states carry their claim, 2 of them not confirmed, 0 of those unqualified**, sample `["PARKED · INFERRED","BLOCKED · INFERRED"]` |
+| One vocabulary for the evidence | The reported forms (`PR #88`, `agent review`, `manual note`, `document`, `commit`, `group chat`) come from one helper, distinct from the menu's Title-Case offers; a ref that already names its source is not said twice. Harness: every Progress event line matches the reported vocabulary |
+| "No evidence on record", in those words | The evidence line's empty case is a sentence, not a gap; harness asserts it on the fixture axis that has nothing behind it (`… state INFERRED no evidence on record`) |
+| Two-session round-trip, automated | New store test with **two store instances over one file**: A reads v_n → B writes v_n+1 → A's save refused with the `conflict:` prefix → nothing written (state, description and the rationale note all unchanged) → A re-reads → retry lands → B sees it. Harness write pass proves the same through the UI: scoped banner (`This development axis changed since you opened it.`), note kept in the field, `Reload this topic`, retry lands with the note atomic |
+
+`AxisScan` gained `stateConfidence` (a rolled-up axis was showing a state without its claim); nothing else
+in the payload changed. Evidence: **`bun run check` → 75 pass / 0 fail / 449 `expect()` calls**;
+**`plugin-smoke.sh` → all checks passed**; harness **41 read / 54 write**, console clean; Reinstall →
+`0.2.0+dev.63e47e9afc4f`; screenshots `dashboard-progress.png` (the `BLOCKED · INFERRED` badge),
+`dashboard-detail.png`.
+
+**Correction to the C7 handoff.** It reported `plugin-smoke.sh` as 33/33. That was wrong: the smoke's new
+C7 grouping check was failing (the jq used `all(.[]; …)` and returned nothing), so the honest state at C7
+was 32 passing with 1 failure. The check is fixed (no `all/2`; it now asserts the least axes-with-events
+per group) and the smoke passes as a whole — but the C7 evidence block above overstated, and the count
+should have been read off the suite's own summary line, not off a `grep -c '^PASS'` I ran myself.
+
+**After C8 (reviewer, 2026-09-30):** **C9a** (skill audit/cleanup) only if needed — the skill was largely
+rewritten during C3/C5 — then **C10** (retire the legacy tables) once the V2 instance has been exercised
+enough.
 
 ### C9 — Librarian skill rewrite · ships with C3 · review step 8 (split, see below)
 
