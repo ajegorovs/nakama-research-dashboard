@@ -1,0 +1,71 @@
+# Layout fixtures — the states the real corpus cannot show
+
+The canonical dataset for this dashboard is `docs/corpus/`: a real public repository's history, seeded
+through the plugin's own action surface. Its value is that nobody chose its state. Its limit is that a
+real repository does not contain every state a layout has to survive — and the ones it lacks are the
+layout-critical ones.
+
+Measured, on the same 43-check read pass:
+
+| dataset | result |
+|---|---|
+| `docs/corpus/` (real) | 36 passed · 0 failed · **7 skipped** |
+| `docs/layout-fixtures/` (this directory) | **43 passed · 0 failed · 0 skipped** |
+
+Both at 1440×900 and 1280×800. The seven skips are not harmless: they are the blocked state, the
+hidden-axis case, the evidence-free claim, and the two people cases. A redesign can look excellent on
+the corpus and regress exactly those.
+
+**Rule: the corpus stays canonical.** This directory is a *second* dataset, applied to the instance
+instead of the corpus and never mixed into `docs/corpus/`. Every file here is labelled synthetic.
+
+## What it covers
+
+| State | Check that skips on the corpus | What the fixture supplies |
+|---|---|---|
+| Blocked axis with a reason | "the blocked axis shows its blocker text" | one axis `state: blocked`, `blockerConfidence: confirmed` |
+| Attention styling | "a topic with a blocked axis is visually distinct" | the blocked axis sits on the first card |
+| A card that hides axes | "a card offers to expand when it hides axes" | 5 axes on one topic (`LEAD_AXES` is 3, so 2 are hidden) |
+| Evidence-free claim | "an axis with no evidence says so and shows no confirmed claim" | an axis with no activity, no branch, no document — `evidence 0`, `conf [inferred]` |
+| An axis that states no progress | "an axis that states no progress carries no confidence for it" | the same axis, with no current-state claim at all |
+| One person, several topics | "one person on several topics shows each topic with its own axes underneath" | `Fixture Alpha`, attributable, 2 topics / 4 axes |
+| A person with no mapped account | "a person filter that matches nothing attributable says so…" | `Fixture Zeta`, `attributable=false`, 1 topic |
+
+## Contents
+
+- `screenshots/1440x900/`, `screenshots/1280x800/` — the six views, captured from the fixture state.
+- `verify-fixture-read-*.txt` — the harness transcript for each capture, verbatim.
+
+## Reproducing it
+
+Apply the fixture to a checkout's instance (it wipes nothing itself — apply it to an empty or
+throwaway instance so the two datasets do not mix):
+
+```bash
+set -a; . <services>/compose/nakama/.env; set +a
+NAKAMA_URL=http://127.0.0.1:4399 node harness/apply-layout-fixture.mjs
+```
+
+It prints what it wrote and the resulting rollup, and exits non-zero if any write was refused — a
+fixture that silently fails to apply is worse than none.
+
+Capture, from the estate's services tree:
+
+```bash
+NAKAMA_VIEWPORT=1440x900 \
+TRANSCRIPT=<plugin-repo>/docs/layout-fixtures/verify-fixture-read-1440x900.txt \
+PUBLISH_SHOT_DIR=<plugin-repo>/docs/layout-fixtures/screenshots/1440x900 \
+  scripts/verify-read.sh
+```
+
+Then put the instance back the way you found it (wipe at row level, re-seed `docs/corpus/`).
+
+## Caveats
+
+- **Synthetic by construction.** It proves the states *render*; it says nothing about whether they are
+  representative, or about density under a realistic load. The corpus is the density reference.
+- **The names are ordered on purpose.** `Fixture Alpha` and `Fixture Zeta` are alphabetical so that the
+  person-first view selects the multi-topic person first; the same for the newest activity. That is a
+  fixture convenience, not a naming convention for real data.
+- **Not a substitute for the corpus.** If a claim can be checked against the real dataset, check it
+  there.

@@ -20,7 +20,9 @@ here: `vendor/` holds the recipe that puts the plugin into a checkout, because N
 >
 > **The V2 rework this review triggered is planned in [`docs/V2-PLAN.md`](docs/V2-PLAN.md)** — chunked
 > work packages with acceptance tests, the platform facts that changed three points of the proposal,
-> and the open decisions. **Progress: C0–C6 are done** — migration 002 applied and verified on a live
+> and the open decisions. **Progress: C0–C10 are done**; the real-corpus pass replaced the demo contents
+> with a real public repository's history (see `docs/corpus/README.md`), and GitHub evidence automation
+> (C11) is a separate capability phase. C0–C6 delivered: migration 002 applied and verified on a live
 > instance, the store rewritten around the new model (rollback, version-conflict and cross-process
 > contention tests), the action surface rebuilt as **five exposed agent tools** over one atomic write
 > path, the **overview** now the default screen (one card per topic, axes grouped under it in
@@ -35,7 +37,7 @@ here: `vendor/` holds the recipe that puts the plugin into a checkout, because N
 > newest topic first, filterable by topic, person, repository and axis state). All four render from the
 > one payload the page fetches, so switching a view costs no query; one person on several topics is one
 > row with their involvement grouped underneath, and nothing is scored or ranked
-> (`bun run check` → 75 pass). C8 finished the provenance pass: one `StateBadge` renders every axis state
+> (`bun run check` → **82 pass / 472 expect()**). C8 finished the provenance pass: one `StateBadge` renders every axis state
 > in every view, so a state that is not `confirmed` says so where it is read (`BLOCKED · inferred`) and a
 > confirmed one is only quiet, never unqualified; one vocabulary says what backs a claim (`PR #88`,
 > `agent review`, `manual note`, `no evidence on record`); and the two-session concurrency round-trip is
@@ -47,7 +49,8 @@ here: `vendor/` holds the recipe that puts the plugin into a checkout, because N
 > against a compact V2 snapshot before/after, on the fixture *and* on the real database. That is the point
 > where the legacy copy genuinely disappears, so a pre-003 copy is kept under the dev data root's
 > `backups/`. With C10 done the dashboard is complete; GitHub evidence automation (C11) is a separate
-> capability phase.
+> capability phase, and the layout rework that follows this handoff is briefed in
+> [`docs/layout-rework-brief.md`](docs/layout-rework-brief.md).
 > What the agent side actually does is checked against the
 > platform, not the manifest: `GET /v1/tools` lists exactly the five tool rows, and a live three-turn
 > run used all five (`find_tools` → `get_overview`; `find_tools` → `search_dashboard` ∥ `get_topic` →
@@ -176,8 +179,8 @@ imply from `plugin_<id>__<key>`. Quote the underscore form in skills and prompts
 
 Deliberately thin: the coordination tables (`topics`, `development_axes`, repositories, people, link
 tables, `activities`, `annotations`), five agent tools over one atomic write path, one page. All three
-views are in — the C4 overview with its editing surface, the C5 topic detail, and the C6 people and
-repositories views, which are read-only and ride the same `get_overview` call; provenance marking in the
-UI (C8), the optimistic-concurrency round-trip (C7) and GitHub/repository automation (C11) are **not** —
+views are in — the overview with its editing surface, the topic detail, and the people, repositories and
+progress views, which are read-only and ride the same `get_overview` call. Provenance marking in the UI
+and the optimistic-concurrency round-trip are in as well; GitHub/repository automation (C11) is **not** —
 see `docs/V2-PLAN.md`. `topics.summary` is the only place an interpretation lives, and it is meant to be
 human-approved.

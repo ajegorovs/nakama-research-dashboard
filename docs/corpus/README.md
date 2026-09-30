@@ -157,4 +157,10 @@ Observations, not verdicts — the layout judgement is the review's to make:
   against this corpus as well: **49 checks passed · 0 failed · 7 skipped** (the same skips). Its
   screenshots are not published and the store was wiped and re-seeded from this bundle afterwards, so
   what the published images rest on is the **read** pass above — 36 · 0 · 7.
-- No claim is made here about how the page behaves at other viewports; every capture is 1440×900.
+- Captured at two viewports: `docs/screenshots/` (1440×900) and `docs/screenshots/1280x800/` (the same
+  six views; the harness's `NAKAMA_VIEWPORT` selects one). Nothing is claimed for narrower widths — there
+  is no mobile target.
+- **The states this corpus does not have are covered by a second, synthetic dataset** —
+  [`docs/layout-fixtures/`](../layout-fixtures/README.md): 43 checks pass there against 36 here, with the
+  seven skips below turning into exercised cases. The requirements for the rework are in
+  [`docs/layout-rework-brief.md`](../layout-rework-brief.md).
