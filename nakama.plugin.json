@@ -232,11 +232,24 @@
                 },
                 "kind": {
                   "type": "string",
-                  "enum": ["feature", "experiment", "test", "investigation", "maintenance"]
+                  "enum": [
+                    "feature",
+                    "experiment",
+                    "test",
+                    "investigation",
+                    "maintenance"
+                  ]
                 },
                 "state": {
                   "type": "string",
-                  "enum": ["active", "draft", "blocked", "parked", "completed", "abandoned"]
+                  "enum": [
+                    "active",
+                    "draft",
+                    "blocked",
+                    "parked",
+                    "completed",
+                    "abandoned"
+                  ]
                 },
                 "branch": {
                   "type": "string",

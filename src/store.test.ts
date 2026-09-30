@@ -428,10 +428,14 @@ describe("ResearchStore reconcileTopic", () => {
       topic: { summary: "touched by the user the dashboard knows" },
       topicId: alpha.id,
     });
-    const betaPeople = store.listTopicPeople(beta.id).map((person) => person.id);
+    const betaPeople = store
+      .listTopicPeople(beta.id)
+      .map((person) => person.id);
     expect(betaPeople).toHaveLength(1);
     // Same person on the topic they just wrote to — one row, two links.
-    expect(store.listTopicPeople(alpha.id).map((person) => person.id)).toEqual(betaPeople);
+    expect(store.listTopicPeople(alpha.id).map((person) => person.id)).toEqual(
+      betaPeople
+    );
 
     // An actor nobody has recorded as a person leaves no trace: no row is created for them.
     store.reconcileTopic({
@@ -714,15 +718,24 @@ describe("ResearchStore overview and search", () => {
     const alpha = store.createTopic({ name: "Signal Processing" });
     store.createTopic({ name: "Acquisition Automation", status: "paused" });
     store.reconcileTopic({
-      activities: [{ axisTitle: "Parameter automation", summary: "sweep queued" }],
+      activities: [
+        { axisTitle: "Parameter automation", summary: "sweep queued" },
+      ],
       // A claim marked `confirmed` has to be backed in the same call: the group saying "we are waiting
       // on the rig firmware" *is* the evidence, and it is recorded as the annotation.
       annotations: [
-        { axisTitle: "Rig control", text: "the group said the rig is waiting on a firmware update" },
+        {
+          axisTitle: "Rig control",
+          text: "the group said the rig is waiting on a firmware update",
+        },
       ],
       axes: [
         { branch: "feat/acquisition-control", title: "Parameter automation" },
-        { blocker: "rig firmware update", state: "blocked", title: "Rig control" },
+        {
+          blocker: "rig firmware update",
+          state: "blocked",
+          title: "Rig control",
+        },
       ],
       people: [{ displayName: "Researcher A" }],
       repositories: [{ fullName: "group/processing-pipeline" }],
@@ -731,7 +744,12 @@ describe("ResearchStore overview and search", () => {
 
     const overview = store.getOverview();
     expect(overview.activitySinceDays).toBe(14); // the default, echoed back
-    expect(overview.counts).toMatchObject({ axes: 2, people: 1, repositories: 1, topics: 2 });
+    expect(overview.counts).toMatchObject({
+      axes: 2,
+      people: 1,
+      repositories: 1,
+      topics: 2,
+    });
     expect(overview.counts.topicsByStatus).toEqual({
       active: 1,
       archived: 0,
@@ -753,12 +771,20 @@ describe("ResearchStore overview and search", () => {
   test("treats activitySinceDays as a query parameter, not stored state", () => {
     const { store } = openStore();
     const topic = store.createTopic({ name: "Signal Processing" });
-    const longAgo = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString();
-    store.addActivity({ occurredAt: longAgo, summary: "old run", topicId: topic.id });
+    const longAgo = new Date(
+      Date.now() - 45 * 24 * 60 * 60 * 1000
+    ).toISOString();
+    store.addActivity({
+      occurredAt: longAgo,
+      summary: "old run",
+      topicId: topic.id,
+    });
     store.addActivity({ summary: "recent run", topicId: topic.id });
 
     expect(store.getOverview().recentActivity).toHaveLength(1);
-    expect(store.getOverview({ activitySinceDays: 90 }).recentActivity).toHaveLength(2);
+    expect(
+      store.getOverview({ activitySinceDays: 90 }).recentActivity
+    ).toHaveLength(2);
   });
 
   test("searches every entity and reports which field matched", () => {
@@ -772,15 +798,25 @@ describe("ResearchStore overview and search", () => {
       title: "Parameter automation",
       topicId: topic.id,
     });
-    store.addActivity({ summary: "acquisition sweep queued", topicId: topic.id });
-    store.addAnnotation({ text: "acquisition window agreed", topicId: topic.id });
+    store.addActivity({
+      summary: "acquisition sweep queued",
+      topicId: topic.id,
+    });
+    store.addAnnotation({
+      text: "acquisition window agreed",
+      topicId: topic.id,
+    });
     store.createTopic({ name: "Signal Processing" });
 
     const results = store.searchDashboard({ query: "acquisition" });
-    expect(results.topics.map((hit) => hit.record.name)).toEqual(["Acquisition Automation"]);
+    expect(results.topics.map((hit) => hit.record.name)).toEqual([
+      "Acquisition Automation",
+    ]);
     expect(results.topics[0]?.matchedFields).toEqual(["name", "description"]);
     expect(results.axes).toHaveLength(1);
-    expect(results.axes[0]).toMatchObject({ topicName: "Acquisition Automation" });
+    expect(results.axes[0]).toMatchObject({
+      topicName: "Acquisition Automation",
+    });
     expect(results.axes[0]?.matchedFields).toEqual(["branch"]); // only the branch carries the term
     expect(results.activities.map((hit) => hit.record.summary)).toEqual([
       "acquisition sweep queued",
@@ -789,8 +825,12 @@ describe("ResearchStore overview and search", () => {
     expect(results.truncated).toBe(false);
 
     // Case-insensitive, and a query that matches nothing is empty rather than an error.
-    expect(store.searchDashboard({ query: "ACQUISITION" }).topics).toHaveLength(1);
-    expect(store.searchDashboard({ query: "nothing-matches-this" }).topics).toHaveLength(0);
+    expect(store.searchDashboard({ query: "ACQUISITION" }).topics).toHaveLength(
+      1
+    );
+    expect(
+      store.searchDashboard({ query: "nothing-matches-this" }).topics
+    ).toHaveLength(0);
   });
 
   test("hides archived topics unless asked, and reports truncation", () => {
@@ -799,11 +839,20 @@ describe("ResearchStore overview and search", () => {
     store.updateTopic(archived.id, { status: "archived" });
     store.createTopic({ name: "Filtering Comparison v2" });
 
-    expect(store.searchDashboard({ query: "Filtering" }).topics).toHaveLength(1);
-    expect(store.searchDashboard({ query: "Filtering", includeArchived: true }).topics).toHaveLength(2);
-    expect(store.searchDashboard({ query: "Filtering", limit: 1, includeArchived: true }).truncated).toBe(
-      true
+    expect(store.searchDashboard({ query: "Filtering" }).topics).toHaveLength(
+      1
     );
+    expect(
+      store.searchDashboard({ includeArchived: true, query: "Filtering" })
+        .topics
+    ).toHaveLength(2);
+    expect(
+      store.searchDashboard({
+        includeArchived: true,
+        limit: 1,
+        query: "Filtering",
+      }).truncated
+    ).toBe(true);
   });
 
   test("treats LIKE wildcards in the query as literal text", () => {
@@ -811,16 +860,20 @@ describe("ResearchStore overview and search", () => {
     store.createTopic({ name: "Topic 100%" });
     store.createTopic({ name: "Topic 100x" });
 
-    expect(store.searchDashboard({ query: "100%" }).topics.map((hit) => hit.record.name)).toEqual([
-      "Topic 100%",
-    ]);
+    expect(
+      store
+        .searchDashboard({ query: "100%" })
+        .topics.map((hit) => hit.record.name)
+    ).toEqual(["Topic 100%"]);
     // '%' and '_' must not act as wildcards: neither name contains a literal "10_".
     expect(store.searchDashboard({ query: "10_" }).topics).toHaveLength(0);
   });
 
   test("rejects an empty search query as a fixable rule", () => {
     const { store } = openStore();
-    expect(() => store.searchDashboard({ query: "  " })).toThrow(ResearchStoreError);
+    expect(() => store.searchDashboard({ query: "  " })).toThrow(
+      ResearchStoreError
+    );
   });
 });
 

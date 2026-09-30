@@ -19,7 +19,9 @@ import { join } from "node:path";
 import { run } from "./actions";
 
 const repoRoot = join(import.meta.dir, "..");
-const manifest = JSON.parse(readFileSync(join(repoRoot, "nakama.plugin.json"), "utf8")) as {
+const manifest = JSON.parse(
+  readFileSync(join(repoRoot, "nakama.plugin.json"), "utf8")
+) as {
   actions: Array<{
     access?: string;
     effect?: string;
@@ -31,12 +33,14 @@ const manifest = JSON.parse(readFileSync(join(repoRoot, "nakama.plugin.json"), "
   id: string;
   version: string;
 };
-const packageJson = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8")) as {
+const packageJson = JSON.parse(
+  readFileSync(join(repoRoot, "package.json"), "utf8")
+) as {
   version: string;
 };
 
-const MIGRATIONS = ["001-research.sql", "002-coordination-model.sql"].map((name) =>
-  readFileSync(join(repoRoot, "migrations", name), "utf8")
+const MIGRATIONS = ["001-research.sql", "002-coordination-model.sql"].map(
+  (name) => readFileSync(join(repoRoot, "migrations", name), "utf8")
 );
 
 /** The five agent tools, and nothing else (D4). */
@@ -108,7 +112,10 @@ async function call(
   options?: { actorId?: string; path?: string; profileId?: string }
 ): Promise<Record<string, unknown>> {
   const path = options?.path ?? freshDatabase();
-  return (await run(input, contextFor(actionKey, path, options))) as Record<string, unknown>;
+  return (await run(input, contextFor(actionKey, path, options))) as Record<
+    string,
+    unknown
+  >;
 }
 
 describe("manifest contract", () => {
@@ -151,12 +158,16 @@ describe("manifest contract", () => {
       if (typeof schema !== "object" || schema === null) {
         return;
       }
-      for (const [key, value] of Object.entries(schema as Record<string, unknown>)) {
+      for (const [key, value] of Object.entries(
+        schema as Record<string, unknown>
+      )) {
         if (!ALLOWED_SCHEMA_KEYS.has(key)) {
           offenders.push(`${path}.${key}`);
         }
         if (key === "properties") {
-          for (const [name, child] of Object.entries(value as Record<string, unknown>)) {
+          for (const [name, child] of Object.entries(
+            value as Record<string, unknown>
+          )) {
             walk(child, `${path}.properties.${name}`);
           }
         }
@@ -178,7 +189,9 @@ describe("read actions", () => {
     await call(
       "reconcile_topic",
       {
-        annotations: [{ axisTitle: "Rig control", text: "waiting on the rig firmware" }],
+        annotations: [
+          { axisTitle: "Rig control", text: "waiting on the rig firmware" },
+        ],
         axes: [
           { branch: "feat/acquisition-control", title: "Parameter automation" },
           { blocker: "rig firmware", state: "blocked", title: "Rig control" },
@@ -194,10 +207,12 @@ describe("read actions", () => {
     expect(result.counts).toMatchObject({ axes: 2, topics: 1 });
     expect(result.activitySinceDays).toBe(14);
     expect(result.blocked).toHaveLength(1);
-    expect((result.blocked as Array<Record<string, unknown>>)[0]).toMatchObject({
-      blocker: "rig firmware",
-      topicName: "Acquisition Automation",
-    });
+    expect((result.blocked as Array<Record<string, unknown>>)[0]).toMatchObject(
+      {
+        blocker: "rig firmware",
+        topicName: "Acquisition Automation",
+      }
+    );
     expect(result.recentTopics).toHaveLength(1);
   });
 
@@ -207,14 +222,20 @@ describe("read actions", () => {
       "reconcile_topic",
       {
         activities: [
-          { axisTitle: "Signal explorer", repositoryFullName: "group/pipeline", summary: "run finished" },
+          {
+            axisTitle: "Signal explorer",
+            repositoryFullName: "group/pipeline",
+            summary: "run finished",
+          },
         ],
         axes: [
           {
             branch: "feat/signal-explorer",
             currentState: "prototype compares methods",
             people: [{ displayName: "Researcher A", role: "owner" }],
-            repositories: [{ fullName: "group/pipeline", relationship: "primary" }],
+            repositories: [
+              { fullName: "group/pipeline", relationship: "primary" },
+            ],
             title: "Signal explorer",
           },
         ],
@@ -226,14 +247,21 @@ describe("read actions", () => {
       { path }
     );
 
-    const result = await call("get_topic", { topicName: "signal processing" }, { path });
+    const result = await call(
+      "get_topic",
+      { topicName: "signal processing" },
+      { path }
+    );
     expect(result.ok).toBe(true);
     const topic = result.topic as Record<string, unknown>;
     expect(topic.name).toBe("Signal Processing");
     expect(topic.version).toBe(2); // returned so the caller can write it back safely
     const axes = result.axes as Array<Record<string, unknown>>;
     expect(axes).toHaveLength(1);
-    expect(axes[0]).toMatchObject({ branch: "feat/signal-explorer", state: "active" });
+    expect(axes[0]).toMatchObject({
+      branch: "feat/signal-explorer",
+      state: "active",
+    });
     expect(axes[0]?.repositories).toHaveLength(1);
     expect(axes[0]?.people).toHaveLength(1);
     expect(result.repositories).toHaveLength(1);
@@ -253,7 +281,11 @@ describe("read actions", () => {
       { path }
     );
 
-    const result = await call("search_dashboard", { query: "automation" }, { path });
+    const result = await call(
+      "search_dashboard",
+      { query: "automation" },
+      { path }
+    );
     expect(result.ok).toBe(true);
     const topics = result.topics as Array<Record<string, unknown>>;
     expect(topics).toHaveLength(1);
@@ -269,8 +301,12 @@ describe("write actions", () => {
     const result = await call(
       "reconcile_topic",
       {
-        activities: [{ axisTitle: "Parameter automation", summary: "sweep queued" }],
-        axes: [{ branch: "feat/acquisition-control", title: "Parameter automation" }],
+        activities: [
+          { axisTitle: "Parameter automation", summary: "sweep queued" },
+        ],
+        axes: [
+          { branch: "feat/acquisition-control", title: "Parameter automation" },
+        ],
         people: [{ displayName: "Researcher A" }],
         repositories: [{ fullName: "group/pipeline", relationship: "primary" }],
         topic: { status: "paused" },
@@ -280,10 +316,21 @@ describe("write actions", () => {
     );
 
     expect(result.ok).toBe(true);
-    expect(result.created).toMatchObject({ axes: 1, people: 1, repositories: 1, topic: true });
-    expect((result.axes as unknown[])[0]).toMatchObject({ title: "Parameter automation" });
+    expect(result.created).toMatchObject({
+      axes: 1,
+      people: 1,
+      repositories: 1,
+      topic: true,
+    });
+    expect((result.axes as unknown[])[0]).toMatchObject({
+      title: "Parameter automation",
+    });
 
-    const readBack = await call("get_topic", { topicName: "Acquisition Automation" }, { path });
+    const readBack = await call(
+      "get_topic",
+      { topicName: "Acquisition Automation" },
+      { path }
+    );
     const topic = readBack.topic as Record<string, unknown>;
     expect(topic.status).toBe("paused");
     expect(readBack.activity).toHaveLength(1);
@@ -308,7 +355,11 @@ describe("write actions", () => {
     expect(failed.ok).toBe(false);
     expect(String(failed.error)).toMatch(/without blocker text/);
 
-    const after = await call("get_topic", { topicName: "Topic Alpha" }, { path });
+    const after = await call(
+      "get_topic",
+      { topicName: "Topic Alpha" },
+      { path }
+    );
     expect((after.topic as Record<string, unknown>).summary).toBe("");
     expect(after.axes).toHaveLength(0);
   });
@@ -342,7 +393,7 @@ describe("write actions", () => {
         summary: "sampler refactor merged",
         topicName: "Signal Processing",
       },
-      { path, actorId: "user-42" }
+      { actorId: "user-42", path }
     );
     expect(recorded.ok).toBe(true);
     expect(recorded.activity).toMatchObject({
@@ -352,33 +403,47 @@ describe("write actions", () => {
       summary: "sampler refactor merged",
     });
 
-    const readBack = await call("get_topic", { topicName: "Signal Processing" }, { path });
+    const readBack = await call(
+      "get_topic",
+      { topicName: "Signal Processing" },
+      { path }
+    );
     // The repository is registered and the *activity* points at it; a topic-level repository link means
     // "this topic lives in that repo", which is a statement nobody made here.
-    expect((readBack.activity as Array<Record<string, unknown>>)[0]?.repositoryId).toEqual(
-      expect.any(String)
-    );
+    expect(
+      (readBack.activity as Array<Record<string, unknown>>)[0]?.repositoryId
+    ).toEqual(expect.any(String));
     expect(readBack.repositories).toHaveLength(0);
   });
 
   test("a tool call is attributed to the agent, a page call to the person", async () => {
     const path = freshDatabase();
-    const topic = await call("reconcile_topic", { topicName: "Topic Alpha" }, { path });
+    const topic = await call(
+      "reconcile_topic",
+      { topicName: "Topic Alpha" },
+      { path }
+    );
     const topicId = (topic.topic as Record<string, unknown>).id as string;
 
     const fromAgent = await call(
       "add_annotation",
       { text: "the agent read this from the meeting notes", topicId },
-      { path, actorId: "user-7", profileId: "profile-1" }
+      { actorId: "user-7", path, profileId: "profile-1" }
     );
-    expect(fromAgent.annotation).toMatchObject({ authorId: "user-7", authorType: "agent" });
+    expect(fromAgent.annotation).toMatchObject({
+      authorId: "user-7",
+      authorType: "agent",
+    });
 
     const fromPerson = await call(
       "add_annotation",
       { text: "and the person confirmed it", topicId },
-      { path, actorId: "user-7" }
+      { actorId: "user-7", path }
     );
-    expect(fromPerson.annotation).toMatchObject({ authorId: "user-7", authorType: "human" });
+    expect(fromPerson.annotation).toMatchObject({
+      authorId: "user-7",
+      authorType: "human",
+    });
   });
 
   test("list_topics and list_activity serve the page", async () => {
@@ -399,28 +464,45 @@ describe("failure shapes stay distinguishable", () => {
   test("semantic problems come back as results, not exceptions", async () => {
     const path = freshDatabase();
     await call("reconcile_topic", { topicName: "Topic Alpha" }, { path });
-    const other = await call("reconcile_topic", { topicName: "Topic Beta" }, { path });
+    const other = await call(
+      "reconcile_topic",
+      { topicName: "Topic Beta" },
+      { path }
+    );
     const beta = (other.topic as Record<string, unknown>).id as string;
     const betaAxis = await call(
       "reconcile_topic",
       { axes: [{ title: "Signal explorer" }], topicId: beta },
       { path }
     );
-    const axisId = ((betaAxis.axes as Array<Record<string, unknown>>)[0]?.id ?? "") as string;
+    const axisId = ((betaAxis.axes as Array<Record<string, unknown>>)[0]?.id ??
+      "") as string;
 
     const cases: Array<[string, Record<string, unknown>, RegExp]> = [
       ["get_topic", {}, /topicId or topicName is required/],
       ["get_topic", { topicId: "missing" }, /Topic not found/],
       ["get_topic", { topicName: "No Such Topic" }, /No topic named/],
-      ["record_activity", { summary: "x", topicId: "missing" }, /Topic not found/],
-      ["record_activity", { summary: "  ", topicName: "Topic Alpha" }, /summary is required/],
+      [
+        "record_activity",
+        { summary: "x", topicId: "missing" },
+        /Topic not found/,
+      ],
+      [
+        "record_activity",
+        { summary: "  ", topicName: "Topic Alpha" },
+        /summary is required/,
+      ],
       ["reconcile_topic", { topicId: "missing" }, /Topic not found/],
       ["search_dashboard", {}, /query is required/],
       ["search_dashboard", { query: "   " }, /query is required/],
       ["add_annotation", { text: "orphan" }, /topicId or axisId is required/],
       ["list_topics", { status: "done" }, /status must be one of/],
       // Cross-topic confusion is caught, not silently applied.
-      ["record_activity", { axisId, summary: "x", topicName: "Topic Alpha" }, /does not belong/],
+      [
+        "record_activity",
+        { axisId, summary: "x", topicName: "Topic Alpha" },
+        /does not belong/,
+      ],
     ];
 
     for (const [actionKey, input, pattern] of cases) {
@@ -432,9 +514,17 @@ describe("failure shapes stay distinguishable", () => {
 
   test("a stale version keeps its conflict prefix so the caller knows to re-read", async () => {
     const path = freshDatabase();
-    const created = await call("reconcile_topic", { topicName: "Topic Alpha" }, { path });
+    const created = await call(
+      "reconcile_topic",
+      { topicName: "Topic Alpha" },
+      { path }
+    );
     const topicId = (created.topic as Record<string, unknown>).id as string;
-    await call("reconcile_topic", { topic: { summary: "first writer" }, topicId }, { path });
+    await call(
+      "reconcile_topic",
+      { topic: { summary: "first writer" }, topicId },
+      { path }
+    );
 
     const conflict = await call(
       "reconcile_topic",
@@ -445,7 +535,9 @@ describe("failure shapes stay distinguishable", () => {
     expect(String(conflict.error).startsWith("conflict: ")).toBe(true);
 
     const after = await call("get_topic", { topicId }, { path });
-    expect((after.topic as Record<string, unknown>).summary).toBe("first writer");
+    expect((after.topic as Record<string, unknown>).summary).toBe(
+      "first writer"
+    );
   });
 
   test("identity is never read from input, even if a spoof survives the host", async () => {
@@ -453,22 +545,30 @@ describe("failure shapes stay distinguishable", () => {
     const result = await call(
       "reconcile_topic",
       {
-        annotations: [{ text: "whose note is this?" }],
         // The declared schema rejects unknown keys with a 400, so this cannot arrive through the host —
         // the action must not trust it either (defence in depth).
         actor: { id: "someone-else", type: "human" },
+        annotations: [{ text: "whose note is this?" }],
         topicName: "Topic Alpha",
       },
-      { path, actorId: "user-1" }
+      { actorId: "user-1", path }
     );
     expect(result.ok).toBe(true);
 
-    const readBack = await call("get_topic", { topicName: "Topic Alpha" }, { path });
-    const annotation = (readBack.annotations as Array<Record<string, unknown>>)[0];
+    const readBack = await call(
+      "get_topic",
+      { topicName: "Topic Alpha" },
+      { path }
+    );
+    const annotation = (
+      readBack.annotations as Array<Record<string, unknown>>
+    )[0];
     expect(annotation?.authorId).toBe("user-1");
   });
 
   test("an unknown action key throws instead of pretending to succeed", async () => {
-    await expect(call("not_an_action", {}, {})).rejects.toThrow(/Unsupported action/);
+    await expect(call("not_an_action", {}, {})).rejects.toThrow(
+      /Unsupported action/
+    );
   });
 });

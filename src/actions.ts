@@ -36,14 +36,14 @@
  */
 import type { PluginExecutionContext } from "@nakama/core";
 import {
-  ResearchStore,
-  ResearchStoreError,
-  SOURCE_TYPES,
-  TOPIC_STATUSES,
   type ActorType,
   type Axis,
   type ReconcileTopicInput,
+  ResearchStore,
+  ResearchStoreError,
+  SOURCE_TYPES,
   type SourceType,
+  TOPIC_STATUSES,
   type Topic,
   type TopicStatus,
 } from "./store";
@@ -60,7 +60,11 @@ type Input = Record<string, unknown>;
 /** Caller-fixable input problem; converted into a structured result in `run`. */
 class BusinessRuleError extends Error {}
 
-function optionalText(value: unknown, field: string, max: number): string | undefined {
+function optionalText(
+  value: unknown,
+  field: string,
+  max: number
+): string | undefined {
   if (value === undefined || value === null) {
     return undefined;
   }
@@ -111,8 +115,13 @@ function optionalEnum<T extends string>(
   if (value === undefined || value === null) {
     return undefined;
   }
-  if (typeof value !== "string" || !(allowed as readonly string[]).includes(value)) {
-    throw new BusinessRuleError(`${field} must be one of: ${allowed.join(", ")}.`);
+  if (
+    typeof value !== "string" ||
+    !(allowed as readonly string[]).includes(value)
+  ) {
+    throw new BusinessRuleError(
+      `${field} must be one of: ${allowed.join(", ")}.`
+    );
   }
   return value as T;
 }
@@ -153,7 +162,11 @@ function requireTopic(store: ResearchStore, input: Input): Topic {
 }
 
 /** The axis a call refers to, if any. A named axis must belong to the resolved topic. */
-function resolveAxis(store: ResearchStore, topic: Topic, input: Input): Axis | null {
+function resolveAxis(
+  store: ResearchStore,
+  topic: Topic,
+  input: Input
+): Axis | null {
   const axisId = optionalText(input.axisId, "axisId", 100);
   if (axisId) {
     const axis = store.getAxis(axisId);
@@ -185,7 +198,10 @@ export async function run(input: Input, context: Context): Promise<unknown> {
   try {
     return await dispatch(input, context, store);
   } catch (error) {
-    if (error instanceof BusinessRuleError || error instanceof ResearchStoreError) {
+    if (
+      error instanceof BusinessRuleError ||
+      error instanceof ResearchStoreError
+    ) {
       return { error: error.message, ok: false };
     }
     throw error;
@@ -194,13 +210,22 @@ export async function run(input: Input, context: Context): Promise<unknown> {
   }
 }
 
-async function dispatch(input: Input, context: Context, store: ResearchStore): Promise<unknown> {
+async function dispatch(
+  input: Input,
+  context: Context,
+  store: ResearchStore
+): Promise<unknown> {
   switch (context.actionKey) {
     case "get_overview": {
       return {
         ok: true,
         ...store.getOverview({
-          activitySinceDays: optionalInt(input.activitySinceDays, "activitySinceDays", 1, 365),
+          activitySinceDays: optionalInt(
+            input.activitySinceDays,
+            "activitySinceDays",
+            1,
+            365
+          ),
           limit: optionalInt(input.limit, "limit", 1, 50),
         }),
       };
@@ -210,18 +235,25 @@ async function dispatch(input: Input, context: Context, store: ResearchStore): P
       const topic = requireTopic(store, input);
       const includeAnnotations = input.includeAnnotations !== false;
       return {
-        ok: true,
         activity: store.listActivity({
           limit: optionalInt(input.activityLimit, "activityLimit", 1, 100),
-          sinceDays: optionalInt(input.activitySinceDays, "activitySinceDays", 1, 365),
+          sinceDays: optionalInt(
+            input.activitySinceDays,
+            "activitySinceDays",
+            1,
+            365
+          ),
           topicId: topic.id,
         }),
-        annotations: includeAnnotations ? store.listAnnotations({ topicId: topic.id }) : [],
+        annotations: includeAnnotations
+          ? store.listAnnotations({ topicId: topic.id })
+          : [],
         axes: store.listAxes(topic.id).map((axis) => ({
           ...axis,
           people: store.listAxisPeople(axis.id),
           repositories: store.listAxisRepositories(axis.id),
         })),
+        ok: true,
         people: store.listTopicPeople(topic.id),
         repositories: store.listTopicRepositories(topic.id),
         topic,
@@ -243,7 +275,10 @@ async function dispatch(input: Input, context: Context, store: ResearchStore): P
       // One call, one transaction: the payload is applied whole or not at all.
       return {
         ok: true,
-        ...store.reconcileTopic({ ...(input as ReconcileTopicInput), actor: actorOf(context) }),
+        ...store.reconcileTopic({
+          ...(input as ReconcileTopicInput),
+          actor: actorOf(context),
+        }),
       };
     }
 
@@ -257,9 +292,17 @@ async function dispatch(input: Input, context: Context, store: ResearchStore): P
         axisId: axis?.id,
         occurredAt: optionalText(input.occurredAt, "occurredAt", 40),
         // Registering the named repository happens inside the store's transaction: still one step.
-        repositoryFullName: optionalText(input.repositoryFullName, "repositoryFullName", 200),
+        repositoryFullName: optionalText(
+          input.repositoryFullName,
+          "repositoryFullName",
+          200
+        ),
         sourceRef: optionalText(input.sourceRef, "sourceRef", 200),
-        sourceType: optionalEnum<SourceType>(input.sourceType, SOURCE_TYPES, "sourceType"),
+        sourceType: optionalEnum<SourceType>(
+          input.sourceType,
+          SOURCE_TYPES,
+          "sourceType"
+        ),
         sourceUrl: optionalText(input.sourceUrl, "sourceUrl", 500),
         summary: requiredText(input.summary, "summary", 1000),
         topicId: topic.id,
@@ -270,19 +313,21 @@ async function dispatch(input: Input, context: Context, store: ResearchStore): P
     case "list_topics": {
       return {
         ok: true,
-        topics: store.listTopics(optionalEnum<TopicStatus>(input.status, TOPIC_STATUSES, "status")),
+        topics: store.listTopics(
+          optionalEnum<TopicStatus>(input.status, TOPIC_STATUSES, "status")
+        ),
       };
     }
 
     case "list_activity": {
       return {
-        ok: true,
         activity: store.listActivity({
           axisId: optionalText(input.axisId, "axisId", 100),
           limit: optionalInt(input.limit, "limit", 1, 100),
           sinceDays: optionalInt(input.sinceDays, "sinceDays", 1, 365),
           topicId: optionalText(input.topicId, "topicId", 100),
         }),
+        ok: true,
       };
     }
 
@@ -290,7 +335,7 @@ async function dispatch(input: Input, context: Context, store: ResearchStore): P
       const actor = actorOf(context);
       const topicId = optionalText(input.topicId, "topicId", 100);
       const axisId = optionalText(input.axisId, "axisId", 100);
-      if (!topicId && !axisId) {
+      if (!(topicId || axisId)) {
         throw new BusinessRuleError("topicId or axisId is required.");
       }
       return {

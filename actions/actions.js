@@ -356,7 +356,10 @@ class ResearchStore {
         })),
         counts: { ...counts, topicsByStatus },
         generatedAt: nowIso(),
-        recentActivity: this.listActivity({ limit: 25, sinceDays: activitySinceDays }),
+        recentActivity: this.listActivity({
+          limit: 25,
+          sinceDays: activitySinceDays
+        }),
         recentTopics: this.db.query("SELECT * FROM topics ORDER BY updated_at DESC, name ASC LIMIT ?").all(limit).map(toTopic)
       };
     });
@@ -410,12 +413,17 @@ class ResearchStore {
         topicName: row.topic_name
       }));
       const activities = activityRows.slice(0, limit).map((row) => ({
-        matchedFields: fields(row, ["summary", "source_ref"]),
+        matchedFields: fields(row, [
+          "summary",
+          "source_ref"
+        ]),
         record: toActivity(row),
         topicName: row.topic_name
       }));
       const annotations = annotationRows.slice(0, limit).map((row) => ({
-        matchedFields: fields(row, ["text"]),
+        matchedFields: fields(row, [
+          "text"
+        ]),
         record: toAnnotation(row),
         topicName: row.topic_name
       }));
@@ -603,6 +611,12 @@ class ResearchStore {
       oneOf(actor.type, ACTOR_TYPES, "actor.type");
       const resolved = this.resolveTopicForReconcile(input);
       let topic = resolved.topic;
+      if (actor.id) {
+        const known = this.db.query("SELECT id FROM people WHERE nakama_user_id = ? LIMIT 1").get(actor.id);
+        if (known) {
+          this.db.query("INSERT INTO topic_people (topic_id, person_id, role) VALUES (?, ?, '') ON CONFLICT (topic_id, person_id) DO NOTHING").run(topic.id, known.id);
+        }
+      }
       if (input.topic) {
         const patch = { ...input.topic };
         if (patch.name !== undefined && patch.name.trim() === topic.name) {
@@ -927,7 +941,11 @@ class ResearchStore {
   assertClaimsAreBacked(axis, asserted) {
     const claims = [
       ["state", axis.stateConfidence, asserted.has("state")],
-      ["current_state", axis.currentStateConfidence, axis.currentState.trim().length > 0],
+      [
+        "current_state",
+        axis.currentStateConfidence,
+        axis.currentState.trim().length > 0
+      ],
       ["blocker", axis.blockerConfidence, axis.blocker.trim().length > 0]
     ];
     const unbacked = claims.filter(([, confidence, isClaim]) => isClaim && confidence === "confirmed").map(([field]) => field);
@@ -1067,7 +1085,6 @@ async function dispatch(input, context, store) {
       const topic = requireTopic(store, input);
       const includeAnnotations = input.includeAnnotations !== false;
       return {
-        ok: true,
         activity: store.listActivity({
           limit: optionalInt(input.activityLimit, "activityLimit", 1, 100),
           sinceDays: optionalInt(input.activitySinceDays, "activitySinceDays", 1, 365),
@@ -1079,6 +1096,7 @@ async function dispatch(input, context, store) {
           people: store.listAxisPeople(axis.id),
           repositories: store.listAxisRepositories(axis.id)
         })),
+        ok: true,
         people: store.listTopicPeople(topic.id),
         repositories: store.listTopicRepositories(topic.id),
         topic
@@ -1097,7 +1115,10 @@ async function dispatch(input, context, store) {
     case "reconcile_topic": {
       return {
         ok: true,
-        ...store.reconcileTopic({ ...input, actor: actorOf(context) })
+        ...store.reconcileTopic({
+          ...input,
+          actor: actorOf(context)
+        })
       };
     }
     case "record_activity": {
@@ -1126,20 +1147,20 @@ async function dispatch(input, context, store) {
     }
     case "list_activity": {
       return {
-        ok: true,
         activity: store.listActivity({
           axisId: optionalText(input.axisId, "axisId", 100),
           limit: optionalInt(input.limit, "limit", 1, 100),
           sinceDays: optionalInt(input.sinceDays, "sinceDays", 1, 365),
           topicId: optionalText(input.topicId, "topicId", 100)
-        })
+        }),
+        ok: true
       };
     }
     case "add_annotation": {
       const actor = actorOf(context);
       const topicId = optionalText(input.topicId, "topicId", 100);
       const axisId = optionalText(input.axisId, "axisId", 100);
-      if (!topicId && !axisId) {
+      if (!(topicId || axisId)) {
         throw new BusinessRuleError("topicId or axisId is required.");
       }
       return {

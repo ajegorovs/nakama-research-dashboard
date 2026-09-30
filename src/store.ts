@@ -819,7 +819,10 @@ export class ResearchStore {
    * recently. `activitySinceDays` is a query parameter, never stored state — the same call answers
    * "what happened this week" and "what happened this quarter".
    */
-  getOverview(options?: { activitySinceDays?: number; limit?: number }): Overview {
+  getOverview(options?: {
+    activitySinceDays?: number;
+    limit?: number;
+  }): Overview {
     return this.snapshot(() => {
       const activitySinceDays = options?.activitySinceDays ?? 14;
       const limit = clampLimit(options?.limit, 10, 50);
@@ -839,7 +842,9 @@ export class ResearchStore {
         AXIS_STATES.map((state) => [state, 0])
       ) as Record<AxisState, number>;
       for (const row of this.db
-        .query("SELECT state, count(*) AS n FROM development_axes GROUP BY state")
+        .query(
+          "SELECT state, count(*) AS n FROM development_axes GROUP BY state"
+        )
         .all() as Array<{ n: number; state: string }>) {
         if ((AXIS_STATES as readonly string[]).includes(row.state)) {
           axesByState[row.state as AxisState] = row.n;
@@ -853,7 +858,12 @@ export class ResearchStore {
                   (SELECT count(*) FROM repositories) AS repositories,
                   (SELECT count(*) FROM people) AS people`
         )
-        .get() as { axes: number; people: number; repositories: number; topics: number };
+        .get() as {
+        axes: number;
+        people: number;
+        repositories: number;
+        topics: number;
+      };
 
       const blocked = this.db
         .query(
@@ -870,7 +880,8 @@ export class ResearchStore {
         blocked: blocked.map((row) => ({
           axisId: row.id,
           blocker: row.blocker,
-          blockerConfidence: (row.blocker_confidence as Confidence) ?? "uncertain",
+          blockerConfidence:
+            (row.blocker_confidence as Confidence) ?? "uncertain",
           state: (row.state as AxisState) ?? "active",
           title: row.title,
           topicId: row.topic_id,
@@ -879,10 +890,15 @@ export class ResearchStore {
         })),
         counts: { ...counts, topicsByStatus },
         generatedAt: nowIso(),
-        recentActivity: this.listActivity({ limit: 25, sinceDays: activitySinceDays }),
+        recentActivity: this.listActivity({
+          limit: 25,
+          sinceDays: activitySinceDays,
+        }),
         recentTopics: (
           this.db
-            .query("SELECT * FROM topics ORDER BY updated_at DESC, name ASC LIMIT ?")
+            .query(
+              "SELECT * FROM topics ORDER BY updated_at DESC, name ASC LIMIT ?"
+            )
             .all(limit) as TopicRow[]
         ).map(toTopic),
       };
@@ -905,7 +921,9 @@ export class ResearchStore {
     const pattern = `%${query.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
 
     return this.snapshot(() => {
-      const archivedFilter = includeArchived ? "" : "AND t.status <> 'archived'";
+      const archivedFilter = includeArchived
+        ? ""
+        : "AND t.status <> 'archived'";
 
       const topicRows = this.db
         .query(
@@ -938,7 +956,9 @@ export class ResearchStore {
            ORDER BY x.occurred_at DESC, x.rowid DESC
            LIMIT ?`
         )
-        .all(pattern, pattern, limit + 1) as Array<ActivityRow & { topic_name: string | null }>;
+        .all(pattern, pattern, limit + 1) as Array<
+        ActivityRow & { topic_name: string | null }
+      >;
 
       const annotationRows = this.db
         .query(
@@ -947,10 +967,19 @@ export class ResearchStore {
            ORDER BY n.created_at DESC, n.rowid DESC
            LIMIT ?`
         )
-        .all(pattern, limit + 1) as Array<AnnotationRow & { topic_name: string | null }>;
+        .all(pattern, limit + 1) as Array<
+        AnnotationRow & { topic_name: string | null }
+      >;
 
-      const fields = (row: Record<string, unknown>, names: string[]): string[] =>
-        names.filter((name) => String(row[name] ?? "").toLowerCase().includes(needle));
+      const fields = (
+        row: Record<string, unknown>,
+        names: string[]
+      ): string[] =>
+        names.filter((name) =>
+          String(row[name] ?? "")
+            .toLowerCase()
+            .includes(needle)
+        );
 
       const topics = topicRows.slice(0, limit).map((row) => ({
         matchedFields: fields(row as unknown as Record<string, unknown>, [
@@ -972,12 +1001,17 @@ export class ResearchStore {
         topicName: row.topic_name,
       }));
       const activities = activityRows.slice(0, limit).map((row) => ({
-        matchedFields: fields(row as unknown as Record<string, unknown>, ["summary", "source_ref"]),
+        matchedFields: fields(row as unknown as Record<string, unknown>, [
+          "summary",
+          "source_ref",
+        ]),
         record: toActivity(row),
         topicName: row.topic_name,
       }));
       const annotations = annotationRows.slice(0, limit).map((row) => ({
-        matchedFields: fields(row as unknown as Record<string, unknown>, ["text"]),
+        matchedFields: fields(row as unknown as Record<string, unknown>, [
+          "text",
+        ]),
         record: toAnnotation(row),
         topicName: row.topic_name,
       }));
@@ -1237,7 +1271,8 @@ export class ResearchStore {
       // A named repository is registered inside this transaction, so recording an event that names a
       // repository is still one atomic step for the caller.
       const repositoryId = input.repositoryFullName
-        ? this.upsertRepository({ fullName: input.repositoryFullName }).repository.id
+        ? this.upsertRepository({ fullName: input.repositoryFullName })
+            .repository.id
         : input.repositoryId;
       if (repositoryId && !this.repositoryExists(repositoryId)) {
         throw new ResearchStoreError("Repository not found.");
@@ -1490,7 +1525,10 @@ export class ResearchStore {
       // call (an activity or annotation above). Runs inside the transaction, so a claim with nothing
       // behind it rolls the whole update back instead of laundering a guess into a fact.
       for (const axis of touchedAxes) {
-        this.assertClaimsAreBacked(axis, assertedByAxis.get(axis.id) ?? NO_CLAIMS);
+        this.assertClaimsAreBacked(
+          axis,
+          assertedByAxis.get(axis.id) ?? NO_CLAIMS
+        );
       }
 
       return {
@@ -2020,14 +2058,23 @@ export class ResearchStore {
    * fresh `{ title }` axis impossible to create, which is the sort of error that teaches callers to
    * pass `inferred` everywhere and means nothing.
    */
-  private assertClaimsAreBacked(axis: Axis, asserted: ReadonlySet<ClaimField>): void {
+  private assertClaimsAreBacked(
+    axis: Axis,
+    asserted: ReadonlySet<ClaimField>
+  ): void {
     const claims: Array<[ClaimField, Confidence, boolean]> = [
       ["state", axis.stateConfidence, asserted.has("state")],
-      ["current_state", axis.currentStateConfidence, axis.currentState.trim().length > 0],
+      [
+        "current_state",
+        axis.currentStateConfidence,
+        axis.currentState.trim().length > 0,
+      ],
       ["blocker", axis.blockerConfidence, axis.blocker.trim().length > 0],
     ];
     const unbacked = claims
-      .filter(([, confidence, isClaim]) => isClaim && confidence === "confirmed")
+      .filter(
+        ([, confidence, isClaim]) => isClaim && confidence === "confirmed"
+      )
       .map(([field]) => field);
     if (unbacked.length === 0) {
       return;
