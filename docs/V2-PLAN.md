@@ -1,9 +1,10 @@
 # V2 plan — coordination model (topics → development axes → evidence)
 
-**Status:** in progress — **C0–C8 are done and verified** (decisions, migration 002, store v2, the action
-surface, the overview, the topic detail, the people/repositories views, the progress view, the provenance
-pass); **C9a (skill audit, only if needed) and C10 (retire the legacy tables) are next**. See the status
-line at the end of each chunk.
+**Status:** **complete for the dashboard itself** — **C0–C10 are done and verified** (decisions, migration
+002, store v2, the action surface, the overview, the topic detail, the people/repositories views, the
+progress view, the provenance pass, the C9a skill audit and the C10 retirement of generation 1).
+**C11 — GitHub / repository evidence automation — is a separate capability phase**, not unfinished
+dashboard work. See the status line at the end of each chunk.
 **Input:** [`reviews/2026-09-30-v2-structural-redesign.md`](reviews/2026-09-30-v2-structural-redesign.md)
 (external review of V1, kept verbatim; §16 lists its suggested sequence).
 **Written:** 2026-09-30, checked against Nakama v0.4.31 and this repo at `8688a08`.
@@ -23,8 +24,8 @@ in-tree copy on the Nakama clone's `research-dashboard` branch are **not** touch
    **D6** is resolved too (real topic names are genericised throughout, screenshots included).
 3. Work §6 in order. Each chunk is self-contained: deliverable, files, acceptance test, evidence
    command, dependencies. Do not start a chunk whose dependencies are unmet — most of the risk here
-   is in the seams between chunks, not inside them. **C1–C8 are done; C9a (skill audit, only if needed)
-   and C10 (retire the legacy tables) are next.**
+   is in the seams between chunks, not inside them. **C1–C10 are done** — the dashboard itself is
+   complete; **C11 (GitHub evidence automation) is a separate capability phase.**
    The gen-1 surface is gone — `src/actions.ts` is the v2 surface, `src/ui.tsx` renders the overview
    on top of it, and the shipped `research-coordinator` skill documents its five tools.
 4. Reinstall on the dev instance to exercise migrations end-to-end (`plugin-smoke.sh`).
@@ -682,7 +683,7 @@ should have been read off the suite's own summary line, not off a `grep -c '^PAS
 rewritten during C3/C5 — then **C10** (retire the legacy tables) once the V2 instance has been exercised
 enough.
 
-### C9 — Librarian skill rewrite · ships with C3 · review step 8 (split, see below)
+### C9 — Librarian skill rewrite · ships with C3 · **audited as C9a 2026-10-01** · review step 8 (split, see below)
 
 Deliverable: `skills/research-coordinator/SKILL.md` rewritten for reconciliation: read dashboard state
 **and human annotations first**, reconcile axes rather than re-creating them, mark inferences as
@@ -698,13 +699,42 @@ Acceptance: a test asserting every `plugin_research_dashboard__*` name mentioned
 in the manifest (V1's real drift failure mode: a reinstall refreshed the skill, but nothing checked it
 matched the tools); plus one recorded agent run that reconciles a topic and marks an inferred claim.
 
-### C10 — Retire V1 · depends on C4, C5, C6 (V2 proven in use)
+**C9a — the audit, run 2026-10-01 (reviewer: "a short audit, not a new development chunk").** Checked
+against the eight things the review named. Four held as written (inferred/uncertain claims stay labelled;
+`confirmed` requires evidence in the same call; tool names exactly match the manifest; no promise of GitHub
+inspection) and four had drifted — the skill did not yet describe the `get_overview` rollups C6/C7 added,
+and it did not state three semantics the store now enforces (read annotations before inferring, a human
+annotation outranks an inference, reconcile an axis rather than recreating it). All four are fixed in
+`skills/research-coordinator/SKILL.md`, and the drift can no longer recur silently: `actions.test.ts` now
+asserts the skill's named tools **equal** the manifest's exposed set (both directions), that it calls the
+plugin by its real id, that it names the rollups it receives, that it states those semantics, and that it
+promises no GitHub inspection. 5 new tests.
+
+### C10 — Retire V1 · depends on C4, C5, C6 (V2 proven in use) · **done 2026-10-01**
 
 Deliverable: migration `003-drop-legacy.sql` dropping `projects_v1` / `activities_v1`, and removal of
 the remaining `project*` code paths from the store and actions.
 
 Acceptance: no code reference to the legacy tables; `PRAGMA integrity_check` clean; the dev instance
 still renders with the legacy tables gone.
+
+**Executed to the bar the review set (2026-10-01), which is stricter than the plan's:**
+
+| Check | Evidence |
+|---|---|
+| `003-drop-legacy.sql` drops **only** those two tables | `DROP TABLE IF EXISTS activities_v1;` then `projects_v1` (child first, so the order is valid under `PRAGMA foreign_keys=ON`); the fixture test asserts the set difference is exactly those two names |
+| Nothing still depends on them | Whole-repo search for the two names: `docs/` (the plan and the two review documents, as prose), `migrations/002` (the rename + backfill), `migrations/003` (the drop) and `src/migration.test.ts` (the tests of that path) — and **nothing** in `src/` runtime, `scripts/`, `ui/`, `skills/` or the manifest |
+| Tested from a database built `001 → 002 → 003` | New `migration 003` suite builds the gen-1 fixture, applies 002, then 003 |
+| The drop is inert with respect to live V2 state | The compact snapshot the review asked for — topics, axes, activities, people, repositories, annotations and all four link tables — compared immediately before and after 003: **identical**. Same comparison run against the **real dev database** and its pre-003 copy |
+| `foreign_key_check` / `integrity_check` clean | Both, on the fixture and on the real database |
+| Re-applying the file is safe | A second `DROP IF EXISTS` pass is a no-op, asserted |
+| Reinstall on the dev instance | `0.2.0+dev.c7547a8c46ae`; the live DB's ledger reads `001-research, 002-coordination-model, 003-drop-legacy`, and only then did `activities_v1`/`projects_v1` leave it (4 + 3 rows) |
+| Existing checks stay green | **82 pass / 0 fail / 472 `expect()` calls**; `plugin-smoke.sh` → all checks passed; harness **41 read / 54 write** on the post-003 database, console clean |
+| The dashboard still renders | All four views and the topic detail — the read pass asserts them, and it runs against the migrated database |
+| A pre-003 copy is preserved | `<data-root>/backups/research-dashboard-pre-003-20261001.sqlite` — taken before the reinstall, because after this migration those rows exist nowhere else |
+
+Migration `003` also had to be **declared** in `nakama.plugin.json` (`database.migrations`) — the host
+applies what the manifest lists, so a file on disk alone would never have run.
 
 ### C11 — GitHub / repository review automation · **deferred, after C10** · review step 10
 

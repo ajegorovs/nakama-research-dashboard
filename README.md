@@ -41,6 +41,13 @@ here: `vendor/` holds the recipe that puts the plugin into a checkout, because N
 > `agent review`, `manual note`, `no evidence on record`); and the two-session concurrency round-trip is
 > now an automated test at both levels — the store (A reads, B writes, A is refused, A re-reads and
 > retries) and the page (scoped banner, reload, retry, the rationale note atomic with it).
+> C9a audited the shipped skill against the surface as built (4 of the review's 8 points had drifted —
+> the rollups were undeclared and three store semantics unstated — now fixed and pinned by tests), and
+> **C10 retired generation 1**: `003-drop-legacy.sql` drops `projects_v1`/`activities_v1`, verified inert
+> against a compact V2 snapshot before/after, on the fixture *and* on the real database. That is the point
+> where the legacy copy genuinely disappears, so a pre-003 copy is kept under the dev data root's
+> `backups/`. With C10 done the dashboard is complete; GitHub evidence automation (C11) is a separate
+> capability phase.
 > What the agent side actually does is checked against the
 > platform, not the manifest: `GET /v1/tools` lists exactly the five tool rows, and a live three-turn
 > run used all five (`find_tools` → `get_overview`; `find_tools` → `search_dashboard` ∥ `get_topic` →

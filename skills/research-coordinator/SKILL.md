@@ -10,8 +10,12 @@ are the *evidence* attached to them. Read it before reconstructing state from ch
 
 Tools (assign them to the profile alongside this skill) — the whole agent surface, five tools:
 
-- `plugin_research_dashboard__get_overview` — counts by state, every blocked axis with its topic and
-  blocker, recently touched topics, recent activity. Start here.
+- `plugin_research_dashboard__get_overview` — the one read that answers "where does the group stand":
+  counts by state, every blocked axis with its topic and blocker, recently touched topics, recent
+  activity, plus three rollups over the same window — `people` (who is on what, and only the activity
+  attributable to their own account), `repositories` (what each codebase carries and what is happening in
+  it) and `timeline` (what changed in the window, grouped topic → axis → event). Start here, and prefer it
+  to asking several narrow questions.
 - `plugin_research_dashboard__get_topic` — one topic in full, by `topicId` or `topicName`: fields,
   axes with branch/PR/state/blocker and per-claim confidence, repositories, people, activity,
   annotations. It returns the topic's `version`.
@@ -33,6 +37,15 @@ How to work:
   in **one transaction**: either all of it lands or none of it does. Pass everything one conversation
   established in a single call — do not split a change into several calls, and do not sequence writes
   yourself.
+- **Read before you infer.** A topic's annotations and corrections are human notes, and they are part of
+  the record: read them together with the activity before deciding that an axis is stale, finished or
+  blocked. A human annotation outranks your inference — if your reading of the work disagrees with one,
+  record the disagreement as a new annotation or an `inferred` claim and say so in your reply. Never
+  overwrite it and never treat it as silently out of date.
+- **Reconcile, do not recreate.** Pass the axis's `id` (or its exact existing title) with the fields that
+  changed: a workstream already on the topic is the same axis, not a new one. A parallel axis for the same
+  workstream, or a second topic for the same direction, splits the record — that is the failure this write
+  path exists to prevent.
 - Put the evidence in the same call as the claim. A claim marked `confirmed` (the default for `state`,
   `currentState`, `blocker`) must be backed by something in that call — a branch, a PR number/URL, an
   activity or an annotation — or the whole update is refused. When nothing could have confirmed it, say

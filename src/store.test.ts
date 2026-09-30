@@ -1,7 +1,7 @@
 /**
  * Store v2 tests.
  *
- * Every test runs against a database built from the **shipped migrations** (001, then 002) rather than
+ * Every test runs against a database built from the **shipped migrations** (001, 002, 003) rather than
  * hand-written DDL, so the store is checked against the schema the platform will actually hand it.
  *
  * The interesting tests here are the ones V1 could not have passed: the pragmas (each action runs in a
@@ -21,9 +21,11 @@ import {
 } from "./store";
 
 const migrationsDir = join(import.meta.dir, "../migrations");
-const MIGRATIONS = ["001-research.sql", "002-coordination-model.sql"].map(
-  (name) => readFileSync(join(migrationsDir, name), "utf8")
-);
+const MIGRATIONS = [
+  "001-research.sql",
+  "002-coordination-model.sql",
+  "003-drop-legacy.sql",
+].map((name) => readFileSync(join(migrationsDir, name), "utf8"));
 
 function tempPath(): string {
   return `${process.env.TMPDIR ?? "/tmp"}/research-store-${crypto.randomUUID()}.sqlite`;
@@ -1579,8 +1581,8 @@ describe("ResearchStore two-session concurrency (C8)", () => {
         {
           expectedVersion: read.version,
           id: read.id,
-          state: "parked",
-          stateConfidence: "inferred",
+          state: "parked" as const,
+          stateConfidence: "inferred" as const,
         },
       ],
       topicId: topic.id,

@@ -39,9 +39,11 @@ const packageJson = JSON.parse(
   version: string;
 };
 
-const MIGRATIONS = ["001-research.sql", "002-coordination-model.sql"].map(
-  (name) => readFileSync(join(repoRoot, "migrations", name), "utf8")
-);
+const MIGRATIONS = [
+  "001-research.sql",
+  "002-coordination-model.sql",
+  "003-drop-legacy.sql",
+].map((name) => readFileSync(join(repoRoot, "migrations", name), "utf8"));
 
 /** The five agent tools, and nothing else (D4). */
 const EXPOSED_TOOLS = [
@@ -761,5 +763,57 @@ describe("failure shapes stay distinguishable", () => {
     await expect(call("not_an_action", {}, {})).rejects.toThrow(
       /Unsupported action/
     );
+  });
+});
+
+/**
+ * C9a — the drift test the V1 rework lacked. The skill is the agent's only map of this surface and is
+ * materialized per release, so a stale body costs real turns (V1 shipped one naming keys that no longer
+ * existed). The tool names in the skill and the manifest's exposed actions must be the same set, in both
+ * directions, and the skill must describe the payload the actions actually return.
+ */
+describe("the shipped skill matches the surface it promises (C9a)", () => {
+  const skill = readFileSync(
+    join(repoRoot, "skills", "research-coordinator", "SKILL.md"),
+    "utf8"
+  );
+  const namedInSkill = [
+    ...new Set(
+      [...skill.matchAll(/`plugin_([a-z_]+)__([a-z_]+)`/g)].map(
+        (match) => match[2] ?? ""
+      )
+    ),
+  ];
+
+  test("names exactly the exposed tools, and all of them", () => {
+    expect(namedInSkill.sort()).toEqual([...EXPOSED_TOOLS].sort());
+  });
+
+  test("calls the plugin by its real id, hyphen turned into underscore", () => {
+    expect(skill).toContain(`plugin_${manifest.id.replace(/-/g, "_")}__`);
+  });
+
+  test("tells the agent about the rollups get_overview carries (C6/C7)", () => {
+    for (const field of ["people", "repositories", "timeline"]) {
+      expect(skill).toContain(field);
+    }
+  });
+
+  test("states the semantics the store now enforces", () => {
+    // The rules a rewrite must not lose: read before inferring, annotations outrank inference,
+    // reconcile rather than recreate, and evidence for a `confirmed` claim.
+    for (const phrase of [
+      /annotations and corrections are human notes/i,
+      /outranks your inference/i,
+      /Reconcile, do not recreate/i,
+      /must be backed by something in that call/i,
+    ]) {
+      expect(skill).toMatch(phrase);
+    }
+  });
+
+  test("promises no GitHub inspection — that is C9b/C11", () => {
+    expect(skill).not.toMatch(/inspect (the )?(repository|repositories|branch|PR)/i);
+    expect(skill).not.toMatch(/fetch (the )?(commits|PRs|pull requests)/i);
   });
 });

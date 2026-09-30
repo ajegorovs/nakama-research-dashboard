@@ -113,6 +113,102 @@ function open(path: string): Database {
   return db;
 }
 
+/**
+ * 003 retires generation 1. The bar for a DROP is that it is *inert* with respect to everything still
+ * live, so the first test compares a compact V2 snapshot immediately before and after, and checks that
+ * those two tables are the only thing that went. The second is the re-run case: a migration file must be
+ * safe to apply to a database that already has it.
+ */
+const V3 = readFileSync(join(migrationsDir, "003-drop-legacy.sql"), "utf8");
+
+function tableNames(path: string): string[] {
+  const db = open(path);
+  try {
+    return (
+      db
+        .query("SELECT name FROM sqlite_master WHERE type = 'table'")
+        .all() as Array<{ name: string }>
+    )
+      .map((row) => row.name)
+      .sort();
+  } finally {
+    db.close();
+  }
+}
+
+/** What "live V2 state" means, in counts: every table the coordination model actually reads. */
+function v2Snapshot(path: string): Record<string, number> {
+  const db = open(path);
+  try {
+    const count = (table: string): number =>
+      (db.query(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n;
+    return {
+      activities: count("activities"),
+      annotations: count("annotations"),
+      axisPeople: count("axis_people"),
+      axisRepositories: count("axis_repositories"),
+      developmentAxes: count("development_axes"),
+      people: count("people"),
+      repositories: count("repositories"),
+      topicPeople: count("topic_people"),
+      topicRepositories: count("topic_repositories"),
+      topics: count("topics"),
+    };
+  } finally {
+    db.close();
+  }
+}
+
+describe("migration 003 — retiring generation 1 (C10)", () => {
+  test("drops the two legacy tables and nothing else, leaving live V2 state identical", () => {
+    const path = v1Database();
+    apply(path, V2);
+
+    const before = v2Snapshot(path);
+    const tablesBefore = tableNames(path);
+    expect(tablesBefore).toContain("activities_v1");
+    expect(tablesBefore).toContain("projects_v1");
+    expect(before.topics).toBeGreaterThan(0);
+    // A backfilled database has no axes (gen 1 had none) but does carry its activity across.
+    expect(before.activities).toBeGreaterThan(0);
+
+    apply(path, V3);
+
+    const tablesAfter = tableNames(path);
+    expect(tablesAfter).not.toContain("activities_v1");
+    expect(tablesAfter).not.toContain("projects_v1");
+    expect(tablesBefore.filter((name) => !tablesAfter.includes(name))).toEqual([
+      "activities_v1",
+      "projects_v1",
+    ]);
+    // The point of the snapshot: the drop is inert with respect to everything still live.
+    expect(v2Snapshot(path)).toEqual(before);
+
+    const db = open(path);
+    try {
+      expect(db.query("PRAGMA foreign_key_check").all()).toEqual([]);
+      expect(
+        (
+          db.query("PRAGMA integrity_check").get() as {
+            integrity_check: string;
+          }
+        ).integrity_check
+      ).toBe("ok");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("re-applying it is a no-op rather than an error", () => {
+    const path = v1Database();
+    apply(path, V2);
+    apply(path, V3);
+    const after = v2Snapshot(path);
+    expect(() => apply(path, V3)).not.toThrow();
+    expect(v2Snapshot(path)).toEqual(after);
+  });
+});
+
 describe("migration 002 (V1 -> V2)", () => {
   test("copies generation 1 into topics, mapping the renamed status", () => {
     const path = v1Database();
