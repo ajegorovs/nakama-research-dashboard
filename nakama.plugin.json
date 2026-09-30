@@ -1,0 +1,181 @@
+{
+  "apiVersion": 1,
+  "id": "research-dashboard",
+  "name": "Research Dashboard",
+  "version": "0.1.0",
+  "minNakamaVersion": "0.4.10",
+  "author": "self-hosted deployment",
+  "license": "MIT",
+  "description": "Shared project and activity state for research coordination: a dashboard page plus agent tools.",
+  "actions": [
+    {
+      "key": "list_projects",
+      "access": "member",
+      "effect": "read",
+      "entry": "actions/actions.js",
+      "exposeAsTool": true,
+      "description": "List research projects with status, description, summary and last update. Use this before reconstructing project state from conversation history.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["active", "paused", "done"]
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "key": "create_project",
+      "access": "member",
+      "effect": "write",
+      "entry": "actions/actions.js",
+      "exposeAsTool": true,
+      "description": "Create a research project record. Use it for a project that a human asks to track; do not invent projects from unclear context.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "status": {
+            "type": "string",
+            "enum": ["active", "paused", "done"]
+          }
+        },
+        "required": ["name"]
+      }
+    },
+    {
+      "key": "update_project",
+      "access": "member",
+      "effect": "write",
+      "entry": "actions/actions.js",
+      "exposeAsTool": true,
+      "description": "Update a research project's name, description, status or summary. Send only the fields that change. Treat status and summary as interpretations: state them only when a human asked for that change.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "status": {
+            "type": "string",
+            "enum": ["active", "paused", "done"]
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 2000
+          }
+        },
+        "required": ["projectId"]
+      }
+    },
+    {
+      "key": "list_activity",
+      "access": "member",
+      "effect": "read",
+      "entry": "actions/actions.js",
+      "exposeAsTool": true,
+      "description": "List recorded project activity, newest first, optionally filtered to one project. Each entry carries its source type and source reference.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "key": "add_activity",
+      "access": "member",
+      "effect": "write",
+      "entry": "actions/actions.js",
+      "exposeAsTool": true,
+      "description": "Record one objective project event (a merged pull request, a completed run, a commit) with its source reference. Record facts directly; interpretive milestone claims belong in a project summary a human approves.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "projectId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "summary": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000
+          },
+          "sourceType": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "github_pr",
+              "github_issue",
+              "commit",
+              "experiment",
+              "document"
+            ]
+          },
+          "sourceRef": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "occurredAt": {
+            "type": "string",
+            "maxLength": 40
+          }
+        },
+        "required": ["projectId", "summary"]
+      }
+    }
+  ],
+  "skills": [
+    {
+      "key": "research-coordinator",
+      "directory": "skills/research-coordinator"
+    }
+  ],
+  "database": {
+    "migrations": [
+      {
+        "id": "001-research",
+        "path": "migrations/001-research.sql"
+      }
+    ]
+  },
+  "ui": {
+    "entryModule": "ui/app.js",
+    "assetsDir": "ui",
+    "pageLabel": "Research"
+  }
+}

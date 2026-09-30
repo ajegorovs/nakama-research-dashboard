@@ -1,0 +1,12 @@
+diff --git a/apps/server/src/services/plugin-service.ts b/apps/server/src/services/plugin-service.ts
+index cdb7e2c4..2f46f59f 100644
+--- a/apps/server/src/services/plugin-service.ts
++++ b/apps/server/src/services/plugin-service.ts
+@@ -107,6 +107,7 @@ const OFFICIAL_PLUGINS = new Map<
+   ["workflows", { requiresHost: true, setupAction: "import_legacy" }],
+   ["supermemory", { requiresHost: true }],
+   ["google-meet", { requiresHost: false }],
++  ["research-dashboard", { requiresHost: false }],
+ ]);
+ const lifecycleLocks = new Map<string, Promise<unknown>>();
+ const BUN_BIN = process.env.NAKAMA_BUN_BIN ?? "bun";

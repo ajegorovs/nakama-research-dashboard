@@ -1,0 +1,12 @@
+{
+  "name": "nakama-research-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Research dashboard plugin for a self-hosted Nakama instance: one dashboard page plus agent tools over shared project/activity state.",
+  "scripts": {
+    "build": "bun build ./src/actions.ts --outdir actions --target bun && bun build ./src/ui.tsx --outfile ui/app.js --target browser",
+    "test": "bun test src",
+    "check": "bun run build && bun test src"
+  }
+}
