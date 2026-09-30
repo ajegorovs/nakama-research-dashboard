@@ -1332,7 +1332,7 @@ function apply(ctx) {
         key: note.id
       }, /* @__PURE__ */ React.createElement("div", null, note.text), /* @__PURE__ */ React.createElement("span", {
         className: "rd-meta"
-      }, note.authorType, " · ", note.createdAt.slice(0, 10)))), details.notes.length === 0 ? /* @__PURE__ */ React.createElement("li", {
+      }, note.authorType, " ·", " ", note.createdAt.slice(0, 10)))), details.notes.length === 0 ? /* @__PURE__ */ React.createElement("li", {
         className: "rd-muted"
       }, "No notes yet. This is where a correction or a caveat goes — deliberately not in the activity log.") : null), /* @__PURE__ */ React.createElement("form", {
         className: "rd-cluster",
@@ -1362,7 +1362,7 @@ function apply(ctx) {
           key: item.id
         }, /* @__PURE__ */ React.createElement("div", null, item.summary), /* @__PURE__ */ React.createElement("span", {
           className: "rd-meta"
-        }, SOURCE_OPTIONS.find((option) => option.value === item.sourceType)?.label ?? item.sourceType, item.sourceRef ? ` · ${item.sourceRef}` : "", " ·", " ", item.occurredAt.slice(0, 10), item.actorType ? ` · ${item.actorType}` : "", axisTitle ? ` · axis: ${axisTitle}` : ""));
+        }, SOURCE_OPTIONS.find((option) => option.value === item.sourceType)?.label ?? item.sourceType, item.sourceRef ? ` · ${item.sourceRef}` : "", " ", "· ", item.occurredAt.slice(0, 10), item.actorType ? ` · ${item.actorType}` : "", axisTitle ? ` · axis: ${axisTitle}` : ""));
       }), details.activity.length === 0 ? /* @__PURE__ */ React.createElement("li", {
         className: "rd-muted"
       }, "No activity recorded yet.") : null), /* @__PURE__ */ React.createElement("form", {

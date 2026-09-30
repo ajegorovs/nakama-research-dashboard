@@ -632,7 +632,11 @@ class ResearchStore {
     const topicRefs = new Map;
     for (const row of this.db.query("SELECT id, name, status FROM topics").all()) {
       if (isTopicStatus(row.status)) {
-        topicRefs.set(row.id, { id: row.id, name: row.name, status: row.status });
+        topicRefs.set(row.id, {
+          id: row.id,
+          name: row.name,
+          status: row.status
+        });
       }
     }
     const visible = (topicId) => {

@@ -1312,7 +1312,10 @@ export function apply(ctx: Context) {
     windowDays: number;
   }) {
     return (
-      <Card className="rd-panel" data-rd-person-panel={entry.person.displayName}>
+      <Card
+        className="rd-panel"
+        data-rd-person-panel={entry.person.displayName}
+      >
         <CardHeader>
           <div className="rd-row">
             <CardTitle>{entry.person.displayName}</CardTitle>
@@ -1412,8 +1415,8 @@ export function apply(ctx: Context) {
         <Card>
           <CardContent>
             <p className="rd-muted">
-              Nobody is linked yet. People appear here once a topic or an axis names
-              them.
+              Nobody is linked yet. People appear here once a topic or an axis
+              names them.
             </p>
           </CardContent>
         </Card>
@@ -1887,11 +1890,7 @@ export function apply(ctx: Context) {
         <div className="rd-row">
           <h2 style={{ margin: 0 }}>Research overview</h2>
           <div className="rd-cluster">
-            <ViewControl
-              disabled={busy}
-              onChange={setView}
-              value={view}
-            />
+            <ViewControl disabled={busy} onChange={setView} value={view} />
             <WindowControl
               disabled={busy}
               onChange={setWindowDays}
@@ -1928,26 +1927,26 @@ export function apply(ctx: Context) {
         <div className="rd-row">
           <div className="rd-cluster">
             {view === "topics" ? (
-            <form
-              className="rd-cluster rd-newtopic"
-              onSubmit={(event) => {
-                void createTopic(event);
-              }}
-            >
-              <Input
-                aria-label="New topic name"
-                disabled={busy}
-                maxLength={120}
-                onChange={(event) =>
-                  setNewName((event.target as { value: string }).value)
-                }
-                placeholder="New topic name"
-                value={newName}
-              />
-              <Button disabled={busy || !newName.trim()} type="submit">
-                Add topic
-              </Button>
-            </form>
+              <form
+                className="rd-cluster rd-newtopic"
+                onSubmit={(event) => {
+                  void createTopic(event);
+                }}
+              >
+                <Input
+                  aria-label="New topic name"
+                  disabled={busy}
+                  maxLength={120}
+                  onChange={(event) =>
+                    setNewName((event.target as { value: string }).value)
+                  }
+                  placeholder="New topic name"
+                  value={newName}
+                />
+                <Button disabled={busy || !newName.trim()} type="submit">
+                  Add topic
+                </Button>
+              </form>
             ) : null}
           </div>
           <span className="rd-muted">
@@ -1964,403 +1963,420 @@ export function apply(ctx: Context) {
 
         {view === "topics"
           ? topics.map((entry) => {
-          const hasBlocked = entry.axisCounts.blocked > 0;
-          const expanded = entry.topic.id === expandedId;
-          const shown = expanded ? entry.axes : entry.axes.slice(0, LEAD_AXES);
-          const hidden = entry.axes.length - shown.length;
-          const editingThis = editing?.topicId === entry.topic.id;
-          // The expanded card renders from the `get_topic` detail (history, notes and evidence per
-          // axis); the collapsed card renders from the overview it already has.
-          const details =
-            expanded && detail && detail.topic.id === entry.topic.id
-              ? detail
-              : null;
-          return (
-            <Card
-              className="rd-topic-card"
-              data-rd-blocked={hasBlocked}
-              data-rd-topic={entry.topic.name}
-              key={entry.topic.id}
-            >
-              <CardHeader>
-                <div className="rd-row">
-                  <CardTitle>{entry.topic.name}</CardTitle>
-                  <span className="rd-muted">{entry.topic.status}</span>
-                </div>
-                <span className="rd-meta">
-                  {entry.people.length > 0
-                    ? entry.people
-                        .map((person) => person.displayName)
-                        .join(", ")
-                    : "nobody tagged yet"}
-                  {entry.repositories.length > 0
-                    ? ` · ${entry.repositories
-                        .map((repository) => repository.fullName)
-                        .join(", ")}`
-                    : ""}
-                </span>
-              </CardHeader>
-              <CardContent>
-                <div className="rd-form">
-                  <StateCounts counts={entry.axisCounts} />
-
-                  <ul className="rd-axes">
-                    {details
-                      ? details.axes.map((axis) => (
-                          <AxisDetailCard
-                            axis={axis}
-                            busy={busy}
-                            conflict={conflict}
-                            correction={correction}
-                            historyOpen={historyAxisId === axis.id}
-                            key={axis.id}
-                            onCorrection={setCorrection}
-                            onReload={() => {
-                              void reloadAxis(details.topic.id, axis.id);
-                            }}
-                            onSave={() => {
-                              void saveCorrection();
-                            }}
-                            onToggleHistory={() => {
-                              setHistoryAxisId((current) =>
-                                current === axis.id ? null : axis.id
-                              );
-                            }}
-                          />
-                        ))
-                      : shown.map((axis) => (
-                          <AxisItem axis={axis} key={axis.id} />
-                        ))}
-                  </ul>
-
-                  <div className="rd-row">
-                    <span className="rd-muted">
-                      Recent: {entry.activityCount} event
-                      {entry.activityCount === 1 ? "" : "s"} · last activity{" "}
-                      {describeAge(entry.lastActivityAt)}
-                    </span>
-                    <div className="rd-cluster">
-                      {entry.axes.length > LEAD_AXES ? (
-                        <Button
-                          disabled={busy}
-                          onClick={() => toggle(entry.topic.id)}
-                          size="sm"
-                          variant="outline"
-                        >
-                          {expanded
-                            ? "Show fewer axes"
-                            : `All ${entry.axes.length} axes`}
-                        </Button>
-                      ) : null}
-                      <Button
-                        disabled={busy}
-                        onClick={() => {
-                          if (editingThis) {
-                            // Closing the fields closes the card with them: for a topic with fewer axes
-                            // than the lead count there is no "show fewer axes" control, so this is the
-                            // only way back to a collapsed card — and the detail is not a separate
-                            // navigation pattern, it is the expanded card.
-                            setEditing(null);
-                            setExpandedId(null);
-                          } else {
-                            startEditing(entry);
-                          }
-                        }}
-                        size="sm"
-                        variant={editingThis ? "outline" : "default"}
-                      >
-                        {editingThis ? "Close" : "Edit fields"}
-                      </Button>
+              const hasBlocked = entry.axisCounts.blocked > 0;
+              const expanded = entry.topic.id === expandedId;
+              const shown = expanded
+                ? entry.axes
+                : entry.axes.slice(0, LEAD_AXES);
+              const hidden = entry.axes.length - shown.length;
+              const editingThis = editing?.topicId === entry.topic.id;
+              // The expanded card renders from the `get_topic` detail (history, notes and evidence per
+              // axis); the collapsed card renders from the overview it already has.
+              const details =
+                expanded && detail && detail.topic.id === entry.topic.id
+                  ? detail
+                  : null;
+              return (
+                <Card
+                  className="rd-topic-card"
+                  data-rd-blocked={hasBlocked}
+                  data-rd-topic={entry.topic.name}
+                  key={entry.topic.id}
+                >
+                  <CardHeader>
+                    <div className="rd-row">
+                      <CardTitle>{entry.topic.name}</CardTitle>
+                      <span className="rd-muted">{entry.topic.status}</span>
                     </div>
-                  </div>
-
-                  {hidden > 0 && !expanded ? (
-                    <span className="rd-muted">
-                      {hidden} more axe{hidden === 1 ? "" : "s"} hidden
+                    <span className="rd-meta">
+                      {entry.people.length > 0
+                        ? entry.people
+                            .map((person) => person.displayName)
+                            .join(", ")
+                        : "nobody tagged yet"}
+                      {entry.repositories.length > 0
+                        ? ` · ${entry.repositories
+                            .map((repository) => repository.fullName)
+                            .join(", ")}`
+                        : ""}
                     </span>
-                  ) : null}
+                  </CardHeader>
+                  <CardContent>
+                    <div className="rd-form">
+                      <StateCounts counts={entry.axisCounts} />
 
-                  {details ? (
-                    <div
-                      className="rd-detail rd-divider"
-                      data-rd-detail={details.topic.name}
-                    >
-                      <span className="rd-section">Topic</span>
-                      <div className="rd-claim">
-                        <span
-                          className="rd-claim-value"
-                          data-rd-claim="description"
-                        >
-                          {details.topic.description || (
-                            <span className="rd-muted">no description yet</span>
-                          )}
-                        </span>
-                        <span className="rd-muted">description</span>
-                      </div>
-                      <div className="rd-claim">
-                        <span
-                          className="rd-claim-value"
-                          data-rd-claim="summary"
-                        >
-                          {details.topic.summary || (
-                            <span className="rd-muted">
-                              no approved summary
-                            </span>
-                          )}
-                        </span>
+                      <ul className="rd-axes">
+                        {details
+                          ? details.axes.map((axis) => (
+                              <AxisDetailCard
+                                axis={axis}
+                                busy={busy}
+                                conflict={conflict}
+                                correction={correction}
+                                historyOpen={historyAxisId === axis.id}
+                                key={axis.id}
+                                onCorrection={setCorrection}
+                                onReload={() => {
+                                  void reloadAxis(details.topic.id, axis.id);
+                                }}
+                                onSave={() => {
+                                  void saveCorrection();
+                                }}
+                                onToggleHistory={() => {
+                                  setHistoryAxisId((current) =>
+                                    current === axis.id ? null : axis.id
+                                  );
+                                }}
+                              />
+                            ))
+                          : shown.map((axis) => (
+                              <AxisItem axis={axis} key={axis.id} />
+                            ))}
+                      </ul>
+
+                      <div className="rd-row">
                         <span className="rd-muted">
-                          approved summary — a human interpretation, not an
-                          agent one
+                          Recent: {entry.activityCount} event
+                          {entry.activityCount === 1 ? "" : "s"} · last activity{" "}
+                          {describeAge(entry.lastActivityAt)}
                         </span>
-                      </div>
-                      <span className="rd-meta" data-rd-detail-counts="true">
-                        {[
-                          countLabel(details.counts.axes, "axis", "axes"),
-                          countLabel(
-                            details.counts.activities,
-                            "activity",
-                            "activities"
-                          ),
-                          countLabel(details.counts.notes, "note", "notes"),
-                          `${details.counts.axesWithoutEvidence} without evidence`,
-                        ].join(" · ")}
-                      </span>
-
-                      {conflict && !conflict.axisId ? (
-                        <div
-                          className="rd-conflict"
-                          data-rd-conflict="true"
-                          role="alert"
-                        >
-                          <span className="rd-strong">
-                            This topic changed since you opened it.
-                          </span>
-                          <span className="rd-meta">{conflict.message}</span>
-                          <div className="rd-cluster">
+                        <div className="rd-cluster">
+                          {entry.axes.length > LEAD_AXES ? (
                             <Button
                               disabled={busy}
-                              onClick={() => {
-                                void loadDetail(details.topic.id);
-                              }}
+                              onClick={() => toggle(entry.topic.id)}
                               size="sm"
                               variant="outline"
                             >
-                              Reload this topic
+                              {expanded
+                                ? "Show fewer axes"
+                                : `All ${entry.axes.length} axes`}
+                            </Button>
+                          ) : null}
+                          <Button
+                            disabled={busy}
+                            onClick={() => {
+                              if (editingThis) {
+                                // Closing the fields closes the card with them: for a topic with fewer axes
+                                // than the lead count there is no "show fewer axes" control, so this is the
+                                // only way back to a collapsed card — and the detail is not a separate
+                                // navigation pattern, it is the expanded card.
+                                setEditing(null);
+                                setExpandedId(null);
+                              } else {
+                                startEditing(entry);
+                              }
+                            }}
+                            size="sm"
+                            variant={editingThis ? "outline" : "default"}
+                          >
+                            {editingThis ? "Close" : "Edit fields"}
+                          </Button>
+                        </div>
+                      </div>
+
+                      {hidden > 0 && !expanded ? (
+                        <span className="rd-muted">
+                          {hidden} more axe{hidden === 1 ? "" : "s"} hidden
+                        </span>
+                      ) : null}
+
+                      {details ? (
+                        <div
+                          className="rd-detail rd-divider"
+                          data-rd-detail={details.topic.name}
+                        >
+                          <span className="rd-section">Topic</span>
+                          <div className="rd-claim">
+                            <span
+                              className="rd-claim-value"
+                              data-rd-claim="description"
+                            >
+                              {details.topic.description || (
+                                <span className="rd-muted">
+                                  no description yet
+                                </span>
+                              )}
+                            </span>
+                            <span className="rd-muted">description</span>
+                          </div>
+                          <div className="rd-claim">
+                            <span
+                              className="rd-claim-value"
+                              data-rd-claim="summary"
+                            >
+                              {details.topic.summary || (
+                                <span className="rd-muted">
+                                  no approved summary
+                                </span>
+                              )}
+                            </span>
+                            <span className="rd-muted">
+                              approved summary — a human interpretation, not an
+                              agent one
+                            </span>
+                          </div>
+                          <span
+                            className="rd-meta"
+                            data-rd-detail-counts="true"
+                          >
+                            {[
+                              countLabel(details.counts.axes, "axis", "axes"),
+                              countLabel(
+                                details.counts.activities,
+                                "activity",
+                                "activities"
+                              ),
+                              countLabel(details.counts.notes, "note", "notes"),
+                              `${details.counts.axesWithoutEvidence} without evidence`,
+                            ].join(" · ")}
+                          </span>
+
+                          {conflict && !conflict.axisId ? (
+                            <div
+                              className="rd-conflict"
+                              data-rd-conflict="true"
+                              role="alert"
+                            >
+                              <span className="rd-strong">
+                                This topic changed since you opened it.
+                              </span>
+                              <span className="rd-meta">
+                                {conflict.message}
+                              </span>
+                              <div className="rd-cluster">
+                                <Button
+                                  disabled={busy}
+                                  onClick={() => {
+                                    void loadDetail(details.topic.id);
+                                  }}
+                                  size="sm"
+                                  variant="outline"
+                                >
+                                  Reload this topic
+                                </Button>
+                                <span className="rd-muted">
+                                  Nothing you typed has been thrown away.
+                                </span>
+                              </div>
+                            </div>
+                          ) : null}
+
+                          <span className="rd-section">
+                            Corrections &amp; notes · {details.notes.length}
+                          </span>
+                          <ul
+                            className="rd-notes"
+                            data-rd-topic-notes={details.notes.length}
+                          >
+                            {details.notes.map((note) => (
+                              <li key={note.id}>
+                                <div>{note.text}</div>
+                                <span className="rd-meta">
+                                  {note.authorType} ·{" "}
+                                  {note.createdAt.slice(0, 10)}
+                                </span>
+                              </li>
+                            ))}
+                            {details.notes.length === 0 ? (
+                              <li className="rd-muted">
+                                No notes yet. This is where a correction or a
+                                caveat goes — deliberately not in the activity
+                                log.
+                              </li>
+                            ) : null}
+                          </ul>
+                          <form
+                            className="rd-cluster"
+                            onSubmit={(event) => {
+                              void addTopicNote(event);
+                            }}
+                          >
+                            <Input
+                              aria-label="Topic note"
+                              disabled={busy}
+                              maxLength={1000}
+                              onChange={(event) =>
+                                setTopicNote(
+                                  (event.target as { value: string }).value
+                                )
+                              }
+                              placeholder="A correction or caveat about this topic"
+                              value={topicNote}
+                            />
+                            <Button
+                              disabled={busy || !topicNote.trim()}
+                              size="sm"
+                              type="submit"
+                              variant="outline"
+                            >
+                              Add note
+                            </Button>
+                          </form>
+
+                          <CardTitle className="rd-meta">Activity</CardTitle>
+                          <ul
+                            className="rd-activity"
+                            data-rd-topic-activity={details.activity.length}
+                          >
+                            {details.activity.map((item) => {
+                              const axisTitle = details.axes.find(
+                                (axis) => axis.id === item.axisId
+                              )?.title;
+                              return (
+                                <li key={item.id}>
+                                  <div>{item.summary}</div>
+                                  <span className="rd-meta">
+                                    {SOURCE_OPTIONS.find(
+                                      (option) =>
+                                        option.value === item.sourceType
+                                    )?.label ?? item.sourceType}
+                                    {item.sourceRef
+                                      ? ` · ${item.sourceRef}`
+                                      : ""}{" "}
+                                    · {item.occurredAt.slice(0, 10)}
+                                    {item.actorType
+                                      ? ` · ${item.actorType}`
+                                      : ""}
+                                    {axisTitle ? ` · axis: ${axisTitle}` : ""}
+                                  </span>
+                                </li>
+                              );
+                            })}
+                            {details.activity.length === 0 ? (
+                              <li className="rd-muted">
+                                No activity recorded yet.
+                              </li>
+                            ) : null}
+                          </ul>
+                          <form
+                            className="rd-form"
+                            onSubmit={(event) => {
+                              void addActivity(event);
+                            }}
+                          >
+                            <Textarea
+                              aria-label="Activity"
+                              disabled={busy}
+                              onChange={(event) =>
+                                setActivitySummary(
+                                  (event.target as { value: string }).value
+                                )
+                              }
+                              placeholder="One objective event, e.g. PR #72 merged"
+                              value={activitySummary}
+                            />
+                            <div className="rd-row">
+                              <SourceSelect
+                                disabled={busy}
+                                onChange={setActivitySourceType}
+                                value={activitySourceType}
+                              />
+                              <Input
+                                aria-label="Source reference"
+                                disabled={busy}
+                                maxLength={200}
+                                onChange={(event) =>
+                                  setActivitySourceRef(
+                                    (event.target as { value: string }).value
+                                  )
+                                }
+                                placeholder="Reference (PR #, commit, run id)"
+                                value={activitySourceRef}
+                              />
+                            </div>
+                            <Button
+                              disabled={busy || !activitySummary.trim()}
+                              type="submit"
+                            >
+                              Record activity
+                            </Button>
+                          </form>
+                        </div>
+                      ) : null}
+
+                      {editingThis && editing ? (
+                        <div
+                          className="rd-form rd-divider"
+                          data-rd-topic-editor="true"
+                        >
+                          <Textarea
+                            aria-label="Topic description"
+                            disabled={busy}
+                            onChange={(event) =>
+                              setEditing({
+                                ...editing,
+                                description: (event.target as { value: string })
+                                  .value,
+                              })
+                            }
+                            placeholder="What this topic is"
+                            value={editing.description}
+                          />
+                          <Textarea
+                            aria-label="Approved summary"
+                            disabled={busy}
+                            onChange={(event) =>
+                              setEditing({
+                                ...editing,
+                                summary: (event.target as { value: string })
+                                  .value,
+                              })
+                            }
+                            placeholder="Approved summary (interpretation, confirmed by a human)"
+                            value={editing.summary}
+                          />
+                          <div className="rd-row">
+                            <div className="rd-cluster">
+                              <StatusSelect
+                                disabled={busy}
+                                onChange={(next) => {
+                                  setEditing({ ...editing, status: next });
+                                }}
+                                value={editing.status}
+                              />
+                              <span className="rd-muted">
+                                {editing.status === entry.topic.status
+                                  ? "unchanged"
+                                  : `was ${entry.topic.status}`}
+                              </span>
+                            </div>
+                            <span className="rd-muted">
+                              v{entry.topic.version} · updated{" "}
+                              {entry.topic.updatedAt.slice(0, 10)}
+                            </span>
+                          </div>
+                          <Textarea
+                            aria-label="Note on this change"
+                            disabled={busy}
+                            onChange={(event) =>
+                              setEditing({
+                                ...editing,
+                                note: (event.target as { value: string }).value,
+                              })
+                            }
+                            placeholder="Why (optional) — saved with the change as a note on this topic"
+                            value={editing.note}
+                          />
+                          <div className="rd-cluster">
+                            <Button
+                              disabled={busy || !details}
+                              onClick={() => {
+                                void saveDetails();
+                              }}
+                            >
+                              Save
                             </Button>
                             <span className="rd-muted">
-                              Nothing you typed has been thrown away.
+                              The status change and its note land in one call.
                             </span>
                           </div>
                         </div>
                       ) : null}
-
-                      <span className="rd-section">
-                        Corrections &amp; notes · {details.notes.length}
-                      </span>
-                      <ul
-                        className="rd-notes"
-                        data-rd-topic-notes={details.notes.length}
-                      >
-                        {details.notes.map((note) => (
-                          <li key={note.id}>
-                            <div>{note.text}</div>
-                            <span className="rd-meta">
-                              {note.authorType} · {note.createdAt.slice(0, 10)}
-                            </span>
-                          </li>
-                        ))}
-                        {details.notes.length === 0 ? (
-                          <li className="rd-muted">
-                            No notes yet. This is where a correction or a caveat
-                            goes — deliberately not in the activity log.
-                          </li>
-                        ) : null}
-                      </ul>
-                      <form
-                        className="rd-cluster"
-                        onSubmit={(event) => {
-                          void addTopicNote(event);
-                        }}
-                      >
-                        <Input
-                          aria-label="Topic note"
-                          disabled={busy}
-                          maxLength={1000}
-                          onChange={(event) =>
-                            setTopicNote(
-                              (event.target as { value: string }).value
-                            )
-                          }
-                          placeholder="A correction or caveat about this topic"
-                          value={topicNote}
-                        />
-                        <Button
-                          disabled={busy || !topicNote.trim()}
-                          size="sm"
-                          type="submit"
-                          variant="outline"
-                        >
-                          Add note
-                        </Button>
-                      </form>
-
-                      <CardTitle className="rd-meta">Activity</CardTitle>
-                      <ul
-                        className="rd-activity"
-                        data-rd-topic-activity={details.activity.length}
-                      >
-                        {details.activity.map((item) => {
-                          const axisTitle = details.axes.find(
-                            (axis) => axis.id === item.axisId
-                          )?.title;
-                          return (
-                            <li key={item.id}>
-                              <div>{item.summary}</div>
-                              <span className="rd-meta">
-                                {SOURCE_OPTIONS.find(
-                                  (option) => option.value === item.sourceType
-                                )?.label ?? item.sourceType}
-                                {item.sourceRef ? ` · ${item.sourceRef}` : ""} ·{" "}
-                                {item.occurredAt.slice(0, 10)}
-                                {item.actorType ? ` · ${item.actorType}` : ""}
-                                {axisTitle ? ` · axis: ${axisTitle}` : ""}
-                              </span>
-                            </li>
-                          );
-                        })}
-                        {details.activity.length === 0 ? (
-                          <li className="rd-muted">
-                            No activity recorded yet.
-                          </li>
-                        ) : null}
-                      </ul>
-                      <form
-                        className="rd-form"
-                        onSubmit={(event) => {
-                          void addActivity(event);
-                        }}
-                      >
-                        <Textarea
-                          aria-label="Activity"
-                          disabled={busy}
-                          onChange={(event) =>
-                            setActivitySummary(
-                              (event.target as { value: string }).value
-                            )
-                          }
-                          placeholder="One objective event, e.g. PR #72 merged"
-                          value={activitySummary}
-                        />
-                        <div className="rd-row">
-                          <SourceSelect
-                            disabled={busy}
-                            onChange={setActivitySourceType}
-                            value={activitySourceType}
-                          />
-                          <Input
-                            aria-label="Source reference"
-                            disabled={busy}
-                            maxLength={200}
-                            onChange={(event) =>
-                              setActivitySourceRef(
-                                (event.target as { value: string }).value
-                              )
-                            }
-                            placeholder="Reference (PR #, commit, run id)"
-                            value={activitySourceRef}
-                          />
-                        </div>
-                        <Button
-                          disabled={busy || !activitySummary.trim()}
-                          type="submit"
-                        >
-                          Record activity
-                        </Button>
-                      </form>
                     </div>
-                  ) : null}
-
-                  {editingThis && editing ? (
-                    <div
-                      className="rd-form rd-divider"
-                      data-rd-topic-editor="true"
-                    >
-                      <Textarea
-                        aria-label="Topic description"
-                        disabled={busy}
-                        onChange={(event) =>
-                          setEditing({
-                            ...editing,
-                            description: (event.target as { value: string })
-                              .value,
-                          })
-                        }
-                        placeholder="What this topic is"
-                        value={editing.description}
-                      />
-                      <Textarea
-                        aria-label="Approved summary"
-                        disabled={busy}
-                        onChange={(event) =>
-                          setEditing({
-                            ...editing,
-                            summary: (event.target as { value: string }).value,
-                          })
-                        }
-                        placeholder="Approved summary (interpretation, confirmed by a human)"
-                        value={editing.summary}
-                      />
-                      <div className="rd-row">
-                        <div className="rd-cluster">
-                          <StatusSelect
-                            disabled={busy}
-                            onChange={(next) => {
-                              setEditing({ ...editing, status: next });
-                            }}
-                            value={editing.status}
-                          />
-                          <span className="rd-muted">
-                            {editing.status === entry.topic.status
-                              ? "unchanged"
-                              : `was ${entry.topic.status}`}
-                          </span>
-                        </div>
-                        <span className="rd-muted">
-                          v{entry.topic.version} · updated{" "}
-                          {entry.topic.updatedAt.slice(0, 10)}
-                        </span>
-                      </div>
-                      <Textarea
-                        aria-label="Note on this change"
-                        disabled={busy}
-                        onChange={(event) =>
-                          setEditing({
-                            ...editing,
-                            note: (event.target as { value: string }).value,
-                          })
-                        }
-                        placeholder="Why (optional) — saved with the change as a note on this topic"
-                        value={editing.note}
-                      />
-                      <div className="rd-cluster">
-                        <Button
-                          disabled={busy || !details}
-                          onClick={() => {
-                            void saveDetails();
-                          }}
-                        >
-                          Save
-                        </Button>
-                        <span className="rd-muted">
-                          The status change and its note land in one call.
-                        </span>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              </CardContent>
-            </Card>
-          );
+                  </CardContent>
+                </Card>
+              );
             })
           : null}
 

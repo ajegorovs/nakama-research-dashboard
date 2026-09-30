@@ -1499,7 +1499,9 @@ export class ResearchStore {
          FROM axis_repositories l JOIN repositories r ON r.id = l.repository_id
          ORDER BY (l.relationship = 'primary') DESC, r.full_name COLLATE NOCASE ASC`
       )
-      .all() as Array<RepositoryRow & { axis_id: string; relationship: string }>) {
+      .all() as Array<
+      RepositoryRow & { axis_id: string; relationship: string }
+    >) {
       const linked = map.get(row.axis_id) ?? [];
       linked.push({
         ...toRepository(row),
@@ -1542,7 +1544,11 @@ export class ResearchStore {
       .query("SELECT id, name, status FROM topics")
       .all() as Array<{ id: string; name: string; status: string }>) {
       if (isTopicStatus(row.status)) {
-        topicRefs.set(row.id, { id: row.id, name: row.name, status: row.status });
+        topicRefs.set(row.id, {
+          id: row.id,
+          name: row.name,
+          status: row.status,
+        });
       }
     }
     // Archived work is hidden unless the page asks for it, exactly as on the front page.
@@ -1712,7 +1718,10 @@ export class ResearchStore {
     }
 
     const activityByRepository = new Map<string, Activity[]>();
-    const addRepositoryEvent = (repositoryId: string, event: Activity): void => {
+    const addRepositoryEvent = (
+      repositoryId: string,
+      event: Activity
+    ): void => {
       const own = activityByRepository.get(repositoryId) ?? [];
       if (
         own.length < DEFAULT_ROLLUP_ACTIVITY_LIMIT &&
@@ -1765,7 +1774,9 @@ export class ResearchStore {
       Array<{ relationship: Relationship; topic: TopicRef }>
     >();
     for (const row of this.db
-      .query("SELECT topic_id, repository_id, relationship FROM topic_repositories")
+      .query(
+        "SELECT topic_id, repository_id, relationship FROM topic_repositories"
+      )
       .all() as Array<{
       relationship: string;
       repository_id: string;

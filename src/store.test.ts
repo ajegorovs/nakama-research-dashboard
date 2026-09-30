@@ -1363,8 +1363,7 @@ describe("ResearchStore people and repository rollups (C6)", () => {
     expect(axesUnder("Acquisition Automation")).toEqual(["Rig control"]);
     expect(axesUnder("Metrics Review")).toEqual([]);
     expect(
-      a?.topics.find((entry) => entry.topic.name === "Signal Processing")
-        ?.role
+      a?.topics.find((entry) => entry.topic.name === "Signal Processing")?.role
     ).toBe("owner");
     expect(a?.axes.find((axis) => axis.title === "Rig control")?.topicId).toBe(
       acquisition.id

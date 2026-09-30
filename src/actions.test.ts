@@ -325,7 +325,11 @@ describe("read actions", () => {
       topics: [],
     });
     // The repository view scans the axes that name it, in the same attention order as the topic view.
-    expect((repository?.axes as Array<Record<string, unknown>>).length).toBe(1);
+    const repositoryAxes =
+      repository === undefined
+        ? undefined
+        : (repository.axes as Array<Record<string, unknown>>);
+    expect(repositoryAxes?.length ?? -1).toBe(1);
 
     // The window is a query parameter, not stored state — and `0` is the page's "all time".
     const allTime = await call(
