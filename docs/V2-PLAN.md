@@ -1,7 +1,7 @@
 # V2 plan — coordination model (topics → development axes → evidence)
 
-**Status:** in progress — **C0 (decisions) and C1 (migration 002 + tests) are done and verified on the
-platform path**; C2 is next. See the status line at the end of each chunk.
+**Status:** in progress — **C0 (decisions), C1 (migration 002 + tests) and C2 (store v2) are done and
+verified**; C3 is next. See the status line at the end of each chunk.
 **Input:** [`reviews/2026-09-30-v2-structural-redesign.md`](reviews/2026-09-30-v2-structural-redesign.md)
 (external review of V1, kept verbatim; §16 lists its suggested sequence).
 **Written:** 2026-09-30, checked against Nakama v0.4.31 and this repo at `8688a08`.
@@ -21,8 +21,10 @@ in-tree copy on the Nakama clone's `research-dashboard` branch are **not** touch
    **D6** is resolved too (real topic names are genericised throughout, screenshots included).
 3. Work §6 in order. Each chunk is self-contained: deliverable, files, acceptance test, evidence
    command, dependencies. Do not start a chunk whose dependencies are unmet — most of the risk here
-   is in the seams between chunks, not inside them. **C1 is done; start at C2**, which is what makes
-   the migrated schema usable again (gen-1 code against the V2 schema returns HTTP 500 by design).
+   is in the seams between chunks, not inside them. **C1 and C2 are done; start at C3** (the action
+   surface). Gen-1 code no longer runs against the migrated schema — C2 kept a bridge in
+   `src/actions.ts` (same keys, topic-backed) so the plugin and the dev instance stay green until C3
+   replaces that surface.
 4. Reinstall on the dev instance to exercise migrations end-to-end (`plugin-smoke.sh`).
    `scratch/reinstall-002.sh` shows the shape of that call: the body needs
    `{"expectedRevision": <number>}` — the plugin detail's `revision` field is an integer, and a string
@@ -288,6 +290,55 @@ Acceptance:
 Evidence: `bun test`; the concurrency test is the one that would have caught V1's missing pragmas.
 Risk: low, but the pragma choice interacts with how the platform opens the DB for **migrations** — if
 FK enforcement is on during 002, insert order matters (parents first). Either way the test must pass.
+
+**Status: ✅ done (2026-09-30).** `src/store.ts` is rewritten around the gen-2 entities, with the
+transaction boundary as a property of the API rather than a thing callers remember:
+**every public writer is atomic on its own, `atomic()` is the only place `BEGIN`/`COMMIT` appears, and
+it is reentrant** so composite operations join the transaction already in flight. `reconcileTopic` is
+the composite that C3/C9a need — topic fields, axes, repository/person links, activities and
+annotations, plus the version check, in **one** transaction, so the librarian calls it once and relies
+on all-or-nothing.
+
+Pragmas are set in the constructor, i.e. on every open (`foreign_keys=ON`, `journal_mode=WAL`,
+`busy_timeout=5000`), and `store.pragmas()` exposes the effective values so a test asserts them
+instead of trusting the calls. `updated_at` is maintained in one private `touch()` and the version bump
+lives in the same UPDATE as the field change, so a conflict cannot half-apply.
+
+Two design points worth keeping:
+
+- **The evidence rule has one escape hatch and one ordering consequence.** A claim marked `confirmed`
+  must be backed by a branch, PR, activity or annotation — otherwise the honest label is `inferred`.
+  `reconcileTopic` therefore checks the rule **after** applying the call's writes, so an activity that
+  arrives in the same call can back the claim; a fresh axis is allowed its default claims (it has to
+  exist before anything can back it) while an explicit `confirmed` on creation is held to the rule.
+- **A stale `expectedVersion` is `ResearchStoreConflictError`, message prefixed `conflict: `**, so the
+  action layer can keep `{ok:false,error}` while the caller can still tell a conflict from a typo.
+
+Acceptance, all met (`bun test src` → **33 pass / 0 fail**; `bun run check` green):
+
+| Check | Evidence |
+|---|---|
+| Pragmas on every open | `store.pragmas()` = `{foreignKeys: 1, journalMode: "wal", busyTimeout: 5000}`, asserted again after reopening the same file |
+| Cascade with FKs on | deleting a topic removes its axes, both link tables, its activities and annotations; repositories/people survive as shared infrastructure |
+| Rollback | a `reconcileTopic` that trips a rule **after** patching the topic and creating an axis changes nothing: version, `summary`, `updated_at` and every table count are unchanged |
+| Conflict | stale `expectedVersion` → `conflict: topic "…" is at version 2, not 1`, and neither the row nor a sibling write moves |
+| Concurrency | two store instances interleaved (20 writes, no `SQLITE_BUSY`); plus a **separate process** holds `BEGIN IMMEDIATE` for 400 ms and the store's write waits it out and succeeds |
+| Migration-backed | every test builds its database by applying 001 **and** 002, so the store is checked against the shipped schema |
+
+The concurrency test had to use a separate **process**, not an in-process timer: `bun:sqlite` is
+synchronous, so a timer could never fire while our own write blocks on the lock. That is also why
+`busy_timeout` matters in the field — the platform runs each action in its own child process.
+
+On the risk noted above: the migration applier opens the file with **no pragmas at all**, so
+`foreign_keys` is OFF while 002 runs and the copy's insert order is free (verified in C1). The pragmas
+only govern the plugin's own connections.
+
+Also in this chunk, and **deliberately confined to it**: `src/actions.ts` is the gen-1 surface
+re-pointed at the gen-2 store — same five keys and result shapes, `project` ⇄ `topic`, and the status
+vocabulary mapped at that boundary (`done` ⇄ `completed`) because the manifest still enforces gen 1's
+enum. It exists so `bun run check` and the dev instance stay green across the migration; C3 deletes it.
+The one behavioural difference: rule violations now read `Topic not found.` (the store's vocabulary),
+and the smoke harness asserts that.
 
 ### C3 — Action surface v2 (+ provenance, + actors) · depends on C2 · D4 resolved (five tools) · ships with C9 · review steps 3, 4
 
