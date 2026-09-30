@@ -20,6 +20,11 @@ here: `vendor/` holds the recipe that puts the plugin into a checkout, because N
 > work packages with acceptance tests, the platform facts that changed three points of the proposal,
 > and the open decisions. The review itself is kept verbatim at
 > [`docs/reviews/2026-09-30-v2-structural-redesign.md`](docs/reviews/2026-09-30-v2-structural-redesign.md).
+>
+> A **delta review** is requested at
+> [`docs/reviews/2026-09-30-v2-plan-review-request.md`](docs/reviews/2026-09-30-v2-plan-review-request.md):
+> six questions only (confidence granularity, axis↔repo cardinality, topic-state vocabulary, the 002
+> mechanism, the librarian split, exposed-tool count), each with the exact SQL we would write.
 
 ## Current look
 

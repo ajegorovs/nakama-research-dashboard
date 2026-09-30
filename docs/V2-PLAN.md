@@ -182,7 +182,8 @@ Acceptance (all automated):
 
 Evidence: `bun test src/migration.test.ts`; `services/nakama/scripts/plugin-smoke.sh` after a Reinstall.
 Risk: **this is the only irreversible step** — it runs on existing data, and the platform refuses
-downgrades. Test it on a copy of the dev DB before the first Reinstall.
+downgrades. Test it on a database built from 001 first, and take a **file-level copy of the live DB
+before the first Reinstall on the deployment** — a restore is the only rollback that exists.
 
 ### C2 — Store v2: pragmas, transactions, optimistic version · depends on C1 · review steps 2, 9 (part)
 
@@ -331,6 +332,10 @@ a platform-admin concern, not a plugin one.
 | **D4** | Exposed tool count | (a) 8 as reviewed (two `find_tools` loads) · (b) consolidate to ≤5 (fold `register_person`/`register_repository` into `reconcile_topic`) | **(a)** first and measure the agent run; only consolidate if discovery friction shows |
 | **D5** | Legacy V1 data | (a) copy it (C1 as written) · (b) skip the copy, start clean (the dev data is seeded demo data) | **(a)** — the copy costs one test and keeps the option of migrating a real instance later |
 | **D6** | This plan is in the public repo and names the group's topics | (a) keep · (b) genericise topic names to `Topic A/B` | your call — placeholders are already applied to people and private repo owners |
+
+**Frame sent to the reviewer:** [`reviews/2026-09-30-v2-plan-review-request.md`](reviews/2026-09-30-v2-plan-review-request.md)
+— the six delta questions only (D1, D2, D3, the 002 mechanism, the C9 split, D4), each with the exact
+SQL of the recommended option, plus an explicit "don't re-read the model" note. Their answers land here.
 
 ## 8. Non-goals
 
