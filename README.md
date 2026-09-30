@@ -16,6 +16,14 @@ here: `vendor/` holds the recipe that puts the plugin into a checkout, because N
 > The repository is **private**: request collaborator access rather than expecting an anonymous clone.
 > Everything needed to build is in here — `bun run check` is the whole build and test story.
 
+## Current look
+
+The page as it renders today (a seeded demo dataset, not real group data):
+
+| ![page on load](docs/screenshots/dashboard.png) | ![project selected](docs/screenshots/dashboard-detail.png) | ![command palette route](docs/screenshots/navigation.png) |
+|---|---|---|
+| `dashboard.png` — the page on load: project list, empty detail pane | `dashboard-detail.png` — a project selected: status control, description, approved summary, activity feed, record-activity form | `navigation.png` — how a member reaches it: command palette → Plugins → Research (no sidebar entry in v0.4.31) |
+
 ## Why not published to npm
 
 Third-party Nakama plugins install **only** from the public npm registry at an exact version — local

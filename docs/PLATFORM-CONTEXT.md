@@ -82,7 +82,8 @@ Not available: restyling the host shell, adding a sidebar entry (**in v0.4.31 pl
 in the command palette** — `Ctrl/Cmd+K` → "Plugins" — despite docs describing a sidebar group), more
 than one page, renderers for native or other plugins' tools, or a sandbox (these are trusted modules).
 It is React inside the host's tree: internal tabs, routing, charts and any component library you bundle
-are yours to choose.
+are yours to choose. `docs/screenshots/` shows the page as it renders today (on load, with a project
+selected, and the command-palette route that is the only way members reach it).
 
 ## 5. The agent layer
 
