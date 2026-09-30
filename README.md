@@ -15,6 +15,11 @@ here: `vendor/` holds the recipe that puts the plugin into a checkout, because N
 >
 > Everything needed to build is in here: `bun run check` is the whole build and test story — no
 > network access, private registry or credentials required.
+>
+> **The V2 rework this review triggered is planned in [`docs/V2-PLAN.md`](docs/V2-PLAN.md)** — chunked
+> work packages with acceptance tests, the platform facts that changed three points of the proposal,
+> and the open decisions. The review itself is kept verbatim at
+> [`docs/reviews/2026-09-30-v2-structural-redesign.md`](docs/reviews/2026-09-30-v2-structural-redesign.md).
 
 ## Current look
 
