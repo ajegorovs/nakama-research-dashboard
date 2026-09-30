@@ -1,6 +1,7 @@
 # V2 plan — coordination model (topics → development axes → evidence)
 
-**Status:** proposal, **not started**. Nothing in here has been implemented.
+**Status:** in progress — **C0 (decisions) and C1 (migration 002 + tests) are done and verified on the
+platform path**; C2 is next. See the status line at the end of each chunk.
 **Input:** [`reviews/2026-09-30-v2-structural-redesign.md`](reviews/2026-09-30-v2-structural-redesign.md)
 (external review of V1, kept verbatim; §16 lists its suggested sequence).
 **Written:** 2026-09-30, checked against Nakama v0.4.31 and this repo at `8688a08`.
@@ -17,11 +18,19 @@ in-tree copy on the Nakama clone's `research-dashboard` branch are **not** touch
    [`reviews/2026-09-30-v2-plan-answer.md`](reviews/2026-09-30-v2-plan-answer.md)): D1 → three
    confidence columns; D2 → `axis_repositories`, the single repo FK dropped; D3 →
    `active/paused/completed/archived`; D4 → **five** exposed tools, not eight; D5 → copy the V1 data.
-   Only **D6** (topic names in a public repo) is open, and it blocks nothing.
+   **D6** is resolved too (real topic names are genericised throughout, screenshots included).
 3. Work §6 in order. Each chunk is self-contained: deliverable, files, acceptance test, evidence
    command, dependencies. Do not start a chunk whose dependencies are unmet — most of the risk here
-   is in the seams between chunks, not inside them.
+   is in the seams between chunks, not inside them. **C1 is done; start at C2**, which is what makes
+   the migrated schema usable again (gen-1 code against the V2 schema returns HTTP 500 by design).
 4. Reinstall on the dev instance to exercise migrations end-to-end (`plugin-smoke.sh`).
+   `scratch/reinstall-002.sh` shows the shape of that call: the body needs
+   `{"expectedRevision": <number>}` — the plugin detail's `revision` field is an integer, and a string
+   is rejected with HTTP 400.
+5. Before the first Reinstall of a chunk that changes migrations, copy the active generation file in
+   `<data-root>/orgs/<org>/plugins/research-dashboard/db/` — and note that a Reinstall mints a *new*
+   generation file (copy-on-write from current data), keeping the old one, so a rollback is "copy the
+   retained file back over the active generation path" (see C1).
 
 ## 1. The model to lock
 
@@ -219,10 +228,45 @@ Acceptance (all automated):
 - 002 is applied by the platform on the dev instance (Reinstall) and appears once in
   `_nakama_plugin_migrations`.
 
-Evidence: `bun test src/migration.test.ts`; `services/nakama/scripts/plugin-smoke.sh` after a Reinstall.
 Risk: **this is the only irreversible step** — it runs on existing data, and the platform refuses
 downgrades. Test it on a database built from 001 first, and take a **file-level copy of the live DB
 before the first Reinstall on the deployment** — a restore is the only rollback that exists.
+
+**Status: ✅ done (2026-09-30).** `migrations/002-coordination-model.sql`, its manifest entry and
+`src/migration.test.ts` are in the repo; `bun test src` is 11 pass / 0 fail (7 migration + 4 store).
+
+Met on the platform path, not just in the harness — Reinstall on the dev instance moved it from
+`0.1.0+dev.684004193d4f` to `0.1.0+dev.d2a2bd18a2fe` and the live database came out as intended:
+ledger `001-research, 002-coordination-model`; 11 new tables alongside `projects_v1`/`activities_v1`
+(4 projects, 3 activities, still readable); `topics` holding the 4 seeded topics with **`Reconstruction
+Study` mapped `done` → `completed`** — the row that would have aborted an unmapped copy, since `CHECK`
+fires even with `foreign_keys` off; 3 copied activities, `axis_id NULL`, `recorded_at = occurred_at`,
+source types mapped (`commit` → `github_commit`, `experiment`, `github_pr`); `PRAGMA foreign_key_check`
+empty; both partial unique indexes present.
+
+Three things the run taught us that the plan did not know:
+
+1. **The applier is not transactional.** `applyPluginMigrations` does a bare `db.exec(sql)` per file,
+   on a connection that sets no pragmas, and records the checksum only afterwards — a failure part-way
+   through would leave the database half-migrated with no ledger entry, and the retry would die on
+   "table topics already exists". 002 therefore wraps itself in `BEGIN IMMEDIATE` / `COMMIT`.
+   `migration.test.ts` asserts the atomicity with a deliberately broken copy of the file.
+2. **A Reinstall mints a new database generation file** (`g<random hex>` — not derived from content)
+   and VACUUM-copies the current data into it before applying migrations, keeping the previous
+   generation on disk. So: the automatic rollback is that retained file, and reverting the *manifest*
+   does **not** return an instance to an older generation (it mints a fresh one seeded from current
+   data). Rollback = copy the retained file back over the active generation path.
+3. **Gen-1 code cannot run against the migrated schema** — it queries `projects`, which is now
+   `projects_v1` (`list_projects` → HTTP 500). That is expected and is exactly what C2 fixes.
+
+Resting state between C1 and C2: the dev instance's active generation file was put back to its pre-002
+bytes (`g518302c79db84d34afc791c1191d48f9.sqlite` → the current generation path; the migrated copy is
+kept alongside as `.v2-migrated.bak`), so the instance keeps serving the gen-1 dashboard until the C2
+store rewrite lands. The next Reinstall re-applies 002 (the manifest still declares it; the ledger is
+what makes that idempotent).
+
+Evidence: `bun test src` → **11 pass / 0 fail**; `bash scratch/reinstall-002.sh` + a direct read of the
+org's plugin database; `plugin-smoke.sh` to re-run after the C2 Reinstall.
 
 ### C2 — Store v2: pragmas, transactions, optimistic version · depends on C1 · review steps 2, 9 (part)
 

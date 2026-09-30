@@ -170,6 +170,10 @@
       {
         "id": "001-research",
         "path": "migrations/001-research.sql"
+      },
+      {
+        "id": "002-coordination-model",
+        "path": "migrations/002-coordination-model.sql"
       }
     ]
   },
