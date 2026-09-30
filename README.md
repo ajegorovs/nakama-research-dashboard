@@ -13,8 +13,8 @@ here: `vendor/` holds the recipe that puts the plugin into a checkout, because N
 > layout, extra functionality, multi-user, service delivery, updates). This README covers build,
 > layout, loading it into Nakama, and a per-file review table.
 >
-> The repository is **private**: request collaborator access rather than expecting an anonymous clone.
-> Everything needed to build is in here — `bun run check` is the whole build and test story.
+> Everything needed to build is in here: `bun run check` is the whole build and test story — no
+> network access, private registry or credentials required.
 
 ## Current look
 

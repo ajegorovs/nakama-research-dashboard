@@ -114,7 +114,7 @@ selected, and the command-palette route that is the only way members reach it).
 
 One container runs API + dashboard + workers (`ghcr.io/ahmadrosid/nakama`), restart policy
 `unless-stopped`, published only on the host's tailnet address (login required), data root on a host
-**bind mount** (`/mnt/otrais/data/nakama:/nakama/data`), no Docker socket, no privileged mode, no
+**bind mount** (`<data-root>/nakama:/nakama/data`), no Docker socket, no privileged mode, no
 named volumes. Because it is a bind mount, `down && up -d` preserves everything; only deleting that
 directory loses state. Provider keys are stored **plaintext** in `<data-root>/config.ini`.
 
