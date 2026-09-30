@@ -117,8 +117,9 @@ export type Axis = {
   currentState: string;
   blocker: string;
   stateConfidence: Confidence;
-  currentStateConfidence: Confidence;
-  blockerConfidence: Confidence;
+  /** Null where the claim itself is absent — see toAxis. */
+  currentStateConfidence: Confidence | null;
+  blockerConfidence: Confidence | null;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -233,6 +234,11 @@ export const DEFAULT_ACTIVITY_LIMIT = 25;
 export const MAX_ACTIVITY_LIMIT = 100;
 export const DEFAULT_ANNOTATION_LIMIT = 25;
 export const MAX_ANNOTATION_LIMIT = 100;
+/** How many recorded items of one kind count towards an axis's evidence line (activities, notes). */
+export const EVIDENCE_ITEM_LIMIT = 5;
+/** Per-axis history on the detail view: enough to see the arc of the work without paging. */
+export const DEFAULT_AXIS_HISTORY_LIMIT = 25;
+export const MAX_AXIS_HISTORY_LIMIT = 100;
 export const BUSY_TIMEOUT_MS = 5000;
 
 /** A rule the caller can fix by sending different input. */
@@ -335,15 +341,24 @@ function toPerson(row: PersonRow): Person {
   };
 }
 
+/**
+ * A confidence belongs to a claim. Where the claim itself is absent (`current_state`, `blocker` are
+ * both optional) there is nothing to be confident about, so the confidence reads as null rather than
+ * falling back to the column default — otherwise an axis nothing is known about renders as
+ * "confirmed", which is exactly the provenance a reader must be able to trust.
+ */
 function toAxis(row: AxisRow): Axis {
   return {
     blocker: row.blocker,
-    blockerConfidence: (row.blocker_confidence as Confidence) ?? "confirmed",
+    blockerConfidence: row.blocker
+      ? ((row.blocker_confidence as Confidence) ?? "confirmed")
+      : null,
     branch: row.branch,
     createdAt: row.created_at,
     currentState: row.current_state,
-    currentStateConfidence:
-      (row.current_state_confidence as Confidence) ?? "confirmed",
+    currentStateConfidence: row.current_state
+      ? ((row.current_state_confidence as Confidence) ?? "confirmed")
+      : null,
     description: row.description,
     id: row.id,
     kind: (row.kind as AxisKind) ?? "feature",
@@ -553,6 +568,82 @@ export type Overview = {
   }>;
   recentTopics: Topic[];
   recentActivity: Activity[];
+};
+
+/** Evidence reads as a phrase, not as an enum value: "PR #88", "agent review", "repo document". */
+const SOURCE_EVIDENCE_LABELS: Record<SourceType, string> = {
+  agent_review: "agent review",
+  experiment: "experiment",
+  github_commit: "commit",
+  github_issue: "issue",
+  github_pr: "PR",
+  group_chat: "group chat",
+  manual: "manual record",
+  repo_document: "repo document",
+};
+
+/** "PR #88" from `github_pr` + the ref the recorder gave, without stuttering ("PR PR #88"). */
+function evidenceLabel(sourceType: SourceType, sourceRef: string): string {
+  const base = SOURCE_EVIDENCE_LABELS[sourceType];
+  const ref = sourceRef.trim();
+  if (!ref) {
+    return base;
+  }
+  return ref.toLowerCase().includes(base.toLowerCase()) ? ref : `${base} ${ref}`;
+}
+
+/**
+ * One piece of evidence on an axis, in the shape a reader can judge: what it is, where it came from,
+ * who recorded it and when.
+ *
+ * This is deliberately the *same* set `assertClaimsAreBacked` accepts — a branch, a PR, an activity or
+ * an annotation — because that method now calls `axisEvidence` too, so the rule and the page cannot
+ * drift apart. What it does **not** carry is which claim a given item backs: evidence is recorded per
+ * axis, not per field, so the UI phrases it as "evidence on this axis" instead of inventing an
+ * attribution the store never made.
+ */
+export type AxisEvidence = {
+  kind: "branch" | "pull_request" | "activity" | "annotation";
+  label: string;
+  /** Null for branch/PR evidence, which has no recorded source of its own. */
+  sourceType: SourceType | null;
+  sourceRef: string;
+  sourceUrl: string;
+  /** `human` / `agent` / `system` / `unknown`, or the note's author type. */
+  by: string;
+  at: string;
+};
+
+/** One axis as the detail view shows it: full metadata, its own history and notes, its evidence. */
+export type AxisDetail = Axis & {
+  people: LinkedPerson[];
+  repositories: LinkedRepository[];
+  evidence: AxisEvidence[];
+  /** Activity on this axis only, newest first — never one merged log for the whole topic. */
+  history: Activity[];
+  /** Notes on this axis, kept out of `history` on purpose: a correction is not an event. */
+  notes: Annotation[];
+};
+
+/** One topic in depth, in a single call. */
+export type TopicDetail = {
+  generatedAt: string;
+  topic: Topic;
+  people: LinkedPerson[];
+  repositories: LinkedRepository[];
+  axes: AxisDetail[];
+  axisCounts: Record<AxisState, number>;
+  /** The topic's own log — every activity recorded against it, axis-linked rows included. */
+  activity: Activity[];
+  /** Notes on the topic itself; a note that belongs to an axis renders under that axis. */
+  notes: Annotation[];
+  counts: {
+    axes: number;
+    activities: number;
+    notes: number;
+    /** Axes that carry no evidence at all — where a `confirmed` claim is impossible by rule. */
+    axesWithoutEvidence: number;
+  };
 };
 
 /**
@@ -890,6 +981,174 @@ export class ResearchStore {
       )
       .all(topicId) as Array<PersonRow & { role: string }>;
     return rows.map((row) => ({ ...toPerson(row), role: row.role }));
+  }
+
+  /** Notes on the topic itself — a note that belongs to an axis renders under that axis instead. */
+  listTopicNotes(topicId: string, limit?: number): Annotation[] {
+    const rows = this.db
+      .query(
+        `SELECT * FROM annotations
+         WHERE topic_id = ? AND axis_id IS NULL
+         ORDER BY created_at DESC, rowid DESC
+         LIMIT ?`
+      )
+      .all(
+        topicId,
+        clampLimit(limit, DEFAULT_ANNOTATION_LIMIT, MAX_ANNOTATION_LIMIT)
+      ) as AnnotationRow[];
+    return rows.map(toAnnotation);
+  }
+
+  // ------------------------------------------------------- evidence & detail
+
+  /**
+   * Everything that counts as evidence for an axis, in reading order: the structural evidence the axis
+   * names first (its branch and its PR), then what was recorded against it, newest first.
+   *
+   * **This is the one definition of "that axis has evidence"** — `assertClaimsAreBacked` calls it too,
+   * so a claim the rule would reject cannot render as backed, and one it accepts cannot render as bare.
+   * The reverse is the useful direction: an axis with an empty list here can only ever be `inferred` or
+   * `uncertain`, and the page says so.
+   */
+  axisEvidence(axis: Axis): AxisEvidence[] {
+    const items: AxisEvidence[] = [];
+    const branch = axis.branch.trim();
+    if (branch) {
+      items.push({
+        at: "",
+        by: "",
+        kind: "branch",
+        label: branch,
+        sourceRef: "",
+        sourceType: null,
+        sourceUrl: "",
+      });
+    }
+    if (axis.prNumber !== null || axis.prUrl.trim()) {
+      items.push({
+        at: "",
+        by: "",
+        kind: "pull_request",
+        label: axis.prNumber ? `PR #${axis.prNumber}` : "PR",
+        sourceRef: "",
+        sourceType: null,
+        sourceUrl: axis.prUrl.trim(),
+      });
+    }
+    const activities = this.db
+      .query(
+        `SELECT * FROM activities WHERE axis_id = ?
+         ORDER BY occurred_at DESC, rowid DESC LIMIT ?`
+      )
+      .all(axis.id, EVIDENCE_ITEM_LIMIT) as ActivityRow[];
+    for (const row of activities) {
+      const activity = toActivity(row);
+      items.push({
+        at: activity.occurredAt,
+        by: activity.actorType,
+        kind: "activity",
+        label: evidenceLabel(activity.sourceType, activity.sourceRef),
+        sourceRef: activity.sourceRef,
+        sourceType: activity.sourceType,
+        sourceUrl: activity.sourceUrl,
+      });
+    }
+    const notes = this.db
+      .query(
+        `SELECT * FROM annotations WHERE axis_id = ?
+         ORDER BY created_at DESC, rowid DESC LIMIT ?`
+      )
+      .all(axis.id, EVIDENCE_ITEM_LIMIT) as AnnotationRow[];
+    for (const row of notes) {
+      const note = toAnnotation(row);
+      items.push({
+        at: note.createdAt,
+        by: note.authorType,
+        kind: "annotation",
+        label: "note",
+        sourceRef: "",
+        sourceType: null,
+        sourceUrl: "",
+      });
+    }
+    return items;
+  }
+
+  /**
+   * One topic in depth, in a single call: full axis metadata with each axis's own history, notes and
+   * evidence, plus the topic's own activity log and notes.
+   *
+   * The front page deliberately avoids a read per topic; here the opposite trade is right. This is one
+   * topic with a handful of axes, and the per-axis reads are exactly what makes "history under the
+   * axis, notes beside it" expressible — a merged log for the whole topic is what the reviewer asked
+   * us *not* to build.
+   */
+  getTopicDetail(
+    topicId: string,
+    options?: {
+      activityLimit?: number;
+      activitySinceDays?: number;
+      historyLimit?: number;
+      notesLimit?: number;
+    }
+  ): TopicDetail {
+    return this.snapshot(() => {
+      const topic = this.getTopic(required(topicId, "topicId"));
+      if (!topic) {
+        throw new ResearchStoreError("Topic not found.");
+      }
+      const historyLimit = clampLimit(
+        options?.historyLimit,
+        DEFAULT_AXIS_HISTORY_LIMIT,
+        MAX_AXIS_HISTORY_LIMIT
+      );
+      const notesLimit = clampLimit(
+        options?.notesLimit,
+        DEFAULT_ANNOTATION_LIMIT,
+        MAX_ANNOTATION_LIMIT
+      );
+      const axes: AxisDetail[] = this.listAxes(topic.id).map((axis) => ({
+        ...axis,
+        evidence: this.axisEvidence(axis),
+        history: this.listActivity({ axisId: axis.id, limit: historyLimit }),
+        notes: this.listAnnotations({ axisId: axis.id, limit: notesLimit }),
+        people: this.listAxisPeople(axis.id),
+        repositories: this.listAxisRepositories(axis.id),
+      }));
+      const axisCounts = Object.fromEntries(
+        AXIS_STATES.map((state) => [
+          state,
+          axes.filter((axis) => axis.state === state).length,
+        ])
+      ) as Record<AxisState, number>;
+      const activity = this.listActivity({
+        limit: clampLimit(
+          options?.activityLimit,
+          DEFAULT_ACTIVITY_LIMIT,
+          MAX_ACTIVITY_LIMIT
+        ),
+        sinceDays: options?.activitySinceDays,
+        topicId: topic.id,
+      });
+      const notes = this.listTopicNotes(topic.id, notesLimit);
+      return {
+        activity,
+        axes,
+        axisCounts,
+        counts: {
+          activities: activity.length,
+          axes: axes.length,
+          axesWithoutEvidence: axes.filter((axis) => axis.evidence.length === 0)
+            .length,
+          notes: notes.length,
+        },
+        generatedAt: nowIso(),
+        notes,
+        people: this.listTopicPeople(topic.id),
+        repositories: this.listTopicRepositories(topic.id),
+        topic,
+      };
+    });
   }
 
   // ------------------------------------------------------- aggregates & search
@@ -1908,6 +2167,17 @@ export class ResearchStore {
     if (!existing) {
       throw new ResearchStoreError("Axis not found.");
     }
+    // The read model reports null for a confidence whose claim is absent, but the columns are NOT NULL:
+    // the write path reads them straight so that a patch which says nothing about a confidence leaves
+    // the stored value exactly as it was.
+    const stored = this.db
+      .query(
+        "SELECT current_state_confidence, blocker_confidence FROM development_axes WHERE id = ?"
+      )
+      .get(id) as {
+      blocker_confidence: string;
+      current_state_confidence: string;
+    } | null;
     this.assertVersion(
       "axis",
       existing.title,
@@ -1965,8 +2235,10 @@ export class ResearchStore {
         next.currentState,
         next.blocker,
         next.stateConfidence ?? existing.stateConfidence,
-        next.currentStateConfidence ?? existing.currentStateConfidence,
-        next.blockerConfidence ?? existing.blockerConfidence,
+        next.currentStateConfidence ??
+          stored?.current_state_confidence ??
+          "confirmed",
+        next.blockerConfidence ?? stored?.blocker_confidence ?? "confirmed",
         nowIso(),
         id
       );
@@ -2304,7 +2576,7 @@ export class ResearchStore {
     axis: Axis,
     asserted: ReadonlySet<ClaimField>
   ): void {
-    const claims: Array<[ClaimField, Confidence, boolean]> = [
+    const claims: Array<[ClaimField, Confidence | null, boolean]> = [
       ["state", axis.stateConfidence, asserted.has("state")],
       [
         "current_state",
@@ -2321,25 +2593,9 @@ export class ResearchStore {
     if (unbacked.length === 0) {
       return;
     }
-    const evidence =
-      axis.branch.trim().length > 0 ||
-      axis.prUrl.trim().length > 0 ||
-      axis.prNumber !== null ||
-      Boolean(
-        this.db
-          .query(
-            "SELECT 1 AS present FROM activities WHERE axis_id = ? LIMIT 1"
-          )
-          .get(axis.id)
-      ) ||
-      Boolean(
-        this.db
-          .query(
-            "SELECT 1 AS present FROM annotations WHERE axis_id = ? LIMIT 1"
-          )
-          .get(axis.id)
-      );
-    if (!evidence) {
+    // The same list the detail view renders, from `axisEvidence` — one definition of "has evidence",
+    // so what the page shows and what this rule enforces can never disagree.
+    if (this.axisEvidence(axis).length === 0) {
       throw new ResearchStoreError(
         `Axis "${axis.title}" claims 'confirmed' for ${unbacked.join(
           ", "

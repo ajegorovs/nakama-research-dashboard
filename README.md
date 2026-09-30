@@ -20,11 +20,14 @@ here: `vendor/` holds the recipe that puts the plugin into a checkout, because N
 >
 > **The V2 rework this review triggered is planned in [`docs/V2-PLAN.md`](docs/V2-PLAN.md)** — chunked
 > work packages with acceptance tests, the platform facts that changed three points of the proposal,
-> and the open decisions. **Progress: C0–C4 are done** — migration 002 applied and verified on a live
+> and the open decisions. **Progress: C0–C5 are done** — migration 002 applied and verified on a live
 > instance, the store rewritten around the new model (rollback, version-conflict and cross-process
 > contention tests), the action surface rebuilt as **five exposed agent tools** over one atomic write
-> path, and the **overview** now the default screen: one card per topic, axes grouped under it in
-> attention order, an activity window that is a query parameter (`bun run check` → 61 pass).
+> path, the **overview** now the default screen (one card per topic, axes grouped under it in
+> attention order, an activity window that is a query parameter), and the **topic detail** now carrying
+> the depth: every axis with its full metadata and per-claim confidence, its own history and notes
+> expanding inside it, an evidence line in words beside each inferred claim, and the correction form
+> that refuses a stale write in place instead of overwriting it (`bun run check` → 68 pass).
 > What the agent side actually does is checked against the
 > platform, not the manifest: `GET /v1/tools` lists exactly the five tool rows, and a live three-turn
 > run used all five (`find_tools` → `get_overview`; `find_tools` → `search_dashboard` ∥ `get_topic` →
@@ -46,7 +49,8 @@ here: `vendor/` holds the recipe that puts the plugin into a checkout, because N
 > ([`docs/reviews/2026-09-30-c4-c8-answers.md`](docs/reviews/2026-09-30-c4-c8-answers.md)): a manual
 > status change carries an **optional** note (D8, C8's work), and the overview presents **axes grouped
 > under topics** with `blocked → active → draft → parked → completed → abandoned` ordering (D9, which
-> shaped C4). Neither needed a schema change.
+> shaped C4). Neither needed a schema change. D8's note landed early, in C5: a manual status change
+> takes an optional rationale, and that note is itself the evidence a `confirmed` claim can rest on.
 
 ## Current look
 
@@ -54,7 +58,7 @@ The page as it renders today (a seeded demo dataset, not real group data):
 
 | ![overview on load](docs/screenshots/dashboard.png) | ![a topic card expanded](docs/screenshots/dashboard-detail.png) | ![command palette route](docs/screenshots/navigation.png) |
 |---|---|---|
-| `dashboard.png` — the overview: one card per topic, axes grouped under it in attention order (blocked first), people, state counts, repo/branch/PR line, blocker and a recent-activity summary. The window control is the only query-level control. | `dashboard-detail.png` — a card expanded: the remaining axes plus the unchanged generation-1 editing surface (description, approved summary, status, activity feed and the record-activity form) | `navigation.png` — how a member reaches it: command palette → Plugins → Research (no sidebar entry in v0.4.31) |
+| `dashboard.png` — the overview: one card per topic, axes grouped under it in attention order (blocked first), people, state counts, repo/branch/PR line, blocker and a recent-activity summary. The window control is the only query-level control. | `dashboard-detail.png` — a topic expanded: the whole detail in one `get_topic` call — description and approved summary, counts, corrections/notes kept apart from the activity log, and every axis with its full metadata, per-claim confidence, evidence line and its own history and notes behind `History (n)` | `navigation.png` — how a member reaches it: command palette → Plugins → Research (no sidebar entry in v0.4.31) |
 
 ## Why not published to npm
 

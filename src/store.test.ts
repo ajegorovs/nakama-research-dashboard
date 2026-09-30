@@ -1049,6 +1049,255 @@ describe("ResearchStore overview and search", () => {
   });
 });
 
+describe("ResearchStore topic detail and evidence (C5)", () => {
+  test("gives each axis its own history and its own notes, and the topic its own", async () => {
+    const { store } = openStore();
+    const topic = store.createTopic({ name: "Acquisition Automation" });
+    const control = store.createAxis({
+      branch: "feat/rig-control",
+      kind: "investigation",
+      prNumber: 88,
+      title: "Rig control",
+      topicId: topic.id,
+    });
+    const noise = store.createAxis({ title: "Noise study", topicId: topic.id });
+    await Bun.sleep(2);
+    store.addActivity({
+      axisId: control.id,
+      sourceRef: "PR #88",
+      sourceType: "github_pr",
+      summary: "rig firmware update merged",
+      topicId: topic.id,
+    });
+    store.addActivity({
+      axisId: noise.id,
+      sourceRef: "README.md",
+      sourceType: "repo_document",
+      summary: "notes on the noise floor",
+      topicId: topic.id,
+    });
+    store.addActivity({
+      sourceType: "group_chat",
+      summary: "standup: the rig is the priority",
+      topicId: topic.id,
+    });
+    store.addAnnotation({
+      authorType: "human",
+      axisId: control.id,
+      text: "waiting intentionally for the October hardware slot",
+    });
+    store.addAnnotation({
+      text: "the group re-scoped this topic in September",
+      topicId: topic.id,
+    });
+
+    const detail = store.getTopicDetail(topic.id);
+
+    // Each axis carries its own history — never one merged log for the whole topic.
+    expect(detail.axes.map((axis) => axis.title)).toEqual([
+      "Rig control",
+      "Noise study",
+    ]);
+    const [rig, study] = detail.axes;
+    expect(rig.history.map((item) => item.sourceRef)).toEqual(["PR #88"]);
+    expect(study.history.map((item) => item.sourceRef)).toEqual(["README.md"]);
+    // The topic's own log sees everything, and a row that belongs to an axis says so.
+    expect(detail.activity).toHaveLength(3);
+    expect(
+      detail.activity.filter((item) => item.axisId === control.id)
+    ).toHaveLength(1);
+    // Notes separate from activity, and an axis note renders under its axis (D8's split).
+    expect(rig.notes.map((note) => note.text)).toEqual([
+      "waiting intentionally for the October hardware slot",
+    ]);
+    expect(detail.notes.map((note) => note.text)).toEqual([
+      "the group re-scoped this topic in September",
+    ]);
+    expect(detail.counts).toMatchObject({
+      activities: 3,
+      axes: 2,
+      axesWithoutEvidence: 0,
+      notes: 1,
+    });
+    // The detail answers for one topic only.
+    expect(() => store.getTopicDetail("no-such-topic")).toThrow(
+      ResearchStoreError
+    );
+  });
+
+  test("reads the evidence a claim could rest on in words, from the set the rule accepts", async () => {
+    const { store } = openStore();
+    const topic = store.createTopic({ name: "Signal Processing" });
+    const axis = store.createAxis({
+      branch: "feat/rig-control",
+      prNumber: 88,
+      prUrl: "https://example.invalid/group/signal-pipeline/pull/88",
+      state: "active",
+      stateConfidence: "inferred",
+      title: "Rig control",
+      topicId: topic.id,
+    });
+    store.addActivity({
+      axisId: axis.id,
+      sourceRef: "PR #90",
+      sourceType: "github_pr",
+      summary: "follow-up pull request",
+      topicId: topic.id,
+    });
+    store.addAnnotation({ axisId: axis.id, text: "reviewed by hand" });
+
+    const detail = store.getTopicDetail(topic.id);
+    const evidence = detail.axes[0].evidence;
+    // Reading order: what the axis names about itself, then what was recorded against it.
+    expect(evidence.map((item) => item.kind)).toEqual([
+      "branch",
+      "pull_request",
+      "activity",
+      "annotation",
+    ]);
+    expect(evidence.map((item) => item.label)).toEqual([
+      "feat/rig-control",
+      "PR #88",
+      "PR #90",
+      "note",
+    ]);
+    expect(evidence[1].sourceUrl).toBe(
+      "https://example.invalid/group/signal-pipeline/pull/88"
+    );
+    expect(evidence[2]).toMatchObject({ by: "unknown", sourceType: "github_pr" });
+  });
+
+  test("a person's own note is evidence, so a manual 'confirmed' can land (D8)", () => {
+    const { store } = openStore();
+    const topic = store.createTopic({ name: "Reconstruction Study" });
+    const axis = store.createAxis({
+      state: "active",
+      stateConfidence: "inferred",
+      title: "Filtering comparison",
+      topicId: topic.id,
+    });
+    expect(store.axisEvidence(axis)).toEqual([]);
+
+    // Nothing backs this axis, so the strict claim is refused...
+    expect(() =>
+      store.updateAxis(axis.id, {
+        state: "parked",
+        stateConfidence: "confirmed",
+      })
+    ).toThrow(ResearchStoreError);
+
+    // ...and a note arriving in the same call is what makes it a fact rather than a guess.
+    const result = store.reconcileTopic({
+      actor: { id: "user-1", type: "human" },
+      annotations: [
+        {
+          axisId: axis.id,
+          text: "waiting intentionally for the October hardware slot",
+        },
+      ],
+      axes: [{ id: axis.id, state: "parked", stateConfidence: "confirmed" }],
+      topicId: topic.id,
+    });
+    expect(result.axes[0]).toMatchObject({
+      state: "parked",
+      stateConfidence: "confirmed",
+    });
+
+    const detail = store.getTopicDetail(topic.id);
+    expect(detail.axes[0].evidence.map((item) => item.kind)).toEqual([
+      "annotation",
+    ]);
+    expect(detail.axes[0].notes).toHaveLength(1);
+    expect(detail.axes[0].notes[0].authorType).toBe("human");
+    expect(detail.counts.axesWithoutEvidence).toBe(0);
+  });
+
+  // The C5 detail surfaced this one: the read model filled a confidence from the column's default, so
+  // an axis nobody had said anything about rendered "confirmed" — in the page and in the agent tool
+  // alike. A confidence belongs to a claim; with no claim there is nothing to be confident about.
+  test("does not invent a confidence for a claim nobody made", () => {
+    const { store } = openStore();
+    const topic = store.createTopic({ name: "Sparse Topic" });
+    const axis = store.createAxis({ title: "Bare axis", topicId: topic.id });
+
+    expect(axis.currentStateConfidence).toBeNull();
+    expect(axis.blockerConfidence).toBeNull();
+    expect(store.listAxes(topic.id)[0]?.blockerConfidence).toBeNull();
+    expect(
+      store.getTopicDetail(topic.id).axes[0]?.currentStateConfidence
+    ).toBeNull();
+
+    // Stating a progress note states a claim, so it carries a confidence — and is held to the rule.
+    expect(() =>
+      store.updateAxis(axis.id, { currentState: "half way" })
+    ).toThrow(ResearchStoreError);
+    const stated = store.updateAxis(axis.id, {
+      currentState: "half way",
+      currentStateConfidence: "inferred",
+    });
+    expect(stated.currentStateConfidence).toBe("inferred");
+  });
+
+  // The invariant the page's conflict path leans on: when a correction carries a rationale note and
+  // the axis moved underneath it, the refusal takes the note down with it. Nothing half-written.
+  test("a stale correction is atomic: neither the axis nor its note is written", () => {
+    const { store } = openStore();
+    const topic = store.createTopic({ name: "Atomicity" });
+    const axis = store.createAxis({ title: "Rig control", topicId: topic.id });
+    const readVersion = axis.version;
+
+    // Another writer moves the axis on after the page has read it.
+    store.updateAxis(axis.id, { description: "bumped by someone else" });
+    const before = store.getAxis(axis.id);
+
+    expect(() =>
+      store.reconcileTopic({
+        annotations: [{ axisId: axis.id, text: "parked on purpose" }],
+        axes: [
+          {
+            expectedVersion: readVersion,
+            id: axis.id,
+            state: "parked",
+            stateConfidence: "inferred",
+          },
+        ],
+        topicId: topic.id,
+      })
+    ).toThrow(ResearchStoreConflictError);
+
+    const after = store.getAxis(axis.id);
+    expect(after?.state).not.toBe("parked");
+    expect(after?.version).toBe(before?.version);
+    expect(after?.description).toBe("bumped by someone else");
+    expect(store.listTopicNotes(topic.id)).toHaveLength(0);
+    expect(store.listAnnotations({ axisId: axis.id })).toHaveLength(0);
+  });
+
+  test("caps per-axis history without losing the count of what exists", async () => {
+    const { store } = openStore();
+    const topic = store.createTopic({ name: "Filtering Comparison" });
+    const axis = store.createAxis({ title: "Baseline sweep", topicId: topic.id });
+    for (let index = 0; index < 4; index += 1) {
+      store.addActivity({
+        axisId: axis.id,
+        sourceRef: `run ${index}`,
+        sourceType: "experiment",
+        summary: `run ${index}`,
+        topicId: topic.id,
+      });
+      await Bun.sleep(1);
+    }
+    const detail = store.getTopicDetail(topic.id, { historyLimit: 2 });
+    expect(detail.axes[0].history).toHaveLength(2);
+    // Newest first, and the cap is a window onto the axis, not a different axis.
+    expect(detail.axes[0].history.map((item) => item.sourceRef)).toEqual([
+      "run 3",
+      "run 2",
+    ]);
+    expect(detail.counts.activities).toBe(4);
+  });
+});
+
 describe("ResearchStore concurrency", () => {
   test("two store instances write to one file without surfacing SQLITE_BUSY", () => {
     const { path, store } = openStore();

@@ -1,8 +1,8 @@
 # V2 plan — coordination model (topics → development axes → evidence)
 
 **Status:** in progress — **C0 (decisions), C1 (migration 002 + tests), C2 (store v2), C3 (action
-surface v2) and C4 (overview UI) are done and verified**; C5 (topic detail) is next. See the status
-line at the end of each chunk.
+surface v2), C4 (overview UI) and C5 (topic detail) are done and verified**; C6 (people and repositories
+views) is next. See the status line at the end of each chunk.
 **Input:** [`reviews/2026-09-30-v2-structural-redesign.md`](reviews/2026-09-30-v2-structural-redesign.md)
 (external review of V1, kept verbatim; §16 lists its suggested sequence).
 **Written:** 2026-09-30, checked against Nakama v0.4.31 and this repo at `8688a08`.
@@ -22,7 +22,8 @@ in-tree copy on the Nakama clone's `research-dashboard` branch are **not** touch
    **D6** is resolved too (real topic names are genericised throughout, screenshots included).
 3. Work §6 in order. Each chunk is self-contained: deliverable, files, acceptance test, evidence
    command, dependencies. Do not start a chunk whose dependencies are unmet — most of the risk here
-   is in the seams between chunks, not inside them. **C1–C4 are done; start at C5** (topic detail).
+   is in the seams between chunks, not inside them. **C1–C5 are done; start at C6** (people and
+   repositories views).
    The gen-1 surface is gone — `src/actions.ts` is the v2 surface, `src/ui.tsx` renders the overview
    on top of it, and the shipped `research-coordinator` skill documents its five tools.
 4. Reinstall on the dev instance to exercise migrations end-to-end (`plugin-smoke.sh`).
@@ -504,15 +505,50 @@ scrolls it inside its own container, so a document-level shot shows whichever sl
 view and silently drops the header — the first C4 screenshot was missing the window control entirely.
 `verify-plugin-page.mjs` captures the plugin root element instead.
 
-### C5 — Topic detail (axes + per-axis history) · depends on C4 · review steps 5, 6, 10
+### C5 — Topic detail (axes + per-axis history) · depends on C4 · review steps 5, 6, 10 · **done 2026-09-30**
 
-Deliverable: topic view with description, people, repositories, and one card per axis (state, kind,
-branch, PR, current state, blocker, confidence, people) whose history expands **inside the card** —
-never one merged log for the whole topic.
+Deliverable: the expanded topic card *is* the detail — description, status, approved summary, people and
+linked repositories; one block per axis with its full metadata (state, kind, branch, PR, current state,
+blocker, per-claim confidence, people, repositories); each axis's history and notes expanding inside that
+axis; topic-level recent activity; annotations/corrections kept visually apart from activity; and the
+correction form that lets a manager fix agent inference in place.
 
-Acceptance: activity is shown per axis with its source type/ref; editing an axis sends
-`expectedVersion` and surfaces a conflict (C7 wires the full flow); annotations render next to the
-axis they belong to.
+Acceptance (all four are harness/store assertions, not reading):
+
+| Check | Evidence |
+|---|---|
+| One call per topic | Opening a card issues exactly one `get_topic`; the C4 assertions (no `list_topics`) still hold on first paint |
+| Per-axis depth, unmerged | Each axis renders its own `History (n)` with only its own events, its own notes, and an evidence line in words |
+| Notes stay out of activity | An axis note never appears in that axis's history list; topic-level notes are listed separately (the harness checks the exact strings) |
+| Confidence on a claim only | An axis with no evidence renders `no evidence on record — a 'confirmed' claim is impossible here`, and shows **no** badge for a progress claim it never made |
+| Stale correction is refused, in place | With a second writer bumping the axis, the save is refused with the banner *inside that axis* ("This development axis changed since you opened it.") and the person's note intact — nothing written |
+| Reload re-reads, then lands | `Reload this topic` re-reads the axis and carries the rationale across while the claim fields are re-read; saving again lands it, and the note under the axis becomes the evidence for `confirmed` |
+| Atomic on refusal | Store test: a stale correction carrying a note writes neither the axis mutation nor the note |
+
+Evidence: 68 store/action tests pass; `plugin-smoke.sh` 28/28 (idempotent across runs, 4 checks are new
+here); the page harness is 28 read checks and 38 with `--write`; screenshots
+`docs/screenshots/dashboard.png` (overview) and `docs/screenshots/dashboard-detail.png` (one topic's
+detail, captured with the host's scroll container unclipped so the whole card is in frame).
+
+Three findings, all fixed rather than papered over:
+
+1. **A confidence with no claim behind it.** `toAxis` filled `current_state_confidence` from the column
+   default, so an axis nobody had said anything about rendered **`confirmed`** — in the page and in
+   `get_topic`'s payload for agents alike. Confidence describes a *claim*, not the mere existence of an
+   axis: with no claim the read model now returns `null` and nothing is rendered. The columns stay
+   `NOT NULL`, so the write path reads them straight. **Later librarian work must preserve this**: an
+   axis that states nothing is not a confirmed axis.
+2. **`Close` stopped collapsing the card.** After the detail moved into the expanded card, closing the
+   fields left the card expanded — and a topic with fewer axes than the lead count has no "show fewer
+   axes" control, so there was no way back to a collapsed card at all.
+3. **A recorded activity refreshed the wrong list.** `record_activity` re-read `list_activity` into a
+   state variable the C5 detail no longer renders, so the event you just recorded did not appear. The
+   detail is now the thing that is re-read (and the now-dead call went with it).
+
+Also: the harness had been looking for a `data-rd-conflict` attribute the page never emitted, which made
+a working conflict banner read as missing — worth knowing when an assertion "fails" on a feature that
+looks right. And the C4 count-line regex was `repositories?`, which matches "repositorie(s)" but not the
+singular "1 repository" `countLabel` produces.
 
 ### C6 — People and Repositories views · depends on C5 · review steps 7, 11, 12
 

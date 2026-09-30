@@ -39,6 +39,9 @@ var DEFAULT_ACTIVITY_LIMIT = 25;
 var MAX_ACTIVITY_LIMIT = 100;
 var DEFAULT_ANNOTATION_LIMIT = 25;
 var MAX_ANNOTATION_LIMIT = 100;
+var EVIDENCE_ITEM_LIMIT = 5;
+var DEFAULT_AXIS_HISTORY_LIMIT = 25;
+var MAX_AXIS_HISTORY_LIMIT = 100;
 var BUSY_TIMEOUT_MS = 5000;
 
 class ResearchStoreError extends Error {
@@ -114,11 +117,11 @@ function toPerson(row) {
 function toAxis(row) {
   return {
     blocker: row.blocker,
-    blockerConfidence: row.blocker_confidence ?? "confirmed",
+    blockerConfidence: row.blocker ? row.blocker_confidence ?? "confirmed" : null,
     branch: row.branch,
     createdAt: row.created_at,
     currentState: row.current_state,
-    currentStateConfidence: row.current_state_confidence ?? "confirmed",
+    currentStateConfidence: row.current_state ? row.current_state_confidence ?? "confirmed" : null,
     description: row.description,
     id: row.id,
     kind: row.kind ?? "feature",
@@ -159,6 +162,24 @@ function toAnnotation(row) {
     text: row.text,
     topicId: row.topic_id
   };
+}
+var SOURCE_EVIDENCE_LABELS = {
+  agent_review: "agent review",
+  experiment: "experiment",
+  github_commit: "commit",
+  github_issue: "issue",
+  github_pr: "PR",
+  group_chat: "group chat",
+  manual: "manual record",
+  repo_document: "repo document"
+};
+function evidenceLabel(sourceType, sourceRef) {
+  const base = SOURCE_EVIDENCE_LABELS[sourceType];
+  const ref = sourceRef.trim();
+  if (!ref) {
+    return base;
+  }
+  return ref.toLowerCase().includes(base.toLowerCase()) ? ref : `${base} ${ref}`;
 }
 var AXIS_STATE_ATTENTION = {
   abandoned: 5,
@@ -350,6 +371,112 @@ class ResearchStore {
          WHERE l.topic_id = ?
          ORDER BY p.display_name COLLATE NOCASE ASC`).all(topicId);
     return rows.map((row) => ({ ...toPerson(row), role: row.role }));
+  }
+  listTopicNotes(topicId, limit) {
+    const rows = this.db.query(`SELECT * FROM annotations
+         WHERE topic_id = ? AND axis_id IS NULL
+         ORDER BY created_at DESC, rowid DESC
+         LIMIT ?`).all(topicId, clampLimit(limit, DEFAULT_ANNOTATION_LIMIT, MAX_ANNOTATION_LIMIT));
+    return rows.map(toAnnotation);
+  }
+  axisEvidence(axis) {
+    const items = [];
+    const branch = axis.branch.trim();
+    if (branch) {
+      items.push({
+        at: "",
+        by: "",
+        kind: "branch",
+        label: branch,
+        sourceRef: "",
+        sourceType: null,
+        sourceUrl: ""
+      });
+    }
+    if (axis.prNumber !== null || axis.prUrl.trim()) {
+      items.push({
+        at: "",
+        by: "",
+        kind: "pull_request",
+        label: axis.prNumber ? `PR #${axis.prNumber}` : "PR",
+        sourceRef: "",
+        sourceType: null,
+        sourceUrl: axis.prUrl.trim()
+      });
+    }
+    const activities = this.db.query(`SELECT * FROM activities WHERE axis_id = ?
+         ORDER BY occurred_at DESC, rowid DESC LIMIT ?`).all(axis.id, EVIDENCE_ITEM_LIMIT);
+    for (const row of activities) {
+      const activity = toActivity(row);
+      items.push({
+        at: activity.occurredAt,
+        by: activity.actorType,
+        kind: "activity",
+        label: evidenceLabel(activity.sourceType, activity.sourceRef),
+        sourceRef: activity.sourceRef,
+        sourceType: activity.sourceType,
+        sourceUrl: activity.sourceUrl
+      });
+    }
+    const notes = this.db.query(`SELECT * FROM annotations WHERE axis_id = ?
+         ORDER BY created_at DESC, rowid DESC LIMIT ?`).all(axis.id, EVIDENCE_ITEM_LIMIT);
+    for (const row of notes) {
+      const note = toAnnotation(row);
+      items.push({
+        at: note.createdAt,
+        by: note.authorType,
+        kind: "annotation",
+        label: "note",
+        sourceRef: "",
+        sourceType: null,
+        sourceUrl: ""
+      });
+    }
+    return items;
+  }
+  getTopicDetail(topicId, options) {
+    return this.snapshot(() => {
+      const topic = this.getTopic(required(topicId, "topicId"));
+      if (!topic) {
+        throw new ResearchStoreError("Topic not found.");
+      }
+      const historyLimit = clampLimit(options?.historyLimit, DEFAULT_AXIS_HISTORY_LIMIT, MAX_AXIS_HISTORY_LIMIT);
+      const notesLimit = clampLimit(options?.notesLimit, DEFAULT_ANNOTATION_LIMIT, MAX_ANNOTATION_LIMIT);
+      const axes = this.listAxes(topic.id).map((axis) => ({
+        ...axis,
+        evidence: this.axisEvidence(axis),
+        history: this.listActivity({ axisId: axis.id, limit: historyLimit }),
+        notes: this.listAnnotations({ axisId: axis.id, limit: notesLimit }),
+        people: this.listAxisPeople(axis.id),
+        repositories: this.listAxisRepositories(axis.id)
+      }));
+      const axisCounts = Object.fromEntries(AXIS_STATES.map((state) => [
+        state,
+        axes.filter((axis) => axis.state === state).length
+      ]));
+      const activity = this.listActivity({
+        limit: clampLimit(options?.activityLimit, DEFAULT_ACTIVITY_LIMIT, MAX_ACTIVITY_LIMIT),
+        sinceDays: options?.activitySinceDays,
+        topicId: topic.id
+      });
+      const notes = this.listTopicNotes(topic.id, notesLimit);
+      return {
+        activity,
+        axes,
+        axisCounts,
+        counts: {
+          activities: activity.length,
+          axes: axes.length,
+          axesWithoutEvidence: axes.filter((axis) => axis.evidence.length === 0).length,
+          notes: notes.length
+        },
+        generatedAt: nowIso(),
+        notes,
+        people: this.listTopicPeople(topic.id),
+        repositories: this.listTopicRepositories(topic.id),
+        topic
+      };
+    });
   }
   getOverview(options) {
     return this.snapshot(() => {
@@ -909,6 +1036,7 @@ class ResearchStore {
     if (!existing) {
       throw new ResearchStoreError("Axis not found.");
     }
+    const stored = this.db.query("SELECT current_state_confidence, blocker_confidence FROM development_axes WHERE id = ?").get(id);
     this.assertVersion("axis", existing.title, existing.version, options?.expectedVersion);
     const next = {
       blocker: patch.blocker ?? existing.blocker,
@@ -929,7 +1057,7 @@ class ResearchStore {
            title = ?, description = ?, kind = ?, state = ?, branch = ?, pr_number = ?, pr_url = ?,
            current_state = ?, blocker = ?, state_confidence = ?, current_state_confidence = ?,
            blocker_confidence = ?, version = version + 1, updated_at = ?
-         WHERE id = ?`).run(next.title, next.description, next.kind ?? existing.kind, next.state ?? existing.state, next.branch, next.prNumber, next.prUrl, next.currentState, next.blocker, next.stateConfidence ?? existing.stateConfidence, next.currentStateConfidence ?? existing.currentStateConfidence, next.blockerConfidence ?? existing.blockerConfidence, nowIso(), id);
+         WHERE id = ?`).run(next.title, next.description, next.kind ?? existing.kind, next.state ?? existing.state, next.branch, next.prNumber, next.prUrl, next.currentState, next.blocker, next.stateConfidence ?? existing.stateConfidence, next.currentStateConfidence ?? stored?.current_state_confidence ?? "confirmed", next.blockerConfidence ?? stored?.blocker_confidence ?? "confirmed", nowIso(), id);
     return this.getAxis(id);
   }
   upsertRepository(input) {
@@ -1070,8 +1198,7 @@ class ResearchStore {
     if (unbacked.length === 0) {
       return;
     }
-    const evidence = axis.branch.trim().length > 0 || axis.prUrl.trim().length > 0 || axis.prNumber !== null || Boolean(this.db.query("SELECT 1 AS present FROM activities WHERE axis_id = ? LIMIT 1").get(axis.id)) || Boolean(this.db.query("SELECT 1 AS present FROM annotations WHERE axis_id = ? LIMIT 1").get(axis.id));
-    if (!evidence) {
+    if (this.axisEvidence(axis).length === 0) {
       throw new ResearchStoreError(`Axis "${axis.title}" claims 'confirmed' for ${unbacked.join(", ")} but carries no evidence \u2014 add a branch, a PR or an activity, or mark it 'inferred'.`);
     }
   }
@@ -1203,22 +1330,17 @@ async function dispatch(input, context, store) {
     case "get_topic": {
       const topic = requireTopic(store, input);
       const includeAnnotations = input.includeAnnotations !== false;
+      const detail = store.getTopicDetail(topic.id, {
+        activityLimit: optionalInt(input.activityLimit, "activityLimit", 1, 100),
+        activitySinceDays: optionalInt(input.activitySinceDays, "activitySinceDays", 1, 365),
+        historyLimit: optionalInt(input.historyLimit, "historyLimit", 1, 100),
+        notesLimit: optionalInt(input.notesLimit, "notesLimit", 1, 100)
+      });
       return {
-        activity: store.listActivity({
-          limit: optionalInt(input.activityLimit, "activityLimit", 1, 100),
-          sinceDays: optionalInt(input.activitySinceDays, "activitySinceDays", 1, 365),
-          topicId: topic.id
-        }),
-        annotations: includeAnnotations ? store.listAnnotations({ topicId: topic.id }) : [],
-        axes: store.listAxes(topic.id).map((axis) => ({
-          ...axis,
-          people: store.listAxisPeople(axis.id),
-          repositories: store.listAxisRepositories(axis.id)
-        })),
-        ok: true,
-        people: store.listTopicPeople(topic.id),
-        repositories: store.listTopicRepositories(topic.id),
-        topic
+        ...detail,
+        annotations: includeAnnotations ? detail.notes : [],
+        axes: includeAnnotations ? detail.axes : detail.axes.map((axis) => ({ ...axis, notes: [] })),
+        ok: true
       };
     }
     case "search_dashboard": {

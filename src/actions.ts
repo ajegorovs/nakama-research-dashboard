@@ -236,29 +236,28 @@ async function dispatch(
     case "get_topic": {
       const topic = requireTopic(store, input);
       const includeAnnotations = input.includeAnnotations !== false;
+      // The detail view is one call by contract: full axis metadata with each axis's own history,
+      // notes and evidence, plus the topic's own log and notes (C5).
+      const detail = store.getTopicDetail(topic.id, {
+        activityLimit: optionalInt(input.activityLimit, "activityLimit", 1, 100),
+        activitySinceDays: optionalInt(
+          input.activitySinceDays,
+          "activitySinceDays",
+          1,
+          365
+        ),
+        historyLimit: optionalInt(input.historyLimit, "historyLimit", 1, 100),
+        notesLimit: optionalInt(input.notesLimit, "notesLimit", 1, 100),
+      });
       return {
-        activity: store.listActivity({
-          limit: optionalInt(input.activityLimit, "activityLimit", 1, 100),
-          sinceDays: optionalInt(
-            input.activitySinceDays,
-            "activitySinceDays",
-            1,
-            365
-          ),
-          topicId: topic.id,
-        }),
-        annotations: includeAnnotations
-          ? store.listAnnotations({ topicId: topic.id })
-          : [],
-        axes: store.listAxes(topic.id).map((axis) => ({
-          ...axis,
-          people: store.listAxisPeople(axis.id),
-          repositories: store.listAxisRepositories(axis.id),
-        })),
+        ...detail,
+        // The topic-level note list, under the name it has always had. `notes` is the same list; a note
+        // that belongs to an axis is under that axis, so nothing is lost by the split.
+        annotations: includeAnnotations ? detail.notes : [],
+        axes: includeAnnotations
+          ? detail.axes
+          : detail.axes.map((axis) => ({ ...axis, notes: [] })),
         ok: true,
-        people: store.listTopicPeople(topic.id),
-        repositories: store.listTopicRepositories(topic.id),
-        topic,
       };
     }
 

@@ -312,6 +312,67 @@ describe("read actions", () => {
     expect(result.repositories).toHaveLength(1);
     expect(result.people).toHaveLength(1);
     expect(result.activity).toHaveLength(1);
+    // C5: the detail is per-axis. Each axis carries its own history and its own evidence line, and the
+    // topic-level counts say how much of the topic has no evidence at all.
+    expect(axes[0]?.history).toHaveLength(1);
+    expect(
+      (axes[0]?.evidence as Array<Record<string, unknown>>).map(
+        (item) => item.kind
+      )
+    ).toEqual(["branch", "activity"]);
+    expect(result.counts).toMatchObject({
+      activities: 1,
+      axes: 1,
+      axesWithoutEvidence: 0,
+      notes: 0,
+    });
+  });
+
+  test("get_topic files a note under its own axis, and a manual correction carries it (D8)", async () => {
+    const path = freshDatabase();
+    const created = await call(
+      "reconcile_topic",
+      {
+        axes: [{ title: "Rig control" }],
+        topic: { description: "hardware-side work" },
+        topicName: "Acquisition Automation",
+      },
+      { path }
+    );
+    const topicId = (created.topic as { id: string }).id;
+    const axisId = (created.axes as Array<{ id: string }>)[0]?.id as string;
+
+    // A person parks an axis that nothing else backs yet, and says why in the same call. The note is
+    // what makes 'confirmed' reachable — the evidence rule reads it in that transaction.
+    const corrected = await call(
+      "reconcile_topic",
+      {
+        annotations: [
+          {
+            axisId,
+            text: "waiting intentionally for the October hardware slot",
+          },
+        ],
+        axes: [{ id: axisId, state: "parked", stateConfidence: "confirmed" }],
+        topicId,
+      },
+      { path }
+    );
+    expect(corrected.ok).toBe(true);
+
+    const detail = await call("get_topic", { topicId }, { path });
+    const axes = detail.axes as Array<Record<string, unknown>>;
+    expect(axes[0]).toMatchObject({ state: "parked", stateConfidence: "confirmed" });
+    // An axis note renders under its axis, not in the topic-level list...
+    expect(axes[0]?.notes).toHaveLength(1);
+    expect(detail.annotations).toHaveLength(0);
+    // ...and the evidence line is the same set the write rule accepted, in words.
+    expect(
+      (axes[0]?.evidence as Array<Record<string, unknown>>).map(
+        (item) => item.label
+      )
+    ).toEqual(["note"]);
+    expect(detail.counts).toMatchObject({ axesWithoutEvidence: 0, notes: 0 });
   });
 
   test("search_dashboard reports which field matched", async () => {
