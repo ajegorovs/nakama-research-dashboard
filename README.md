@@ -18,7 +18,9 @@ here: `vendor/` holds the recipe that puts the plugin into a checkout, because N
 >
 > **The V2 rework this review triggered is planned in [`docs/V2-PLAN.md`](docs/V2-PLAN.md)** — chunked
 > work packages with acceptance tests, the platform facts that changed three points of the proposal,
-> and the open decisions. The review itself is kept verbatim at
+> and the open decisions. **Progress: C0–C2 are done** — migration 002 applied and verified on a live
+> instance, and the store rewritten around the new model (`bun test src` → 33 pass, incl. rollback,
+> version-conflict and cross-process contention tests). The review itself is kept verbatim at
 > [`docs/reviews/2026-09-30-v2-structural-redesign.md`](docs/reviews/2026-09-30-v2-structural-redesign.md).
 >
 > **Answered 2026-09-30** — the delta review is closed:
