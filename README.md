@@ -18,9 +18,16 @@ here: `vendor/` holds the recipe that puts the plugin into a checkout, because N
 >
 > **The V2 rework this review triggered is planned in [`docs/V2-PLAN.md`](docs/V2-PLAN.md)** — chunked
 > work packages with acceptance tests, the platform facts that changed three points of the proposal,
-> and the open decisions. **Progress: C0–C2 are done** — migration 002 applied and verified on a live
-> instance, and the store rewritten around the new model (`bun test src` → 33 pass, incl. rollback,
-> version-conflict and cross-process contention tests). The review itself is kept verbatim at
+> and the open decisions. **Progress: C0–C3 are done** — migration 002 applied and verified on a live
+> instance, the store rewritten around the new model (rollback, version-conflict and cross-process
+> contention tests), and the action surface rebuilt as **five exposed agent tools** over one atomic
+> write path (`bun run check` → 57 pass). What the agent side actually does is checked against the
+> platform, not the manifest: `GET /v1/tools` lists exactly the five tool rows, and a live three-turn
+> run used all five (`find_tools` → `get_overview`; `find_tools` → `search_dashboard` ∥ `get_topic` →
+> `reconcile_topic`; `find_tools` → `get_topic` → `search_dashboard` → `record_activity`) with both
+> writes landing and attributed. Note the discovery cost is **per turn**, not per surface: plugin tools
+> are loaded by `find_tools` for one user request at a time, and one search returns the whole
+> five-tool group. The review itself is kept verbatim at
 > [`docs/reviews/2026-09-30-v2-structural-redesign.md`](docs/reviews/2026-09-30-v2-structural-redesign.md).
 >
 > **Answered 2026-09-30** — the delta review is closed:
@@ -68,10 +75,11 @@ check that `git status` is clean — a non-empty diff means the committed bundle
 ```
 nakama.plugin.json      manifest: actions, skill, migration, UI entry, schemas
 migrations/             SQL applied to the organization's plugin database generation
-src/store.ts            bun:sqlite data access (projects, activities)
-src/actions.ts          one entry for every action; dispatch on context.actionKey
+src/store.ts            bun:sqlite data access (topics, axes, repositories, people, activities, annotations)
+src/actions.ts          the action surface: five agent tools + page/admin actions, no transaction logic
 src/ui.tsx              the single plugin page (list + detail)
-src/store.test.ts       store tests (temp-file SQLite, no host)
+src/store.test.ts       store tests (migrations applied, no host)
+src/actions.test.ts     action + manifest tests (result shapes, provenance, schema allowlist)
 skills/research-coordinator/SKILL.md   what the agent is told about this plugin
 actions/, ui/           build output — never edited by hand
 vendor/                 allowlist.patch + vendor-into-nakama.sh + in-tree package.json

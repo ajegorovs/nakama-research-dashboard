@@ -6,11 +6,19 @@
  * Plugin page. One page is required by the host; the list/detail split lives inside it.
  * React, the shared UI controls and the stylesheet are supplied by the dashboard — this
  * module must not bundle React, React DOM or @nakama/ui.
+ *
+ * The page talks to the same actions the agent uses (`list_topics`, `reconcile_topic`,
+ * `record_activity`); `exposeAsTool` governs the agent's tool registry, not HTTP access, so the two
+ * callers share one write path and one set of rules. Writes send the version they read, so a change
+ * made elsewhere shows up as a conflict message instead of being silently overwritten.
+ *
+ * Still generation-1 in presentation: topics only, no axes, no confidence marking, no provenance
+ * display — chunk C8 redesigns what the page shows, now against this surface.
  */
 import type * as UI from "@nakama/ui";
 import type * as ReactType from "react";
 
-type Project = {
+type Topic = {
   id: string;
   name: string;
   description: string;
@@ -18,15 +26,18 @@ type Project = {
   summary: string;
   createdAt: string;
   updatedAt: string;
+  /** Read to write: sent back on the next update so a concurrent change is caught. */
+  version: number;
 };
 
 type Activity = {
   id: string;
-  projectId: string;
+  axisId: string | null;
   sourceType: string;
   sourceRef: string;
   summary: string;
   occurredAt: string;
+  actorType: string;
 };
 
 type Context = {
@@ -46,16 +57,19 @@ export const inject = ["slots", "host", "ui", "styles"];
 const STATUS_OPTIONS = [
   { label: "Active", value: "active" },
   { label: "Paused", value: "paused" },
-  { label: "Done", value: "done" },
+  { label: "Completed", value: "completed" },
+  { label: "Archived", value: "archived" },
 ];
 
 const SOURCE_OPTIONS = [
   { label: "Manual note", value: "manual" },
   { label: "Pull request", value: "github_pr" },
+  { label: "Commit", value: "github_commit" },
   { label: "Issue", value: "github_issue" },
-  { label: "Commit", value: "commit" },
+  { label: "Document / notebook", value: "repo_document" },
+  { label: "Group chat", value: "group_chat" },
   { label: "Experiment / run", value: "experiment" },
-  { label: "Document / notebook", value: "document" },
+  { label: "Agent review", value: "agent_review" },
 ];
 
 const css = `
@@ -72,8 +86,8 @@ const css = `
   justify-content: space-between;
   gap: 8px;
 }
-[data-plugin-id="research-dashboard"] .rd-projects { display: grid; gap: 4px; }
-[data-plugin-id="research-dashboard"] .rd-project {
+[data-plugin-id="research-dashboard"] .rd-topics { display: grid; gap: 4px; }
+[data-plugin-id="research-dashboard"] .rd-topic {
   display: block;
   width: 100%;
   text-align: left;
@@ -83,8 +97,8 @@ const css = `
   background: transparent;
   cursor: pointer;
 }
-[data-plugin-id="research-dashboard"] .rd-project:hover { border-color: var(--border); }
-[data-plugin-id="research-dashboard"] .rd-project[data-selected="true"] {
+[data-plugin-id="research-dashboard"] .rd-topic:hover { border-color: var(--border); }
+[data-plugin-id="research-dashboard"] .rd-topic[data-selected="true"] {
   border-color: var(--border);
   background: var(--muted, rgba(127, 127, 127, 0.08));
 }
@@ -147,7 +161,7 @@ export function apply(ctx: Context) {
         }}
         value={value}
       >
-        <SelectTrigger aria-label="Project status">
+        <SelectTrigger aria-label="Topic status">
           <SelectValue>
             {STATUS_OPTIONS.find((option) => option.value === value)?.label ??
               value}
@@ -201,7 +215,7 @@ export function apply(ctx: Context) {
   }
 
   function ResearchPage() {
-    const [projects, setProjects] = React.useState<Project[]>([]);
+    const [topics, setTopics] = React.useState<Topic[]>([]);
     const [activity, setActivity] = React.useState<Activity[]>([]);
     const [selectedId, setSelectedId] = React.useState<string | null>(null);
     const [draft, setDraft] = React.useState<Draft>({
@@ -216,8 +230,7 @@ export function apply(ctx: Context) {
     const [busy, setBusy] = React.useState(false);
     const [error, setError] = React.useState("");
 
-    const selected =
-      projects.find((project) => project.id === selectedId) ?? null;
+    const selected = topics.find((topic) => topic.id === selectedId) ?? null;
 
     async function call<T extends { ok?: boolean; error?: string }>(
       action: string,
@@ -247,23 +260,12 @@ export function apply(ctx: Context) {
       }
     }
 
-    async function loadProjects(): Promise<Project[]> {
-      const result = await call<{ ok?: boolean; projects: Project[] }>(
-        "list_projects"
-      );
-      const next = result?.projects ?? [];
-      if (!ctx.signal.aborted) {
-        setProjects(next);
-      }
-      return next;
-    }
-
-    async function loadActivity(projectId: string): Promise<void> {
+    async function loadActivity(topicId: string): Promise<void> {
       const result = await call<{ ok?: boolean; activity: Activity[] }>(
         "list_activity",
         {
           limit: 50,
-          projectId,
+          topicId,
         }
       );
       if (!ctx.signal.aborted) {
@@ -274,11 +276,11 @@ export function apply(ctx: Context) {
     React.useEffect(() => {
       let active = true;
       (async () => {
-        const result = await call<{ ok?: boolean; projects: Project[] }>(
-          "list_projects"
+        const result = await call<{ ok?: boolean; topics: Topic[] }>(
+          "list_topics"
         );
         if (active && result) {
-          setProjects(result.projects);
+          setTopics(result.topics);
         }
       })();
       return () => {
@@ -298,7 +300,7 @@ export function apply(ctx: Context) {
           "list_activity",
           {
             limit: 50,
-            projectId: selectedId,
+            topicId: selectedId,
           }
         );
         if (active && result) {
@@ -308,31 +310,43 @@ export function apply(ctx: Context) {
       return () => {
         active = false;
       };
-      // Reloads when the selected project changes.
+      // Reloads when the selected topic changes.
     }, [selectedId]);
 
-    function select(project: Project) {
-      setSelectedId(project.id);
-      setDraft({ description: project.description, summary: project.summary });
+    async function loadTopics(): Promise<Topic[]> {
+      const result = await call<{ ok?: boolean; topics: Topic[] }>(
+        "list_topics"
+      );
+      const next = result?.topics ?? [];
+      if (!ctx.signal.aborted) {
+        setTopics(next);
+      }
+      return next;
     }
 
-    async function createProject(event: unknown) {
+    function select(topic: Topic) {
+      setSelectedId(topic.id);
+      setDraft({ description: topic.description, summary: topic.summary });
+    }
+
+    async function createTopic(event: unknown) {
       const formEvent = event as { preventDefault(): void };
       formEvent.preventDefault();
       const name = newName.trim();
       if (!name) {
         return;
       }
-      const result = await call<{ ok?: boolean; project: Project }>(
-        "create_project",
+      // Creating a topic is a reconcile with nothing but its name — the same single write path.
+      const result = await call<{ ok?: boolean; topic: Topic }>(
+        "reconcile_topic",
         {
-          name,
+          topicName: name,
         }
       );
-      if (result?.project) {
+      if (result?.topic) {
         setNewName("");
-        await loadProjects();
-        select(result.project);
+        await loadTopics();
+        select(result.topic);
       }
     }
 
@@ -340,20 +354,24 @@ export function apply(ctx: Context) {
       if (!selected) {
         return;
       }
-      await call("update_project", {
-        description: draft.description,
-        projectId: selected.id,
-        summary: draft.summary,
+      await call("reconcile_topic", {
+        expectedVersion: selected.version,
+        topic: { description: draft.description, summary: draft.summary },
+        topicId: selected.id,
       });
-      await loadProjects();
+      await loadTopics();
     }
 
     async function changeStatus(next: string) {
       if (!selected) {
         return;
       }
-      await call("update_project", { projectId: selected.id, status: next });
-      await loadProjects();
+      await call("reconcile_topic", {
+        expectedVersion: selected.version,
+        topic: { status: next },
+        topicId: selected.id,
+      });
+      await loadTopics();
     }
 
     async function addActivity(event: unknown) {
@@ -362,17 +380,17 @@ export function apply(ctx: Context) {
       if (!(selected && activitySummary.trim())) {
         return;
       }
-      const result = await call("add_activity", {
-        projectId: selected.id,
+      const result = await call("record_activity", {
         sourceRef: activitySourceRef.trim(),
         sourceType: activitySourceType,
         summary: activitySummary.trim(),
+        topicId: selected.id,
       });
       if (result) {
         setActivitySummary("");
         setActivitySourceRef("");
         await loadActivity(selected.id);
-        await loadProjects();
+        await loadTopics();
       }
     }
 
@@ -382,12 +400,12 @@ export function apply(ctx: Context) {
           <h2 style={{ margin: 0 }}>Research dashboard</h2>
           <div className="rd-row">
             <span className="rd-muted">
-              {projects.length} project{projects.length === 1 ? "" : "s"}
+              {topics.length} topic{topics.length === 1 ? "" : "s"}
             </span>
             <Button
               disabled={busy}
               onClick={() => {
-                void loadProjects();
+                void loadTopics();
                 if (selectedId) {
                   void loadActivity(selectedId);
                 }
@@ -408,49 +426,48 @@ export function apply(ctx: Context) {
         <div className="rd-grid">
           <Card>
             <CardHeader>
-              <CardTitle>Projects</CardTitle>
+              <CardTitle>Topics</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="rd-form">
                 <form
                   className="rd-form"
                   onSubmit={(event) => {
-                    void createProject(event);
+                    void createTopic(event);
                   }}
                 >
                   <Input
-                    aria-label="New project name"
+                    aria-label="New topic name"
                     disabled={busy}
                     maxLength={120}
                     onChange={(event) =>
                       setNewName((event.target as { value: string }).value)
                     }
-                    placeholder="New project name"
+                    placeholder="New topic name"
                     value={newName}
                   />
                   <Button disabled={busy || !newName.trim()} type="submit">
-                    Add project
+                    Add topic
                   </Button>
                 </form>
-                <div className="rd-projects">
-                  {projects.map((project) => (
+                <div className="rd-topics">
+                  {topics.map((topic) => (
                     <button
-                      className="rd-project"
-                      data-selected={project.id === selectedId}
+                      className="rd-topic"
+                      data-selected={topic.id === selectedId}
                       disabled={busy}
-                      key={project.id}
-                      onClick={() => select(project)}
+                      key={topic.id}
+                      onClick={() => select(topic)}
                       type="button"
                     >
-                      {project.name}
+                      {topic.name}
                       <span className="rd-meta">
-                        {project.status} · updated{" "}
-                        {project.updatedAt.slice(0, 10)}
+                        {topic.status} · updated {topic.updatedAt.slice(0, 10)}
                       </span>
                     </button>
                   ))}
-                  {projects.length === 0 ? (
-                    <p className="rd-muted">No projects recorded yet.</p>
+                  {topics.length === 0 ? (
+                    <p className="rd-muted">No topics recorded yet.</p>
                   ) : null}
                 </div>
               </div>
@@ -475,7 +492,7 @@ export function apply(ctx: Context) {
                 <CardContent>
                   <div className="rd-form">
                     <Textarea
-                      aria-label="Project description"
+                      aria-label="Topic description"
                       disabled={busy}
                       onChange={(event) =>
                         setDraft({
@@ -484,7 +501,7 @@ export function apply(ctx: Context) {
                             .value,
                         })
                       }
-                      placeholder="What this project is"
+                      placeholder="What this topic is"
                       value={draft.description}
                     />
                     <Textarea
@@ -501,8 +518,8 @@ export function apply(ctx: Context) {
                     />
                     <div className="rd-row">
                       <span className="rd-muted">
-                        created {selected.createdAt.slice(0, 10)} · id{" "}
-                        {selected.id.slice(0, 8)}
+                        created {selected.createdAt.slice(0, 10)} · v
+                        {selected.version} · id {selected.id.slice(0, 8)}
                       </span>
                       <Button
                         disabled={busy}
@@ -533,6 +550,7 @@ export function apply(ctx: Context) {
                             )?.label ?? entry.sourceType}
                             {entry.sourceRef ? ` · ${entry.sourceRef}` : ""} ·{" "}
                             {entry.occurredAt.slice(0, 10)}
+                            {entry.actorType ? ` · ${entry.actorType}` : ""}
                           </span>
                         </li>
                       ))}
@@ -591,7 +609,7 @@ export function apply(ctx: Context) {
             <Card>
               <CardContent>
                 <p className="rd-muted">
-                  Select a project to see its description, approved summary and
+                  Select a topic to see its description, approved summary and
                   recorded activity.
                 </p>
               </CardContent>

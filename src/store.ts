@@ -476,6 +476,67 @@ export type ReconcileResult = {
   };
 };
 
+/** One search hit, with the fields it matched so a caller can say *why* it came back. */
+export type SearchHit<T> = {
+  matchedFields: string[];
+  record: T;
+  /** The owning topic, for hits that are not topics themselves. */
+  topicName?: string | null;
+};
+
+export type SearchResults = {
+  query: string;
+  limit: number;
+  includeArchived: boolean;
+  topics: Array<SearchHit<Topic>>;
+  axes: Array<SearchHit<Axis>>;
+  activities: Array<SearchHit<Activity>>;
+  annotations: Array<SearchHit<Annotation>>;
+  /** True when a group hit the limit, i.e. there may be more matches than returned. */
+  truncated: boolean;
+};
+
+/** The dashboard front page in one call. */
+export type Overview = {
+  generatedAt: string;
+  activitySinceDays: number;
+  counts: {
+    topics: number;
+    axes: number;
+    repositories: number;
+    people: number;
+    topicsByStatus: Record<TopicStatus, number>;
+  };
+  axesByState: Record<AxisState, number>;
+  blocked: Array<{
+    axisId: string;
+    topicId: string;
+    topicName: string;
+    title: string;
+    state: AxisState;
+    blocker: string;
+    blockerConfidence: Confidence;
+    updatedAt: string;
+  }>;
+  recentTopics: Topic[];
+  recentActivity: Activity[];
+};
+
+/** The three fields an axis can make a claim about. */
+type ClaimField = "blocker" | "current_state" | "state";
+
+/** Nothing asserted — the set a caller passes when a write mentions no `state` at all. */
+const NO_CLAIMS: ReadonlySet<ClaimField> = new Set();
+
+/**
+ * Which claims a call actually makes. `current_state` and `blocker` assert themselves when they carry
+ * text; `state` counts only when the caller mentions it, because the column's default is where a new
+ * axis starts rather than something anyone said.
+ */
+function assertedClaims(input: { state?: unknown }): ReadonlySet<ClaimField> {
+  return new Set(input.state === undefined ? [] : (["state"] as const));
+}
+
 export class ResearchStore {
   private readonly db: Database;
   /** Depth of the transaction in flight; >0 means a nested call must join it, not open a second one. */
@@ -533,6 +594,29 @@ export class ResearchStore {
       throw error;
     } finally {
       this.depth -= 1;
+    }
+  }
+
+  /**
+   * A consistent read across several queries. Deferred (no write lock), so a dashboard aggregate
+   * cannot mix a row from before a write with one from after it.
+   */
+  private snapshot<T>(fn: () => T): T {
+    if (this.depth > 0) {
+      return fn();
+    }
+    this.db.exec("BEGIN");
+    try {
+      const result = fn();
+      this.db.exec("COMMIT");
+      return result;
+    } catch (error) {
+      try {
+        this.db.exec("ROLLBACK");
+      } catch {
+        // Already unwound; the original error is the useful one.
+      }
+      throw error;
     }
   }
 
@@ -728,6 +812,193 @@ export class ResearchStore {
     return rows.map((row) => ({ ...toPerson(row), role: row.role }));
   }
 
+  // ------------------------------------------------------- aggregates & search
+
+  /**
+   * The dashboard front page: what exists, what is blocked and who is waiting on what, what moved
+   * recently. `activitySinceDays` is a query parameter, never stored state — the same call answers
+   * "what happened this week" and "what happened this quarter".
+   */
+  getOverview(options?: { activitySinceDays?: number; limit?: number }): Overview {
+    return this.snapshot(() => {
+      const activitySinceDays = options?.activitySinceDays ?? 14;
+      const limit = clampLimit(options?.limit, 10, 50);
+
+      const topicsByStatus = Object.fromEntries(
+        TOPIC_STATUSES.map((status) => [status, 0])
+      ) as Record<TopicStatus, number>;
+      for (const row of this.db
+        .query("SELECT status, count(*) AS n FROM topics GROUP BY status")
+        .all() as Array<{ n: number; status: string }>) {
+        if (isTopicStatus(row.status)) {
+          topicsByStatus[row.status] = row.n;
+        }
+      }
+
+      const axesByState = Object.fromEntries(
+        AXIS_STATES.map((state) => [state, 0])
+      ) as Record<AxisState, number>;
+      for (const row of this.db
+        .query("SELECT state, count(*) AS n FROM development_axes GROUP BY state")
+        .all() as Array<{ n: number; state: string }>) {
+        if ((AXIS_STATES as readonly string[]).includes(row.state)) {
+          axesByState[row.state as AxisState] = row.n;
+        }
+      }
+
+      const counts = this.db
+        .query(
+          `SELECT (SELECT count(*) FROM topics) AS topics,
+                  (SELECT count(*) FROM development_axes) AS axes,
+                  (SELECT count(*) FROM repositories) AS repositories,
+                  (SELECT count(*) FROM people) AS people`
+        )
+        .get() as { axes: number; people: number; repositories: number; topics: number };
+
+      const blocked = this.db
+        .query(
+          `SELECT a.*, t.name AS topic_name
+           FROM development_axes a JOIN topics t ON t.id = a.topic_id
+           WHERE a.state = 'blocked'
+           ORDER BY a.updated_at DESC`
+        )
+        .all() as Array<AxisRow & { topic_name: string }>;
+
+      return {
+        activitySinceDays,
+        axesByState,
+        blocked: blocked.map((row) => ({
+          axisId: row.id,
+          blocker: row.blocker,
+          blockerConfidence: (row.blocker_confidence as Confidence) ?? "uncertain",
+          state: (row.state as AxisState) ?? "active",
+          title: row.title,
+          topicId: row.topic_id,
+          topicName: row.topic_name,
+          updatedAt: row.updated_at,
+        })),
+        counts: { ...counts, topicsByStatus },
+        generatedAt: nowIso(),
+        recentActivity: this.listActivity({ limit: 25, sinceDays: activitySinceDays }),
+        recentTopics: (
+          this.db
+            .query("SELECT * FROM topics ORDER BY updated_at DESC, name ASC LIMIT ?")
+            .all(limit) as TopicRow[]
+        ).map(toTopic),
+      };
+    });
+  }
+
+  /**
+   * Substring search across topics, axes, activity and annotations. Deliberately simple (no FTS table
+   * yet): a librarian uses it to find the row a conversation is about, not to rank a corpus.
+   */
+  searchDashboard(options: {
+    query: string;
+    limit?: number;
+    includeArchived?: boolean;
+  }): SearchResults {
+    const query = required(options.query, "query");
+    const limit = clampLimit(options.limit, 10, 50);
+    const includeArchived = options.includeArchived ?? false;
+    const needle = query.toLowerCase();
+    const pattern = `%${query.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
+
+    return this.snapshot(() => {
+      const archivedFilter = includeArchived ? "" : "AND t.status <> 'archived'";
+
+      const topicRows = this.db
+        .query(
+          `SELECT t.* FROM topics t
+           WHERE (t.name LIKE ? ESCAPE '\\' OR t.description LIKE ? ESCAPE '\\' OR t.summary LIKE ? ESCAPE '\\')
+             ${archivedFilter}
+           ORDER BY t.updated_at DESC
+           LIMIT ?`
+        )
+        .all(pattern, pattern, pattern, limit + 1) as TopicRow[];
+
+      const axisRows = this.db
+        .query(
+          `SELECT a.*, t.name AS topic_name FROM development_axes a JOIN topics t ON t.id = a.topic_id
+           WHERE (a.title LIKE ? ESCAPE '\\' OR a.description LIKE ? ESCAPE '\\'
+                  OR a.current_state LIKE ? ESCAPE '\\' OR a.blocker LIKE ? ESCAPE '\\'
+                  OR a.branch LIKE ? ESCAPE '\\')
+             ${archivedFilter}
+           ORDER BY a.updated_at DESC
+           LIMIT ?`
+        )
+        .all(pattern, pattern, pattern, pattern, pattern, limit + 1) as Array<
+        AxisRow & { topic_name: string }
+      >;
+
+      const activityRows = this.db
+        .query(
+          `SELECT x.*, t.name AS topic_name FROM activities x LEFT JOIN topics t ON t.id = x.topic_id
+           WHERE (x.summary LIKE ? ESCAPE '\\' OR x.source_ref LIKE ? ESCAPE '\\')
+           ORDER BY x.occurred_at DESC, x.rowid DESC
+           LIMIT ?`
+        )
+        .all(pattern, pattern, limit + 1) as Array<ActivityRow & { topic_name: string | null }>;
+
+      const annotationRows = this.db
+        .query(
+          `SELECT n.*, t.name AS topic_name FROM annotations n LEFT JOIN topics t ON t.id = n.topic_id
+           WHERE n.text LIKE ? ESCAPE '\\'
+           ORDER BY n.created_at DESC, n.rowid DESC
+           LIMIT ?`
+        )
+        .all(pattern, limit + 1) as Array<AnnotationRow & { topic_name: string | null }>;
+
+      const fields = (row: Record<string, unknown>, names: string[]): string[] =>
+        names.filter((name) => String(row[name] ?? "").toLowerCase().includes(needle));
+
+      const topics = topicRows.slice(0, limit).map((row) => ({
+        matchedFields: fields(row as unknown as Record<string, unknown>, [
+          "name",
+          "description",
+          "summary",
+        ]),
+        record: toTopic(row),
+      }));
+      const axes = axisRows.slice(0, limit).map((row) => ({
+        matchedFields: fields(row as unknown as Record<string, unknown>, [
+          "title",
+          "description",
+          "current_state",
+          "blocker",
+          "branch",
+        ]),
+        record: toAxis(row),
+        topicName: row.topic_name,
+      }));
+      const activities = activityRows.slice(0, limit).map((row) => ({
+        matchedFields: fields(row as unknown as Record<string, unknown>, ["summary", "source_ref"]),
+        record: toActivity(row),
+        topicName: row.topic_name,
+      }));
+      const annotations = annotationRows.slice(0, limit).map((row) => ({
+        matchedFields: fields(row as unknown as Record<string, unknown>, ["text"]),
+        record: toAnnotation(row),
+        topicName: row.topic_name,
+      }));
+
+      return {
+        activities,
+        annotations,
+        axes,
+        includeArchived,
+        limit,
+        query,
+        topics,
+        truncated:
+          topicRows.length > limit ||
+          axisRows.length > limit ||
+          activityRows.length > limit ||
+          annotationRows.length > limit,
+      };
+    });
+  }
+
   // ------------------------------------------------------- single-row writers
 
   createTopic(input: {
@@ -799,16 +1070,9 @@ export class ResearchStore {
         throw new ResearchStoreError("Topic not found.");
       }
       const axis = this.insertAxis(topicId, input);
-      // A brand-new axis is allowed to carry the default claims: it has to exist before anything can
-      // back it. Only an explicit `confirmed` from the caller is held to the evidence rule.
-      const explicit = [
-        input.stateConfidence,
-        input.currentStateConfidence,
-        input.blockerConfidence,
-      ].some((value) => value === "confirmed");
-      if (explicit) {
-        this.assertClaimsAreBacked(axis);
-      }
+      // A brand-new axis starts from the column defaults, and a default nobody chose is not a claim:
+      // only what the caller actually said is held to the evidence rule.
+      this.assertClaimsAreBacked(axis, assertedClaims(input));
       return axis;
     });
   }
@@ -820,19 +1084,9 @@ export class ResearchStore {
   ): Axis {
     return this.atomic(() => {
       const axis = this.applyAxisPatch(required(id, "axisId"), patch, options);
-      // Changing what the axis claims, or explicitly labelling a claim, is a statement about reality:
-      // it has to be backed by something (branch, PR, activity, annotation).
-      const claims = [
-        patch.state,
-        patch.currentState,
-        patch.blocker,
-        patch.stateConfidence,
-        patch.currentStateConfidence,
-        patch.blockerConfidence,
-      ].some((value) => value !== undefined);
-      if (claims) {
-        this.assertClaimsAreBacked(axis);
-      }
+      // Unconditional: a write is the moment to check that the axis still stands behind every claim it
+      // carries, including ones this patch did not touch.
+      this.assertClaimsAreBacked(axis, assertedClaims(patch));
       return axis;
     });
   }
@@ -953,6 +1207,8 @@ export class ResearchStore {
     topicId?: string;
     axisId?: string;
     repositoryId?: string;
+    /** Registered inside the same transaction when given, so a caller never has to two-step it. */
+    repositoryFullName?: string;
     summary: string;
     sourceType?: SourceType;
     sourceRef?: string;
@@ -978,7 +1234,12 @@ export class ResearchStore {
       if (axis && topicId && axis.topicId !== topicId) {
         throw new ResearchStoreError("Axis does not belong to this topic.");
       }
-      if (input.repositoryId && !this.repositoryExists(input.repositoryId)) {
+      // A named repository is registered inside this transaction, so recording an event that names a
+      // repository is still one atomic step for the caller.
+      const repositoryId = input.repositoryFullName
+        ? this.upsertRepository({ fullName: input.repositoryFullName }).repository.id
+        : input.repositoryId;
+      if (repositoryId && !this.repositoryExists(repositoryId)) {
         throw new ResearchStoreError("Repository not found.");
       }
       return this.insertActivity({
@@ -987,7 +1248,7 @@ export class ResearchStore {
           optionalOneOf(input.actorType, ACTOR_TYPES, "actorType") ?? "unknown",
         axisId,
         occurredAt: input.occurredAt ?? nowIso(),
-        repositoryId: input.repositoryId ?? null,
+        repositoryId: repositoryId ?? null,
         sourceRef: text(input.sourceRef),
         // Validated here rather than left to the column's CHECK: a raw SQLite error reaches the caller
         // as a generic 500, and this is input the caller can fix.
@@ -1052,6 +1313,22 @@ export class ResearchStore {
 
       const resolved = this.resolveTopicForReconcile(input);
       let topic = resolved.topic;
+
+      // Whoever just wrote is on the topic they wrote to, if the dashboard already knows them as a
+      // person. A link, never a new row: "who touched this" must not invent people (F6).
+      if (actor.id) {
+        const known = this.db
+          .query("SELECT id FROM people WHERE nakama_user_id = ? LIMIT 1")
+          .get(actor.id) as { id: string } | null;
+        if (known) {
+          this.db
+            .query(
+              "INSERT INTO topic_people (topic_id, person_id, role) VALUES (?, ?, '') ON CONFLICT (topic_id, person_id) DO NOTHING"
+            )
+            .run(topic.id, known.id);
+        }
+      }
+
       if (input.topic) {
         const patch = { ...input.topic };
         if (patch.name !== undefined && patch.name.trim() === topic.name) {
@@ -1071,6 +1348,7 @@ export class ResearchStore {
         topic: resolved.created,
       };
       const touchedAxes: Axis[] = [];
+      const assertedByAxis = new Map<string, ReadonlySet<ClaimField>>();
       const activities: string[] = [];
       const annotations: string[] = [];
 
@@ -1104,7 +1382,7 @@ export class ResearchStore {
         const existing = axisInput.id
           ? this.getAxis(required(axisInput.id, "axis.id"))
           : axisInput.title
-            ? this.getAxisByTitle(topic.id, axisInput.title)
+            ? this.findAxisByTitle(topic.id, axisInput.title)
             : null;
         if (axisInput.id && !existing) {
           throw new ResearchStoreError("Axis not found.");
@@ -1153,6 +1431,7 @@ export class ResearchStore {
             .run(axis.id, result.person.id, person.role ?? "");
         }
         touchedAxes.push(axis);
+        assertedByAxis.set(axis.id, assertedClaims(axisInput));
       }
 
       for (const activityInput of input.activities ?? []) {
@@ -1211,7 +1490,7 @@ export class ResearchStore {
       // call (an activity or annotation above). Runs inside the transaction, so a claim with nothing
       // behind it rolls the whole update back instead of laundering a guess into a fact.
       for (const axis of touchedAxes) {
-        this.assertClaimsAreBacked(axis);
+        this.assertClaimsAreBacked(axis, assertedByAxis.get(axis.id) ?? NO_CLAIMS);
       }
 
       return {
@@ -1662,7 +1941,8 @@ export class ResearchStore {
       .run(nowIso(), id);
   }
 
-  private getAxisByTitle(topicId: string, title: string): Axis | null {
+  /** Axis lookup within a topic, case-insensitively — the way a caller names an axis in conversation. */
+  findAxisByTitle(topicId: string, title: string): Axis | null {
     const row = this.db
       .query(
         "SELECT * FROM development_axes WHERE topic_id = ? AND title = ? COLLATE NOCASE"
@@ -1687,7 +1967,7 @@ export class ResearchStore {
       return axis.id;
     }
     if (axisTitle) {
-      const axis = this.getAxisByTitle(topicId, axisTitle);
+      const axis = this.findAxisByTitle(topicId, axisTitle);
       if (!axis) {
         throw new ResearchStoreError(
           `Axis "${axisTitle}" not found in this topic.`
@@ -1731,18 +2011,24 @@ export class ResearchStore {
   }
 
   /**
-   * A claim may only be `confirmed` when something could have confirmed it: a branch, a PR, or a
-   * recorded activity on the axis. Otherwise the honest values are `inferred` or `uncertain`.
+   * A claim may only be `confirmed` when something could have confirmed it: a branch, a PR, a recorded
+   * activity or an annotation on the axis. Otherwise the honest values are `inferred` or `uncertain`.
+   *
+   * Only fields that actually state something count as claims. A blank `current_state` or `blocker`
+   * states nothing, and neither does a `state` the caller never mentioned — the column's default is
+   * where a new axis starts, not something anyone asserted. Holding those to the evidence rule made a
+   * fresh `{ title }` axis impossible to create, which is the sort of error that teaches callers to
+   * pass `inferred` everywhere and means nothing.
    */
-  private assertClaimsAreBacked(axis: Axis): void {
-    const claims: Array<[string, Confidence]> = [
-      ["state", axis.stateConfidence],
-      ["current_state", axis.currentStateConfidence],
-      ["blocker", axis.blockerConfidence],
+  private assertClaimsAreBacked(axis: Axis, asserted: ReadonlySet<ClaimField>): void {
+    const claims: Array<[ClaimField, Confidence, boolean]> = [
+      ["state", axis.stateConfidence, asserted.has("state")],
+      ["current_state", axis.currentStateConfidence, axis.currentState.trim().length > 0],
+      ["blocker", axis.blockerConfidence, axis.blocker.trim().length > 0],
     ];
-    const unbacked = claims.filter(
-      ([, confidence]) => confidence === "confirmed"
-    );
+    const unbacked = claims
+      .filter(([, confidence, isClaim]) => isClaim && confidence === "confirmed")
+      .map(([field]) => field);
     if (unbacked.length === 0) {
       return;
     }
@@ -1766,11 +2052,9 @@ export class ResearchStore {
       );
     if (!evidence) {
       throw new ResearchStoreError(
-        `Axis "${axis.title}" claims 'confirmed' for ${unbacked
-          .map(([field]) => field)
-          .join(
-            ", "
-          )} but carries no evidence — add a branch, a PR or an activity, or mark it 'inferred'.`
+        `Axis "${axis.title}" claims 'confirmed' for ${unbacked.join(
+          ", "
+        )} but carries no evidence — add a branch, a PR or an activity, or mark it 'inferred'.`
       );
     }
   }

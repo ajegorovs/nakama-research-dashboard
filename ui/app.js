@@ -3,15 +3,18 @@ var inject = ["slots", "host", "ui", "styles"];
 var STATUS_OPTIONS = [
   { label: "Active", value: "active" },
   { label: "Paused", value: "paused" },
-  { label: "Done", value: "done" }
+  { label: "Completed", value: "completed" },
+  { label: "Archived", value: "archived" }
 ];
 var SOURCE_OPTIONS = [
   { label: "Manual note", value: "manual" },
   { label: "Pull request", value: "github_pr" },
+  { label: "Commit", value: "github_commit" },
   { label: "Issue", value: "github_issue" },
-  { label: "Commit", value: "commit" },
+  { label: "Document / notebook", value: "repo_document" },
+  { label: "Group chat", value: "group_chat" },
   { label: "Experiment / run", value: "experiment" },
-  { label: "Document / notebook", value: "document" }
+  { label: "Agent review", value: "agent_review" }
 ];
 var css = `
 [data-plugin-id="research-dashboard"] .rd-grid {
@@ -27,8 +30,8 @@ var css = `
   justify-content: space-between;
   gap: 8px;
 }
-[data-plugin-id="research-dashboard"] .rd-projects { display: grid; gap: 4px; }
-[data-plugin-id="research-dashboard"] .rd-project {
+[data-plugin-id="research-dashboard"] .rd-topics { display: grid; gap: 4px; }
+[data-plugin-id="research-dashboard"] .rd-topic {
   display: block;
   width: 100%;
   text-align: left;
@@ -38,8 +41,8 @@ var css = `
   background: transparent;
   cursor: pointer;
 }
-[data-plugin-id="research-dashboard"] .rd-project:hover { border-color: var(--border); }
-[data-plugin-id="research-dashboard"] .rd-project[data-selected="true"] {
+[data-plugin-id="research-dashboard"] .rd-topic:hover { border-color: var(--border); }
+[data-plugin-id="research-dashboard"] .rd-topic[data-selected="true"] {
   border-color: var(--border);
   background: var(--muted, rgba(127, 127, 127, 0.08));
 }
@@ -89,7 +92,7 @@ function apply(ctx) {
       },
       value
     }, /* @__PURE__ */ React.createElement(SelectTrigger, {
-      "aria-label": "Project status"
+      "aria-label": "Topic status"
     }, /* @__PURE__ */ React.createElement(SelectValue, null, STATUS_OPTIONS.find((option) => option.value === value)?.label ?? value)), /* @__PURE__ */ React.createElement(SelectContent, null, STATUS_OPTIONS.map((option) => /* @__PURE__ */ React.createElement(SelectItem, {
       key: option.value,
       value: option.value
@@ -116,7 +119,7 @@ function apply(ctx) {
     }, option.label))));
   }
   function ResearchPage() {
-    const [projects, setProjects] = React.useState([]);
+    const [topics, setTopics] = React.useState([]);
     const [activity, setActivity] = React.useState([]);
     const [selectedId, setSelectedId] = React.useState(null);
     const [draft, setDraft] = React.useState({
@@ -129,7 +132,7 @@ function apply(ctx) {
     const [activitySourceRef, setActivitySourceRef] = React.useState("");
     const [busy, setBusy] = React.useState(false);
     const [error, setError] = React.useState("");
-    const selected = projects.find((project) => project.id === selectedId) ?? null;
+    const selected = topics.find((topic) => topic.id === selectedId) ?? null;
     async function call(action, input) {
       setBusy(true);
       setError("");
@@ -154,18 +157,10 @@ function apply(ctx) {
         }
       }
     }
-    async function loadProjects() {
-      const result = await call("list_projects");
-      const next = result?.projects ?? [];
-      if (!ctx.signal.aborted) {
-        setProjects(next);
-      }
-      return next;
-    }
-    async function loadActivity(projectId) {
+    async function loadActivity(topicId) {
       const result = await call("list_activity", {
         limit: 50,
-        projectId
+        topicId
       });
       if (!ctx.signal.aborted) {
         setActivity(result?.activity ?? []);
@@ -174,9 +169,9 @@ function apply(ctx) {
     React.useEffect(() => {
       let active = true;
       (async () => {
-        const result = await call("list_projects");
+        const result = await call("list_topics");
         if (active && result) {
-          setProjects(result.projects);
+          setTopics(result.topics);
         }
       })();
       return () => {
@@ -192,7 +187,7 @@ function apply(ctx) {
       (async () => {
         const result = await call("list_activity", {
           limit: 50,
-          projectId: selectedId
+          topicId: selectedId
         });
         if (active && result) {
           setActivity(result.activity);
@@ -202,43 +197,55 @@ function apply(ctx) {
         active = false;
       };
     }, [selectedId]);
-    function select(project) {
-      setSelectedId(project.id);
-      setDraft({ description: project.description, summary: project.summary });
+    async function loadTopics() {
+      const result = await call("list_topics");
+      const next = result?.topics ?? [];
+      if (!ctx.signal.aborted) {
+        setTopics(next);
+      }
+      return next;
     }
-    async function createProject(event) {
+    function select(topic) {
+      setSelectedId(topic.id);
+      setDraft({ description: topic.description, summary: topic.summary });
+    }
+    async function createTopic(event) {
       const formEvent = event;
       formEvent.preventDefault();
       const name = newName.trim();
       if (!name) {
         return;
       }
-      const result = await call("create_project", {
-        name
+      const result = await call("reconcile_topic", {
+        topicName: name
       });
-      if (result?.project) {
+      if (result?.topic) {
         setNewName("");
-        await loadProjects();
-        select(result.project);
+        await loadTopics();
+        select(result.topic);
       }
     }
     async function saveDetails() {
       if (!selected) {
         return;
       }
-      await call("update_project", {
-        description: draft.description,
-        projectId: selected.id,
-        summary: draft.summary
+      await call("reconcile_topic", {
+        expectedVersion: selected.version,
+        topic: { description: draft.description, summary: draft.summary },
+        topicId: selected.id
       });
-      await loadProjects();
+      await loadTopics();
     }
     async function changeStatus(next) {
       if (!selected) {
         return;
       }
-      await call("update_project", { projectId: selected.id, status: next });
-      await loadProjects();
+      await call("reconcile_topic", {
+        expectedVersion: selected.version,
+        topic: { status: next },
+        topicId: selected.id
+      });
+      await loadTopics();
     }
     async function addActivity(event) {
       const formEvent = event;
@@ -246,17 +253,17 @@ function apply(ctx) {
       if (!(selected && activitySummary.trim())) {
         return;
       }
-      const result = await call("add_activity", {
-        projectId: selected.id,
+      const result = await call("record_activity", {
         sourceRef: activitySourceRef.trim(),
         sourceType: activitySourceType,
-        summary: activitySummary.trim()
+        summary: activitySummary.trim(),
+        topicId: selected.id
       });
       if (result) {
         setActivitySummary("");
         setActivitySourceRef("");
         await loadActivity(selected.id);
-        await loadProjects();
+        await loadTopics();
       }
     }
     return /* @__PURE__ */ React.createElement("div", {
@@ -269,10 +276,10 @@ function apply(ctx) {
       className: "rd-row"
     }, /* @__PURE__ */ React.createElement("span", {
       className: "rd-muted"
-    }, projects.length, " project", projects.length === 1 ? "" : "s"), /* @__PURE__ */ React.createElement(Button, {
+    }, topics.length, " topic", topics.length === 1 ? "" : "s"), /* @__PURE__ */ React.createElement(Button, {
       disabled: busy,
       onClick: () => {
-        loadProjects();
+        loadTopics();
         if (selectedId) {
           loadActivity(selectedId);
         }
@@ -283,37 +290,37 @@ function apply(ctx) {
       role: "alert"
     }, error) : null, /* @__PURE__ */ React.createElement("div", {
       className: "rd-grid"
-    }, /* @__PURE__ */ React.createElement(Card, null, /* @__PURE__ */ React.createElement(CardHeader, null, /* @__PURE__ */ React.createElement(CardTitle, null, "Projects")), /* @__PURE__ */ React.createElement(CardContent, null, /* @__PURE__ */ React.createElement("div", {
+    }, /* @__PURE__ */ React.createElement(Card, null, /* @__PURE__ */ React.createElement(CardHeader, null, /* @__PURE__ */ React.createElement(CardTitle, null, "Topics")), /* @__PURE__ */ React.createElement(CardContent, null, /* @__PURE__ */ React.createElement("div", {
       className: "rd-form"
     }, /* @__PURE__ */ React.createElement("form", {
       className: "rd-form",
       onSubmit: (event) => {
-        createProject(event);
+        createTopic(event);
       }
     }, /* @__PURE__ */ React.createElement(Input, {
-      "aria-label": "New project name",
+      "aria-label": "New topic name",
       disabled: busy,
       maxLength: 120,
       onChange: (event) => setNewName(event.target.value),
-      placeholder: "New project name",
+      placeholder: "New topic name",
       value: newName
     }), /* @__PURE__ */ React.createElement(Button, {
       disabled: busy || !newName.trim(),
       type: "submit"
-    }, "Add project")), /* @__PURE__ */ React.createElement("div", {
-      className: "rd-projects"
-    }, projects.map((project) => /* @__PURE__ */ React.createElement("button", {
-      className: "rd-project",
-      "data-selected": project.id === selectedId,
+    }, "Add topic")), /* @__PURE__ */ React.createElement("div", {
+      className: "rd-topics"
+    }, topics.map((topic) => /* @__PURE__ */ React.createElement("button", {
+      className: "rd-topic",
+      "data-selected": topic.id === selectedId,
       disabled: busy,
-      key: project.id,
-      onClick: () => select(project),
+      key: topic.id,
+      onClick: () => select(topic),
       type: "button"
-    }, project.name, /* @__PURE__ */ React.createElement("span", {
+    }, topic.name, /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta"
-    }, project.status, " · updated", " ", project.updatedAt.slice(0, 10)))), projects.length === 0 ? /* @__PURE__ */ React.createElement("p", {
+    }, topic.status, " · updated ", topic.updatedAt.slice(0, 10)))), topics.length === 0 ? /* @__PURE__ */ React.createElement("p", {
       className: "rd-muted"
-    }, "No projects recorded yet.") : null)))), selected ? /* @__PURE__ */ React.createElement("div", {
+    }, "No topics recorded yet.") : null)))), selected ? /* @__PURE__ */ React.createElement("div", {
       className: "rd-stack"
     }, /* @__PURE__ */ React.createElement(Card, null, /* @__PURE__ */ React.createElement(CardHeader, null, /* @__PURE__ */ React.createElement("div", {
       className: "rd-row"
@@ -326,13 +333,13 @@ function apply(ctx) {
     }))), /* @__PURE__ */ React.createElement(CardContent, null, /* @__PURE__ */ React.createElement("div", {
       className: "rd-form"
     }, /* @__PURE__ */ React.createElement(Textarea, {
-      "aria-label": "Project description",
+      "aria-label": "Topic description",
       disabled: busy,
       onChange: (event) => setDraft({
         ...draft,
         description: event.target.value
       }),
-      placeholder: "What this project is",
+      placeholder: "What this topic is",
       value: draft.description
     }), /* @__PURE__ */ React.createElement(Textarea, {
       "aria-label": "Approved summary",
@@ -347,7 +354,7 @@ function apply(ctx) {
       className: "rd-row"
     }, /* @__PURE__ */ React.createElement("span", {
       className: "rd-muted"
-    }, "created ", selected.createdAt.slice(0, 10), " · id", " ", selected.id.slice(0, 8)), /* @__PURE__ */ React.createElement(Button, {
+    }, "created ", selected.createdAt.slice(0, 10), " · v", selected.version, " · id ", selected.id.slice(0, 8)), /* @__PURE__ */ React.createElement(Button, {
       disabled: busy,
       onClick: () => {
         saveDetails();
@@ -360,7 +367,7 @@ function apply(ctx) {
       key: entry.id
     }, /* @__PURE__ */ React.createElement("div", null, entry.summary), /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta"
-    }, SOURCE_OPTIONS.find((option) => option.value === entry.sourceType)?.label ?? entry.sourceType, entry.sourceRef ? ` · ${entry.sourceRef}` : "", " ·", " ", entry.occurredAt.slice(0, 10)))), activity.length === 0 ? /* @__PURE__ */ React.createElement("li", {
+    }, SOURCE_OPTIONS.find((option) => option.value === entry.sourceType)?.label ?? entry.sourceType, entry.sourceRef ? ` · ${entry.sourceRef}` : "", " ·", " ", entry.occurredAt.slice(0, 10), entry.actorType ? ` · ${entry.actorType}` : ""))), activity.length === 0 ? /* @__PURE__ */ React.createElement("li", {
       className: "rd-muted"
     }, "No activity recorded yet.") : null), /* @__PURE__ */ React.createElement("form", {
       className: "rd-form",
@@ -391,7 +398,7 @@ function apply(ctx) {
       type: "submit"
     }, "Record activity")))))) : /* @__PURE__ */ React.createElement(Card, null, /* @__PURE__ */ React.createElement(CardContent, null, /* @__PURE__ */ React.createElement("p", {
       className: "rd-muted"
-    }, "Select a project to see its description, approved summary and recorded activity.")))));
+    }, "Select a topic to see its description, approved summary and recorded activity.")))));
   }
   ctx.slots.register("page", ResearchPage);
 }

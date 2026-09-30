@@ -2,133 +2,459 @@
   "apiVersion": 1,
   "id": "research-dashboard",
   "name": "Research Dashboard",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "minNakamaVersion": "0.4.10",
   "author": "self-hosted deployment",
   "license": "MIT",
-  "description": "Shared project and activity state for research coordination: a dashboard page plus agent tools.",
+  "description": "Shared research coordination state — topics, development axes and the evidence attached to them — as a dashboard page plus five agent tools.",
   "actions": [
     {
-      "key": "list_projects",
+      "key": "get_overview",
       "access": "member",
       "effect": "read",
       "entry": "actions/actions.js",
       "exposeAsTool": true,
-      "description": "List research projects with status, description, summary and last update. Use this before reconstructing project state from conversation history.",
+      "description": "Dashboard summary: how many topics and axes exist and in which states, every blocked axis with its topic and blocker text, the most recently touched topics and recent activity. Start here for 'what is going on' questions, then call get_topic for the one topic that matters.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "status": {
-            "type": "string",
-            "enum": ["active", "paused", "done"]
-          }
-        },
-        "required": []
-      }
-    },
-    {
-      "key": "create_project",
-      "access": "member",
-      "effect": "write",
-      "entry": "actions/actions.js",
-      "exposeAsTool": true,
-      "description": "Create a research project record. Use it for a project that a human asks to track; do not invent projects from unclear context.",
-      "inputSchema": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "name": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 120
-          },
-          "description": {
-            "type": "string",
-            "maxLength": 2000
-          },
-          "status": {
-            "type": "string",
-            "enum": ["active", "paused", "done"]
-          }
-        },
-        "required": ["name"]
-      }
-    },
-    {
-      "key": "update_project",
-      "access": "member",
-      "effect": "write",
-      "entry": "actions/actions.js",
-      "exposeAsTool": true,
-      "description": "Update a research project's name, description, status or summary. Send only the fields that change. Treat status and summary as interpretations: state them only when a human asked for that change.",
-      "inputSchema": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "projectId": {
-            "type": "string",
-            "minLength": 1
-          },
-          "name": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 120
-          },
-          "description": {
-            "type": "string",
-            "maxLength": 2000
-          },
-          "status": {
-            "type": "string",
-            "enum": ["active", "paused", "done"]
-          },
-          "summary": {
-            "type": "string",
-            "maxLength": 2000
-          }
-        },
-        "required": ["projectId"]
-      }
-    },
-    {
-      "key": "list_activity",
-      "access": "member",
-      "effect": "read",
-      "entry": "actions/actions.js",
-      "exposeAsTool": true,
-      "description": "List recorded project activity, newest first, optionally filtered to one project. Each entry carries its source type and source reference.",
-      "inputSchema": {
-        "type": "object",
-        "additionalProperties": false,
-        "properties": {
-          "projectId": {
-            "type": "string",
-            "minLength": 1
+          "activitySinceDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 365
           },
           "limit": {
             "type": "integer",
             "minimum": 1,
-            "maximum": 100
+            "maximum": 50
           }
         },
         "required": []
       }
     },
     {
-      "key": "add_activity",
+      "key": "get_topic",
       "access": "member",
-      "effect": "write",
+      "effect": "read",
       "entry": "actions/actions.js",
       "exposeAsTool": true,
-      "description": "Record one objective project event (a merged pull request, a completed run, a commit) with its source reference. Record facts directly; interpretive milestone claims belong in a project summary a human approves.",
+      "description": "Everything recorded about one topic (by topicId or topicName): its fields, its development axes with branch/PR, current state, blocker and per-claim confidence, the repositories and people attached to it, recent activity and annotations. Read the version it returns if you intend to write the topic back.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "projectId": {
+          "topicId": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "topicName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "activityLimit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "activitySinceDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 365
+          },
+          "includeAnnotations": {
+            "type": "boolean"
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "key": "search_dashboard",
+      "access": "member",
+      "effect": "read",
+      "entry": "actions/actions.js",
+      "exposeAsTool": true,
+      "description": "Find the row a conversation is about: substring search over topic names, descriptions and summaries, axis titles, states, blockers and branches, activity summaries and references, and annotation text. Each hit reports which field matched. Search before you create anything, so you extend the existing topic instead of near-duplicating it.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          },
+          "includeArchived": {
+            "type": "boolean"
+          }
+        },
+        "required": ["query"]
+      }
+    },
+    {
+      "key": "reconcile_topic",
+      "access": "member",
+      "effect": "write",
+      "entry": "actions/actions.js",
+      "exposeAsTool": true,
+      "description": "The single write path for a topic update. Applies topic fields, axes (created or updated by id or title), repository and person links, activity and annotations in ONE transaction: either all of it lands or none of it does. Send only what the conversation established. Pass expectedVersion (from get_topic) to fail with a conflict instead of overwriting a change someone else made. Any claim you mark 'confirmed' must be backed by evidence in the same call — an activity, an annotation, a branch or a PR; without evidence, label it 'inferred'.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "topicId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "topicName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "topic": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "description": {
+                "type": "string",
+                "maxLength": 4000
+              },
+              "status": {
+                "type": "string",
+                "enum": ["active", "paused", "completed", "archived"]
+              },
+              "summary": {
+                "type": "string",
+                "maxLength": 4000
+              }
+            },
+            "required": []
+          },
+          "repositories": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "fullName": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                },
+                "url": {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                "description": {
+                  "type": "string",
+                  "maxLength": 1000
+                },
+                "defaultBranch": {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                "relationship": {
+                  "type": "string",
+                  "enum": ["primary", "supporting"]
+                }
+              },
+              "required": ["fullName"]
+            }
+          },
+          "people": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "displayName": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                "role": {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                "githubLogin": {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                "nakamaUserId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                }
+              },
+              "required": ["displayName"]
+            }
+          },
+          "axes": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "title": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                },
+                "description": {
+                  "type": "string",
+                  "maxLength": 2000
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": ["feature", "experiment", "test", "investigation", "maintenance"]
+                },
+                "state": {
+                  "type": "string",
+                  "enum": ["active", "draft", "blocked", "parked", "completed", "abandoned"]
+                },
+                "branch": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "prNumber": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "prUrl": {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                "currentState": {
+                  "type": "string",
+                  "maxLength": 2000
+                },
+                "blocker": {
+                  "type": "string",
+                  "maxLength": 1000
+                },
+                "stateConfidence": {
+                  "type": "string",
+                  "enum": ["confirmed", "inferred", "uncertain"]
+                },
+                "currentStateConfidence": {
+                  "type": "string",
+                  "enum": ["confirmed", "inferred", "uncertain"]
+                },
+                "blockerConfidence": {
+                  "type": "string",
+                  "enum": ["confirmed", "inferred", "uncertain"]
+                },
+                "expectedVersion": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "repositories": {
+                  "type": "array",
+                  "maxItems": 10,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "fullName": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 200
+                      },
+                      "url": {
+                        "type": "string",
+                        "maxLength": 500
+                      },
+                      "description": {
+                        "type": "string",
+                        "maxLength": 1000
+                      },
+                      "defaultBranch": {
+                        "type": "string",
+                        "maxLength": 120
+                      },
+                      "relationship": {
+                        "type": "string",
+                        "enum": ["primary", "supporting"]
+                      }
+                    },
+                    "required": ["fullName"]
+                  }
+                },
+                "people": {
+                  "type": "array",
+                  "maxItems": 10,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "displayName": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "role": {
+                        "type": "string",
+                        "maxLength": 80
+                      },
+                      "githubLogin": {
+                        "type": "string",
+                        "maxLength": 100
+                      },
+                      "nakamaUserId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      }
+                    },
+                    "required": ["displayName"]
+                  }
+                }
+              },
+              "required": []
+            }
+          },
+          "activities": {
+            "type": "array",
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "summary": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1000
+                },
+                "sourceType": {
+                  "type": "string",
+                  "enum": [
+                    "manual",
+                    "github_pr",
+                    "github_commit",
+                    "github_issue",
+                    "repo_document",
+                    "group_chat",
+                    "experiment",
+                    "agent_review"
+                  ]
+                },
+                "sourceRef": {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                "sourceUrl": {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                "occurredAt": {
+                  "type": "string",
+                  "maxLength": 40
+                },
+                "axisId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "axisTitle": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                },
+                "repositoryFullName": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                }
+              },
+              "required": ["summary"]
+            }
+          },
+          "annotations": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "text": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                },
+                "axisId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "axisTitle": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                }
+              },
+              "required": ["text"]
+            }
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "key": "record_activity",
+      "access": "member",
+      "effect": "write",
+      "entry": "actions/actions.js",
+      "exposeAsTool": true,
+      "description": "Record one objective event that already happened against a topic (and optionally an axis): a merged pull request, a finished run, a commit, a document update. Put the identifier in sourceRef (PR #72, commit hash, run id, path) and pick the matching sourceType. Facts only — for a milestone claim a human stated, use reconcile_topic's summary instead. A repository named here is registered automatically.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "topicId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "topicName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "axisId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "axisTitle": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
           },
           "summary": {
             "type": "string",
@@ -140,22 +466,117 @@
             "enum": [
               "manual",
               "github_pr",
+              "github_commit",
               "github_issue",
-              "commit",
+              "repo_document",
+              "group_chat",
               "experiment",
-              "document"
+              "agent_review"
             ]
           },
           "sourceRef": {
             "type": "string",
             "maxLength": 200
           },
+          "sourceUrl": {
+            "type": "string",
+            "maxLength": 500
+          },
           "occurredAt": {
             "type": "string",
             "maxLength": 40
+          },
+          "repositoryFullName": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
           }
         },
-        "required": ["projectId", "summary"]
+        "required": ["summary"]
+      }
+    },
+    {
+      "key": "list_topics",
+      "access": "member",
+      "effect": "read",
+      "entry": "actions/actions.js",
+      "exposeAsTool": false,
+      "description": "List topics for the dashboard page, most recently updated first, optionally filtered by status. Not an agent tool: the agent uses get_overview / search_dashboard, which carry the context this list leaves out.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["active", "paused", "completed", "archived"]
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "key": "list_activity",
+      "access": "member",
+      "effect": "read",
+      "entry": "actions/actions.js",
+      "exposeAsTool": false,
+      "description": "List recorded activity, newest first, optionally filtered to one topic or axis and to a time window. Powers the page's activity panel.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "topicId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "axisId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
+          },
+          "sinceDays": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 365
+          }
+        },
+        "required": []
+      }
+    },
+    {
+      "key": "add_annotation",
+      "access": "member",
+      "effect": "write",
+      "entry": "actions/actions.js",
+      "exposeAsTool": false,
+      "description": "Attach a note to a topic or an axis: conversation-derived context that is not an event. The author is taken from the session, never from input. Not an agent tool: the librarian supplies annotations through reconcile_topic, where they can back a claim in the same transaction.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "topicId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "axisId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "required": ["text"]
       }
     }
   ],

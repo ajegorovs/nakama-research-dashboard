@@ -1,7 +1,12 @@
 // @bun
 // src/store.ts
 import { Database } from "bun:sqlite";
-var TOPIC_STATUSES = ["active", "paused", "completed", "archived"];
+var TOPIC_STATUSES = [
+  "active",
+  "paused",
+  "completed",
+  "archived"
+];
 var AXIS_KINDS = [
   "feature",
   "experiment",
@@ -155,6 +160,10 @@ function toAnnotation(row) {
     topicId: row.topic_id
   };
 }
+var NO_CLAIMS = new Set;
+function assertedClaims(input) {
+  return new Set(input.state === undefined ? [] : ["state"]);
+}
 
 class ResearchStore {
   db;
@@ -196,6 +205,22 @@ class ResearchStore {
       throw error;
     } finally {
       this.depth -= 1;
+    }
+  }
+  snapshot(fn) {
+    if (this.depth > 0) {
+      return fn();
+    }
+    this.db.exec("BEGIN");
+    try {
+      const result = fn();
+      this.db.exec("COMMIT");
+      return result;
+    } catch (error) {
+      try {
+        this.db.exec("ROLLBACK");
+      } catch {}
+      throw error;
     }
   }
   listTopics(status) {
@@ -292,6 +317,120 @@ class ResearchStore {
          ORDER BY p.display_name COLLATE NOCASE ASC`).all(topicId);
     return rows.map((row) => ({ ...toPerson(row), role: row.role }));
   }
+  getOverview(options) {
+    return this.snapshot(() => {
+      const activitySinceDays = options?.activitySinceDays ?? 14;
+      const limit = clampLimit(options?.limit, 10, 50);
+      const topicsByStatus = Object.fromEntries(TOPIC_STATUSES.map((status) => [status, 0]));
+      for (const row of this.db.query("SELECT status, count(*) AS n FROM topics GROUP BY status").all()) {
+        if (isTopicStatus(row.status)) {
+          topicsByStatus[row.status] = row.n;
+        }
+      }
+      const axesByState = Object.fromEntries(AXIS_STATES.map((state) => [state, 0]));
+      for (const row of this.db.query("SELECT state, count(*) AS n FROM development_axes GROUP BY state").all()) {
+        if (AXIS_STATES.includes(row.state)) {
+          axesByState[row.state] = row.n;
+        }
+      }
+      const counts = this.db.query(`SELECT (SELECT count(*) FROM topics) AS topics,
+                  (SELECT count(*) FROM development_axes) AS axes,
+                  (SELECT count(*) FROM repositories) AS repositories,
+                  (SELECT count(*) FROM people) AS people`).get();
+      const blocked = this.db.query(`SELECT a.*, t.name AS topic_name
+           FROM development_axes a JOIN topics t ON t.id = a.topic_id
+           WHERE a.state = 'blocked'
+           ORDER BY a.updated_at DESC`).all();
+      return {
+        activitySinceDays,
+        axesByState,
+        blocked: blocked.map((row) => ({
+          axisId: row.id,
+          blocker: row.blocker,
+          blockerConfidence: row.blocker_confidence ?? "uncertain",
+          state: row.state ?? "active",
+          title: row.title,
+          topicId: row.topic_id,
+          topicName: row.topic_name,
+          updatedAt: row.updated_at
+        })),
+        counts: { ...counts, topicsByStatus },
+        generatedAt: nowIso(),
+        recentActivity: this.listActivity({ limit: 25, sinceDays: activitySinceDays }),
+        recentTopics: this.db.query("SELECT * FROM topics ORDER BY updated_at DESC, name ASC LIMIT ?").all(limit).map(toTopic)
+      };
+    });
+  }
+  searchDashboard(options) {
+    const query = required(options.query, "query");
+    const limit = clampLimit(options.limit, 10, 50);
+    const includeArchived = options.includeArchived ?? false;
+    const needle = query.toLowerCase();
+    const pattern = `%${query.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
+    return this.snapshot(() => {
+      const archivedFilter = includeArchived ? "" : "AND t.status <> 'archived'";
+      const topicRows = this.db.query(`SELECT t.* FROM topics t
+           WHERE (t.name LIKE ? ESCAPE '\\' OR t.description LIKE ? ESCAPE '\\' OR t.summary LIKE ? ESCAPE '\\')
+             ${archivedFilter}
+           ORDER BY t.updated_at DESC
+           LIMIT ?`).all(pattern, pattern, pattern, limit + 1);
+      const axisRows = this.db.query(`SELECT a.*, t.name AS topic_name FROM development_axes a JOIN topics t ON t.id = a.topic_id
+           WHERE (a.title LIKE ? ESCAPE '\\' OR a.description LIKE ? ESCAPE '\\'
+                  OR a.current_state LIKE ? ESCAPE '\\' OR a.blocker LIKE ? ESCAPE '\\'
+                  OR a.branch LIKE ? ESCAPE '\\')
+             ${archivedFilter}
+           ORDER BY a.updated_at DESC
+           LIMIT ?`).all(pattern, pattern, pattern, pattern, pattern, limit + 1);
+      const activityRows = this.db.query(`SELECT x.*, t.name AS topic_name FROM activities x LEFT JOIN topics t ON t.id = x.topic_id
+           WHERE (x.summary LIKE ? ESCAPE '\\' OR x.source_ref LIKE ? ESCAPE '\\')
+           ORDER BY x.occurred_at DESC, x.rowid DESC
+           LIMIT ?`).all(pattern, pattern, limit + 1);
+      const annotationRows = this.db.query(`SELECT n.*, t.name AS topic_name FROM annotations n LEFT JOIN topics t ON t.id = n.topic_id
+           WHERE n.text LIKE ? ESCAPE '\\'
+           ORDER BY n.created_at DESC, n.rowid DESC
+           LIMIT ?`).all(pattern, limit + 1);
+      const fields = (row, names) => names.filter((name) => String(row[name] ?? "").toLowerCase().includes(needle));
+      const topics = topicRows.slice(0, limit).map((row) => ({
+        matchedFields: fields(row, [
+          "name",
+          "description",
+          "summary"
+        ]),
+        record: toTopic(row)
+      }));
+      const axes = axisRows.slice(0, limit).map((row) => ({
+        matchedFields: fields(row, [
+          "title",
+          "description",
+          "current_state",
+          "blocker",
+          "branch"
+        ]),
+        record: toAxis(row),
+        topicName: row.topic_name
+      }));
+      const activities = activityRows.slice(0, limit).map((row) => ({
+        matchedFields: fields(row, ["summary", "source_ref"]),
+        record: toActivity(row),
+        topicName: row.topic_name
+      }));
+      const annotations = annotationRows.slice(0, limit).map((row) => ({
+        matchedFields: fields(row, ["text"]),
+        record: toAnnotation(row),
+        topicName: row.topic_name
+      }));
+      return {
+        activities,
+        annotations,
+        axes,
+        includeArchived,
+        limit,
+        query,
+        topics,
+        truncated: topicRows.length > limit || axisRows.length > limit || activityRows.length > limit || annotationRows.length > limit
+      };
+    });
+  }
   createTopic(input) {
     return this.atomic(() => {
       const name = required(input.name, "name");
@@ -325,31 +464,14 @@ class ResearchStore {
         throw new ResearchStoreError("Topic not found.");
       }
       const axis = this.insertAxis(topicId, input);
-      const explicit = [
-        input.stateConfidence,
-        input.currentStateConfidence,
-        input.blockerConfidence
-      ].some((value) => value === "confirmed");
-      if (explicit) {
-        this.assertClaimsAreBacked(axis);
-      }
+      this.assertClaimsAreBacked(axis, assertedClaims(input));
       return axis;
     });
   }
   updateAxis(id, patch, options) {
     return this.atomic(() => {
       const axis = this.applyAxisPatch(required(id, "axisId"), patch, options);
-      const claims = [
-        patch.state,
-        patch.currentState,
-        patch.blocker,
-        patch.stateConfidence,
-        patch.currentStateConfidence,
-        patch.blockerConfidence
-      ].some((value) => value !== undefined);
-      if (claims) {
-        this.assertClaimsAreBacked(axis);
-      }
+      this.assertClaimsAreBacked(axis, assertedClaims(patch));
       return axis;
     });
   }
@@ -417,7 +539,7 @@ class ResearchStore {
       const summary = required(input.summary, "summary");
       const topicId = input.topicId ? required(input.topicId, "topicId") : null;
       const axisId = input.axisId ? required(input.axisId, "axisId") : null;
-      if (!topicId && !axisId) {
+      if (!(topicId || axisId)) {
         throw new ResearchStoreError("topicId or axisId is required.");
       }
       if (topicId && !this.getTopic(topicId)) {
@@ -430,7 +552,8 @@ class ResearchStore {
       if (axis && topicId && axis.topicId !== topicId) {
         throw new ResearchStoreError("Axis does not belong to this topic.");
       }
-      if (input.repositoryId && !this.repositoryExists(input.repositoryId)) {
+      const repositoryId = input.repositoryFullName ? this.upsertRepository({ fullName: input.repositoryFullName }).repository.id : input.repositoryId;
+      if (repositoryId && !this.repositoryExists(repositoryId)) {
         throw new ResearchStoreError("Repository not found.");
       }
       return this.insertActivity({
@@ -438,7 +561,7 @@ class ResearchStore {
         actorType: optionalOneOf(input.actorType, ACTOR_TYPES, "actorType") ?? "unknown",
         axisId,
         occurredAt: input.occurredAt ?? nowIso(),
-        repositoryId: input.repositoryId ?? null,
+        repositoryId: repositoryId ?? null,
         sourceRef: text(input.sourceRef),
         sourceType: optionalOneOf(input.sourceType, SOURCE_TYPES, "sourceType") ?? "manual",
         sourceUrl: text(input.sourceUrl),
@@ -452,7 +575,7 @@ class ResearchStore {
       const body = required(input.text, "text");
       const topicId = input.topicId ? required(input.topicId, "topicId") : null;
       const axisId = input.axisId ? required(input.axisId, "axisId") : null;
-      if (!topicId && !axisId) {
+      if (!(topicId || axisId)) {
         throw new ResearchStoreError("topicId or axisId is required.");
       }
       if (topicId && !this.getTopic(topicId)) {
@@ -491,8 +614,14 @@ class ResearchStore {
           });
         }
       }
-      const created = { axes: 0, people: 0, repositories: 0, topic: resolved.created };
+      const created = {
+        axes: 0,
+        people: 0,
+        repositories: 0,
+        topic: resolved.created
+      };
       const touchedAxes = [];
+      const assertedByAxis = new Map;
       const activities = [];
       const annotations = [];
       for (const person of input.people ?? []) {
@@ -510,7 +639,7 @@ class ResearchStore {
         this.linkRepository("topic_repositories", "topic_id", topic.id, result.repository.id, repository.relationship ?? "supporting");
       }
       for (const axisInput of input.axes ?? []) {
-        const existing = axisInput.id ? this.getAxis(required(axisInput.id, "axis.id")) : axisInput.title ? this.getAxisByTitle(topic.id, axisInput.title) : null;
+        const existing = axisInput.id ? this.getAxis(required(axisInput.id, "axis.id")) : axisInput.title ? this.findAxisByTitle(topic.id, axisInput.title) : null;
         if (axisInput.id && !existing) {
           throw new ResearchStoreError("Axis not found.");
         }
@@ -519,7 +648,9 @@ class ResearchStore {
         }
         let axis;
         if (existing) {
-          axis = this.applyAxisPatch(existing.id, axisInput, { expectedVersion: axisInput.expectedVersion });
+          axis = this.applyAxisPatch(existing.id, axisInput, {
+            expectedVersion: axisInput.expectedVersion
+          });
         } else {
           if (!axisInput.title) {
             throw new ResearchStoreError("axis.title is required for a new axis.");
@@ -542,10 +673,13 @@ class ResearchStore {
           this.db.query("INSERT INTO axis_people (axis_id, person_id, role) VALUES (?, ?, ?) ON CONFLICT (axis_id, person_id) DO UPDATE SET role = excluded.role").run(axis.id, result.person.id, person.role ?? "");
         }
         touchedAxes.push(axis);
+        assertedByAxis.set(axis.id, assertedClaims(axisInput));
       }
       for (const activityInput of input.activities ?? []) {
         const axisId = this.resolveAxisId(topic.id, activityInput.axisId, activityInput.axisTitle);
-        const repository = activityInput.repositoryFullName ? this.upsertRepository({ fullName: activityInput.repositoryFullName }) : null;
+        const repository = activityInput.repositoryFullName ? this.upsertRepository({
+          fullName: activityInput.repositoryFullName
+        }) : null;
         if (repository?.created) {
           created.repositories += 1;
         }
@@ -575,7 +709,7 @@ class ResearchStore {
         annotations.push(annotation.id);
       }
       for (const axis of touchedAxes) {
-        this.assertClaimsAreBacked(axis);
+        this.assertClaimsAreBacked(axis, assertedByAxis.get(axis.id) ?? NO_CLAIMS);
       }
       return {
         axes: touchedAxes.map((axis) => this.getAxis(axis.id) ?? axis),
@@ -625,7 +759,7 @@ class ResearchStore {
     this.assertVersion("topic", existing.name, existing.version, options?.expectedVersion);
     const next = {
       description: patch.description ?? existing.description,
-      name: patch.name !== undefined ? required(patch.name, "name") : existing.name,
+      name: patch.name === undefined ? existing.name : required(patch.name, "name"),
       status: optionalOneOf(patch.status, TOPIC_STATUSES, "status") ?? existing.status,
       summary: patch.summary ?? existing.summary
     };
@@ -670,7 +804,7 @@ class ResearchStore {
       prUrl: patch.prUrl ?? existing.prUrl,
       state: optionalOneOf(patch.state, AXIS_STATES, "state"),
       stateConfidence: optionalOneOf(patch.stateConfidence, CONFIDENCES, "stateConfidence"),
-      title: patch.title !== undefined ? required(patch.title, "axis.title") : existing.title
+      title: patch.title === undefined ? existing.title : required(patch.title, "axis.title")
     };
     this.assertBlockerPresent(next.state ?? existing.state, next.blocker);
     this.db.query(`UPDATE development_axes SET
@@ -692,12 +826,18 @@ class ResearchStore {
       if (next.defaultBranch !== existing.defaultBranch || next.description !== existing.description || next.url !== existing.url) {
         this.db.query("UPDATE repositories SET url = ?, description = ?, default_branch = ?, updated_at = ? WHERE id = ?").run(next.url, next.description, next.defaultBranch, nowIso(), existing.id);
       }
-      return { created: false, repository: this.getRepositoryByFullName(fullName) };
+      return {
+        created: false,
+        repository: this.getRepositoryByFullName(fullName)
+      };
     }
     const timestamp = nowIso();
     const id = crypto.randomUUID();
     this.db.query("INSERT INTO repositories (id, full_name, url, description, default_branch, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(id, fullName, text(input.url), text(input.description), text(input.defaultBranch), timestamp, timestamp);
-    return { created: true, repository: this.getRepositoryByFullName(fullName) };
+    return {
+      created: true,
+      repository: this.getRepositoryByFullName(fullName)
+    };
   }
   upsertPerson(input) {
     const displayName = required(input.displayName, "person.displayName");
@@ -744,7 +884,7 @@ class ResearchStore {
     }
     this.db.query(`UPDATE ${table} SET updated_at = ? WHERE id = ?`).run(nowIso(), id);
   }
-  getAxisByTitle(topicId, title) {
+  findAxisByTitle(topicId, title) {
     const row = this.db.query("SELECT * FROM development_axes WHERE topic_id = ? AND title = ? COLLATE NOCASE").get(topicId, title.trim());
     return row ? toAxis(row) : null;
   }
@@ -760,7 +900,7 @@ class ResearchStore {
       return axis.id;
     }
     if (axisTitle) {
-      const axis = this.getAxisByTitle(topicId, axisTitle);
+      const axis = this.findAxisByTitle(topicId, axisTitle);
       if (!axis) {
         throw new ResearchStoreError(`Axis "${axisTitle}" not found in this topic.`);
       }
@@ -784,58 +924,69 @@ class ResearchStore {
       throw new ResearchStoreError("An axis cannot be 'blocked' without blocker text \u2014 say what it is waiting on.");
     }
   }
-  assertClaimsAreBacked(axis) {
+  assertClaimsAreBacked(axis, asserted) {
     const claims = [
-      ["state", axis.stateConfidence],
-      ["current_state", axis.currentStateConfidence],
-      ["blocker", axis.blockerConfidence]
+      ["state", axis.stateConfidence, asserted.has("state")],
+      ["current_state", axis.currentStateConfidence, axis.currentState.trim().length > 0],
+      ["blocker", axis.blockerConfidence, axis.blocker.trim().length > 0]
     ];
-    const unbacked = claims.filter(([, confidence]) => confidence === "confirmed");
+    const unbacked = claims.filter(([, confidence, isClaim]) => isClaim && confidence === "confirmed").map(([field]) => field);
     if (unbacked.length === 0) {
       return;
     }
     const evidence = axis.branch.trim().length > 0 || axis.prUrl.trim().length > 0 || axis.prNumber !== null || Boolean(this.db.query("SELECT 1 AS present FROM activities WHERE axis_id = ? LIMIT 1").get(axis.id)) || Boolean(this.db.query("SELECT 1 AS present FROM annotations WHERE axis_id = ? LIMIT 1").get(axis.id));
     if (!evidence) {
-      throw new ResearchStoreError(`Axis "${axis.title}" claims 'confirmed' for ${unbacked.map(([field]) => field).join(", ")} but carries no evidence \u2014 add a branch, a PR or an activity, or mark it 'inferred'.`);
+      throw new ResearchStoreError(`Axis "${axis.title}" claims 'confirmed' for ${unbacked.join(", ")} but carries no evidence \u2014 add a branch, a PR or an activity, or mark it 'inferred'.`);
     }
   }
 }
 
 // src/actions.ts
-var LEGACY_STATUS_TO_TOPIC = {
-  active: "active",
-  done: "completed",
-  paused: "paused"
-};
-var TOPIC_STATUS_TO_LEGACY = {
-  active: "active",
-  archived: "archived",
-  completed: "done",
-  paused: "paused"
-};
-
 class BusinessRuleError extends Error {
 }
-function required2(value, field) {
-  if (typeof value !== "string" || value.trim().length === 0) {
-    throw new BusinessRuleError(`${field} is required.`);
-  }
-  return value.trim();
-}
-function optionalStatus(value) {
-  if (value === undefined) {
+function optionalText(value, field, max) {
+  if (value === undefined || value === null) {
     return;
   }
-  if (typeof value !== "string" || !(value in LEGACY_STATUS_TO_TOPIC)) {
-    throw new BusinessRuleError("status must be one of: active, paused, done.");
+  if (typeof value !== "string") {
+    throw new BusinessRuleError(`${field} must be a string.`);
   }
-  return LEGACY_STATUS_TO_TOPIC[value];
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return;
+  }
+  if (trimmed.length > max) {
+    throw new BusinessRuleError(`${field} must be at most ${max} characters.`);
+  }
+  return trimmed;
 }
-function activityLimit(value) {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    return DEFAULT_ACTIVITY_LIMIT;
+function requiredText(value, field, max) {
+  const text = optionalText(value, field, max);
+  if (text === undefined) {
+    throw new BusinessRuleError(`${field} is required.`);
   }
-  return Math.min(Math.max(Math.trunc(value), 1), MAX_ACTIVITY_LIMIT);
+  return text;
+}
+function optionalInt(value, field, min, max) {
+  if (value === undefined || value === null) {
+    return;
+  }
+  if (typeof value !== "number" || !Number.isInteger(value)) {
+    throw new BusinessRuleError(`${field} must be an integer.`);
+  }
+  if (value < min || value > max) {
+    throw new BusinessRuleError(`${field} must be between ${min} and ${max}.`);
+  }
+  return value;
+}
+function optionalEnum(value, allowed, field) {
+  if (value === undefined || value === null) {
+    return;
+  }
+  if (typeof value !== "string" || !allowed.includes(value)) {
+    throw new BusinessRuleError(`${field} must be one of: ${allowed.join(", ")}.`);
+  }
+  return value;
 }
 function actorOf(context) {
   const id = context.actor?.id ?? "";
@@ -844,16 +995,46 @@ function actorOf(context) {
   }
   return id ? { id, type: "human" } : { id: "", type: "unknown" };
 }
-function toLegacyProject(topic) {
-  return {
-    createdAt: topic.createdAt,
-    description: topic.description,
-    id: topic.id,
-    name: topic.name,
-    status: TOPIC_STATUS_TO_LEGACY[topic.status],
-    summary: topic.summary,
-    updatedAt: topic.updatedAt
-  };
+function requireTopic(store, input) {
+  const topicId = optionalText(input.topicId, "topicId", 100);
+  if (topicId) {
+    const topic = store.getTopic(topicId);
+    if (!topic) {
+      throw new BusinessRuleError("Topic not found.");
+    }
+    return topic;
+  }
+  const topicName = optionalText(input.topicName, "topicName", 120);
+  if (topicName) {
+    const topic = store.getTopicByName(topicName);
+    if (!topic) {
+      throw new BusinessRuleError(`No topic named "${topicName}". Find the right one with search_dashboard.`);
+    }
+    return topic;
+  }
+  throw new BusinessRuleError("topicId or topicName is required.");
+}
+function resolveAxis(store, topic, input) {
+  const axisId = optionalText(input.axisId, "axisId", 100);
+  if (axisId) {
+    const axis = store.getAxis(axisId);
+    if (!axis) {
+      throw new BusinessRuleError("Axis not found.");
+    }
+    if (axis.topicId !== topic.id) {
+      throw new BusinessRuleError("Axis does not belong to this topic.");
+    }
+    return axis;
+  }
+  const axisTitle = optionalText(input.axisTitle, "axisTitle", 160);
+  if (axisTitle) {
+    const axis = store.findAxisByTitle(topic.id, axisTitle);
+    if (!axis) {
+      throw new BusinessRuleError(`No axis "${axisTitle}" in this topic.`);
+    }
+    return axis;
+  }
+  return null;
 }
 async function run(input, context) {
   if (!context.databasePath) {
@@ -873,69 +1054,103 @@ async function run(input, context) {
 }
 async function dispatch(input, context, store) {
   switch (context.actionKey) {
-    case "list_projects": {
-      const status = optionalStatus(input.status);
+    case "get_overview": {
       return {
         ok: true,
-        projects: store.listTopics(status).map(toLegacyProject)
+        ...store.getOverview({
+          activitySinceDays: optionalInt(input.activitySinceDays, "activitySinceDays", 1, 365),
+          limit: optionalInt(input.limit, "limit", 1, 50)
+        })
       };
     }
-    case "create_project": {
-      const topic = store.createTopic({
-        description: input.description ?? "",
-        name: required2(input.name, "name"),
-        status: optionalStatus(input.status)
-      });
-      return { ok: true, project: toLegacyProject(topic) };
-    }
-    case "update_project": {
-      const topicId = required2(input.projectId, "projectId");
-      const topic = store.updateTopic(topicId, {
-        description: input.description,
-        name: input.name,
-        status: optionalStatus(input.status),
-        summary: input.summary
-      });
-      return { ok: true, project: toLegacyProject(topic) };
-    }
-    case "list_activity": {
-      const topicId = input.projectId ? required2(input.projectId, "projectId") : undefined;
+    case "get_topic": {
+      const topic = requireTopic(store, input);
+      const includeAnnotations = input.includeAnnotations !== false;
       return {
-        activity: store.listActivity({ limit: activityLimit(input.limit), topicId }).map((activity) => ({
-          id: activity.id,
-          occurredAt: activity.occurredAt,
-          projectId: activity.topicId ?? "",
-          sourceRef: activity.sourceRef,
-          sourceType: activity.sourceType,
-          summary: activity.summary
+        ok: true,
+        activity: store.listActivity({
+          limit: optionalInt(input.activityLimit, "activityLimit", 1, 100),
+          sinceDays: optionalInt(input.activitySinceDays, "activitySinceDays", 1, 365),
+          topicId: topic.id
+        }),
+        annotations: includeAnnotations ? store.listAnnotations({ topicId: topic.id }) : [],
+        axes: store.listAxes(topic.id).map((axis) => ({
+          ...axis,
+          people: store.listAxisPeople(axis.id),
+          repositories: store.listAxisRepositories(axis.id)
         })),
-        ok: true
+        people: store.listTopicPeople(topic.id),
+        repositories: store.listTopicRepositories(topic.id),
+        topic
       };
     }
-    case "add_activity": {
-      const topicId = required2(input.projectId, "projectId");
+    case "search_dashboard": {
+      return {
+        ok: true,
+        ...store.searchDashboard({
+          includeArchived: input.includeArchived === true,
+          limit: optionalInt(input.limit, "limit", 1, 50),
+          query: requiredText(input.query, "query", 200)
+        })
+      };
+    }
+    case "reconcile_topic": {
+      return {
+        ok: true,
+        ...store.reconcileTopic({ ...input, actor: actorOf(context) })
+      };
+    }
+    case "record_activity": {
       const actor = actorOf(context);
+      const topic = requireTopic(store, input);
+      const axis = resolveAxis(store, topic, input);
       const activity = store.addActivity({
         actorId: actor.id,
         actorType: actor.type,
-        occurredAt: input.occurredAt,
-        sourceRef: input.sourceRef,
-        sourceType: input.sourceType,
-        summary: required2(input.summary, "summary"),
-        topicId
+        axisId: axis?.id,
+        occurredAt: optionalText(input.occurredAt, "occurredAt", 40),
+        repositoryFullName: optionalText(input.repositoryFullName, "repositoryFullName", 200),
+        sourceRef: optionalText(input.sourceRef, "sourceRef", 200),
+        sourceType: optionalEnum(input.sourceType, SOURCE_TYPES, "sourceType"),
+        sourceUrl: optionalText(input.sourceUrl, "sourceUrl", 500),
+        summary: requiredText(input.summary, "summary", 1000),
+        topicId: topic.id
       });
-      const topic = store.getTopic(topicId);
+      return { activity, ok: true, topic: store.getTopic(topic.id) };
+    }
+    case "list_topics": {
       return {
-        activity: {
-          id: activity.id,
-          occurredAt: activity.occurredAt,
-          projectId: activity.topicId ?? "",
-          sourceRef: activity.sourceRef,
-          sourceType: activity.sourceType,
-          summary: activity.summary
-        },
         ok: true,
-        project: topic ? toLegacyProject(topic) : null
+        topics: store.listTopics(optionalEnum(input.status, TOPIC_STATUSES, "status"))
+      };
+    }
+    case "list_activity": {
+      return {
+        ok: true,
+        activity: store.listActivity({
+          axisId: optionalText(input.axisId, "axisId", 100),
+          limit: optionalInt(input.limit, "limit", 1, 100),
+          sinceDays: optionalInt(input.sinceDays, "sinceDays", 1, 365),
+          topicId: optionalText(input.topicId, "topicId", 100)
+        })
+      };
+    }
+    case "add_annotation": {
+      const actor = actorOf(context);
+      const topicId = optionalText(input.topicId, "topicId", 100);
+      const axisId = optionalText(input.axisId, "axisId", 100);
+      if (!topicId && !axisId) {
+        throw new BusinessRuleError("topicId or axisId is required.");
+      }
+      return {
+        annotation: store.addAnnotation({
+          authorId: actor.id,
+          authorType: actor.type === "agent" ? "agent" : "human",
+          axisId,
+          text: requiredText(input.text, "text", 2000),
+          topicId
+        }),
+        ok: true
       };
     }
     default:

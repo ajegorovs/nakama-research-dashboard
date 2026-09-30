@@ -255,6 +255,9 @@ describe("ResearchStore axes", () => {
     ).toThrow(/without blocker text/);
     const ok = store.createAxis({
       blocker: "waiting on the rig's firmware update",
+      // A blocked axis at 'confirmed' is a claim about reality, so it needs something that could have
+      // confirmed it; the branch is that something.
+      branch: "feat/acquisition-control",
       state: "blocked",
       title: "Parameter automation",
       topicId: topic.id,
@@ -263,6 +266,15 @@ describe("ResearchStore axes", () => {
       blocker: "waiting on the rig's firmware update",
       state: "blocked",
     });
+    // Same statement, nothing behind it: refused. Text is an assertion, not evidence.
+    expect(() =>
+      store.createAxis({
+        blocker: "waiting on the rig's firmware update",
+        state: "blocked",
+        title: "Parameter automation",
+        topicId: topic.id,
+      })
+    ).toThrow(/carries no evidence/);
   });
 
   test("refuses a claim of 'confirmed' with nothing behind it", () => {
@@ -270,11 +282,22 @@ describe("ResearchStore axes", () => {
     const topic = store.createTopic({ name: "Topic Alpha" });
     expect(() =>
       store.createAxis({
-        stateConfidence: "confirmed",
+        currentState: "prototype compares methods end to end",
+        currentStateConfidence: "confirmed",
         title: "Unbacked claim",
         topicId: topic.id,
       })
     ).toThrow(/carries no evidence/);
+
+    // A confidence label attached to nothing is meaningless rather than a violation: the rule holds
+    // statements about reality to their evidence, and this asserts no state, no blocker, no progress.
+    const unlabelled = store.createAxis({
+      currentStateConfidence: "confirmed",
+      title: "Unbacked claim",
+      topicId: topic.id,
+    });
+    expect(unlabelled.currentState).toBe("");
+    expect(unlabelled.blocker).toBe("");
 
     const backed = store.createAxis({
       branch: "feat/signal-explorer",
@@ -390,6 +413,35 @@ describe("ResearchStore activity and annotations", () => {
 });
 
 describe("ResearchStore reconcileTopic", () => {
+  test("links the acting user to the topic they wrote to, without inventing a person (F6)", () => {
+    const { store } = openStore();
+    // The dashboard learns about this person on one topic; the row itself is never re-created.
+    const beta = store.reconcileTopic({
+      people: [{ displayName: "Researcher A", nakamaUserId: "user-1" }],
+      topicName: "Topic Beta",
+    }).topic;
+    const alpha = store.createTopic({ name: "Topic Alpha" });
+    const gamma = store.createTopic({ name: "Topic Gamma" });
+
+    store.reconcileTopic({
+      actor: { id: "user-1", type: "human" },
+      topic: { summary: "touched by the user the dashboard knows" },
+      topicId: alpha.id,
+    });
+    const betaPeople = store.listTopicPeople(beta.id).map((person) => person.id);
+    expect(betaPeople).toHaveLength(1);
+    // Same person on the topic they just wrote to — one row, two links.
+    expect(store.listTopicPeople(alpha.id).map((person) => person.id)).toEqual(betaPeople);
+
+    // An actor nobody has recorded as a person leaves no trace: no row is created for them.
+    store.reconcileTopic({
+      actor: { id: "user-999", type: "agent" },
+      topic: { summary: "touched by someone unknown" },
+      topicId: gamma.id,
+    });
+    expect(store.listTopicPeople(gamma.id)).toHaveLength(0);
+  });
+
   test("applies a whole topic update in one call", () => {
     const { store } = openStore();
     const result = store.reconcileTopic({
@@ -653,6 +705,122 @@ describe("ResearchStore repositories and people", () => {
     expect(store.getPerson(byLogin.person.id)?.githubLogin).toBe(
       "researcher-b"
     );
+  });
+});
+
+describe("ResearchStore overview and search", () => {
+  test("summarises the dashboard in one call", () => {
+    const { store } = openStore();
+    const alpha = store.createTopic({ name: "Signal Processing" });
+    store.createTopic({ name: "Acquisition Automation", status: "paused" });
+    store.reconcileTopic({
+      activities: [{ axisTitle: "Parameter automation", summary: "sweep queued" }],
+      // A claim marked `confirmed` has to be backed in the same call: the group saying "we are waiting
+      // on the rig firmware" *is* the evidence, and it is recorded as the annotation.
+      annotations: [
+        { axisTitle: "Rig control", text: "the group said the rig is waiting on a firmware update" },
+      ],
+      axes: [
+        { branch: "feat/acquisition-control", title: "Parameter automation" },
+        { blocker: "rig firmware update", state: "blocked", title: "Rig control" },
+      ],
+      people: [{ displayName: "Researcher A" }],
+      repositories: [{ fullName: "group/processing-pipeline" }],
+      topicId: alpha.id,
+    });
+
+    const overview = store.getOverview();
+    expect(overview.activitySinceDays).toBe(14); // the default, echoed back
+    expect(overview.counts).toMatchObject({ axes: 2, people: 1, repositories: 1, topics: 2 });
+    expect(overview.counts.topicsByStatus).toEqual({
+      active: 1,
+      archived: 0,
+      completed: 0,
+      paused: 1,
+    });
+    expect(overview.axesByState).toMatchObject({ active: 1, blocked: 1 });
+    expect(overview.blocked).toHaveLength(1);
+    expect(overview.blocked[0]).toMatchObject({
+      blocker: "rig firmware update",
+      title: "Rig control",
+      topicName: "Signal Processing",
+    });
+    expect(overview.recentActivity[0]?.summary).toBe("sweep queued");
+    expect(overview.recentTopics).toHaveLength(2);
+    expect(overview.generatedAt).toBeTruthy();
+  });
+
+  test("treats activitySinceDays as a query parameter, not stored state", () => {
+    const { store } = openStore();
+    const topic = store.createTopic({ name: "Signal Processing" });
+    const longAgo = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000).toISOString();
+    store.addActivity({ occurredAt: longAgo, summary: "old run", topicId: topic.id });
+    store.addActivity({ summary: "recent run", topicId: topic.id });
+
+    expect(store.getOverview().recentActivity).toHaveLength(1);
+    expect(store.getOverview({ activitySinceDays: 90 }).recentActivity).toHaveLength(2);
+  });
+
+  test("searches every entity and reports which field matched", () => {
+    const { store } = openStore();
+    const topic = store.createTopic({
+      description: "acquisition rig automation",
+      name: "Acquisition Automation",
+    });
+    store.createAxis({
+      branch: "feat/acquisition-control",
+      title: "Parameter automation",
+      topicId: topic.id,
+    });
+    store.addActivity({ summary: "acquisition sweep queued", topicId: topic.id });
+    store.addAnnotation({ text: "acquisition window agreed", topicId: topic.id });
+    store.createTopic({ name: "Signal Processing" });
+
+    const results = store.searchDashboard({ query: "acquisition" });
+    expect(results.topics.map((hit) => hit.record.name)).toEqual(["Acquisition Automation"]);
+    expect(results.topics[0]?.matchedFields).toEqual(["name", "description"]);
+    expect(results.axes).toHaveLength(1);
+    expect(results.axes[0]).toMatchObject({ topicName: "Acquisition Automation" });
+    expect(results.axes[0]?.matchedFields).toEqual(["branch"]); // only the branch carries the term
+    expect(results.activities.map((hit) => hit.record.summary)).toEqual([
+      "acquisition sweep queued",
+    ]);
+    expect(results.annotations[0]?.matchedFields).toEqual(["text"]);
+    expect(results.truncated).toBe(false);
+
+    // Case-insensitive, and a query that matches nothing is empty rather than an error.
+    expect(store.searchDashboard({ query: "ACQUISITION" }).topics).toHaveLength(1);
+    expect(store.searchDashboard({ query: "nothing-matches-this" }).topics).toHaveLength(0);
+  });
+
+  test("hides archived topics unless asked, and reports truncation", () => {
+    const { store } = openStore();
+    const archived = store.createTopic({ name: "Filtering Comparison" });
+    store.updateTopic(archived.id, { status: "archived" });
+    store.createTopic({ name: "Filtering Comparison v2" });
+
+    expect(store.searchDashboard({ query: "Filtering" }).topics).toHaveLength(1);
+    expect(store.searchDashboard({ query: "Filtering", includeArchived: true }).topics).toHaveLength(2);
+    expect(store.searchDashboard({ query: "Filtering", limit: 1, includeArchived: true }).truncated).toBe(
+      true
+    );
+  });
+
+  test("treats LIKE wildcards in the query as literal text", () => {
+    const { store } = openStore();
+    store.createTopic({ name: "Topic 100%" });
+    store.createTopic({ name: "Topic 100x" });
+
+    expect(store.searchDashboard({ query: "100%" }).topics.map((hit) => hit.record.name)).toEqual([
+      "Topic 100%",
+    ]);
+    // '%' and '_' must not act as wildcards: neither name contains a literal "10_".
+    expect(store.searchDashboard({ query: "10_" }).topics).toHaveLength(0);
+  });
+
+  test("rejects an empty search query as a fixable rule", () => {
+    const { store } = openStore();
+    expect(() => store.searchDashboard({ query: "  " })).toThrow(ResearchStoreError);
   });
 });
 

@@ -1,7 +1,8 @@
 # V2 plan — coordination model (topics → development axes → evidence)
 
-**Status:** in progress — **C0 (decisions), C1 (migration 002 + tests) and C2 (store v2) are done and
-verified**; C3 is next. See the status line at the end of each chunk.
+**Status:** in progress — **C0 (decisions), C1 (migration 002 + tests), C2 (store v2) and C3 (action
+surface v2) are done and verified**; C4 (overview UI) is next. See the status line at the end of each
+chunk.
 **Input:** [`reviews/2026-09-30-v2-structural-redesign.md`](reviews/2026-09-30-v2-structural-redesign.md)
 (external review of V1, kept verbatim; §16 lists its suggested sequence).
 **Written:** 2026-09-30, checked against Nakama v0.4.31 and this repo at `8688a08`.
@@ -21,10 +22,9 @@ in-tree copy on the Nakama clone's `research-dashboard` branch are **not** touch
    **D6** is resolved too (real topic names are genericised throughout, screenshots included).
 3. Work §6 in order. Each chunk is self-contained: deliverable, files, acceptance test, evidence
    command, dependencies. Do not start a chunk whose dependencies are unmet — most of the risk here
-   is in the seams between chunks, not inside them. **C1 and C2 are done; start at C3** (the action
-   surface). Gen-1 code no longer runs against the migrated schema — C2 kept a bridge in
-   `src/actions.ts` (same keys, topic-backed) so the plugin and the dev instance stay green until C3
-   replaces that surface.
+   is in the seams between chunks, not inside them. **C1, C2 and C3 are done; start at C4** (the
+   overview UI). The gen-1 surface is gone — `src/actions.ts` is the v2 surface, `src/ui.tsx` speaks
+   it too, and the shipped `research-coordinator` skill documents its five tools.
 4. Reinstall on the dev instance to exercise migrations end-to-end (`plugin-smoke.sh`).
    `scratch/reinstall-002.sh` shows the shape of that call: the body needs
    `{"expectedRevision": <number>}` — the plugin detail's `revision` field is an integer, and a string
@@ -372,6 +372,68 @@ Evidence: `bun test src/actions.test.ts` + `plugin-smoke.sh` + one recorded agen
 `find_tools` calls it takes to load the surface (D4's data point).
 Risk: **breaking change** — do not merge this without C9 in the same release.
 
+**Status: ✅ done (2026-09-30), C9a included (the shipped skill now documents the v2 surface).**
+`nakama.plugin.json` declares **eight** actions — the five exposed tools plus three the page needs —
+with a fully nested `reconcile_topic` schema; `src/actions.ts` is the thin surface over the gen-2 store
+(no transaction logic, actor from `context.actor`, semantic rules as `{ok:false,error}`); and
+`src/actions.test.ts` covers the manifest contract, every action's result shape, both failure shapes and
+provenance. The C2 gen-1 bridge is deleted, and `src/ui.tsx` speaks the v2 surface so the page keeps
+working — the UI's create/update goes through the *same* `reconcile_topic` write path as the agent,
+since `exposeAsTool` is a tool-registry flag, not access control. Two store reads (`getOverview`,
+`searchDashboard`) landed here rather than as a preliminary refactor, per the review.
+
+Against the acceptance:
+
+- **Five exposed tools, verified against the running platform** rather than the manifest: `GET /v1/tools`
+  lists exactly `plugin_research_dashboard__{get_overview,get_topic,search_dashboard,reconcile_topic,
+  record_activity}` and nothing else from this plugin. The plugin-detail payload does *not* project
+  `exposeAsTool`, so the smoke harness asks the registry — that check is now in `plugin-smoke.sh`.
+- **Both failure shapes stay distinguishable**, asserted over HTTP: nested schema violations (bad enum
+  inside `axes[]`, wrong type in a nested item, unknown key) are HTTP 400 before the action runs;
+  unknown ids, blank fields, `blocked` without blocker text and a cross-topic axis come back as
+  `{ok:false,error}`; a stale `expectedVersion` keeps its `conflict: ` prefix.
+- **The nested schema survives the host's allowlist**: a Reinstall is the real check, and it passes
+  (`0.2.0+dev.937ea2fe21cf`). `src/actions.test.ts` replicates `ALLOWED_SCHEMA_KEYS`, so a stray
+  keyword fails in `bun test` instead of at install.
+- **Atomic at the action level too**: a reconcile whose second axis breaks a rule leaves the topic's
+  `summary` untouched and creates no axes.
+- **Attribution**: activities and annotations record `context.actor.id`, with `profileId` deciding
+  `agent` vs `human`; a spoofed `actor` in the input is ignored even if it survives the host; and the
+  acting user is linked to the topic they wrote to *when the dashboard already knows them as a person* —
+  a link, never a new person row.
+- `activitySinceDays` on `get_overview` defaults to 14 and is a query parameter, not stored state;
+  `search_dashboard` reports which field matched each hit.
+
+Evidence: `bun run check` → **57 pass / 0 fail**; `plugin-smoke.sh` → **21/21**, idempotent (one fixed
+topic name is reconciled each run); Reinstall → `0.2.0+dev.937ea2fe21cf` with the rewritten skill
+re-materialized from the release directory. Agent run (session `l8cdxlUkdGU7L94t2yNg4`, three turns):
+
+| Turn | Asked | Calls, in order |
+|---|---|---|
+| 1 | "what is going on right now, and what is blocked?" | `find_tools` → `get_overview` |
+| 2 | "the group decided at the standup to pause Filtering Comparison — record it" | `find_tools` → `search_dashboard` ∥ `get_topic` → `reconcile_topic` |
+| 3 | "PR #88 was merged on Acquisition Automation — record that" | `find_tools` → `get_topic` → `search_dashboard` → `record_activity` |
+
+All five tools used; both writes landed and are attributed (`group_chat` / `group standup 2026-09-30`,
+and `github_pr` / `PR #88`, `actor_type = agent`). **D4's answer**: the discovery cost is per *turn*,
+not per surface — plugin tools are loaded for one user request at a time, so each turn pays one
+`find_tools` call, and one search returns the whole five-tool group (`remaining: 0`). The surface size
+therefore costs the model's attention, not extra round-trips. A useful side observation, not a
+benchmark: the first run (before the rewritten skill was vendored, so the agent read the *gen-1* skill
+body and followed it) needed five `reconcile_topic` calls and a `skill_manage` for the same class of
+task that the clean run did in one — the skill body is part of the surface, not documentation.
+
+Two corrections found while testing, both fixed rather than papered over:
+
+1. The "a `confirmed` claim needs evidence" rule was firing for *any* axis carrying the default `state`,
+   which made a fresh `{title}` axis impossible to create. A claim is now a **non-empty value** (or a
+   `state` the caller actually mentioned); the rule still refuses a real claim with nothing behind it,
+   asserted from both sides in the store tests. Consequence for C8: a status change made by hand on the
+   page needs its evidence too, so the page should record the person's own note alongside it.
+2. `record_activity` used to register a named repository in a second store call before writing the
+   activity. `addActivity` now takes `repositoryFullName` and registers it inside its own transaction,
+   so no action sequences two writes.
+
 ### C4 — Overview UI (the 10-second view) · depends on C3 · review steps 5, 14
 
 Deliverable: new default screen in `src/ui.tsx`: topics with their axes (kind · state), repo/branch/PR
@@ -515,7 +577,7 @@ shapes are now an acceptance criterion — and the **five-tool contract (D4)**, 
 |---|---|---|
 | `migrations/001-research.sql` | 25 lines | untouched (schema renamed by 002) |
 | `src/store.ts` | 231 lines | rewritten (C2) |
-| `src/actions.ts` | 138 lines | rewritten (C3) |
+| `src/actions.ts` | 138 lines | rewritten (C3 — the gen-1 bridge that kept C2 green is gone) |
 | `src/ui.tsx` | 606 lines | rewritten (C4–C6, C8) |
 | `src/store.test.ts` | 4 tests | kept, extended |
 | `nakama.plugin.json` | 181 lines | actions + migrations rewritten, UI block unchanged |
