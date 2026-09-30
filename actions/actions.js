@@ -41,6 +41,7 @@ var DEFAULT_ANNOTATION_LIMIT = 25;
 var MAX_ANNOTATION_LIMIT = 100;
 var MAX_ROLLUP_LIMIT = 50;
 var DEFAULT_ROLLUP_ACTIVITY_LIMIT = 5;
+var DEFAULT_TIMELINE_AXIS_LIMIT = 10;
 var EVIDENCE_ITEM_LIMIT = 5;
 var DEFAULT_AXIS_HISTORY_LIMIT = 25;
 var MAX_AXIS_HISTORY_LIMIT = 100;
@@ -556,6 +557,7 @@ class ResearchStore {
         recentTopics: this.db.query("SELECT * FROM topics ORDER BY updated_at DESC, name ASC LIMIT ?").all(limit).map(toTopic),
         repositories: rollups.repositories,
         repositoriesTruncated: rollups.repositoriesTruncated,
+        timeline: this.recentProgress(since, includeArchived, DEFAULT_TIMELINE_AXIS_LIMIT),
         topics: this.topicOverviews(includeArchived, since)
       };
     });
@@ -628,7 +630,7 @@ class ResearchStore {
     }
     return map;
   }
-  involvementRollups(includeArchived, since, limit) {
+  visibleContext(includeArchived) {
     const topicRefs = new Map;
     for (const row of this.db.query("SELECT id, name, status FROM topics").all()) {
       if (isTopicStatus(row.status)) {
@@ -650,6 +652,70 @@ class ResearchStore {
         scans.set(row.id, toAxisScan(toAxis(row), repositoriesByAxis.get(row.id) ?? []));
       }
     }
+    return { repositoriesByAxis, scans, topicRefs, visible };
+  }
+  personRefByAccount() {
+    const map = new Map;
+    for (const row of this.db.query("SELECT id, display_name, nakama_user_id FROM people").all()) {
+      if (row.nakama_user_id) {
+        map.set(row.nakama_user_id, {
+          displayName: row.display_name,
+          id: row.id
+        });
+      }
+    }
+    return map;
+  }
+  recentProgress(since, includeArchived, limit) {
+    const { scans, topicRefs } = this.visibleContext(includeArchived);
+    const personByAccount = this.personRefByAccount();
+    const rows = this.db.query(`SELECT * FROM activities
+         WHERE (? IS NULL OR occurred_at >= ?)
+         ORDER BY occurred_at DESC, rowid DESC`).all(since, since);
+    const byTopic = new Map;
+    for (const row of rows) {
+      const event = toActivity(row);
+      const axis = event.axisId ? scans.get(event.axisId) ?? null : null;
+      const topicId = axis?.topicId ?? event.topicId ?? "";
+      if (topicId === "" || !topicRefs.has(topicId)) {
+        continue;
+      }
+      const buckets = byTopic.get(topicId) ?? new Map;
+      const key = axis?.id ?? "";
+      const bucket = buckets.get(key) ?? { axis, eventCount: 0, events: [] };
+      bucket.eventCount += 1;
+      if (bucket.events.length < limit) {
+        bucket.events.push({
+          ...event,
+          person: personByAccount.get(event.actorId) ?? null
+        });
+      }
+      buckets.set(key, bucket);
+      byTopic.set(topicId, buckets);
+    }
+    const groups = [];
+    for (const [topicId, buckets] of byTopic) {
+      const topic = topicRefs.get(topicId);
+      if (!topic) {
+        continue;
+      }
+      const axes = [...buckets.values()].sort((a, b) => {
+        if (a.axis === null || b.axis === null) {
+          return a.axis === null ? 1 : -1;
+        }
+        return compareAxesForAttention(a.axis, b.axis);
+      });
+      groups.push({
+        axes,
+        eventCount: axes.reduce((total, bucket) => total + bucket.eventCount, 0),
+        lastActivityAt: axes[0]?.events[0]?.occurredAt ?? null,
+        topic
+      });
+    }
+    return groups.sort((a, b) => (b.lastActivityAt ?? "").localeCompare(a.lastActivityAt ?? "") || a.topic.name.localeCompare(b.topic.name));
+  }
+  involvementRollups(includeArchived, since, limit) {
+    const { repositoriesByAxis, scans, topicRefs, visible } = this.visibleContext(includeArchived);
     const events = this.db.query(`SELECT * FROM activities
            WHERE (? IS NULL OR occurred_at >= ?)
            ORDER BY occurred_at DESC, rowid DESC`).all(since, since).map(toActivity);

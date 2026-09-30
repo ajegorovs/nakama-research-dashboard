@@ -1545,6 +1545,152 @@ describe("ResearchStore people and repository rollups (C6)", () => {
   });
 });
 
+describe("ResearchStore progress timeline (C7)", () => {
+  test("groups by topic and axis, with the context implied through the axis", () => {
+    const { store } = openStore();
+    const signal = store.createTopic({ name: "Signal Processing" });
+    const acquisition = store.createTopic({ name: "Acquisition Automation" });
+    store.reconcileTopic({
+      axes: [
+        {
+          branch: "feat/signal",
+          repositories: [{ fullName: "group/processing-pipeline" }],
+          title: "Signal explorer",
+        },
+      ],
+      topicId: signal.id,
+    });
+    store.reconcileTopic({
+      axes: [
+        {
+          blocker: "rig firmware",
+          blockerConfidence: "inferred",
+          state: "blocked",
+          stateConfidence: "inferred",
+          title: "Rig control",
+        },
+      ],
+      topicId: acquisition.id,
+    });
+    const signalAxis = store
+      .getTopicDetail(signal.id)
+      .axes.find((axis) => axis.title === "Signal explorer");
+    const rigAxis = store
+      .getTopicDetail(acquisition.id)
+      .axes.find((axis) => axis.title === "Rig control");
+
+    // The common case, and the one the C6 defect hid behind: the recorder names the axis and nothing
+    // else. No topicId, no repositoryId — the timeline still has to place the event, because the axis is
+    // the link. This is the shape the seed and the harness use, not the convenient one.
+    store.addActivity({
+      axisId: signalAxis?.id,
+      sourceRef: "PR #88",
+      sourceType: "github_pr",
+      summary: "PR #88 merged",
+    });
+    store.addActivity({
+      axisId: rigAxis?.id,
+      sourceRef: "note",
+      sourceType: "manual",
+      summary: "blocker recorded",
+    });
+
+    const overview = store.getOverview();
+    expect(overview.timeline).toHaveLength(2);
+    const signalGroup = overview.timeline.find(
+      (group) => group.topic.name === "Signal Processing"
+    );
+    expect(signalGroup?.axes).toHaveLength(1);
+    expect(signalGroup?.axes[0]?.axis?.title).toBe("Signal explorer");
+    expect(signalGroup?.axes[0]?.axis?.repositories[0]?.fullName).toBe(
+      "group/processing-pipeline"
+    );
+    expect(signalGroup?.axes[0]?.events.map((event) => event.sourceRef)).toEqual(
+      ["PR #88"]
+    );
+    expect(signalGroup?.eventCount).toBe(1);
+    expect(signalGroup?.lastActivityAt).not.toBeNull();
+    // The blocked axis sorts first inside its own topic, and a topic-level event keeps its own group.
+    const acquisitionGroup = overview.timeline.find(
+      (group) => group.topic.name === "Acquisition Automation"
+    );
+    expect(acquisitionGroup?.axes[0]?.axis?.title).toBe("Rig control");
+    expect(acquisitionGroup?.axes[0]?.axis?.state).toBe("blocked");
+
+    store.addActivity({
+      sourceType: "manual",
+      summary: "topic-level note with no axis",
+      topicId: signal.id,
+    });
+    const withTopicLevel = store.getOverview().timeline.find(
+      (group) => group.topic.name === "Signal Processing"
+    );
+    // Kept, ordered last, and never merged into the axis it does not name.
+    expect(withTopicLevel?.axes.map((bucket) => bucket.axis?.title ?? null)).toEqual([
+      "Signal explorer",
+      null,
+    ]);
+    expect(withTopicLevel?.eventCount).toBe(2);
+  });
+
+  test("attributes an event only through a mapped account, and windows without hiding history", () => {
+    const { store } = openStore();
+    const topic = store.createTopic({ name: "Signal Processing" });
+    store.reconcileTopic({
+      axes: [{ title: "Signal explorer" }],
+      topicId: topic.id,
+    });
+    const axis = store.getTopicDetail(topic.id).axes[0];
+    const person = store.registerPerson({
+      displayName: "Researcher A",
+      nakamaUserId: "user-1",
+    });
+    store.addActivity({
+      actorId: "user-1",
+      actorType: "human",
+      axisId: axis?.id,
+      sourceType: "experiment",
+      summary: "run recorded by a known account",
+    });
+    store.addActivity({
+      actorId: "ghost",
+      actorType: "human",
+      axisId: axis?.id,
+      sourceType: "experiment",
+      summary: "run recorded by an unmapped actor",
+    });
+    store.addActivity({
+      actorId: "user-1",
+      actorType: "human",
+      axisId: axis?.id,
+      occurredAt: "2026-08-01T09:00:00.000Z",
+      sourceType: "experiment",
+      summary: "recorded a month before the window",
+    });
+
+    const events = (store.getOverview().timeline[0]?.axes[0]?.events ?? []).filter(
+      (event) => event.summary !== "run recorded by an unmapped actor"
+    );
+    const known = events.find(
+      (event) => event.summary === "run recorded by a known account"
+    );
+    const ghost = (store.getOverview().timeline[0]?.axes[0]?.events ?? []).find(
+      (event) => event.summary === "run recorded by an unmapped actor"
+    );
+    expect(known?.person?.id).toBe(person.person.id);
+    expect(known?.person?.displayName).toBe("Researcher A");
+    // An unmapped actor owns nothing: the event is shown, its attribution is not invented.
+    expect(ghost?.person).toBeNull();
+
+    // The window narrows the timeline; it does not rewrite history (the axis detail still has all three).
+    const windowed = store.getOverview({ activitySinceDays: 14 });
+    expect(
+      (windowed.timeline[0]?.axes[0]?.events ?? []).map((event) => event.summary)
+    ).not.toContain("recorded a month before the window");
+    expect(store.getTopicDetail(topic.id).axes[0]?.history.length).toBe(3);
+  });
+});
+
 describe("ResearchStore concurrency", () => {
   test("two store instances write to one file without surfacing SQLITE_BUSY", () => {
     const { path, store } = openStore();

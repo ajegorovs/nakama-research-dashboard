@@ -30,9 +30,12 @@ here: `vendor/` holds the recipe that puts the plugin into a checkout, because N
 > that refuses a stale write in place instead of overwriting it, and the other two views of the same
 > payload now switched in the header: **People** (person-first — a compact index, the selected
 > person's topics and axes, and only the activity that can actually be attributed to their account)
-> and **Repositories** (repository-first — what it supports, the axes naming it, its recorded events).
-> One person on several topics is one row with their involvement grouped underneath; nothing is scored
-> or ranked (`bun run check` → 72 pass).
+> and **Repositories** (repository-first — what it supports, the axes naming it, its recorded events),
+> and **Progress** (the time perspective — what changed in the window, grouped topic → axis → event,
+> newest topic first, filterable by topic, person, repository and axis state). All four render from the
+> one payload the page fetches, so switching a view costs no query; one person on several topics is one
+> row with their involvement grouped underneath, and nothing is scored or ranked
+> (`bun run check` → 74 pass).
 > What the agent side actually does is checked against the
 > platform, not the manifest: `GET /v1/tools` lists exactly the five tool rows, and a live three-turn
 > run used all five (`find_tools` → `get_overview`; `find_tools` → `search_dashboard` ∥ `get_topic` →
@@ -61,9 +64,9 @@ here: `vendor/` holds the recipe that puts the plugin into a checkout, because N
 
 The page as it renders today (a seeded demo dataset, not real group data):
 
-| ![overview on load](docs/screenshots/dashboard.png) | ![a topic card expanded](docs/screenshots/dashboard-detail.png) | ![the People view](docs/screenshots/dashboard-people.png) | ![the Repositories view](docs/screenshots/dashboard-repositories.png) | ![command palette route](docs/screenshots/navigation.png) |
-|---|---|---|---|---|
-| `dashboard.png` — the overview: one card per topic, axes grouped under it in attention order (blocked first), people, state counts, repo/branch/PR line, blocker and a recent-activity summary. The window control is the only query-level control. | `dashboard-detail.png` — a topic expanded: the whole detail in one `get_topic` call — description and approved summary, counts, corrections/notes kept apart from the activity log, and every axis with its full metadata, per-claim confidence, evidence line and its own history and notes behind `History (n)` | `dashboard-people.png` — the People view (C6), person-first: the index on the left, the selected person's topics with their own axes on the right. Activity is listed only where the store can attribute it, and a person with no mapped account says so instead of showing an empty log. | `dashboard-repositories.png` — the Repositories view (C6), repository-first: the topics it supports (declared link), the axes naming it, and the events recorded against it or against one of those axes. | `navigation.png` — how a member reaches it: command palette → Plugins → Research (no sidebar entry in v0.4.31) |
+| ![overview on load](docs/screenshots/dashboard.png) | ![a topic card expanded](docs/screenshots/dashboard-detail.png) | ![the People view](docs/screenshots/dashboard-people.png) | ![the Repositories view](docs/screenshots/dashboard-repositories.png) | ![the Progress view](docs/screenshots/dashboard-progress.png) | ![command palette route](docs/screenshots/navigation.png) |
+|---|---|---|---|---|---|
+| `dashboard.png` — the overview: one card per topic, axes grouped under it in attention order (blocked first), people, state counts, repo/branch/PR line, blocker and a recent-activity summary. The window control is the only query-level control. | `dashboard-detail.png` — a topic expanded: the whole detail in one `get_topic` call — description and approved summary, counts, corrections/notes kept apart from the activity log, and every axis with its full metadata, per-claim confidence, evidence line and its own history and notes behind `History (n)` | `dashboard-people.png` — the People view (C6), person-first: the index on the left, the selected person's topics with their own axes on the right. Activity is listed only where the store can attribute it, and a person with no mapped account says so instead of showing an empty log. | `dashboard-repositories.png` — the Repositories view (C6), repository-first: the topics it supports (declared link), the axes naming it, and the events recorded against it or against one of those axes. | `dashboard-progress.png` — the Progress view (C7), the time perspective: what changed in the window, grouped topic → axis → event, newest topic first, each axis keeping its own state, repository, branch and PR, with filters for topic, person, repository and axis state. | `navigation.png` — how a member reaches it: command palette → Plugins → Research (no sidebar entry in v0.4.31) |
 
 ## Why not published to npm
 

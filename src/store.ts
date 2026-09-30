@@ -238,6 +238,8 @@ export const MAX_ANNOTATION_LIMIT = 100;
 export const MAX_ROLLUP_LIMIT = 50;
 /** How many attributable events one person / repository rollup carries inside the window. */
 export const DEFAULT_ROLLUP_ACTIVITY_LIMIT = 5;
+/** How many events one axis shows in the progress view before it says how many more there are. */
+export const DEFAULT_TIMELINE_AXIS_LIMIT = 10;
 /** How many recorded items of one kind count towards an axis's evidence line (activities, notes). */
 export const EVIDENCE_ITEM_LIMIT = 5;
 /** Per-axis history on the detail view: enough to see the arc of the work without paging. */
@@ -617,6 +619,8 @@ export type Overview = {
   peopleTruncated: boolean;
   repositories: RepositoryRollup[];
   repositoriesTruncated: boolean;
+  /** The time view (C7): the window's events grouped topic → axis, newest topic first. */
+  timeline: TimelineGroup[];
 };
 
 /** Evidence reads as a phrase, not as an enum value: "PR #88", "agent review", "repo document". */
@@ -771,6 +775,37 @@ export type RepositoryRollup = {
   axisCounts: Record<AxisState, number>;
   /** Events recorded against this repository or against one of its axes, newest first. */
   recentActivity: Activity[];
+  lastActivityAt: string | null;
+};
+
+/**
+ * One recorded event as the progress view reads it (C7).
+ *
+ * `person` is resolved with the same narrow rule as the C6 rollups: the activity's actor, mapped through
+ * `people.nakama_user_id`. `null` means the event cannot be attributed to anybody — which is a fact worth
+ * showing, not a gap to paper over.
+ */
+export type TimelineEvent = Activity & {
+  person: { displayName: string; id: string } | null;
+};
+
+/**
+ * One axis's events inside the window. `axis` is `null` for events that name the topic and nothing else —
+ * they are real activity and get their own group rather than being dropped.
+ */
+export type TimelineAxis = {
+  axis: AxisScan | null;
+  /** Newest first, capped at the timeline limit; `eventCount` is the true total in the window. */
+  events: TimelineEvent[];
+  eventCount: number;
+};
+
+/** A topic that saw activity in the window, with its axes — the default grouping of the progress view. */
+export type TimelineGroup = {
+  topic: TopicRef;
+  /** Axes in attention order, topic-level events last; only axes with events in the window appear. */
+  axes: TimelineAxis[];
+  eventCount: number;
   lastActivityAt: string | null;
 };
 
@@ -1389,6 +1424,11 @@ export class ResearchStore {
         ).map(toTopic),
         repositories: rollups.repositories,
         repositoriesTruncated: rollups.repositoriesTruncated,
+        timeline: this.recentProgress(
+          since,
+          includeArchived,
+          DEFAULT_TIMELINE_AXIS_LIMIT
+        ),
         topics: this.topicOverviews(includeArchived, since),
       };
     });
@@ -1513,31 +1553,15 @@ export class ResearchStore {
   }
 
   /**
-   * The person-first and repository-first views of the same data (C6), riding along in the call the
-   * front page already makes: one dashboard, one read, and no new action for an agent to learn.
-   *
-   * Two rules are worth stating, because they are the two a reader should not have to trust.
-   *
-   * 1. **A person is one row.** Grouping is by `people.id`, never by display name: someone on three
-   *    topics and two axes appears once, with their involvement grouped underneath. The identity
-   *    duplication C4 hit was a read-model bug, and this is the read model that must not repeat it.
-   * 2. **Attribution is narrow, and says so.** An event belongs to a person only when the activity's
-   *    `actor_id` maps to their account (`people.nakama_user_id`); an unmapped or unknown actor owns
-   *    nothing, and a person with no account can never own anything — hence `attributable: false`
-   *    instead of an empty log that would read as idleness.
-   *
-   * Nothing here is scored, ranked or expressed as a percentage: this reports involvement, and the
-   * only time-shaped facts are when something was last recorded and when an axis was last reviewed.
+   * The context C6 and C7 group by: every visible topic, and every axis of a visible topic with its
+   * repositories. One definition of "visible", so the rollups, the progress view and the front page
+   * cannot drift apart on archived work.
    */
-  private involvementRollups(
-    includeArchived: boolean,
-    since: string | null,
-    limit: number
-  ): {
-    people: PersonRollup[];
-    peopleTruncated: boolean;
-    repositories: RepositoryRollup[];
-    repositoriesTruncated: boolean;
+  private visibleContext(includeArchived: boolean): {
+    repositoriesByAxis: Map<string, LinkedRepository[]>;
+    scans: Map<string, AxisScan>;
+    topicRefs: Map<string, TopicRef>;
+    visible: (topicId: string) => boolean;
   } {
     const topicRefs = new Map<string, TopicRef>();
     for (const row of this.db
@@ -1569,6 +1593,136 @@ export class ResearchStore {
         );
       }
     }
+
+    return { repositoriesByAxis, scans, topicRefs, visible };
+  }
+
+  /** account id → the person it maps to. The one attribution map; the C6 rollups and C7 both read it. */
+  private personRefByAccount(): Map<string, { displayName: string; id: string }> {
+    const map = new Map<string, { displayName: string; id: string }>();
+    for (const row of this.db
+      .query("SELECT id, display_name, nakama_user_id FROM people")
+      .all() as Array<{
+      display_name: string;
+      id: string;
+      nakama_user_id: string | null;
+    }>) {
+      if (row.nakama_user_id) {
+        map.set(row.nakama_user_id, {
+          displayName: row.display_name,
+          id: row.id,
+        });
+      }
+    }
+    return map;
+  }
+
+  /**
+   * The time view of the same data (C7): what changed inside the window, grouped topic → axis, newest
+   * topic first, with the topic and repository context **implied by the axis** rather than required on
+   * the row.
+   *
+   * That last part is the C6 defect made into a rule. An event recorded by somebody who named only the
+   * axis still lands under the right topic, and still reads as work in the right codebase, because the
+   * grouping follows the relationship. An event that names a topic and no axis is kept as its own group
+   * (topic-level events are real) instead of being dropped; an event that names neither is not shown,
+   * because there is no honest place to put it.
+   */
+  private recentProgress(
+    since: string | null,
+    includeArchived: boolean,
+    limit: number
+  ): TimelineGroup[] {
+    const { scans, topicRefs } = this.visibleContext(includeArchived);
+    const personByAccount = this.personRefByAccount();
+    const rows = this.db
+      .query(
+        `SELECT * FROM activities
+         WHERE (? IS NULL OR occurred_at >= ?)
+         ORDER BY occurred_at DESC, rowid DESC`
+      )
+      .all(since, since) as ActivityRow[];
+
+    /** topicId → axisId (`""` = the topic itself) → that axis's bucket. */
+    const byTopic = new Map<string, Map<string, TimelineAxis>>();
+    for (const row of rows) {
+      const event = toActivity(row);
+      const axis = event.axisId ? (scans.get(event.axisId) ?? null) : null;
+      const topicId = axis?.topicId ?? event.topicId ?? "";
+      if (topicId === "" || !topicRefs.has(topicId)) {
+        continue;
+      }
+      const buckets = byTopic.get(topicId) ?? new Map<string, TimelineAxis>();
+      const key = axis?.id ?? "";
+      const bucket = buckets.get(key) ?? { axis, eventCount: 0, events: [] };
+      bucket.eventCount += 1;
+      if (bucket.events.length < limit) {
+        bucket.events.push({
+          ...event,
+          person: personByAccount.get(event.actorId) ?? null,
+        });
+      }
+      buckets.set(key, bucket);
+      byTopic.set(topicId, buckets);
+    }
+
+    const groups: TimelineGroup[] = [];
+    for (const [topicId, buckets] of byTopic) {
+      const topic = topicRefs.get(topicId);
+      if (!topic) {
+        continue;
+      }
+      const axes = [...buckets.values()].sort((a, b) => {
+        if (a.axis === null || b.axis === null) {
+          return a.axis === null ? 1 : -1;
+        }
+        return compareAxesForAttention(a.axis, b.axis);
+      });
+      groups.push({
+        axes,
+        eventCount: axes.reduce((total, bucket) => total + bucket.eventCount, 0),
+        lastActivityAt: axes[0]?.events[0]?.occurredAt ?? null,
+        topic,
+      });
+    }
+
+    // Most recently active topic first: the view answers "what changed", so the newest change leads.
+    return groups.sort(
+      (a, b) =>
+        (b.lastActivityAt ?? "").localeCompare(a.lastActivityAt ?? "") ||
+        a.topic.name.localeCompare(b.topic.name)
+    );
+  }
+
+  /**
+   * The person-first and repository-first views of the same data (C6), riding along in the call the
+   * front page already makes: one dashboard, one read, and no new action for an agent to learn.
+   *
+   * Two rules are worth stating, because they are the two a reader should not have to trust.
+   *
+   * 1. **A person is one row.** Grouping is by `people.id`, never by display name: someone on three
+   *    topics and two axes appears once, with their involvement grouped underneath. The identity
+   *    duplication C4 hit was a read-model bug, and this is the read model that must not repeat it.
+   * 2. **Attribution is narrow, and says so.** An event belongs to a person only when the activity's
+   *    `actor_id` maps to their account (`people.nakama_user_id`); an unmapped or unknown actor owns
+   *    nothing, and a person with no account can never own anything — hence `attributable: false`
+   *    instead of an empty log that would read as idleness.
+   *
+   * Nothing here is scored, ranked or expressed as a percentage: this reports involvement, and the
+   * only time-shaped facts are when something was last recorded and when an axis was last reviewed.
+   */
+  private involvementRollups(
+    includeArchived: boolean,
+    since: string | null,
+    limit: number
+  ): {
+    people: PersonRollup[];
+    peopleTruncated: boolean;
+    repositories: RepositoryRollup[];
+    repositoriesTruncated: boolean;
+  } {
+    const { repositoriesByAxis, scans, topicRefs, visible } =
+      this.visibleContext(includeArchived);
 
     // Every event inside the window, read once: the two rollups slice it differently.
     const events = (

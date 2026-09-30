@@ -246,6 +246,25 @@ type Overview = {
   peopleTruncated: boolean;
   repositories: RepositoryRollup[];
   repositoriesTruncated: boolean;
+  /** The time view (C7): the window's events grouped topic → axis, newest topic first. */
+  timeline: TimelineGroup[];
+};
+
+/** One recorded event in the progress view; `person` is null when no account can be attributed. */
+type TimelineEvent = Activity & {
+  person: { displayName: string; id: string } | null;
+};
+/** One axis's events in the window. `axis` is null for events that name the topic and nothing else. */
+type TimelineAxis = {
+  axis: AxisScan | null;
+  events: TimelineEvent[];
+  eventCount: number;
+};
+type TimelineGroup = {
+  topic: TopicRef;
+  axes: TimelineAxis[];
+  eventCount: number;
+  lastActivityAt: string | null;
 };
 
 type Context = {
@@ -326,6 +345,7 @@ const VIEW_OPTIONS = [
   { label: "Topics", value: "topics" },
   { label: "People", value: "people" },
   { label: "Repositories", value: "repositories" },
+  { label: "Progress", value: "progress" },
 ] as const;
 
 type ViewName = (typeof VIEW_OPTIONS)[number]["value"];
@@ -397,6 +417,15 @@ const css = `
 }
 [data-plugin-id="research-dashboard"] .rd-window [aria-pressed="true"] { font-weight: 600; }
 [data-plugin-id="research-dashboard"] .rd-views [aria-pressed="true"] { font-weight: 600; }
+/* C7: the progress timeline — filters on one line, each axis a labelled rail. */
+[data-plugin-id="research-dashboard"] .rd-filters { flex-wrap: wrap; gap: 8px; }
+[data-plugin-id="research-dashboard"] .rd-timeline-axis {
+  border-left: 2px solid var(--border, #e5e7eb);
+  display: grid;
+  gap: 6px;
+  padding-left: 10px;
+}
+[data-plugin-id="research-dashboard"] .rd-timeline-axis .rd-activity li { display: grid; gap: 2px; }
 [data-plugin-id="research-dashboard"] .rd-newtopic { flex-wrap: nowrap; }
 [data-plugin-id="research-dashboard"] .rd-newtopic input { width: 18rem; }
 [data-plugin-id="research-dashboard"] .rd-activity { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
@@ -1571,6 +1600,271 @@ export function apply(ctx: Context) {
     );
   }
 
+  /** One filter control. "All …" is the default and means "no filter" — a sentinel, not an empty value. */
+  function FilterSelect({
+    label,
+    onChange,
+    options,
+    value,
+  }: {
+    label: string;
+    onChange: (next: string) => void;
+    options: Array<{ label: string; value: string }>;
+    value: string;
+  }) {
+    return (
+      <Select
+        onValueChange={(next: string | null) => {
+          if (next !== null) {
+            onChange(String(next));
+          }
+        }}
+        value={value}
+      >
+        <SelectTrigger aria-label={label}>
+          <SelectValue>
+            {options.find((option) => option.value === value)?.label ?? value}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    );
+  }
+
+  /**
+   * The time view (C7): what changed inside the window, grouped topic → axis, newest topic first.
+   *
+   * Grouped rather than one flat log, because "what moved in the last two weeks across six concurrent
+   * axes" is only readable when the events keep their axis. Every filter is applied to the payload the
+   * page already holds — no re-query, no new call — and the two *context* filters (topic, repository)
+   * read the axis, which is exactly how an event that named only its axis still filters correctly.
+   */
+  function ProgressView({
+    people,
+    repositories,
+    timeline,
+    windowDays,
+  }: {
+    people: PersonRollup[];
+    repositories: RepositoryRollup[];
+    timeline: TimelineGroup[];
+    windowDays: number;
+  }) {
+    const [topicFilter, setTopicFilter] = React.useState("all");
+    const [personFilter, setPersonFilter] = React.useState("all");
+    const [repositoryFilter, setRepositoryFilter] = React.useState("all");
+    const [stateFilter, setStateFilter] = React.useState("all");
+
+    const groups = timeline
+      .filter(
+        (group) => topicFilter === "all" || group.topic.id === topicFilter
+      )
+      .map((group) => {
+        const axes = group.axes
+          .filter(
+            (bucket) =>
+              stateFilter === "all" || bucket.axis?.state === stateFilter
+          )
+          .filter(
+            (bucket) =>
+              repositoryFilter === "all" ||
+              (bucket.axis?.repositories ?? []).some(
+                (repository) => repository.id === repositoryFilter
+              )
+          )
+          .map((bucket) => ({
+            ...bucket,
+            events: bucket.events.filter(
+              (event) =>
+                personFilter === "all" || event.person?.id === personFilter
+            ),
+          }))
+          .filter((bucket) => bucket.events.length > 0);
+        return { ...group, axes };
+      })
+      .filter((group) => group.axes.length > 0);
+
+    const eventCount = groups.reduce(
+      (total, group) =>
+        total +
+        group.axes.reduce((sum, bucket) => sum + bucket.events.length, 0),
+      0
+    );
+    const filtered =
+      topicFilter !== "all" ||
+      personFilter !== "all" ||
+      repositoryFilter !== "all" ||
+      stateFilter !== "all";
+
+    return (
+      <div className="rd-stack" data-rd-view="progress">
+        <div className="rd-cluster rd-filters">
+          <FilterSelect
+            label="Filter by topic"
+            onChange={setTopicFilter}
+            options={[
+              { label: "All topics", value: "all" },
+              ...timeline.map((group) => ({
+                label: group.topic.name,
+                value: group.topic.id,
+              })),
+            ]}
+            value={topicFilter}
+          />
+          <FilterSelect
+            label="Filter by person"
+            onChange={setPersonFilter}
+            options={[
+              { label: "Anyone (incl. unattributed)", value: "all" },
+              ...people.map((entry) => ({
+                label: entry.person.displayName,
+                value: entry.person.id,
+              })),
+            ]}
+            value={personFilter}
+          />
+          <FilterSelect
+            label="Filter by repository"
+            onChange={setRepositoryFilter}
+            options={[
+              { label: "All repositories", value: "all" },
+              ...repositories.map((entry) => ({
+                label: entry.repository.fullName,
+                value: entry.repository.id,
+              })),
+            ]}
+            value={repositoryFilter}
+          />
+          <FilterSelect
+            label="Filter by axis state"
+            onChange={setStateFilter}
+            options={[
+              { label: "All states", value: "all" },
+              ...STATE_OPTIONS.map((option) => ({
+                label: option.label,
+                value: option.value,
+              })),
+            ]}
+            value={stateFilter}
+          />
+        </div>
+
+        <span className="rd-muted" data-rd-progress-summary="true">
+          {windowDays === 0
+            ? "All time"
+            : `Last ${countLabel(windowDays, "day", "days")}`}{" "}
+          · {countLabel(eventCount, "event", "events")} across{" "}
+          {countLabel(groups.length, "topic", "topics")}
+          {filtered ? " (filtered)" : ""}
+        </span>
+
+        {groups.length === 0 ? (
+          <Card data-rd-progress-empty="true">
+            <CardContent>
+              <p className="rd-muted">
+                {filtered
+                  ? "Nothing matches these filters in this window."
+                  : "Nothing was recorded in this window yet."}
+              </p>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {groups.map((group) => (
+          <Card data-rd-progress-topic={group.topic.name} key={group.topic.id}>
+            <CardHeader>
+              <div className="rd-row">
+                <CardTitle>{group.topic.name}</CardTitle>
+                <span className="rd-muted">
+                  {countLabel(group.eventCount, "event", "events")} ·{" "}
+                  {describeAge(group.lastActivityAt)}
+                </span>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="rd-stack">
+                {group.axes.map((bucket) => (
+                  <div
+                    className="rd-timeline-axis"
+                    data-rd-progress-axis={bucket.axis?.title ?? "topic-level"}
+                    key={bucket.axis?.id ?? "topic-level"}
+                  >
+                    <div className="rd-row">
+                      <span className="rd-cluster">
+                        {bucket.axis ? (
+                          <span
+                            className="rd-state"
+                            data-rd-state={bucket.axis.state}
+                          >
+                            {bucket.axis.state}
+                          </span>
+                        ) : null}
+                        <span className="rd-strong">
+                          {bucket.axis?.title ?? "topic-level"}
+                        </span>
+                      </span>
+                      <span className="rd-meta">
+                        {[
+                          bucket.axis?.kind ?? "",
+                          (bucket.axis?.repositories ?? [])
+                            .map((repository) => repository.fullName)
+                            .join(", "),
+                          bucket.axis?.branch ?? "",
+                          bucket.axis?.prNumber === null ||
+                          bucket.axis?.prNumber === undefined
+                            ? ""
+                            : `PR #${bucket.axis.prNumber}`,
+                        ]
+                          .filter((value) => value !== "")
+                          .join(" · ")}
+                      </span>
+                    </div>
+                    <ul
+                      className="rd-activity"
+                      data-rd-progress-events={bucket.events.length}
+                    >
+                      {bucket.events.map((event) => (
+                        <li data-rd-progress-event="true" key={event.id}>
+                          <div className="rd-cluster">
+                            <span className="rd-meta">
+                              {event.occurredAt.slice(0, 10)}
+                            </span>
+                            <span className="rd-strong">{event.summary}</span>
+                          </div>
+                          <span className="rd-meta">
+                            {SOURCE_OPTIONS.find(
+                              (option) => option.value === event.sourceType
+                            )?.label ?? event.sourceType}
+                            {event.sourceRef ? ` · ${event.sourceRef}` : ""} ·{" "}
+                            {event.person
+                              ? event.person.displayName
+                              : "no account attributed"}
+                          </span>
+                        </li>
+                      ))}
+                      {bucket.eventCount > bucket.events.length ? (
+                        <li className="rd-muted">
+                          {bucket.eventCount - bucket.events.length} older here
+                          — open the topic for the full history
+                        </li>
+                      ) : null}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
+
   function ResearchPage() {
     const [overview, setOverview] = React.useState<Overview | null>(null);
     const [view, setView] = React.useState<ViewName>("topics");
@@ -2392,6 +2686,15 @@ export function apply(ctx: Context) {
           <RepositoriesView
             repositories={overview?.repositories ?? []}
             truncated={overview?.repositoriesTruncated === true}
+            windowDays={windowDays}
+          />
+        ) : null}
+
+        {view === "progress" ? (
+          <ProgressView
+            people={overview?.people ?? []}
+            repositories={overview?.repositories ?? []}
+            timeline={overview?.timeline ?? []}
             windowDays={windowDays}
           />
         ) : null}
