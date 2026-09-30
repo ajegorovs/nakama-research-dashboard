@@ -1164,7 +1164,10 @@ describe("ResearchStore topic detail and evidence (C5)", () => {
     expect(evidence[1].sourceUrl).toBe(
       "https://example.invalid/group/signal-pipeline/pull/88"
     );
-    expect(evidence[2]).toMatchObject({ by: "unknown", sourceType: "github_pr" });
+    expect(evidence[2]).toMatchObject({
+      by: "unknown",
+      sourceType: "github_pr",
+    });
   });
 
   test("a person's own note is evidence, so a manual 'confirmed' can land (D8)", () => {
@@ -1276,7 +1279,10 @@ describe("ResearchStore topic detail and evidence (C5)", () => {
   test("caps per-axis history without losing the count of what exists", async () => {
     const { store } = openStore();
     const topic = store.createTopic({ name: "Filtering Comparison" });
-    const axis = store.createAxis({ title: "Baseline sweep", topicId: topic.id });
+    const axis = store.createAxis({
+      title: "Baseline sweep",
+      topicId: topic.id,
+    });
     for (let index = 0; index < 4; index += 1) {
       store.addActivity({
         axisId: axis.id,

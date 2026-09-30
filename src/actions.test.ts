@@ -105,6 +105,35 @@ function freshDatabase(): string {
   return path;
 }
 
+/**
+ * The single axis a one-axis fixture returns, asserted rather than optional-chained. The lint rule
+ * refuses `a?.b as T` — a cast that hides the possibility of `undefined` inside a chain that would
+ * then throw — so the check is explicit and happens once, here.
+ */
+function onlyAxis(result: Record<string, unknown>): {
+  evidence: Array<{ kind: string; label: string }>;
+  history: Array<{ id: string }>;
+  notes: Array<{ text: string }>;
+  people: unknown[];
+  repositories: unknown[];
+  state: string;
+  stateConfidence: string;
+} {
+  const [axis] = (result.axes ?? []) as Array<{
+    evidence: Array<{ kind: string; label: string }>;
+    history: Array<{ id: string }>;
+    notes: Array<{ text: string }>;
+    people: unknown[];
+    repositories: unknown[];
+    state: string;
+    stateConfidence: string;
+  }>;
+  if (!axis) {
+    throw new Error("expected exactly one axis in this fixture");
+  }
+  return axis;
+}
+
 /** One call the way the host makes it: fresh connection, one action, structured result. */
 async function call(
   actionKey: string,
@@ -307,19 +336,19 @@ describe("read actions", () => {
       branch: "feat/signal-explorer",
       state: "active",
     });
-    expect(axes[0]?.repositories).toHaveLength(1);
-    expect(axes[0]?.people).toHaveLength(1);
+    // C5: the detail is per-axis. Each axis carries its own history and its own evidence line, and the
+    // topic-level counts say how much of the topic has no evidence at all.
+    const axis = onlyAxis(result);
+    expect(axis.repositories).toHaveLength(1);
+    expect(axis.people).toHaveLength(1);
+    expect(axis.history).toHaveLength(1);
+    expect(axis.evidence.map((item) => item.kind)).toEqual([
+      "branch",
+      "activity",
+    ]);
     expect(result.repositories).toHaveLength(1);
     expect(result.people).toHaveLength(1);
     expect(result.activity).toHaveLength(1);
-    // C5: the detail is per-axis. Each axis carries its own history and its own evidence line, and the
-    // topic-level counts say how much of the topic has no evidence at all.
-    expect(axes[0]?.history).toHaveLength(1);
-    expect(
-      (axes[0]?.evidence as Array<Record<string, unknown>>).map(
-        (item) => item.kind
-      )
-    ).toEqual(["branch", "activity"]);
     expect(result.counts).toMatchObject({
       activities: 1,
       axes: 1,
@@ -361,17 +390,16 @@ describe("read actions", () => {
     expect(corrected.ok).toBe(true);
 
     const detail = await call("get_topic", { topicId }, { path });
-    const axes = detail.axes as Array<Record<string, unknown>>;
-    expect(axes[0]).toMatchObject({ state: "parked", stateConfidence: "confirmed" });
+    const axis = onlyAxis(detail);
+    expect(axis).toMatchObject({
+      state: "parked",
+      stateConfidence: "confirmed",
+    });
     // An axis note renders under its axis, not in the topic-level list...
-    expect(axes[0]?.notes).toHaveLength(1);
+    expect(axis.notes).toHaveLength(1);
     expect(detail.annotations).toHaveLength(0);
     // ...and the evidence line is the same set the write rule accepted, in words.
-    expect(
-      (axes[0]?.evidence as Array<Record<string, unknown>>).map(
-        (item) => item.label
-      )
-    ).toEqual(["note"]);
+    expect(axis.evidence.map((item) => item.label)).toEqual(["note"]);
     expect(detail.counts).toMatchObject({ axesWithoutEvidence: 0, notes: 0 });
   });
 

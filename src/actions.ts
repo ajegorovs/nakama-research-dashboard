@@ -239,7 +239,12 @@ async function dispatch(
       // The detail view is one call by contract: full axis metadata with each axis's own history,
       // notes and evidence, plus the topic's own log and notes (C5).
       const detail = store.getTopicDetail(topic.id, {
-        activityLimit: optionalInt(input.activityLimit, "activityLimit", 1, 100),
+        activityLimit: optionalInt(
+          input.activityLimit,
+          "activityLimit",
+          1,
+          100
+        ),
         activitySinceDays: optionalInt(
           input.activitySinceDays,
           "activitySinceDays",

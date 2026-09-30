@@ -589,7 +589,9 @@ function evidenceLabel(sourceType: SourceType, sourceRef: string): string {
   if (!ref) {
     return base;
   }
-  return ref.toLowerCase().includes(base.toLowerCase()) ? ref : `${base} ${ref}`;
+  return ref.toLowerCase().includes(base.toLowerCase())
+    ? ref
+    : `${base} ${ref}`;
 }
 
 /**

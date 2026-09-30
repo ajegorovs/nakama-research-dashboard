@@ -777,8 +777,6 @@ function apply(ctx) {
       }
       const note = correction.note.trim();
       const result = await call("reconcile_topic", {
-        expectedVersion: detail.topic.version,
-        topicId: detail.topic.id,
         axes: [
           {
             blocker: correction.blocker,
@@ -791,6 +789,8 @@ function apply(ctx) {
             stateConfidence: correction.stateConfidence
           }
         ],
+        expectedVersion: detail.topic.version,
+        topicId: detail.topic.id,
         ...note ? { annotations: [{ axisId: axis.id, text: note }] } : {}
       }, { conflictAxisId: correction.axisId });
       if (result) {

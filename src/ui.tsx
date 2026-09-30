@@ -716,7 +716,9 @@ export function apply(ctx: Context) {
       >
         {evidence.length > 0
           ? `evidence: ${shown
-              .map((item) => (item.by ? `${item.label} (${item.by})` : item.label))
+              .map((item) =>
+                item.by ? `${item.label} (${item.by})` : item.label
+              )
               .join(" · ")}${more > 0 ? ` +${more} more` : ""}`
           : "no evidence on record — a 'confirmed' claim is impossible here"}
       </div>
@@ -1011,8 +1013,8 @@ export function apply(ctx: Context) {
                 Save correction
               </Button>
               <span className="rd-muted">
-                Saved against v{axis.version}; a change made since then comes back
-                as a conflict instead of overwriting it.
+                Saved against v{axis.version}; a change made since then comes
+                back as a conflict instead of overwriting it.
               </span>
             </div>
           </div>
@@ -1031,8 +1033,12 @@ export function apply(ctx: Context) {
     >(null);
     const [newName, setNewName] = React.useState("");
     const [detail, setDetail] = React.useState<TopicDetail | null>(null);
-    const [correction, setCorrection] = React.useState<AxisCorrection | null>(null);
-    const [historyAxisId, setHistoryAxisId] = React.useState<string | null>(null);
+    const [correction, setCorrection] = React.useState<AxisCorrection | null>(
+      null
+    );
+    const [historyAxisId, setHistoryAxisId] = React.useState<string | null>(
+      null
+    );
     const [topicNote, setTopicNote] = React.useState("");
     const [conflict, setConflict] = React.useState<ConflictState>(null);
     const [activitySummary, setActivitySummary] = React.useState("");
@@ -1237,8 +1243,6 @@ export function apply(ctx: Context) {
       const result = await call(
         "reconcile_topic",
         {
-          expectedVersion: detail.topic.version,
-          topicId: detail.topic.id,
           axes: [
             {
               blocker: correction.blocker,
@@ -1251,6 +1255,8 @@ export function apply(ctx: Context) {
               stateConfidence: correction.stateConfidence,
             },
           ],
+          expectedVersion: detail.topic.version,
+          topicId: detail.topic.id,
           ...(note ? { annotations: [{ axisId: axis.id, text: note }] } : {}),
         },
         { conflictAxisId: correction.axisId }
@@ -1521,10 +1527,16 @@ export function apply(ctx: Context) {
                   ) : null}
 
                   {details ? (
-                    <div className="rd-detail rd-divider" data-rd-detail={details.topic.name}>
+                    <div
+                      className="rd-detail rd-divider"
+                      data-rd-detail={details.topic.name}
+                    >
                       <span className="rd-section">Topic</span>
                       <div className="rd-claim">
-                        <span className="rd-claim-value" data-rd-claim="description">
+                        <span
+                          className="rd-claim-value"
+                          data-rd-claim="description"
+                        >
                           {details.topic.description || (
                             <span className="rd-muted">no description yet</span>
                           )}
@@ -1532,13 +1544,19 @@ export function apply(ctx: Context) {
                         <span className="rd-muted">description</span>
                       </div>
                       <div className="rd-claim">
-                        <span className="rd-claim-value" data-rd-claim="summary">
+                        <span
+                          className="rd-claim-value"
+                          data-rd-claim="summary"
+                        >
                           {details.topic.summary || (
-                            <span className="rd-muted">no approved summary</span>
+                            <span className="rd-muted">
+                              no approved summary
+                            </span>
                           )}
                         </span>
                         <span className="rd-muted">
-                          approved summary — a human interpretation, not an agent one
+                          approved summary — a human interpretation, not an
+                          agent one
                         </span>
                       </div>
                       <span className="rd-meta" data-rd-detail-counts="true">
@@ -1555,7 +1573,11 @@ export function apply(ctx: Context) {
                       </span>
 
                       {conflict && !conflict.axisId ? (
-                        <div className="rd-conflict" data-rd-conflict="true" role="alert">
+                        <div
+                          className="rd-conflict"
+                          data-rd-conflict="true"
+                          role="alert"
+                        >
                           <span className="rd-strong">
                             This topic changed since you opened it.
                           </span>
@@ -1581,7 +1603,10 @@ export function apply(ctx: Context) {
                       <span className="rd-section">
                         Corrections &amp; notes · {details.notes.length}
                       </span>
-                      <ul className="rd-notes" data-rd-topic-notes={details.notes.length}>
+                      <ul
+                        className="rd-notes"
+                        data-rd-topic-notes={details.notes.length}
+                      >
                         {details.notes.map((note) => (
                           <li key={note.id}>
                             <div>{note.text}</div>
@@ -1626,7 +1651,10 @@ export function apply(ctx: Context) {
                       </form>
 
                       <CardTitle className="rd-meta">Activity</CardTitle>
-                      <ul className="rd-activity" data-rd-topic-activity={details.activity.length}>
+                      <ul
+                        className="rd-activity"
+                        data-rd-topic-activity={details.activity.length}
+                      >
                         {details.activity.map((item) => {
                           const axisTitle = details.axes.find(
                             (axis) => axis.id === item.axisId
