@@ -82,8 +82,10 @@ Not available: restyling the host shell, adding a sidebar entry (**in v0.4.31 pl
 in the command palette** — `Ctrl/Cmd+K` → "Plugins" — despite docs describing a sidebar group), more
 than one page, renderers for native or other plugins' tools, or a sandbox (these are trusted modules).
 It is React inside the host's tree: internal tabs, routing, charts and any component library you bundle
-are yours to choose. `docs/screenshots/` shows the page as it renders today (on load, with a project
-selected, and the command-palette route that is the only way members reach it).
+are yours to choose. `docs/screenshots/` shows the page as it renders today — the overview on load, a
+topic's detail, the People, Repositories and Progress views, and the command-palette route that is the
+only way members reach it. The data is a real **public** corpus rather than the earlier placeholders;
+see [`corpus/README.md`](corpus/README.md) for what it is and what it cannot exercise.
 
 ## 5. The agent layer
 

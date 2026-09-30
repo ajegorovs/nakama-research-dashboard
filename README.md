@@ -63,7 +63,10 @@ here: `vendor/` holds the recipe that puts the plugin into a checkout, because N
 > states `active/paused/completed/archived`; five exposed tools instead of eight; copy the V1 data), and
 > one of our claims was corrected — the platform *does* validate `inputSchema` at runtime. The last
 > open item (real topic names in a public repo) was resolved the same day: every example — docs, test
-> fixtures and the screenshots — now uses neutral data.
+> fixtures and the screenshots — stopped using real names. **Revised 2026-10-01 (D10):** the neutral
+> placeholders are themselves retired in favour of a real **public** corpus —
+> `ajegorovs/udv-echo-process` — so the layout is judged on states we did not choose while the repo
+> still carries nothing unpublished. See [`docs/corpus/README.md`](docs/corpus/README.md).
 >
 > **Answered again after C3** — the two questions the C3 handoff left open
 > ([`docs/reviews/2026-09-30-c4-c8-answers.md`](docs/reviews/2026-09-30-c4-c8-answers.md)): a manual
@@ -74,11 +77,14 @@ here: `vendor/` holds the recipe that puts the plugin into a checkout, because N
 
 ## Current look
 
-The page as it renders today (a seeded demo dataset, not real group data):
+The page as it renders today, on the repository's own history: `ajegorovs/udv-echo-process` is a real,
+**public** repository (625 commits, 69 PRs), seeded through the plugin's own action surface — no row
+hand-typed — so what you see below are states we did not choose. Nothing here is unpublished group
+work; the pack behind these images is [`docs/corpus/README.md`](docs/corpus/README.md).
 
 | ![overview on load](docs/screenshots/dashboard.png) | ![a topic card expanded](docs/screenshots/dashboard-detail.png) | ![the People view](docs/screenshots/dashboard-people.png) | ![the Repositories view](docs/screenshots/dashboard-repositories.png) | ![the Progress view](docs/screenshots/dashboard-progress.png) | ![command palette route](docs/screenshots/navigation.png) |
 |---|---|---|---|---|---|
-| `dashboard.png` — the overview: one card per topic, axes grouped under it in attention order (blocked first), people, state counts, repo/branch/PR line, blocker and a recent-activity summary. The window control is the only query-level control. | `dashboard-detail.png` — a topic expanded: the whole detail in one `get_topic` call — description and approved summary, counts, corrections/notes kept apart from the activity log, and every axis with its full metadata, per-claim confidence, evidence line and its own history and notes behind `History (n)` | `dashboard-people.png` — the People view (C6), person-first: the index on the left, the selected person's topics with their own axes on the right. Activity is listed only where the store can attribute it, and a person with no mapped account says so instead of showing an empty log. | `dashboard-repositories.png` — the Repositories view (C6), repository-first: the topics it supports (declared link), the axes naming it, and the events recorded against it or against one of those axes. | `dashboard-progress.png` — the Progress view (C7), the time perspective: what changed in the window, grouped topic → axis → event, newest topic first, each axis keeping its own state, repository, branch and PR, with filters for topic, person, repository and axis state. | `navigation.png` — how a member reaches it: command palette → Plugins → Research (no sidebar entry in v0.4.31) |
+| `dashboard.png` — the overview: one card per topic, axes grouped under it in attention order (blocked first), people, state counts, repo/branch/PR line, blocker and a recent-activity summary. The window control is the only query-level control. | `dashboard-detail.png` — the topic detail: the whole of it in one `get_topic` call — description and summary, counts, corrections/notes kept apart from the activity log, and every axis with its full metadata, per-claim confidence, evidence line and its own history and notes behind `History (n)`. Captured with the editor open, because a card that hides no axes offers no expander — see the pack for why that is a finding and not an artifact choice | `dashboard-people.png` — the People view (C6), person-first: the index on the left, the selected person's topics with their own axes on the right. Activity is listed only where the store can attribute it, and a person with no mapped account says so instead of showing an empty log. | `dashboard-repositories.png` — the Repositories view (C6), repository-first: the topics it supports (declared link), the axes naming it, and the events recorded against it or against one of those axes. | `dashboard-progress.png` — the Progress view (C7), the time perspective: what changed in the window, grouped topic → axis → event, newest topic first, each axis keeping its own state, repository, branch and PR, with filters for topic, person, repository and axis state. | `navigation.png` — how a member reaches it: command palette → Plugins → Research (no sidebar entry in v0.4.31) |
 
 ## Why not published to npm
 

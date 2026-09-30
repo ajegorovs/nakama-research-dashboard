@@ -770,6 +770,7 @@ a platform-admin concern, not a plugin one.
 | **D7** | Provenance breadth | ✅ **bounded** — three confidence fields + activities + annotations + actor/source metadata on changes that matter; no per-field provenance in V2 |
 | **D8** | Evidence for a manual status change (C8) | ✅ **optional note, easy to attach** (reviewer, 2026-09-30): the page records the person's own rationale alongside the change — a short note like "waiting intentionally for October hardware slot" is what the librarian reads instead of re-inferring `blocked`. Not required for every human edit. **Implemented in C8**, so C4 deliberately left the write shape alone |
 | **D9** | Overview information architecture (C4) | ✅ **axes grouped under topics, never one flat list** (reviewer, 2026-09-30): topic name → people → counts (active/blocked/draft/parked) → 2–4 most relevant axes → recent-activity summary → expand for all axes/history; within a topic `blocked → active → draft → parked → completed → abandoned`, then most recently updated. **Implemented in C4**; no schema change |
+| **D10** | Which data the public repo shows | ✅ **a real *public* corpus instead of neutral placeholders** (owner, 2026-10-01). D6's requirement was that this public repo never carry the group's unpublished work; the neutral placeholders satisfied it by showing nothing real, at the cost of the review being unable to see the states that matter. Both hold at once if the corpus is **public**: `ajegorovs/udv-echo-process` — single contributor, real research code, 625 commits and 69 PRs — is now what the dashboard renders, and what `docs/screenshots/` shows. Attribution stays handle-only; commit identities stay keyed (`docs/corpus/identities.json`). The four branch families do **not** map onto the axes (`feat/` carries both acquisition and analysis work), so the axes are acquisition · signal analysis · documentation+agent skills, with the assignment rule and every judgement call published in `docs/corpus/AXIS-RULE.md`. Pack: [`docs/corpus/README.md`](corpus/README.md) |
 
 **Answered 2026-09-30.** The reviewer's answers are kept verbatim in
 [`reviews/2026-09-30-v2-plan-answer.md`](reviews/2026-09-30-v2-plan-answer.md) and folded into the table
@@ -782,6 +783,13 @@ shapes are now an acceptance criterion — and the **five-tool contract (D4)**, 
 [`reviews/2026-09-30-c4-c8-answers.md`](reviews/2026-09-30-c4-c8-answers.md) and recorded as **D8**
 (a manual status change carries an optional note) and **D9** (the overview groups axes under topics).
 Neither needed a schema change; D9 shaped C4 and D8 is C8's write-side work.
+
+**Revised 2026-10-01 (D10)** — the neutral examples D6 called for are retired. The layout review needs
+the states an author would not choose (an axis inferred with no document behind it, an axis with work
+but no PR, an empty window), and neutral placeholders hid exactly those. The repo now renders a real
+**public** corpus — `ajegorovs/udv-echo-process`, seeded through the plugin's own action surface, no
+row hand-typed — so D6's intent survives and the screenshots stop being decorative. Pack:
+[`docs/corpus/README.md`](corpus/README.md).
 
 ## 8. Non-goals
 

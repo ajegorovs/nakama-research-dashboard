@@ -1,0 +1,284 @@
+[
+ {
+  "family": "(none)",
+  "head": "750be675f6e153ac7bfd452447f5e2228d4db428",
+  "lastCommitAt": "2026-09-29T09:39:05+03:00",
+  "name": "sa2-6-live-notebook-baseline"
+ },
+ {
+  "family": "(none)",
+  "head": "841964d41f8dc73e55d78303e79ed4098c00d700",
+  "lastCommitAt": "2026-09-28T18:22:45+03:00",
+  "name": "master"
+ },
+ {
+  "family": "docs",
+  "head": "410b3d7c2820a25d42847aef3e484ebcb6fd09ca",
+  "lastCommitAt": "2026-09-28T18:22:23+03:00",
+  "name": "docs/bringup-store-dir-lesson"
+ },
+ {
+  "family": "acquire",
+  "head": "62ff1e52878a62b7415ebac63aa0346e417bfad0",
+  "lastCommitAt": "2026-09-28T18:09:17+03:00",
+  "name": "acquire/refused-invocation-provenance"
+ },
+ {
+  "family": "docs",
+  "head": "0f01d9bb598d018f706c270cad433ad339206415",
+  "lastCommitAt": "2026-09-28T16:56:32+03:00",
+  "name": "docs/sa5-cross-interpretation-handoff"
+ },
+ {
+  "family": "feat",
+  "head": "a7dacb7ab95f8425bd6e1e1b127b8f4d8601a195",
+  "lastCommitAt": "2026-09-28T15:11:46+03:00",
+  "name": "feat/analysis-sa5-cross-sitting-publication"
+ },
+ {
+  "family": "docs",
+  "head": "5acb085a711e8dce4f692675f4498a1a94af2120",
+  "lastCommitAt": "2026-09-28T13:09:53+03:00",
+  "name": "docs/sa5-cross-sitting-artifact-schema"
+ },
+ {
+  "family": "feat",
+  "head": "3ca609be65be16ba807217da11e8abc85bf88c10",
+  "lastCommitAt": "2026-09-28T12:51:17+03:00",
+  "name": "feat/analysis-sa5-cross-sitting-backend"
+ },
+ {
+  "family": "docs",
+  "head": "2c0f80548e0872c2bdd78118357cce9121e242c9",
+  "lastCommitAt": "2026-09-28T11:38:00+03:00",
+  "name": "docs/sa5-repeat-context-amend"
+ },
+ {
+  "family": "docs",
+  "head": "2e8c6a786845e1fb0d3b018bb22cf1ddf9e9fda7",
+  "lastCommitAt": "2026-09-28T10:47:10+03:00",
+  "name": "docs/sa5-cross-sitting-prespec"
+ },
+ {
+  "family": "docs",
+  "head": "e8677f8fa8d43e28db4140a426ec006cf5c27fef",
+  "lastCommitAt": "2026-09-28T10:16:05+03:00",
+  "name": "docs/sa5-publication-closure"
+ },
+ {
+  "family": "feat",
+  "head": "804bd52861bc9e480119e4ef0f2bdb3c4e0a7958",
+  "lastCommitAt": "2026-09-28T10:11:25+03:00",
+  "name": "feat/analysis-sa5-publication"
+ },
+ {
+  "family": "feat",
+  "head": "ba2aef3d1c3ecdc9a9c15f1585ca9cdfecdc2092",
+  "lastCommitAt": "2026-09-28T00:51:41+03:00",
+  "name": "feat/analysis-sa5-within-sitting"
+ },
+ {
+  "family": "docs",
+  "head": "d741e103c98e38fa7126348e0d102e0a75111f67",
+  "lastCommitAt": "2026-09-27T22:44:44+03:00",
+  "name": "docs/sa5-prespec"
+ },
+ {
+  "family": "feat",
+  "head": "6513215af1810b77164e52ab1c6fc97e1832882b",
+  "lastCommitAt": "2026-09-27T21:18:58+03:00",
+  "name": "feat/analysis-sa2-scalar-report"
+ },
+ {
+  "family": "feat",
+  "head": "a8a2c7c4113b536dcd3027a6ce8ac3fc61cc7b91",
+  "lastCommitAt": "2026-09-27T13:29:16+03:00",
+  "name": "feat/analysis-sa2-characterization"
+ },
+ {
+  "family": "docs",
+  "head": "da28cad337adff6fe4093087b92af03404428d21",
+  "lastCommitAt": "2026-09-27T13:28:02+03:00",
+  "name": "docs/sa2-4-characterization"
+ },
+ {
+  "family": "docs",
+  "head": "9ad2482b347a56431388d54760e6ad62ebc76863",
+  "lastCommitAt": "2026-09-27T13:17:41+03:00",
+  "name": "docs/sa2-spectral-49-scalar-narrowing"
+ },
+ {
+  "family": "feat",
+  "head": "e17c662854f7164698feaa1b155b4a6301f17063",
+  "lastCommitAt": "2026-09-27T11:44:09+03:00",
+  "name": "feat/analysis-sa2-notebook"
+ },
+ {
+  "family": "docs",
+  "head": "14c16a1b7130d0455d879e06cf8729d0524b621b",
+  "lastCommitAt": "2026-09-27T10:45:08+03:00",
+  "name": "docs/sa2-3-notebook-preview-plan"
+ },
+ {
+  "family": "feat",
+  "head": "016f03d26f90a5005e96329c425de480d4a98be8",
+  "lastCommitAt": "2026-09-27T00:41:13+03:00",
+  "name": "feat/analysis-sa2-periodogram"
+ },
+ {
+  "family": "feat",
+  "head": "381f110cf8c8be5b507d1242d987fb7b84e3926e",
+  "lastCommitAt": "2026-09-26T23:59:22+03:00",
+  "name": "feat/analysis-sa2-admission"
+ },
+ {
+  "family": "feat",
+  "head": "7fc791834249a468f7c1c0bdbab54142974d5b68",
+  "lastCommitAt": "2026-09-26T23:02:57+03:00",
+  "name": "feat/analysis-sa2-design"
+ },
+ {
+  "family": "feat",
+  "head": "fb76ae62b250e54f92a02d9f31eed181c02be312",
+  "lastCommitAt": "2026-09-26T22:14:01+03:00",
+  "name": "feat/analysis-sa1-backend"
+ },
+ {
+  "family": "docs",
+  "head": "c80be5cdab08b8f4a2037612b28259aba230b9ec",
+  "lastCommitAt": "2026-09-25T19:13:26+03:00",
+  "name": "docs/emissions-control-plan"
+ },
+ {
+  "family": "feat",
+  "head": "67f756d558b1370600ba7b96928f80d1c8222d90",
+  "lastCommitAt": "2026-09-25T18:50:16+03:00",
+  "name": "feat/sparse-live-2-report"
+ },
+ {
+  "family": "docs",
+  "head": "dd9c7d3fda667891b8eb2cf876c11c8af53eb565",
+  "lastCommitAt": "2026-09-25T17:46:31+03:00",
+  "name": "docs/record-o4-sa1-in-flight"
+ },
+ {
+  "family": "docs",
+  "head": "d5d8595f35643fcada8209ffeeee2874fa3c1972",
+  "lastCommitAt": "2026-09-25T16:48:17+03:00",
+  "name": "docs/direction-review-disposition"
+ },
+ {
+  "family": "feat",
+  "head": "20aa415e3d8684b88a24228db191c1c8ef284a96",
+  "lastCommitAt": "2026-09-25T16:32:11+03:00",
+  "name": "feat/sparse-sa0-checkpoint"
+ },
+ {
+  "family": "docs",
+  "head": "d2e899f1e6dd0cecd9bd22ae225d9714a1192f77",
+  "lastCommitAt": "2026-09-25T16:27:56+03:00",
+  "name": "docs/acquisition-next-steps"
+ },
+ {
+  "family": "docs",
+  "head": "a08e9a63fc8eec0eaee0cc991fc52621fd1631bd",
+  "lastCommitAt": "2026-09-25T16:14:11+03:00",
+  "name": "docs/failed-invocation-provenance"
+ },
+ {
+  "family": "acquire",
+  "head": "b5d205faf8fc89416f66eb3922357bfd8e1067a9",
+  "lastCommitAt": "2026-09-25T16:07:38+03:00",
+  "name": "acquire/b6-stored-burst-verification"
+ },
+ {
+  "family": "feat",
+  "head": "08fac27fa63ab590105746e0c98c615445b04d34",
+  "lastCommitAt": "2026-09-25T15:00:32+03:00",
+  "name": "feat/b5-job-burst-transitions"
+ },
+ {
+  "family": "docs",
+  "head": "f4e4f050f5bf3655b0037759b58f5f829e8c803e",
+  "lastCommitAt": "2026-09-24T19:36:16+03:00",
+  "name": "docs/b4-burst-commissioning"
+ },
+ {
+  "family": "acquire",
+  "head": "09a18c69ff1c9a7a1e4908c4079176d2ad870e03",
+  "lastCommitAt": "2026-09-24T18:52:06+03:00",
+  "name": "acquire/burst-length-transition"
+ },
+ {
+  "family": "docs",
+  "head": "43c4a8743c901c2f8624cb846b52b250a6c059d6",
+  "lastCommitAt": "2026-09-24T18:19:59+03:00",
+  "name": "docs/sparse-signal-analysis-plan"
+ },
+ {
+  "family": "acquire",
+  "head": "ed28d54fbcd0952b8e34c925690c92bdcba5fd79",
+  "lastCommitAt": "2026-09-24T17:46:24+03:00",
+  "name": "acquire/sparse-mixer-live-2"
+ },
+ {
+  "family": "docs",
+  "head": "4e6dc4534c0cd97921eeb6b54fd18412312b5f69",
+  "lastCommitAt": "2026-09-24T16:49:39+03:00",
+  "name": "docs/agents-skill-refresh"
+ },
+ {
+  "family": "fix",
+  "head": "2d325b99c580811fda1a49692746c61b585199ba",
+  "lastCommitAt": "2026-09-24T16:40:13+03:00",
+  "name": "fix/stage2-report-lf-checkout"
+ },
+ {
+  "family": "analysis",
+  "head": "77f5c63db54c4bdb5e1aa9d56c4f1c1510ac282b",
+  "lastCommitAt": "2026-09-24T13:17:17+03:00",
+  "name": "analysis/stage2-evidence-corrections"
+ },
+ {
+  "family": "analysis",
+  "head": "21c3f24cbf99c2348ac004894d5db9ba411ee49e",
+  "lastCommitAt": "2026-09-21T19:59:02+03:00",
+  "name": "analysis/decision-e64-stage2"
+ },
+ {
+  "family": "analysis",
+  "head": "7a1049c7109a9cdac5d4909739b8428604131cf7",
+  "lastCommitAt": "2026-09-21T19:23:44+03:00",
+  "name": "analysis/stage2-pairs"
+ },
+ {
+  "family": "data",
+  "head": "87b3ac0cf45089e91621e227cbf9e4fdd84bbdc2",
+  "lastCommitAt": "2026-09-21T18:39:51+03:00",
+  "name": "data/stage2-e20-e64"
+ },
+ {
+  "family": "acquire",
+  "head": "d58c78e57b536c4bd9a26350762f92c86aa3d82f",
+  "lastCommitAt": "2026-09-21T17:51:12+03:00",
+  "name": "acquire/stage2-e20-e64-plan"
+ },
+ {
+  "family": "analysis",
+  "head": "36050a554329986a29403066b175f78f27757f52",
+  "lastCommitAt": "2026-09-21T17:36:28+03:00",
+  "name": "analysis/sparse-pass-ingest"
+ },
+ {
+  "family": "feat",
+  "head": "36a57eb8a8536785d5e98764a19130ec509bf5a0",
+  "lastCommitAt": "2026-09-21T13:28:07+03:00",
+  "name": "feat/acquire-sparse-run-plan"
+ },
+ {
+  "family": "docs",
+  "head": "9284c8e631a42509627c3a54909f9d9c694eda67",
+  "lastCommitAt": "2026-09-20T20:11:45+03:00",
+  "name": "docs/sparse-parameter-set"
+ }
+]

@@ -1,0 +1,77 @@
+{
+ "axes": {
+  "acquisition": 301,
+  "analysis": 249,
+  "docs+skills": 75
+ },
+ "axisRuleFile": "AXIS-RULE.md",
+ "branchFamilies": {
+  "(none)": 2,
+  "acquire": 5,
+  "analysis": 4,
+  "data": 1,
+  "docs": 19,
+  "feat": 15,
+  "fix": 1
+ },
+ "branches": 47,
+ "commits": 625,
+ "commitsPerWeekAxis": {
+  "2026-W31": {
+   "acquisition": 10,
+   "analysis": 0,
+   "docs+skills": 3
+  },
+  "2026-W34": {
+   "acquisition": 1,
+   "analysis": 1,
+   "docs+skills": 0
+  },
+  "2026-W37": {
+   "acquisition": 4,
+   "analysis": 38,
+   "docs+skills": 23
+  },
+  "2026-W38": {
+   "acquisition": 233,
+   "analysis": 58,
+   "docs+skills": 27
+  },
+  "2026-W39": {
+   "acquisition": 50,
+   "analysis": 117,
+   "docs+skills": 20
+  },
+  "2026-W40": {
+   "acquisition": 3,
+   "analysis": 35,
+   "docs+skills": 2
+  }
+ },
+ "corpus": "ajegorovs/udv-echo-process",
+ "firstCommit": "2026-07-28T10:56:58+03:00",
+ "head": "841964d41f8dc73e55d78303e79ed4098c00d700",
+ "headSubject": "Merge pull request #69 from ajegorovs/docs/bringup-store-dir-lesson",
+ "hygiene": "Git identities are reduced to opaque keys (sha1 of the address, first 8 hex); no name or address is present in this bundle.",
+ "identities": 3,
+ "judgementCallAssignments": 9,
+ "lastCommit": "2026-09-28T18:22:23+03:00",
+ "mergeCommits": 71,
+ "pulls": {
+  "closedUnmerged": 1,
+  "closedUnmergedNumbers": [
+   48
+  ],
+  "dateRange": [
+   "2026-09-17T20:59:07Z",
+   "2026-09-28T17:45:14Z"
+  ],
+  "merged": 66,
+  "open": 2,
+  "openNumbers": [
+   70,
+   68
+  ],
+  "total": 69
+ }
+}
