@@ -813,7 +813,9 @@ describe("the shipped skill matches the surface it promises (C9a)", () => {
   });
 
   test("promises no GitHub inspection — that is C9b/C11", () => {
-    expect(skill).not.toMatch(/inspect (the )?(repository|repositories|branch|PR)/i);
+    expect(skill).not.toMatch(
+      /inspect (the )?(repository|repositories|branch|PR)/i
+    );
     expect(skill).not.toMatch(/fetch (the )?(commits|PRs|pull requests)/i);
   });
 });
