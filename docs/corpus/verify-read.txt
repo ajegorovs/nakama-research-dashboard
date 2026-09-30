@@ -1,5 +1,5 @@
 # verify-plugin-page.mjs — read pass, dev instance at http://100.122.4.42:3003
-# generated: 2026-10-01T01:33:04+03:00
+# generated: 2026-10-01T01:39:18+03:00
 
 PASS  login — status 200
 corpus: {"axes":3,"blocked":0,"people":1,"repositories":1,"topic":"UDV Echo Process","windowEvents":30}
@@ -19,7 +19,7 @@ PASS  each topic card reports its recent-activity summary — Recent: 607 events
 PASS  the window control re-issues get_overview with the new window only — {"activitySinceDays":7}
 PASS  the page still renders after the window change
 SKIP  a card offers to expand when it hides axes — the topic leads with all 3 axes (LEAD_AXES is 3), so none are hidden
-PASS  opening a topic reads it once, in one get_topic call — saw 1: [{"topicId":"70250919-0606-4472-a9b3-68a90ddf71c0"}]
+PASS  opening a topic reads it once, in one get_topic call — saw 1: [{"topicId":"188f9bb1-8876-4868-a66a-dcc1c6d085ef"}]
 PASS  the expanded card renders the topic detail, one block per axis — 3 axes, detail block: true (payload holds 3)
 PASS  the detail shows the topic's fields, its notes and its activity separately — topic notes in payload 2 → rendered 2; activity rows 25
 PASS  each axis shows full metadata with its own state and per-claim confidence — Docs & agent skills — `docs/`, `.agents/skills`: conf=[confirmed,inferred] | Acquisition — `acquire/`, DOP3010 rig: conf=[confirmed,confirmed] | Signal analysis — `analysis/`, SA1–SA5, sparse: conf=[confirmed,confirmed]
