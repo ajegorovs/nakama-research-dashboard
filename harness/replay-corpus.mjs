@@ -81,7 +81,37 @@ const call = async (path, body, headers = {}) => {
   } catch {
     parsed = { raw: text.slice(0, 300) };
   }
-  return { body: parsed, status: response.status };
+  return { body: parsed, status: response.status, retryAfter: response.headers.get("retry-after") };
+};
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Nakama's newer releases rate-limit the action endpoint: a 695-call replay at ~11/s trips it around
+// call 600 with `429 Too many requests`, which is a property of the instance, not of the transcript.
+// A 429 (or a 503) is therefore retried with backoff — and the failure is *not* reported as "the
+// dataset is not this transcript", which is what it would look like without this.
+const postAction = async (path, body, headers, attempts = 6) => {
+  for (let attempt = 1; ; attempt += 1) {
+    let response;
+    try {
+      response = await call(path, body, headers);
+    } catch (error) {
+      if (attempt >= attempts) throw error;
+      await sleep(Math.min(250 * 2 ** attempt, 4000));
+      continue;
+    }
+    if ((response.status !== 429 && response.status !== 503) || attempt >= attempts) {
+      return response;
+    }
+    const header = Number(response.retryAfter);
+    const wait = Number.isFinite(header) && header > 0
+      ? header * 1000
+      : Math.min(500 * 2 ** attempt, 15_000);
+    console.log(
+      `  HTTP ${response.status} at attempt ${attempt} (rate limit) — waiting ${(wait / 1000).toFixed(1)}s`
+    );
+    await sleep(wait);
+  }
 };
 
 const rows = readFileSync(TRANSCRIPT, "utf8")
@@ -159,7 +189,7 @@ for (const [index, row] of rows.entries()) {
   if (input.people) {
     input.people = input.people.map((person) => ({ ...person, nakamaUserId: actorId }));
   }
-  const { body, status } = await call(
+  const { body, status } = await postAction(
     `/v1/plugins/${PLUGIN_ID}/actions/${row.action}`,
     { input },
     headers
@@ -169,7 +199,9 @@ for (const [index, row] of rows.entries()) {
     failures += 1;
     console.error(
       `\nFAILED  call ${START + index + 1} of ${rows.length} (${row.action}): HTTP ${status} ` +
-        `${JSON.stringify(result).slice(0, 400)}\n  input: ${JSON.stringify(input).slice(0, 600)}`
+        `${JSON.stringify(result).slice(0, 400)}\n  input: ${JSON.stringify(input).slice(0, 600)}` +
+        `\n  the calls before this one were accepted, so resume with:` +
+        `\n    bun harness/replay-corpus.mjs --force --start ${START + index}`
     );
     break;
   }

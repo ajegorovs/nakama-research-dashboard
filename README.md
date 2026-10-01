@@ -172,9 +172,7 @@ bun install
 NAKAMA_HOST=127.0.0.1 NAKAMA_PORT=4399 NAKAMA_CONFIG_DIR=/tmp/nakama-review \
 NAKAMA_SEED_ADMIN_EMAIL=admin@nakama.local NAKAMA_SEED_ADMIN_NAME=Admin \
 NAKAMA_SEED_ADMIN_PASSWORD=<pick-one> bun run apps/server/src/index.ts
-# and the dashboard web dev server in a second shell — plugin pages live inside it. Run vite from
-# apps/web directly: the root wrapper (apps/web/scripts/dev.ts) spawns vite with its own argv and drops
-# extra flags, and some checkouts do not expose a root `dev:web` script at all.
+# and the dashboard web dev server in a second shell — plugin pages live inside it:
 cd apps/web
 NAKAMA_SERVER_URL=http://127.0.0.1:4399 bun run vite --host 127.0.0.1 --port 3003
 
@@ -182,6 +180,12 @@ cd /path/to/this/repo
 bun install                                   # playwright-core
 node node_modules/playwright-core/cli.js install chromium   # or set PLAYWRIGHT_CHROMIUM to any chrome binary
 ```
+
+The checkout root also has a `dev:web` script (`bun run --filter @nakama/web dev`). It honours
+`NAKAMA_SERVER_URL`, but it *starts a server of its own* when that URL is not answering, and it passes
+no port flag to vite, so the web port is whatever `apps/web/vite.config.ts` says. The direct invocation
+above is the one that can be aimed at a specific instance on a port you pick — which is what running two
+datasets side by side needs.
 
 Install and enable the plugin with the env file — one command, which first checks the instance's catalog
 (the failure that means the `vendor/` step was skipped) and exits non-zero if it refuses:
@@ -198,21 +202,33 @@ cd /path/to/this/repo
 bun harness/install-plugin.mjs --env-file /tmp/nakama-review.env
 ```
 
+The same file feeds every script here (`NAKAMA_EMAIL` / `NAKAMA_PASSWORD`, plus `NAKAMA_URL` for the API
+and `NAKAMA_DASHBOARD` for the web origin). Arguing a flag through an npm script works the usual way —
+`bun run harness:read -- --env-file /tmp/nakama-review.env` — and if a script cannot find credentials it
+says which names it looked for and exits 2 rather than failing checks.
+
 **Corpus** (the real, public dataset) — seeded by replaying the committed transcript, which is the
 corpus's own record:
 
 ```bash
 bun harness/replay-corpus.mjs --env-file /tmp/nakama-review.env   # 695 calls, ~75 s
-bun run harness:read
-bun run harness:read -- --viewport 1280x800                       # the second reference width
+bun run harness:read -- --env-file /tmp/nakama-review.env
+bun run harness:read -- --env-file /tmp/nakama-review.env --viewport 1280x800   # the second reference width
 ```
+
+On a current checkout expect the replay to be *paced by the server*, not by the script: the action
+endpoint is rate-limited, and a full replay at ~11 calls/s draws `429 Too many requests` around call 600.
+The replayer backs off (honouring `Retry-After` when it is sent) and retries; if a call still fails it
+prints the exact resume command, and resuming is safe in the sense that it is *additive* — the calls
+before that point were already accepted and are not re-sent. A dataset seeded by two overlapping runs is
+the one thing the guard cannot see, so use `--force` only to resume.
 
 **Synthetic edge states** — on a *second* fresh instance, same env file pointed at it:
 
 ```bash
 bun harness/apply-layout-fixture.mjs --env-file /tmp/nakama-review.env
-bun run harness:fixture
-bun run harness:fixture -- --viewport 1280x800
+bun run harness:fixture -- --env-file /tmp/nakama-review.env
+bun run harness:fixture -- --env-file /tmp/nakama-review.env --viewport 1280x800
 ```
 
 Expected, as of the `pre-ux-v2` tag: corpus **42 pass · 0 fail · 7 skip** and fixture **49 · 0 · 0**, at

@@ -13,8 +13,8 @@
 #
 # Requires a Nakama instance with this plugin installed, its dashboard web dev server, playwright-core
 # (`bun install`) and a chromium — see README § "Run the acceptance pass". Credentials come from the
-# environment or --env-file, never from an argument, so they do not end up in shell history or a
-# committed file.
+# environment or --env-file (`NAKAMA_EMAIL` / `NAKAMA_PASSWORD`; the older `NAKAMA_DEV_*` spelling is
+# accepted too), never from an argument, so they do not end up in shell history or a committed file.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -107,8 +107,14 @@ export NAKAMA_DASHBOARD="${NAKAMA_DASHBOARD:-http://127.0.0.1:3003}"
 export NAKAMA_PLUGIN_ID="${NAKAMA_PLUGIN_ID:-research-dashboard}"
 export NAKAMA_PAGE_LABEL="${NAKAMA_PAGE_LABEL:-Research}"
 
-if [[ -z "${NAKAMA_DEV_EMAIL:-}" || -z "${NAKAMA_DEV_PASSWORD:-}" ]]; then
-  echo "read-pass: NAKAMA_DEV_EMAIL / NAKAMA_DEV_PASSWORD are not set — export them or pass --env-file" >&2
+# Credentials. NAKAMA_EMAIL / NAKAMA_PASSWORD are the names every script in harness/ uses, and the ones
+# the README's env file sets; the older NAKAMA_DEV_* pair is still accepted, because the estate wrapper
+# that calls this script exports both. The checker itself (verify-page.mjs) reads the DEV pair, so the
+# alias is exported for it rather than renaming the variable underneath it.
+export NAKAMA_DEV_EMAIL="${NAKAMA_DEV_EMAIL:-${NAKAMA_EMAIL:-}}"
+export NAKAMA_DEV_PASSWORD="${NAKAMA_DEV_PASSWORD:-${NAKAMA_PASSWORD:-}}"
+if [[ -z "$NAKAMA_DEV_EMAIL" || -z "$NAKAMA_DEV_PASSWORD" ]]; then
+  echo "read-pass: no credentials — set NAKAMA_EMAIL / NAKAMA_PASSWORD (or the NAKAMA_DEV_* pair), in the environment or in --env-file" >&2
   exit 2
 fi
 
