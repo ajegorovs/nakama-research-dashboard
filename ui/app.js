@@ -53,6 +53,10 @@ var VIEW_OPTIONS = [
   { label: "Repositories", value: "repositories" },
   { label: "Progress", value: "progress" }
 ];
+var PROGRESS_INDEX_OPTIONS = [
+  { label: "Axes", value: "axes" },
+  { label: "Problems", value: "problems" }
+];
 var LEAD_AXES = 3;
 var css = `
 [data-plugin-id="research-dashboard"] .rd-stack { display: grid; gap: 14px; }
@@ -158,6 +162,10 @@ var css = `
 }
 [data-plugin-id="research-dashboard"] .rd-window [aria-pressed="true"] { font-weight: 600; }
 [data-plugin-id="research-dashboard"] .rd-views [aria-pressed="true"] { font-weight: 600; }
+/* The Progress index's subject switch: a control over the left column, so it sits with it rather than in
+   the toolbar — the page it governs is the same page in both positions. */
+[data-plugin-id="research-dashboard"] .rd-progress-switch { margin-bottom: 10px; }
+[data-plugin-id="research-dashboard"] .rd-progress-switch [aria-pressed="true"] { font-weight: 600; }
 /* C7: the progress timeline — filters on one line, each axis a labelled rail. */
 [data-plugin-id="research-dashboard"] .rd-filters { flex-wrap: wrap; gap: 8px; }
 /* C8: the qualifier on a state is part of the claim, not decoration — quieter, never optional. */
@@ -1147,6 +1155,7 @@ function apply(ctx) {
   }) {
     const [selectedAxisId, setSelectedAxisId] = React.useState(null);
     const [selectedProblemId, setSelectedProblemId] = React.useState(null);
+    const [indexMode, setIndexMode] = React.useState("axes");
     const [topicFilter, setTopicFilter] = React.useState("all");
     const [personFilter, setPersonFilter] = React.useState("all");
     const [repositoryFilter, setRepositoryFilter] = React.useState("all");
@@ -1161,11 +1170,17 @@ function apply(ctx) {
     const eventCount = groups.reduce((total, group) => total + group.axes.reduce((sum, bucket) => sum + bucket.events.length, 0), 0);
     const filtered = topicFilter !== "all" || personFilter !== "all" || repositoryFilter !== "all" || stateFilter !== "all";
     const axisRows = progress?.axes.axes ?? [];
-    const activeAxis = axisRows.find((row) => row.id === selectedAxisId) ?? axisRows[0] ?? null;
-    const axisProblems = (progress?.problems.problems ?? []).filter((row) => row.axisId === activeAxis?.id);
+    const problemRows = progress?.problems.problems ?? [];
+    const problemsMode = indexMode === "problems";
+    const selectedAxisRow = axisRows.find((row) => row.id === selectedAxisId) ?? null;
+    const chosenProblem = selectedProblemId ? problemRows.find((row) => row.id === selectedProblemId) ?? null : null;
+    const axesModeAxis = selectedAxisRow ?? axisRows[0] ?? null;
+    const axesModeProblems = problemRows.filter((row) => row.axisId === axesModeAxis?.id);
+    const shownProblem = problemsMode ? chosenProblem ?? problemRows[0] ?? null : chosenProblem && chosenProblem.axisId === axesModeAxis?.id ? chosenProblem : axesModeProblems.filter((row) => row.state === "open")[0] ?? axesModeProblems[0] ?? null;
+    const parentAxisOfShownProblem = shownProblem === null ? null : axisRows.find((row) => row.id === shownProblem.axisId) ?? null;
+    const activeAxis = problemsMode ? parentAxisOfShownProblem ?? axesModeAxis : axesModeAxis;
+    const axisProblems = problemRows.filter((row) => row.axisId === activeAxis?.id);
     const openAxisProblems = axisProblems.filter((row) => row.state === "open");
-    const chosenProblem = selectedProblemId ? axisProblems.find((row) => row.id === selectedProblemId) ?? null : null;
-    const shownProblem = chosenProblem ?? openAxisProblems[0] ?? axisProblems[0] ?? null;
     const feed = (progress?.activity.byAxis ?? []).find((bucket) => bucket.axisId === activeAxis?.id) ?? null;
     const axisPlan = activeAxis?.plan ?? null;
     const planClaimsOrder = axisPlan?.steps.some((step) => step.position !== null) ?? false;
@@ -1196,19 +1211,74 @@ function apply(ctx) {
       parts.push(`last activity ${describeAge(problem.recencyAt)}`);
       return parts.join(" · ");
     }
+    function indexProblemContext(problem) {
+      return `${problem.axisTitle} · ${problem.topicName} · ${problemContext(problem)}`;
+    }
+    function switchIndex(next) {
+      if (next === indexMode) {
+        return;
+      }
+      if (next === "problems") {
+        setSelectedProblemId(chosenProblem?.id ?? openAxisProblems[0]?.id ?? axisProblems[0]?.id ?? null);
+      } else if (shownProblem) {
+        setSelectedAxisId(shownProblem.axisId);
+      }
+      setIndexMode(next);
+    }
     return /* @__PURE__ */ React.createElement("div", {
       className: "rd-stack",
       "data-rd-view": "progress"
     }, /* @__PURE__ */ React.createElement("div", {
+      "aria-label": "Progress index",
+      className: "rd-cluster rd-progress-switch",
+      "data-rd-progress-switch": "true",
+      "data-rd-progress-subview": indexMode,
+      role: "group"
+    }, PROGRESS_INDEX_OPTIONS.map((option) => /* @__PURE__ */ React.createElement(Button, {
+      "aria-pressed": option.value === indexMode,
+      "data-rd-progress-subview-option": option.value,
+      key: option.value,
+      onClick: () => switchIndex(option.value),
+      size: "sm",
+      variant: "outline"
+    }, option.label))), /* @__PURE__ */ React.createElement("div", {
       className: "rd-split rd-progress-top",
       "data-rd-progress-top": "true"
     }, /* @__PURE__ */ React.createElement("div", {
       className: "rd-progress-index",
       "data-rd-progress-index": "true",
-      "data-rd-progress-index-rows": (progress?.axes.axes ?? []).length,
+      "data-rd-progress-index-mode": indexMode,
+      "data-rd-progress-index-rows": (problemsMode ? problemRows : axisRows).length,
       "data-rd-progress-index-stale-after": progress?.axes.staleAfterDays ?? 0,
       "data-rd-progress-index-window": progress?.axes.activitySinceDays ?? 0
-    }, /* @__PURE__ */ React.createElement("ul", {
+    }, problemsMode ? /* @__PURE__ */ React.createElement("ul", {
+      className: "rd-index",
+      "data-rd-problem-index-list": problemRows.length
+    }, problemRows.map((problem) => /* @__PURE__ */ React.createElement("li", {
+      key: problem.id
+    }, /* @__PURE__ */ React.createElement("button", {
+      "aria-pressed": shownProblem?.id === problem.id,
+      className: "rd-index-item",
+      "data-rd-problem-index": problem.id,
+      "data-rd-problem-index-axis": problem.axisId,
+      "data-rd-problem-index-state": problem.state,
+      "data-rd-problem-index-topic": problem.topicName,
+      onClick: () => {
+        setSelectedProblemId(problem.id);
+        setSelectedAxisId(problem.axisId);
+      },
+      type: "button"
+    }, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-cluster"
+    }, /* @__PURE__ */ React.createElement(StateBadge, {
+      confidence: problem.stateConfidence,
+      state: problem.state
+    }), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-strong"
+    }, problem.statement)), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta",
+      "data-rd-problem-index-context": "true"
+    }, indexProblemContext(problem)))))) : /* @__PURE__ */ React.createElement("ul", {
       className: "rd-index"
     }, (progress?.axes.axes ?? []).map((row) => /* @__PURE__ */ React.createElement("li", {
       key: row.id
@@ -1231,23 +1301,30 @@ function apply(ctx) {
     }, /* @__PURE__ */ React.createElement(StateBadge, {
       confidence: row.stateConfidence,
       state: row.state
-    }), ` · ${row.topicName} · ${problemCountLine(row)} · ${row.stale ? "stale · " : ""}last activity ${describeAge(row.recencyAt)}`))))), progress && progress.axes.axes.length === 0 ? /* @__PURE__ */ React.createElement("p", {
+    }), ` · ${row.topicName} · ${problemCountLine(row)} · ${row.stale ? "stale · " : ""}last activity ${describeAge(row.recencyAt)}`))))), problemsMode && problemRows.length === 0 ? /* @__PURE__ */ React.createElement("p", {
+      className: "rd-muted",
+      "data-rd-problem-index-empty": "true"
+    }, "No problems yet.") : null, !problemsMode && progress && progress.axes.axes.length === 0 ? /* @__PURE__ */ React.createElement("p", {
       className: "rd-muted",
       "data-rd-progress-index-empty": "true"
     }, "No axes yet.") : null), /* @__PURE__ */ React.createElement("div", {
       className: "rd-progress-problem",
       "data-rd-progress-problem-axis": activeAxis?.id ?? "",
+      "data-rd-progress-problem-mode": indexMode,
       "data-rd-progress-problem-open": activeAxis?.openProblems ?? 0,
       "data-rd-progress-problem-shown": shownProblem?.id ?? ""
     }, /* @__PURE__ */ React.createElement("h3", {
       className: "rd-strong"
-    }, `Open problems (${activeAxis?.openProblems ?? 0})`), activeAxis === null ? /* @__PURE__ */ React.createElement("p", {
+    }, problemsMode ? "Problem" : `Open problems (${activeAxis?.openProblems ?? 0})`), problemsMode && shownProblem ? /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta",
+      "data-rd-problem-parent": "true"
+    }, indexProblemContext(shownProblem)) : null, activeAxis === null && !problemsMode ? /* @__PURE__ */ React.createElement("p", {
       className: "rd-muted",
       "data-rd-progress-problem-empty": "true"
     }, "No axis is selected.") : shownProblem === null ? /* @__PURE__ */ React.createElement("p", {
       className: "rd-muted",
       "data-rd-progress-problem-empty": "true"
-    }, "Nothing is recorded against this axis.") : /* @__PURE__ */ React.createElement("div", {
+    }, problemsMode ? "No problem is recorded yet." : "Nothing is recorded against this axis.") : /* @__PURE__ */ React.createElement("div", {
       className: "rd-problem-card",
       "data-rd-problem": shownProblem.id
     }, /* @__PURE__ */ React.createElement("div", {
@@ -1267,10 +1344,14 @@ function apply(ctx) {
     }, shownProblem.people.map((person) => person.displayName).join(", ")) : null)), /* @__PURE__ */ React.createElement("div", {
       className: "rd-progress-activity",
       "data-rd-progress-feed-axis": activeAxis?.id ?? "",
-      "data-rd-progress-feed-count": feed?.eventCount ?? 0
+      "data-rd-progress-feed-count": feed?.eventCount ?? 0,
+      "data-rd-progress-feed-mode": indexMode
     }, /* @__PURE__ */ React.createElement("h3", {
       className: "rd-strong"
-    }, `Activity (${activeAxis?.activityInWindow ?? 0})`), feed === null || feed.events.length === 0 ? /* @__PURE__ */ React.createElement("p", {
+    }, `Activity (${activeAxis?.activityInWindow ?? 0})`), problemsMode && activeAxis ? /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta",
+      "data-rd-progress-feed-parent": "true"
+    }, `on ${activeAxis.title}`) : null, feed === null || feed.events.length === 0 ? /* @__PURE__ */ React.createElement("p", {
       className: "rd-muted",
       "data-rd-progress-feed-empty": "true"
     }, "Nothing recorded against this axis in this window.") : /* @__PURE__ */ React.createElement("ul", {

@@ -338,6 +338,8 @@ type ProgressProblemRow = {
   activityCount: number;
   authorType: "agent" | "human";
   axisId: string;
+  /** The parent axis's title — the problem index's context line names it rather than looking the axis up. */
+  axisTitle: string;
   evidence: ProgressEvidence[];
   id: string;
   people: Array<{ displayName: string; id: string }>;
@@ -350,6 +352,7 @@ type ProgressProblemRow = {
   stateConfidence: Confidence;
   statement: string;
   steering: ProgressSteering[];
+  topicName: string;
 };
 
 /**
@@ -529,6 +532,19 @@ const VIEW_OPTIONS = [
 
 type ViewName = (typeof VIEW_OPTIONS)[number]["value"];
 
+/**
+ * The Progress index's two subjects. `Axes` is the slice's original index; `Problems` inverts the
+ * projection so the concrete problem — not the axis that owns it — is what the reader navigates. Both
+ * render the **same** `get_progress` payload, so this is a switch over one model rather than a second view:
+ * no request, no write, and the reading surface, sections and Activity feed are the ones already built.
+ */
+const PROGRESS_INDEX_OPTIONS = [
+  { label: "Axes", value: "axes" },
+  { label: "Problems", value: "problems" },
+] as const;
+
+type ProgressIndexMode = (typeof PROGRESS_INDEX_OPTIONS)[number]["value"];
+
 /** How many axes a collapsed card leads with — "then 2–4 most relevant axes". */
 const LEAD_AXES = 3;
 
@@ -636,6 +652,10 @@ const css = `
 }
 [data-plugin-id="research-dashboard"] .rd-window [aria-pressed="true"] { font-weight: 600; }
 [data-plugin-id="research-dashboard"] .rd-views [aria-pressed="true"] { font-weight: 600; }
+/* The Progress index's subject switch: a control over the left column, so it sits with it rather than in
+   the toolbar — the page it governs is the same page in both positions. */
+[data-plugin-id="research-dashboard"] .rd-progress-switch { margin-bottom: 10px; }
+[data-plugin-id="research-dashboard"] .rd-progress-switch [aria-pressed="true"] { font-weight: 600; }
 /* C7: the progress timeline — filters on one line, each axis a labelled rail. */
 [data-plugin-id="research-dashboard"] .rd-filters { flex-wrap: wrap; gap: 8px; }
 /* C8: the qualifier on a state is part of the claim, not decoration — quieter, never optional. */
@@ -2095,6 +2115,12 @@ export function apply(ctx: Context) {
      * the projection's first open problem for the selected axis, so this holds "the reader chose otherwise".
      */
     const [selectedProblemId, setSelectedProblemId] = React.useState<string | null>(null);
+    /**
+     * Which index the left column renders. `Axes` is the Progress slice's own index; `Problems` inverts the
+     * projection so the reader navigates the concrete problems. One payload serves both, so this is a switch
+     * over one model — never a second view with its own query.
+     */
+    const [indexMode, setIndexMode] = React.useState<ProgressIndexMode>("axes");
     const [topicFilter, setTopicFilter] = React.useState("all");
     const [personFilter, setPersonFilter] = React.useState("all");
     const [repositoryFilter, setRepositoryFilter] = React.useState("all");
@@ -2141,28 +2167,51 @@ export function apply(ctx: Context) {
       repositoryFilter !== "all" ||
       stateFilter !== "all";
 
-    // ---- the selected axis, and the two columns that follow it -----------------------------------------
-    // Defaulting to the projection's own first row is not a ranking: the index arrives ordered by attention,
-    // so the axis most in need of a reader is already first. Selection changes which row is active; it does
-    // not change the order, and nothing here re-sorts anything.
+    // ---- the index's subject, and the two columns that follow it ---------------------------------------
+    // One payload, two indexes. Row sets, order, states, counts and staleness all come from the server in
+    // both, and switching between them changes selection and nothing else — no call, no write, and no
+    // re-derivation of anything the projection already decided.
+    //
+    // Defaulting to the projection's own first row is not a ranking: the axis index arrives ordered by
+    // attention, so the axis most in need of a reader is already first. Selection changes which row is
+    // active; it does not change the order, and nothing here re-sorts anything.
     const axisRows = progress?.axes.axes ?? [];
-    const activeAxis =
-      axisRows.find((row) => row.id === selectedAxisId) ?? axisRows[0] ?? null;
+    const problemRows = progress?.problems.problems ?? [];
+    const problemsMode = indexMode === "problems";
+    const selectedAxisRow = axisRows.find((row) => row.id === selectedAxisId) ?? null;
+    /** The reader's own problem pick, or the problem they picked on the axis it belongs to. */
+    const chosenProblem: ProgressProblemRow | null = selectedProblemId
+      ? (problemRows.find((row) => row.id === selectedProblemId) ?? null)
+      : null;
+    const axesModeAxis: ProgressAxisRow | null = selectedAxisRow ?? axisRows[0] ?? null;
+    const axesModeProblems = problemRows.filter((row) => row.axisId === axesModeAxis?.id);
+    // `Problems` mode shows the reader's own pick if they made one and otherwise the projection's first
+    // problem row — the same "the page never opens on a choice it invented" rule the axis index uses.
+    // `Axes` mode keeps steps 1–5's rule exactly: the pick when it belongs to this axis, else the first
+    // *open* problem in the projection's order, else the axis's first problem whatever its state.
+    const shownProblem: ProgressProblemRow | null = problemsMode
+      ? (chosenProblem ?? problemRows[0] ?? null)
+      : chosenProblem && chosenProblem.axisId === axesModeAxis?.id
+        ? chosenProblem
+        : (axesModeProblems.filter((row) => row.state === "open")[0] ??
+          axesModeProblems[0] ??
+          null);
+    // In `Axes` the columns follow the selected axis. In `Problems` the axis follows the problem on screen,
+    // so the card, the plan, the sections and the Activity feed all describe that problem's own parent
+    // context — read off the projection's relations, never re-derived in the markup. With no problem on
+    // screen (a dataset that has none) there is nothing to follow and the axis selection stands.
+    const parentAxisOfShownProblem: ProgressAxisRow | null =
+      shownProblem === null
+        ? null
+        : (axisRows.find((row) => row.id === shownProblem.axisId) ?? null);
+    const activeAxis: ProgressAxisRow | null = problemsMode
+      ? (parentAxisOfShownProblem ?? axesModeAxis)
+      : axesModeAxis;
     // The axis's own problems, taken from the projection's list in the projection's order. The *count* in the
     // heading is the server's (`activeAxis.openProblems`), and the rows are the server's rows: a test asserts
     // the two agree, so a heading can never overstate what it lists.
-    const axisProblems = (progress?.problems.problems ?? []).filter(
-      (row) => row.axisId === activeAxis?.id
-    );
+    const axisProblems = problemRows.filter((row) => row.axisId === activeAxis?.id);
     const openAxisProblems = axisProblems.filter((row) => row.state === "open");
-    // No invented priority, per the reviewer's rule: the first *open* problem in the projection's own order is
-    // shown, and every other one is listed beside it and one click away. Selecting one only changes which is
-    // displayed.
-    const chosenProblem: ProgressProblemRow | null = selectedProblemId
-      ? (axisProblems.find((row) => row.id === selectedProblemId) ?? null)
-      : null;
-    const shownProblem: ProgressProblemRow | null =
-      chosenProblem ?? openAxisProblems[0] ?? axisProblems[0] ?? null;
     // The server already grouped the window by axis and put the groups in the index's order, so the page
     // looks a bucket up rather than filtering a flat list to decide what belongs to this axis.
     const feed =
@@ -2215,6 +2264,42 @@ export function apply(ctx: Context) {
       return parts.join(" · ");
     }
 
+    /**
+     * The problem index's context line: where the problem sits first (parent axis, topic), then the same
+     * compact context the axis inventory's rows already carry. Reusing `problemContext` is deliberate — one
+     * phrasing of one set of facts, so the two lists cannot describe the same problem differently.
+     */
+    function indexProblemContext(problem: ProgressProblemRow): string {
+      return `${problem.axisTitle} · ${problem.topicName} · ${problemContext(problem)}`;
+    }
+
+    /**
+     * Switching the index's subject. Two explicit rules, neither of which invents a selection:
+     *
+     *  - `Axes → Problems` keeps the reader where they were: their own problem pick if they made one, else
+     *    the first **open** problem of the axis on screen in the projection's order (the rule the axis
+     *    index's own default already uses), else that axis's first problem whatever its state, else nothing —
+     *    a dataset with no problem has no bridge to preserve.
+     *  - `Problems → Axes` selects the problem's parent axis, so the axis index marks the row the page is
+     *    actually showing.
+     *
+     * Nothing else happens: no action is called, no state is written server-side, and the payload is not
+     * re-read. The switch is the whole of it.
+     */
+    function switchIndex(next: ProgressIndexMode) {
+      if (next === indexMode) {
+        return;
+      }
+      if (next === "problems") {
+        setSelectedProblemId(
+          chosenProblem?.id ?? openAxisProblems[0]?.id ?? axisProblems[0]?.id ?? null
+        );
+      } else if (shownProblem) {
+        setSelectedAxisId(shownProblem.axisId);
+      }
+      setIndexMode(next);
+    }
+
     return (
       <div className="rd-stack" data-rd-view="progress">
         {/*
@@ -2223,29 +2308,91 @@ export function apply(ctx: Context) {
          * in one wrapping row, so below a reading width they stack in semantic order (Problem, then Activity,
          * per interaction-spec §13) rather than squeezing into columns that no longer fit.
          */}
+        {/*
+         * The index's subject — `Axes | Problems`. This is a **switch**, not a view: both positions render
+         * the same `get_progress` payload, so it issues no call, writes nothing, and preserves selection
+         * across the two wherever the problem↔axis relation makes the bridge explicit (`switchIndex`).
+         * It sits with the column it governs rather than in the toolbar, because the page below it is the
+         * same page in both positions.
+         */}
+        <div
+          aria-label="Progress index"
+          className="rd-cluster rd-progress-switch"
+          data-rd-progress-switch="true"
+          data-rd-progress-subview={indexMode}
+          role="group"
+        >
+          {PROGRESS_INDEX_OPTIONS.map((option) => (
+            <Button
+              aria-pressed={option.value === indexMode}
+              data-rd-progress-subview-option={option.value}
+              key={option.value}
+              onClick={() => switchIndex(option.value)}
+              size="sm"
+              variant="outline"
+            >
+              {option.label}
+            </Button>
+          ))}
+        </div>
+
         <div className="rd-split rd-progress-top" data-rd-progress-top="true">
         {/*
-         * The axis index — this slice's one new element, rendered straight from `get_progress.axes.axes`.
+         * The index — rendered straight from `get_progress`, in one of its two subjects.
          *
-         * Server order is the presentation order: no re-sorting, no re-grouping, no client-side recomputation
-         * of `stale` or of either problem count. The row's two numbers and its stale flag are read off the
-         * projection; only their phrasing is decided here.
+         * `Axes` (the default): server order is the presentation order — no re-sorting, no re-grouping, no
+         * client-side recomputation of `stale` or of either problem count. The row's two numbers and its
+         * stale flag are read off the projection; only their phrasing is decided here.
          *
-         * Selection marks a row active and does nothing else — it filters nothing, because nothing on this
-         * view reads the selection until the Problem and Activity columns arrive. The index is a projection
+         * `Problems`: the projection inverted — the concrete problem becomes the navigation object, and the
+         * rows are the server's problem list in the server's order, each carrying its own state, parent
+         * axis, topic and recency. Picking one drives the *same* reading surface, sections and feed the axis
+         * index drives. Nothing is recomputed, and nothing is written.
+         *
+         * Selection marks a row active and does nothing else — it filters nothing. The index is a projection
          * renderer, not a second model.
-         *
-         * Geometry note: the contract puts this index on the left with Problem + Activity beside it. There is
-         * nothing to put beside it yet, so it sits above the window's existing content; the split is the next
-         * step's layout work, not a decision taken here.
          */}
         <div
           className="rd-progress-index"
           data-rd-progress-index="true"
-          data-rd-progress-index-rows={(progress?.axes.axes ?? []).length}
+          data-rd-progress-index-mode={indexMode}
+          data-rd-progress-index-rows={(problemsMode ? problemRows : axisRows).length}
           data-rd-progress-index-stale-after={progress?.axes.staleAfterDays ?? 0}
           data-rd-progress-index-window={progress?.axes.activitySinceDays ?? 0}
         >
+          {problemsMode ? (
+            <ul className="rd-index" data-rd-problem-index-list={problemRows.length}>
+              {problemRows.map((problem) => (
+                <li key={problem.id}>
+                  <button
+                    /* The problem the reading surface is showing, by the same active-row rule the axis index uses. */
+                    aria-pressed={shownProblem?.id === problem.id}
+                    className="rd-index-item"
+                    data-rd-problem-index={problem.id}
+                    data-rd-problem-index-axis={problem.axisId}
+                    data-rd-problem-index-state={problem.state}
+                    data-rd-problem-index-topic={problem.topicName}
+                    onClick={() => {
+                      setSelectedProblemId(problem.id);
+                      setSelectedAxisId(problem.axisId);
+                    }}
+                    type="button"
+                  >
+                    <div className="rd-cluster">
+                      <StateBadge
+                        confidence={problem.stateConfidence}
+                        state={problem.state as ProblemState}
+                      />
+                      <span className="rd-strong">{problem.statement}</span>
+                    </div>
+                    <span className="rd-meta" data-rd-problem-index-context="true">
+                      {indexProblemContext(problem)}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
           <ul className="rd-index">
             {(progress?.axes.axes ?? []).map((row) => (
               <li key={row.id}>
@@ -2278,7 +2425,13 @@ export function apply(ctx: Context) {
               </li>
             ))}
           </ul>
-          {progress && progress.axes.axes.length === 0 ? (
+          )}
+          {problemsMode && problemRows.length === 0 ? (
+            <p className="rd-muted" data-rd-problem-index-empty="true">
+              No problems yet.
+            </p>
+          ) : null}
+          {!problemsMode && progress && progress.axes.axes.length === 0 ? (
             <p className="rd-muted" data-rd-progress-index-empty="true">
               No axes yet.
             </p>
@@ -2286,27 +2439,40 @@ export function apply(ctx: Context) {
         </div>
 
         {/*
-         * The central Problem column. The heading's number is the projection's own `openProblems` for this
-         * axis; the card below it is the first open problem *in the projection's order* — no recency ranking,
-         * no activity-count ranking, no repository-count ranking — and the remaining ones are listed and
-         * selectable, which is the whole of the selection rule.
+         * The central Problem column — the reading surface, in both index modes, from one set of components.
+         *
+         * `Axes`: the heading's number is the projection's own `openProblems` for this axis, and the card is
+         * the first open problem *in the projection's order* — no recency ranking, no activity-count ranking,
+         * no repository-count ranking — with the remaining ones listed and selectable.
+         *
+         * `Problems`: the card is the problem the index selected, which may be closed out, so a count of open
+         * problems would describe something the card is not showing. The heading names what the card is, and
+         * a context line says where the problem sits.
          */}
         <div
           className="rd-progress-problem"
           data-rd-progress-problem-axis={activeAxis?.id ?? ""}
+          data-rd-progress-problem-mode={indexMode}
           data-rd-progress-problem-open={activeAxis?.openProblems ?? 0}
           data-rd-progress-problem-shown={shownProblem?.id ?? ""}
         >
           <h3 className="rd-strong">
-            {`Open problems (${activeAxis?.openProblems ?? 0})`}
+            {problemsMode ? "Problem" : `Open problems (${activeAxis?.openProblems ?? 0})`}
           </h3>
-          {activeAxis === null ? (
+          {problemsMode && shownProblem ? (
+            <span className="rd-meta" data-rd-problem-parent="true">
+              {indexProblemContext(shownProblem)}
+            </span>
+          ) : null}
+          {activeAxis === null && !problemsMode ? (
             <p className="rd-muted" data-rd-progress-problem-empty="true">
               No axis is selected.
             </p>
           ) : shownProblem === null ? (
             <p className="rd-muted" data-rd-progress-problem-empty="true">
-              Nothing is recorded against this axis.
+              {problemsMode
+                ? "No problem is recorded yet."
+                : "Nothing is recorded against this axis."}
             </p>
           ) : (
             <div className="rd-problem-card" data-rd-problem={shownProblem.id}>
@@ -2336,15 +2502,25 @@ export function apply(ctx: Context) {
          * The Activity column: the server's bucket for this axis, newest first, rendered with the same line
          * the grouped view below uses. The count in the heading is the axis row's `activityInWindow`, which
          * the projection computes from the same predicate as the bucket's `eventCount`.
+         *
+         * In `Problems` the bucket is the problem's **parent axis**, so the column says which axis it is
+         * showing rather than letting the reader assume the feed is the problem's own events. It is the
+         * projection's bucket either way — the markup does not reconstruct what belongs to what.
          */}
         <div
           className="rd-progress-activity"
           data-rd-progress-feed-axis={activeAxis?.id ?? ""}
           data-rd-progress-feed-count={feed?.eventCount ?? 0}
+          data-rd-progress-feed-mode={indexMode}
         >
           <h3 className="rd-strong">
             {`Activity (${activeAxis?.activityInWindow ?? 0})`}
           </h3>
+          {problemsMode && activeAxis ? (
+            <span className="rd-meta" data-rd-progress-feed-parent="true">
+              {`on ${activeAxis.title}`}
+            </span>
+          ) : null}
           {feed === null || feed.events.length === 0 ? (
             <p className="rd-muted" data-rd-progress-feed-empty="true">
               Nothing recorded against this axis in this window.

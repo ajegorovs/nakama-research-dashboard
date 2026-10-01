@@ -244,6 +244,17 @@ and `NAKAMA_DASHBOARD` for the web origin). Arguing a flag through an npm script
 `bun run harness:read -- --env-file /tmp/nakama-review.env` — and if a script cannot find credentials it
 says which names it looked for and exits 2 rather than failing checks.
 
+**Serving a new build.** `install-plugin.mjs` installs and enables; it does not serve changed bytes. After
+`bun run build` and `vendor/vendor-into-nakama.sh`, mint a release from the vendored checkout with:
+
+```bash
+bun run harness:reinstall -- --env-file /tmp/nakama-review.env
+```
+
+It reads the installed revision, reinstalls with it as the guard, and prints the version change — or says so
+plainly when the vendored bytes are identical to the release already installed, which is the case where a pass
+would otherwise silently measure the previous build.
+
 **Corpus** (the real, public dataset) — seeded by replaying the committed transcript, which is the
 corpus's own record:
 
@@ -275,13 +286,19 @@ it is re-runnable without duplicating itself, and it **does not move the counts 
 internally (activities, annotations and plan-step links cannot name a problem created in the same transaction,
 and row ids are server-generated); the applier reads the ids back and does the referencing pass second.
 
-Expected as of U4's step 5, on **separate instances** — a corpus-only one and an isolated fixture-only one:
-corpus **52 pass · 0 fail · 26 skip** and fixture **80 · 0 · 0**, at both viewports. The corpus figure is new.
-The record before it (**43 · 0 · 7** out of 50 checks) was taken against the **shared dev instance**, which is
+Expected as of U4's step 6, on **separate instances** — a corpus-only one and an isolated fixture-only one:
+corpus **56 pass · 0 fail · 30 skip** and fixture **87 · 0 · 0**, at both viewports. Step 6 added seven checks
+(the `Axes | Problems` switch: the control and its default, the problem index against the projection's own list
+and order, the same reading surface and parent-axis follow-through when one is picked, the sections rendering
+from that same problem object, the parent-axis bridge back to `Axes`, and — on both datasets — that switching
+issues **no** action call and leaves the live payload identical, which is what makes it a switch over one model
+rather than a second view). The corpus exercises four of those and skips the three that need a problem row.
+The record before it, at U4's step 5: corpus **52 · 0 · 26** and fixture **80 · 0 · 0**. The corpus record
+before *that* (**43 · 0 · 7** out of 50 checks) was taken against the **shared dev instance**, which is
 not corpus-only — a corpus pass there reads the fixture's topic next to the corpus one (6 axes / 2 people / 3
-repositories) — and it predates steps 3–5's checks, so it is superseded rather than re-derived. The 26 skips
+repositories) — and it predates steps 3–5's checks, so it is superseded rather than re-derived. The 30 skips
 are the checks a corpus with **no problem rows and no plan** cannot exercise; each prints its reason, and
-"0 failed" never hides "26 never exercised".
+"0 failed" never hides "30 never exercised".
 (Before U1 it was 42 and 49 — U1 added one check, "every axis state the payload carries
 reaches the page as that state", and the `abandoned` fixture axis it needs. U4's step 1 added the Progress
 window check, taking the fixture pass to 51; step 2 added six that compare the three-column composition and
@@ -292,7 +309,11 @@ asserted step 2's inline list, which that column no longer holds — taking it t
 the three supporting sections, the two repository tags that must both navigate, and the cases each section must
 not show, plus one guard that the subject axis is real — taking it to **80**. The pass then swapped one check
 for another (the closed-out precondition folded into the conditional that replaced it; a new precondition that
-the `get_progress` payload carries all three halves the page reads), so the total stays **80**, not 81.) The
+the `get_progress` payload carries all three halves the page reads), so the total stays **80**, not 81. Step 6
+added seven for the `Axes | Problems` switch — the control and its default, the problem index against the
+projection's own list and order, the reading surface and parent-axis follow-through when one is picked, the
+sections rendering from that same problem object, the parent-axis bridge back to `Axes`, and the two
+dataset-independent claims (no action call, identical payload) — taking it to **87**.) The
 counts move
 whenever a check is added, so read the run's own summary line rather than a number in a document. Each run
 writes its transcript to

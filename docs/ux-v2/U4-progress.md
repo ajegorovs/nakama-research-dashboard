@@ -454,16 +454,23 @@ context line is the problem's own fields, phrased: its repositories (or `no repo
 where it names one, its event count, and its recency using the same timestamp that sorts it.
 
 **Two cases the section must not show.** *Closed-out problems:* the fixture gained one on Fixture E's axis —
-created and then moved to `resolved` through `transitions[]`, since a problem's state changes only that way —
-so the axis now carries **4 problems, 3 open**. The check asserts that case exists before asserting the
-inventory has 3 rows, which is what keeps "open only" from passing on a dataset with nothing to leak.
+created and then moved to `resolved` through `transitions[]`, since a problem's state changes only that way — so
+that axis carries **3 problems, 2 open** (the pass's own line reads `1 closed-out of 3 problem(s) on the axis;
+2 row(s) for 2 open`). The check asserts that case exists before asserting the inventory lists every open one,
+which is what keeps "open only" from passing on a dataset with nothing to leak.
+(**Corrected at step 6:** this section first read *4 problems, 3 open*, which was true of the instance stepping
+4 measured — that instance had been through the layout applier twice, and the pre-step-5 applier duplicated a
+problem on re-apply. Step 5's idempotency fix removed the duplicate, so a fresh apply gives 3/2, and the
+harness's skip reason that repeated the old number is corrected with it. The measured claim — one closed-out
+problem is excluded while every open one is listed — is unaffected; only the count was stale.)
 *No open problems at all:* an axis with none renders **nothing** — no section, no shell, no "missing problem"
 wording (nothing matching `missing problem|error|warning|invalid` on the page) — while the axis's title and the
 card column keep rendering, because the axis is meaningful on its own.
 
-**Why the heading carries no count.** The card column's heading already says `Open problems (3)`; a second
-heading asserting the same number would be two sources for one fact. The count that matters is asserted where
-it is rendered, and the section's own row count is checked against the projection.
+**Why the heading carries no count.** The card column's heading already says `Open problems (n)` with the
+projection's own number; a second heading asserting the same number would be two sources for one fact. The
+count that matters is asserted where it is rendered, and the section's own row count is checked against the
+projection.
 
 **Measured.** Fixture acceptance **69 PASS / 0 FAIL / 0 skip at both viewports** — 62, minus step 2's "the
 others are listed" check (the list it asserted is no longer in that column) plus step 4's eight. The action
@@ -638,8 +645,8 @@ label is `0.2.0` (a fresh install publishes the packaged version — a *reinstal
 
 | dataset | instance | record (both 1440×900 and 1280×800) |
 |---|---|---|
-| corpus (695-call replay) | `:4500`, web `:3007`, corpus only | **52 pass · 0 fail · 26 skip** |
-| fixture (applied once) | `:4400`, web `:3005`, fixture only | **80 · 0 · 0** |
+| corpus (695-call replay) | `:4500`, web `:3007`, corpus only | **52 pass · 0 fail · 26 skip** (step 5's record; **56 · 0 · 30** at step 6, §17) |
+| fixture (applied once) | `:4400`, web `:3005`, fixture only | **80 · 0 · 0** (step 5's record; **87 · 0 · 0** at step 6, §17) |
 
 **The 26 skips are a finding, not noise.** The corpus carries **no problem row and no plan**, so every check
 whose subject is a problem — the Problem column, the open-problem inventory, repository threads, evidence,
@@ -675,3 +682,88 @@ fixture — crowded card` — the corpus pass is reading the fixture dataset nex
 mixed-instance problem demonstrated in the corpus evidence path. The transcript is kept outside this repository
 (the operator's scratch tree) on purpose: what this repository commits under `docs/corpus/` is the corpus-only
 record.
+
+---
+
+## 17. The index's two subjects (step 6)
+
+Step 6 was specified as an **inversion, not a sibling**: with `Problems` selected the navigation object becomes
+the concrete problem, and the reading surface, the sections and the Activity feed stay the ones already built.
+The rule that makes that checkable is that switching is a **switch over one payload** — no request, no write, no
+re-derivation — and the harness asserts it on **both** datasets.
+
+**What rendered.** A two-option control (`Axes | Problems`, `data-rd-progress-switch`) sits above the composition,
+with the left column as the thing it governs. In `Problems`, the column lists `get_progress.problems.problems` —
+the server's rows, in the server's order, unfiltered and unsorted — each row carrying its state chip, its
+statement, and one context line built from the row's own fields: parent axis, topic, repositories (or
+`no repository`), the step it sits on, its event count and its recency. The fixture's index shows the three
+problems of `Fixture: active axis (with evidence)` — the one on step 2 with two repositories and two evidence
+records, the unlinked one behind nothing, and the closed-out one — in the projection's order, which is recency,
+so the list is not a priority order and is not presented as one.
+
+**The reviewer's spec, item by item.** Concrete problems instead of axes: yes, from the projection, unfiltered.
+Server order: kept (a check compares the rendered id sequence against the live answer's). Enough context to
+disambiguate: statement, state, parent axis, topic, recency — the row's own fields, with no lookup invented to
+fill a gap. Same Problem reading surface: the card, the facts line, the plan, the three sections and the feed are
+the same components, reading the same `shownProblem`; the check that proves it compares the **section counts**
+against that problem's own projection row rather than against a constant. Activity follows the problem's parent:
+in `Problems` the axis is *derived from the problem* (`shownProblem.axisId`), so the feed is the server's bucket
+for that parent, and the column says so out loud (`on <axis title>`) instead of leaving a reader to assume the
+events belong to the problem. Repository/evidence/steering keep using the one Problem object — nothing is
+re-fetched or re-shaped for the subview. Switching creates and mutates nothing: asserted as an absence of calls
+and as an identical payload.
+
+**The selection rules, written down because they are the whole interaction.** `Axes → Problems` keeps the reader
+where they were: their own problem pick if they made one, else the first **open** problem of the axis on screen in
+the projection's order (the rule the axis index's own default already uses), else that axis's first problem
+whatever its state, else nothing — a dataset with no problem has no bridge to preserve. `Problems → Axes` selects
+the problem's **parent axis**, so the axis index marks the row the page is actually showing; a check exercises
+exactly that round trip. No memory of "where I was" beyond that bridge, per the reviewer's "no elaborate
+selection memory yet".
+
+**One thing the mode had to change.** The card's heading in `Axes` is `Open problems (n)` — the projection's own
+number. In `Problems` the card can be a problem that is closed out, and a count of open problems would then
+describe something the card is not showing, so the heading becomes `Problem` with a context line naming where it
+sits. Same components, a heading that stays true in both positions.
+
+**The deferred question, answered: `get_progress` was not touched.** Step 2's `problems.filter(axisId)` stays,
+and the problem index does **not** need it — the projection already returns every problem, in the server's order,
+with the fields both positions read (the index uses the whole list; the axes-mode card uses the subset for the
+selected axis). A second, "problems index" projection would have been a second source for one fact and a
+migration of the read contract for a navigation change. Left alone deliberately, recorded here so a later reader
+does not reopen it as an oversight.
+
+**Two defects on the way.** (1) The page's own view type had gone stale against the projection: the new index
+read `axisTitle`/`topicName` off a problem row and the mirror never declared them, so the component would have
+rendered an axis-free context line. The typecheck caught it *this* time because the field was used in a typed
+expression — which is why the step-1 mirror defect (a flattened level of nesting, invisible to the checker and
+empty on screen) remains the more dangerous cousin, and why the harness's DOM-vs-projection comparisons exist.
+(2) The rebuild loop had no script: `install-plugin.mjs` installs and enables but never reinstalls, so serving a
+new build was a hand-run endpoint call. It is now `harness/reinstall-plugin.mjs` (`bun run harness:reinstall`),
+which names the revision it read, reports the version change, and says so plainly when the vendored bytes are
+identical to the release already installed — the case where a pass would otherwise silently measure the previous
+build.
+
+**Measured.** Release `0.2.0+dev.5b9351485fe2` on both instances, revision 12 (corpus) / 25 (fixture); the served
+`ui/app.js` hashes to **`72e6b99c0cfaa27e`** on both instances, in the vendored checkout, and in this repository's
+own build. Fixture acceptance **87 PASS / 0 FAIL / 0 skip** at both 1440×900 and 1280×800; corpus **56 PASS /
+0 FAIL / 30 skip** at both. The seven added checks: the control and its default; the index against the
+projection's list, order and fields; the picked problem in the same reading surface with the parent-axis
+follow-through; the sections rendering from that same object; the parent-axis bridge back to `Axes`; and — on
+both datasets — no action call and an identical payload. The corpus exercises four of them and skips three (no
+problem row to index), plus its own empty-index check: with no problem in the dataset the index says
+`No problems yet.` and the card says `No problem is recorded yet.`, rather than rendering an empty list that
+would look the same as a load failure. `bun run check` = **0 typecheck · 126 pass · 0 fail · 764 expect()**
+(unchanged: step 6 is page-side; the store, the actions and the field inventory are untouched). A seventh
+published capture, `dashboard-problems.png`, shows the inverted index at the moment the checks describe.
+
+**One correction that fell out of the measurement.** The step-4 section above and a harness skip reason both said
+the fixture's axis carries *four problems, three open*. Step 4 was right about the instance it measured, but that
+instance had been through the layout applier twice and the pre-step-5 applier duplicated a problem; step 5's
+idempotency fix removed the duplicate, so a fresh apply gives **three problems, two open** — which is what the
+step-5 transcript already printed. The prose and the skip reason are corrected; the measured claim they support
+is unchanged. Three consecutive applies still prove idempotency.
+
+**Not done:** step 7 (propagating the shared primitives into Topics, Repositories, People and Overview), and the
+`state_log`-backed history UI. The corpus's problem-index checks will exercise on the day the corpus carries a
+problem — `problems.problems` is empty on it today.

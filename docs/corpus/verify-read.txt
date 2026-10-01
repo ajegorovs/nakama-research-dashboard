@@ -1,6 +1,6 @@
 # harness/read-pass.sh — read pass · dataset corpus · viewport 1440x900
 # dashboard: http://127.0.0.1:3007
-# generated: 2026-10-01T23:15:37+03:00
+# generated: 2026-10-02T00:30:33+03:00
 
 PASS  login — status 200
 corpus: {"axes":3,"blocked":0,"people":1,"repositories":1,"topic":"UDV Echo Process","windowEvents":30}
@@ -16,7 +16,7 @@ PASS  every topic in the payload has one card, carrying its own axes and none of
 PASS  a topic card leads with people and its state counts — ajegorovs on UDV Echo Process; payload states ["2 active","1 completed"]; card counts ["2 active","1 completed"]
 SKIP  the blocked axis shows its blocker text — no axis in this corpus is blocked
 SKIP  a topic with a blocked axis is visually distinct — no axis in this corpus is blocked, so the attention styling has no subject here
-PASS  each topic card reports its recent-activity summary — Recent: 598 events · last activity 3 days ago 
+PASS  each topic card reports its recent-activity summary — Recent: 595 events · last activity 3 days ago 
 PASS  the window control re-issues get_overview with the new window only — {"activitySinceDays":7}
 PASS  the page still renders after the window change
 PASS  the topic card offers one disclosure control, not two — card buttons ["Read topic","Edit fields"]
@@ -52,7 +52,7 @@ PASS  an event recorded against an axis alone still lands under the right topic 
 progress screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/screenshots/research-dashboard-read-progress.png
 PASS  the Progress index is the projection for the current window — replaced on change, not extended — matched the projection at 30 and 7 days (7d restored)
 PASS  the get_progress payload carries all three halves the page reads (axes, problems, activity) — 3 halves · axes 3 · problems 0 · activity 3
-PASS  the Progress top area shows the index, the Problem column and the Activity feed side by side — index {"h":310,"w":256,"x":320,"y":102}, problem {"h":42,"w":469,"x":588,"y":102}, feed {"h":1608,"w":347,"x":1069,"y":102}
+PASS  the Progress top area shows the index, the Problem column and the Activity feed side by side — index {"h":310,"w":256,"x":320,"y":154}, problem {"h":42,"w":469,"x":588,"y":154}, feed {"h":1608,"w":347,"x":1069,"y":154}
 PASS  the axis index opens on the projection's first row, and the detail columns follow it — active ccd11229, projection first ccd11229, problem column ccd11229, feed ccd11229
 SKIP  the Problem column shows the projection's first open problem, under the projection's own count — no axis in this dataset has an open problem, so this pass cannot exercise the Problem column
 PASS  the Activity feed is the projection's bucket for the selected axis, in the projection's order — feed axis ccd11229, count 15 (projection 15), heading "Activity (15)" (index row 15), 15 rows vs 15 in the projection
@@ -61,7 +61,7 @@ SKIP  the plan renders below the composition, from the projection — no axis in
 SKIP  the problem's step and the step's problem are marked, both ways — no axis in this dataset has a plan and a problem naming one of its steps
 SKIP  an unordered plan keeps the store's order and invents no sequence — no axis in this dataset carries a multi-step plan with no positions
 PASS  an axis with no plan renders no plan section at all — plan section present false, page mentions a missing plan false
-SKIP  the fixture still carries an axis with open problems to inventory — no axis in this dataset carries an open problem — the fixture's axis carries four, so that run discriminates; here the inventory has no subject
+SKIP  the fixture still carries an axis with open problems to inventory — no axis in this dataset carries an open problem — the fixture's axis carries three, two of them open, so that run discriminates; here the inventory has no subject
 SKIP  the inventory lists every open problem of the axis, in the projection's order — this dataset has no open problem on any axis, so there is no inventory to read
 SKIP  each row carries its own state, repositories, step link and recency — compact context, nothing re-derived — this dataset has no open problem on any axis, so there is no row to read the context off
 SKIP  exactly the problem on screen is the active row — this dataset has no open problem on any axis, so no row can be the active one
@@ -78,6 +78,14 @@ SKIP  and the tag wrote nothing: the repository set is the same after navigating
 SKIP  the sparse problem is one the inventory can select — this dataset carries no problem with nothing behind it (no repositories, no evidence, no steering), so the negative cases have no subject — the fixture's sparse problem does, so that run discriminates
 SKIP  a problem with no repositories, no evidence and no steering renders no shell for any of them — this dataset carries no problem with nothing behind it (no repositories, no evidence, no steering), so the negative cases have no subject — the fixture's sparse problem does, so that run discriminates
 SKIP  and the steering section follows the data: it is absent unless the axis itself carries a claim — this dataset carries no problem with nothing behind it (no repositories, no evidence, no steering), so the negative cases have no subject — the fixture's sparse problem does, so that run discriminates
+PASS  the Progress index offers both subjects, and opens on Axes (U4 step 6) — subjects axes|problems; pressed axes; group mode axes; index mode axes; card mode axes
+PASS  with no problem in the dataset the Problems index says so, instead of rendering an empty list — rows 0, index empty "No problems yet.", card empty "No problem is recorded yet."
+SKIP  the Problems index lists the projection's problems, in the server's order, with each row's own state, axis, topic and recency — this dataset carries no problem row at all, so the problem index has no subject here — the fixture does, so that run discriminates
+SKIP  picking a problem shows it in the same reading surface, with the axis columns following its parent — this dataset carries no problem row at all, so the problem index has no subject here — the fixture does, so that run discriminates
+SKIP  the repository threads, evidence and steering sections render from that same problem object — this dataset carries no problem row at all, so the problem index has no subject here — the fixture does, so that run discriminates
+SKIP  switching back to Axes marks the parent axis of the problem that was on screen — this dataset carries no problem row at all, so the problem index has no subject here — the fixture does, so that run discriminates
+PASS  switching the index's subject issues no action call — 0 extra get_progress call(s) across the switches
+PASS  and the projection is unchanged: switching a subview writes nothing — the live answer is identical before and after
 PASS  every rendered state carries its claim, and one that is not confirmed says so (C8) — states 6, carrying a claim 6, not confirmed 2 but unqualified 0; sample ["ACTIVE · INFERRED","ACTIVE · INFERRED"]
 PASS  the corpus's inferred states reach the view as unconfirmed, not laundered into facts (C8) — 1 of 3 axes are unconfirmed in the payload (Docs & agent skills — `docs/`, `.agents/skills`=inferred); the view rendered 2 unconfirmed states
 PASS  a recorded event names its source the way it is reported, not the way the menu offers it (C8) — sample ["commit · 410b3d7c2 · ajegorovs","commit · a79cc727b · ajegorovs"]
@@ -90,7 +98,7 @@ PASS  palette entry navigates to the page — http://127.0.0.1:3007/plugins/rese
 screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/screenshots/research-dashboard-read.png
 console issues after login: []
 
-read pass: all checks passed; 26 skipped for want of a subject in this corpus
+read pass: all checks passed; 30 skipped for want of a subject in this corpus
 skipped (each with its reason):
   - the blocked axis shows its blocker text — no axis in this corpus is blocked
   - a topic with a blocked axis is visually distinct — no axis in this corpus is blocked, so the attention styling has no subject here
@@ -102,7 +110,7 @@ skipped (each with its reason):
   - the plan renders below the composition, from the projection — no axis in this dataset carries a plan
   - the problem's step and the step's problem are marked, both ways — no axis in this dataset has a plan and a problem naming one of its steps
   - an unordered plan keeps the store's order and invents no sequence — no axis in this dataset carries a multi-step plan with no positions
-  - the fixture still carries an axis with open problems to inventory — no axis in this dataset carries an open problem — the fixture's axis carries four, so that run discriminates; here the inventory has no subject
+  - the fixture still carries an axis with open problems to inventory — no axis in this dataset carries an open problem — the fixture's axis carries three, two of them open, so that run discriminates; here the inventory has no subject
   - the inventory lists every open problem of the axis, in the projection's order — this dataset has no open problem on any axis, so there is no inventory to read
   - each row carries its own state, repositories, step link and recency — compact context, nothing re-derived — this dataset has no open problem on any axis, so there is no row to read the context off
   - exactly the problem on screen is the active row — this dataset has no open problem on any axis, so no row can be the active one
@@ -117,4 +125,8 @@ skipped (each with its reason):
   - the sparse problem is one the inventory can select — this dataset carries no problem with nothing behind it (no repositories, no evidence, no steering), so the negative cases have no subject — the fixture's sparse problem does, so that run discriminates
   - a problem with no repositories, no evidence and no steering renders no shell for any of them — this dataset carries no problem with nothing behind it (no repositories, no evidence, no steering), so the negative cases have no subject — the fixture's sparse problem does, so that run discriminates
   - and the steering section follows the data: it is absent unless the axis itself carries a claim — this dataset carries no problem with nothing behind it (no repositories, no evidence, no steering), so the negative cases have no subject — the fixture's sparse problem does, so that run discriminates
+  - the Problems index lists the projection's problems, in the server's order, with each row's own state, axis, topic and recency — this dataset carries no problem row at all, so the problem index has no subject here — the fixture does, so that run discriminates
+  - picking a problem shows it in the same reading surface, with the axis columns following its parent — this dataset carries no problem row at all, so the problem index has no subject here — the fixture does, so that run discriminates
+  - the repository threads, evidence and steering sections render from that same problem object — this dataset carries no problem row at all, so the problem index has no subject here — the fixture does, so that run discriminates
+  - switching back to Axes marks the parent axis of the problem that was on screen — this dataset carries no problem row at all, so the problem index has no subject here — the fixture does, so that run discriminates
   - a person filter that matches nothing attributable says so, and shows no unrelated events — every person in this corpus maps to a platform account, so the unattributable case has no subject

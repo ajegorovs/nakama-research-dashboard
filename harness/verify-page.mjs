@@ -1627,7 +1627,8 @@ const planOf = (result, axisId) =>
   } else {
     skip(
       "the fixture still carries an axis with open problems to inventory",
-      "no axis in this dataset carries an open problem — the fixture's axis carries four, so that run " +
+      "no axis in this dataset carries an open problem — the fixture's axis carries three, two of them open, " +
+        "so that run " +
         "discriminates; here the inventory has no subject"
     );
   }
@@ -1639,7 +1640,7 @@ const planOf = (result, axisId) =>
   const wanted = expectedOpen.map((problem) => problem.id).join("|");
   // Nothing to list is not the same as listing nothing: with no open problem on the axis the section is
   // (correctly) absent, so these three checks have no subject and say so instead of going red or, worse,
-  // going green on an empty list. The fixture's axis carries four, three of them open.
+  // going green on an empty list. The fixture's axis carries three, two of them open.
   if (expectedOpen.length === 0) {
     skip(
       "the inventory lists every open problem of the axis, in the projection's order",
@@ -2052,6 +2053,241 @@ const planOf = (result, axisId) =>
       skip(description, sparseReason);
     }
   }
+}
+
+  // ------------------------------- C7g: the index's two subjects — `Axes | Problems`, and what does not change
+// Step 6 inverts the projection instead of adding to it: with `Problems` selected the navigation object is the
+// concrete problem, and the reading surface, the sections and the Activity feed are the ones already built —
+// the feed following the problem's **parent axis** through the projection's own bucket, not through markup
+// that re-decides what belongs to what. Everything is checked against the live `get_progress` answer.
+//
+// The two claims that make this a switch and not a second view are checked on **both** datasets: switching
+// issues no action call, and the payload is identical before and after. A dataset with no problem at all (the
+// corpus) still exercises those, plus the empty-index case; the four checks that need a problem row say SKIP
+// with their reason there and run on the fixture.
+{
+  const readSubView = () =>
+    page.evaluate(() => {
+      const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+      const index = scope?.querySelector('[data-rd-progress-index="true"]') ?? null;
+      const card = scope?.querySelector(".rd-progress-problem") ?? null;
+      const feed = scope?.querySelector(".rd-progress-activity") ?? null;
+      const group = scope?.querySelector("[data-rd-progress-switch]") ?? null;
+      return {
+        axisRows: [...(index?.querySelectorAll("[data-rd-index-axis]") ?? [])].map((node) => ({
+          active: node.getAttribute("aria-pressed") === "true",
+          id: node.getAttribute("data-rd-index-axis"),
+        })),
+        card: {
+          axis: card?.getAttribute("data-rd-progress-problem-axis") ?? null,
+          empty: (card?.querySelector("[data-rd-progress-problem-empty]")?.textContent ?? "").trim(),
+          mode: card?.getAttribute("data-rd-progress-problem-mode") ?? null,
+          shown: card?.getAttribute("data-rd-progress-problem-shown") ?? "",
+          statement: (card?.querySelector("[data-rd-problem] .rd-strong")?.textContent ?? "").trim(),
+        },
+        feed: {
+          axis: feed?.getAttribute("data-rd-progress-feed-axis") ?? null,
+          count: Number(feed?.getAttribute("data-rd-progress-feed-count") ?? -1),
+          parent: (feed?.querySelector("[data-rd-progress-feed-parent]")?.textContent ?? "").trim(),
+        },
+        indexEmpty: (index?.querySelector("[data-rd-problem-index-empty]")?.textContent ?? "").trim(),
+        indexMode: index?.getAttribute("data-rd-progress-index-mode") ?? null,
+        indexRows: Number(index?.getAttribute("data-rd-progress-index-rows") ?? -1),
+        mode: group?.getAttribute("data-rd-progress-subview") ?? null,
+        options: [...(group?.querySelectorAll("[data-rd-progress-subview-option]") ?? [])].map((node) => ({
+          pressed: node.getAttribute("aria-pressed") === "true",
+          value: node.getAttribute("data-rd-progress-subview-option"),
+        })),
+        problemRows: [...(index?.querySelectorAll("[data-rd-problem-index]") ?? [])].map((node) => ({
+          active: node.getAttribute("aria-pressed") === "true",
+          axis: node.getAttribute("data-rd-problem-index-axis"),
+          context: (node.querySelector("[data-rd-problem-index-context]")?.textContent ?? "").trim(),
+          id: node.getAttribute("data-rd-problem-index"),
+          state: node.getAttribute("data-rd-problem-index-state"),
+          statement: (node.querySelector(".rd-strong")?.textContent ?? "").trim(),
+          topic: node.getAttribute("data-rd-problem-index-topic"),
+        })),
+        sections: {
+          evidence: Number(
+            scope
+              ?.querySelector("[data-rd-progress-evidence]")
+              ?.getAttribute("data-rd-progress-evidence") ?? -1
+          ),
+          repositories: Number(
+            scope
+              ?.querySelector("[data-rd-progress-repositories]")
+              ?.getAttribute("data-rd-progress-repositories") ?? -1
+          ),
+          steering: Boolean(scope?.querySelector("[data-rd-progress-steering]")),
+        },
+      };
+    });
+
+  const clickSubject = async (mode) => {
+    await root.locator(`[data-rd-progress-subview-option="${mode}"]`).click();
+    await page.waitForTimeout(250);
+  };
+
+  const projectionBefore = await apiProgress(windowDaysNow);
+  const callsBefore = callsFor("get_progress").length;
+  const problemRowsAll = allProgress.problems.problems ?? [];
+
+  // (1) The control, and the subject the view opens on. Both datasets.
+  const opened = await readSubView();
+  const subjects = opened.options.map((option) => option.value).join("|");
+  const pressed = opened.options.filter((option) => option.pressed);
+  check(
+    "the Progress index offers both subjects, and opens on Axes (U4 step 6)",
+    subjects === "axes|problems" &&
+      pressed.length === 1 &&
+      pressed[0]?.value === "axes" &&
+      opened.mode === "axes" &&
+      opened.indexMode === "axes" &&
+      opened.card.mode === "axes",
+    `subjects ${subjects || "none"}; pressed ${pressed[0]?.value ?? "none"}; group mode ${opened.mode}; index mode ${opened.indexMode}; card mode ${opened.card.mode}`
+  );
+
+  if (problemRowsAll.length > 0) {
+    // (2) The index *is* the projection's problem list — ids, order, state, parent axis and topic, all read
+    // off the live answer rather than remembered. The context line must carry the parent axis, the topic and
+    // the recency, because a problem statement alone does not say which axis it belongs to.
+    await clickSubject("problems");
+    const listed = await readSubView();
+    const wantedIds = problemRowsAll.map((row) => row.id).join("|");
+    const listedIds = listed.problemRows.map((row) => row.id).join("|");
+    const fieldsMatch = listed.problemRows.every((row, index) => {
+      const source = problemRowsAll[index];
+      return (
+        row.state === source.state &&
+        row.axis === source.axisId &&
+        row.topic === source.topicName &&
+        row.statement === source.statement &&
+        row.context.includes(source.axisTitle) &&
+        row.context.includes(source.topicName) &&
+        row.context.includes("last activity")
+      );
+    });
+    check(
+      "the Problems index lists the projection's problems, in the server's order, with each row's own state, axis, topic and recency",
+      listed.mode === "problems" &&
+        listed.indexMode === "problems" &&
+        listed.problemRows.length === problemRowsAll.length &&
+        listed.indexRows === problemRowsAll.length &&
+        listedIds === wantedIds &&
+        fieldsMatch,
+      `${listed.problemRows.length} row(s) of ${problemRowsAll.length}; order ${listedIds === wantedIds ? "matches" : "differs"}; fields ${fieldsMatch ? "match" : "differ"}; first ${JSON.stringify(listed.problemRows[0]?.context ?? "")}`
+    );
+
+    // (3) Picking a problem drives the *same* reading surface: the card shows that problem, the card's axis is
+    // its parent, and the Activity column is the projection's bucket for that parent rather than a feed the
+    // markup assembled. The subject is the first problem that carries relations, so the section check below
+    // has something to read; failing that, the first problem in the projection's order.
+    const subjectProblem =
+      problemRowsAll.find(
+        (row) => (row.repositories?.length ?? 0) > 0 && (row.evidence?.length ?? 0) > 0
+      ) ?? problemRowsAll[0];
+    const parentRow = (allProgress.axes.axes ?? []).find((row) => row.id === subjectProblem.axisId);
+    await root.locator(`[data-rd-problem-index="${subjectProblem.id}"]`).click();
+    await page.waitForTimeout(250);
+    const picked = await readSubView();
+    const bucket = (allProgress.activity.byAxis ?? []).find(
+      (entry) => entry.axisId === subjectProblem.axisId
+    );
+    check(
+      "picking a problem shows it in the same reading surface, with the axis columns following its parent",
+      picked.card.shown === subjectProblem.id &&
+        picked.card.statement === subjectProblem.statement &&
+        picked.card.axis === subjectProblem.axisId &&
+        picked.feed.axis === subjectProblem.axisId &&
+        picked.feed.count === (bucket?.eventCount ?? -1) &&
+        picked.feed.parent === `on ${parentRow?.title ?? ""}` &&
+        picked.problemRows.filter((row) => row.active).length === 1 &&
+        picked.problemRows.find((row) => row.active)?.id === subjectProblem.id,
+      `card ${picked.card.shown?.slice(0, 8) ?? "none"} (wanted ${subjectProblem.id.slice(0, 8)}); axis ${picked.card.axis?.slice(0, 8)}; feed ${picked.feed.axis?.slice(0, 8)} count ${picked.feed.count} (projection ${bucket?.eventCount ?? -1}); parent "${picked.feed.parent}" (axis "${parentRow?.title ?? ""}")`
+    );
+
+    // (4) Reuse, not a parallel UI: the three sections belong to the problem on screen and carry its own
+    // numbers — the same fields the axes mode renders, read from the same object.
+    const steeringTotal =
+      (subjectProblem.steering?.length ?? 0) +
+      ((allProgress.axes.axes ?? []).find((row) => row.id === subjectProblem.axisId)?.steering
+        ?.length ?? 0);
+    check(
+      "the repository threads, evidence and steering sections render from that same problem object",
+      picked.sections.repositories === (subjectProblem.repositories?.length ?? 0) &&
+        picked.sections.evidence === (subjectProblem.evidence?.length ?? 0) &&
+        picked.sections.steering === steeringTotal > 0,
+      `sections ${picked.sections.repositories} repo / ${picked.sections.evidence} evidence / steering ${picked.sections.steering ? "present" : "absent"}; projection ${subjectProblem.repositories?.length ?? 0} / ${subjectProblem.evidence?.length ?? 0} / ${steeringTotal > 0 ? "present" : "absent"}`
+    );
+
+    // The published capture of the inverted index, taken in exactly the state the checks above describe.
+    const problemsShot = `${OUT}/research-dashboard-${WRITE ? "write" : "read"}-problems.png`;
+    await root.screenshot({ path: problemsShot });
+    console.log("problems screenshot:", problemsShot);
+
+    // (5) Back to `Axes`: the index marks the **parent axis** of the problem on screen, which is the identity
+    // bridge the switch preserves — not a remembered axis the reader has since left.
+    await clickSubject("axes");
+    const back = await readSubView();
+    const activeAxisRows = back.axisRows.filter((row) => row.active);
+    check(
+      "switching back to Axes marks the parent axis of the problem that was on screen",
+      back.mode === "axes" &&
+        activeAxisRows.length === 1 &&
+        activeAxisRows[0]?.id === subjectProblem.axisId &&
+        back.card.axis === subjectProblem.axisId &&
+        back.card.shown === subjectProblem.id,
+      `active ${activeAxisRows[0]?.id?.slice(0, 8) ?? "none"} (wanted ${subjectProblem.axisId.slice(0, 8)}); card axis ${back.card.axis?.slice(0, 8)} shown ${back.card.shown?.slice(0, 8)}`
+    );
+  } else {
+    const reason =
+      "this dataset carries no problem row at all, so the problem index has no subject here — the fixture " +
+      "does, so that run discriminates";
+    // The corpus *does* have a subject for the empty case, and it is the one that matters: an index that
+    // renders nothing and says nothing would read as "no problems exist" while looking identical to a
+    // dataset that has them and failed to load.
+    await clickSubject("problems");
+    const empty = await readSubView();
+    check(
+      "with no problem in the dataset the Problems index says so, instead of rendering an empty list",
+      empty.mode === "problems" &&
+        empty.problemRows.length === 0 &&
+        empty.indexRows === 0 &&
+        empty.indexEmpty.length > 0 &&
+        empty.card.empty.length > 0,
+      `rows ${empty.problemRows.length}, index empty "${empty.indexEmpty}", card empty "${empty.card.empty}"`
+    );
+    await clickSubject("axes");
+    for (const description of [
+      "the Problems index lists the projection's problems, in the server's order, with each row's own state, axis, topic and recency",
+      "picking a problem shows it in the same reading surface, with the axis columns following its parent",
+      "the repository threads, evidence and steering sections render from that same problem object",
+      "switching back to Axes marks the parent axis of the problem that was on screen",
+    ]) {
+      skip(description, reason);
+    }
+  }
+
+  // (6) The two claims that make this a switch rather than a second view — checked on both datasets, because
+  // neither depends on a problem existing: switching issues **no** action call, and the payload the page reads
+  // is byte-identical before and after, so nothing was created or mutated server-side.
+  const callsAfter = callsFor("get_progress").length;
+  check(
+    "switching the index's subject issues no action call",
+    callsAfter === callsBefore,
+    `${callsAfter - callsBefore} extra get_progress call(s) across the switches`
+  );
+  const projectionAfter = await apiProgress(windowDaysNow);
+  const identical =
+    JSON.stringify(projectionAfter) === JSON.stringify(projectionBefore) &&
+    projectionBefore !== null;
+  check(
+    "and the projection is unchanged: switching a subview writes nothing",
+    identical,
+    identical
+      ? "the live answer is identical before and after"
+      : "the live answer differs — something was written or recomputed server-side"
+  );
 }
 
   // ------------------------------------------------ C8: no bare state, one vocabulary for the evidence

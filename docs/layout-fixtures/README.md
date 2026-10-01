@@ -27,13 +27,18 @@ closed-out problem staying out and an axis with none rendering no section) — o
 that step's inline list — and then eleven with U4's step 5 (the three supporting sections: the problem's own
 repositories as tags that both navigate, evidence kept with its source, human steering under separate problem
 and axis scopes, and what none of the three may show — with one guard that the subject axis really has open
-problems), so the same fixture pass now reports **80**, at both viewports, with nothing failing.
-**Measured against each other at U4's step 5, on separate instances:** this directory **80 · 0 · 0** and the
-corpus **52 · 0 · 26** — the corpus record is new, taken on a corpus-only instance, and its 26 skips are the
+problems), so the same fixture pass reported **80** at U4's step 5, and then **87** at U4's step 6 (seven for
+the `Axes | Problems` switch: the control and its default, the problem index against the projection's own list
+and order, the reading surface and parent-axis follow-through when one is picked, the sections rendering from
+that same object, the bridge back to `Axes` in which the parent axis is marked, and the two
+dataset-independent claims — no action call, identical payload), at both viewports, with nothing failing.
+**Measured against each other at U4's step 6, on separate instances:** this directory **87 · 0 · 0** and the
+corpus **56 · 0 · 30** — the corpus record is taken on a corpus-only instance, and its 30 skips are the
 checks a corpus with no problem row and no plan cannot exercise, each printed with its reason. So the pair
-that once read 36/43 reads **52/80**. The pass also *swapped* one check for another at step 5 — the closed-out
-precondition folded into the conditional that replaced it, and a new precondition that `get_progress`
-carries all three halves the page reads — which is why the fixture total stays **80** rather than moving to 81.
+that once read 36/43 reads **56/87** (at U4's step 5 it read 52/80). The pass also *swapped* one check for
+another at step 5 — the closed-out precondition folded into the conditional that replaced it, and a new
+precondition that `get_progress` carries all three halves the page reads — which is why the fixture total
+stayed **80** rather than moving to 81.
 
 The transcripts in this directory are the record; read a run's own summary line rather than a number in a
 document.)
@@ -56,7 +61,7 @@ instead of the corpus and never mixed into `docs/corpus/`. Every file here is la
 
 ## Contents
 
-- `screenshots/1440x900/`, `screenshots/1280x800/` — the six views, captured from the fixture state.
+- `screenshots/1440x900/`, `screenshots/1280x800/` — the seven views, captured from the fixture state.
 - `verify-fixture-read-*.txt` — the harness transcript for each capture, verbatim.
 
 ## Reproducing it

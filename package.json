@@ -14,6 +14,7 @@
     "harness:fixture": "bash harness/read-pass.sh --dataset fixture",
     "harness:seed": "bun harness/replay-corpus.mjs",
     "harness:install": "bun harness/install-plugin.mjs",
+    "harness:reinstall": "bun harness/reinstall-plugin.mjs",
     "harness:update": "bun harness/update-plugin.mjs",
     "harness:test": "bun harness/test-004.mjs",
     "harness:write": "bash harness/read-pass.sh --write"

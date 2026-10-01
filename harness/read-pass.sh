@@ -159,6 +159,7 @@ if [[ "$status" -eq 0 && "$PASS" == "read" ]]; then
     "research-dashboard-read-people.png:dashboard-people.png"
     "research-dashboard-read-repositories.png:dashboard-repositories.png"
     "research-dashboard-read-progress.png:dashboard-progress.png"
+    "research-dashboard-read-problems.png:dashboard-problems.png"
     "research-dashboard-read-palette.png:navigation.png"
   )
   for pair in "${rename_map[@]}"; do
