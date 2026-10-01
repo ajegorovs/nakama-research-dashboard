@@ -29,6 +29,18 @@ this file is a measurement until it says so.
 | axis, `usable → active` (a reopen) | accepted; the `usable` row stays in history |
 | either, unknown id | refused ("Axis not found." / "Problem not found.") |
 | either, `origin` outside `human|agent` | refused — `migration` is the migration's word, never a writer's |
+| either, `expectedVersion` supplied and now stale | refused — `conflict: …`, and reported as a conflict rather than as a no-op |
+
+**The atomic unit is validate → append history → update subject → commit**, with the current state and
+version read *inside* that block, so `from_state` is always the state the write is actually replacing. A
+failure at any point leaves **both** the subject and the log exactly as they were; a half-applied transition
+is not a possible outcome, and a test asserts it rather than assuming it.
+
+**Optimistic version.** `expectedVersion` is how two writers that started from the same reading are
+resolved: exactly one wins, and the loser gets a `conflict:` rather than appending a history row derived from
+a state it no longer owns. That matters more here than in an ordinary table, because the subject's state and
+its history must stay in step — a stale writer that "succeeded" would leave two rows disagreeing about what
+happened.
 
 Two invariants this table is really about:
 
@@ -54,14 +66,31 @@ carries the same note where the rule would live.
 
 ## 2. Human-authored text is never rewritten by automation
 
-Rule, at field level rather than row level:
+Rule, at **field** level in intent and row level in implementation:
 
 - *Authored text*: `problems.statement`, `plans.summary`, `plan_steps.title`, `annotations.text`.
-- An **agent**-origin update that would change authored text on a row whose `author_type = 'human'` is
+- An **agent**-origin update that would change authored text on a row whose authorship is `human` is
   **refused** (`human-authored: …`), and nothing is written.
 - An agent may still change what is *machine-owned*: state (through the transition writer, as an appended
   row), repository/person links, plan-step state, and it may always add new rows.
 - A **human**-origin update may edit human text — a person correcting their own words is not automation.
+
+**The approximation, stated rather than implied.** The invariant is about the provenance of *the text being
+replaced*, not about who first created the entity. The schema carries authorship per row, so the rule is
+implemented at row level with one clarification that makes it unambiguous: **`author_type`/`author_id`
+describe who wrote the text currently stored.** A human rewrite of authored text therefore *sets*
+`author_type='human'` on that row, and the protection follows the text from then on. Per-field provenance is
+deliberately **not** built — it would be infrastructure for a case that has not asked for it yet.
+
+The handoff case this exists for, and which is tested:
+
+1. an agent creates a problem (`author_type='agent'`);
+2. a human rewrites its `statement` → the row is now human-authored text;
+3. a later agent update may still change that problem's links, plan-step state and state — and is **refused**
+   for the statement, with `human-authored: …` and nothing written.
+
+The same rule read the other way is also tested: a statement no human has ever edited may still be rewritten
+by a later agent write.
 
 That is the contract's requirement — a human's words must not be silently replaced by later automation —
 expressed as a refusal the caller can see, rather than a silent non-write.
@@ -87,6 +116,11 @@ five redesigned views will read for Problems and Plans.
   never stored, and it is a *different fact* from `blocked`. A test asserts stale ≠ blocked: a blocked axis
   with recent activity is current-but-blocked, a quiet axis is stale, and neither term may stand in for the
   other.
+- **The stale timestamp and the sort timestamp are the same timestamp.** Not two helpers sharing a
+  threshold: the value that decides `stale` for an object is exactly the value that places it in the
+  recency order, and a test asserts the two are equal for the same object — because two sources sharing a
+  number today can drift apart with one edit, and then a panel sorts an object as current while another
+  marks it stale.
 - **One visible-set helper.** Archived rows and the activity window are resolved once per call, in a
   shared helper, and every read model reads *that* — not its own copy of the filter. Two copies drift the
   moment one gains a rule, and then two panels answer "what is in scope?" differently.
@@ -116,8 +150,15 @@ Alongside keeping every existing test green:
    path as well);
 9. a problem with no repository, no plan step and no activity is still meaningful;
 10. a plan with unordered steps returns `position = null` rather than a synthesized order;
-11. stale ≠ blocked;
-12. an entity with no claim reports `null`, not `confirmed`.
+11. stale ≠ blocked, **and the value that decides stale is the same value that sorts that object**;
+12. an entity with no claim reports `null`, not `confirmed`;
+13. **the handoff case**: an agent creates a problem, a human rewrites its `statement`, and a later agent
+    write is refused for the statement (text unchanged) while still permitted for its links and state;
+14. **the concurrency case**: two writers holding the same `expectedVersion` request different targets —
+    exactly one wins, the loser gets `conflict: `, `state_log` gains exactly one row, and the loser
+    appended nothing derived from a state it no longer owned;
+15. **the atomicity case**: a failure between the history append and the subject update leaves both the log
+    and the subject unchanged — state, version and row count all identical.
 
 **Seeding discipline.** These tests seed the *common* shape, not the convenient one: an activity that names
 its problem and lets its axis and repository be implied by the problem's links — because that is what the
@@ -129,7 +170,13 @@ the real one.
 - **The action surface** (U3): no action key creates a problem or performs a transition yet, so nothing
   here is reachable from the UI or an agent. In particular `usable` is still absent from
   `nakama.plugin.json`'s `axes[].state` enum, which is U3's first change.
-- **`abandoned`'s terminality** (§1) — allowed today, flagged rather than decided.
+- **`abandoned`'s terminality — confirmed as "not a rule".** The reviewer's ruling: these are descriptive
+  lifecycle states, not a workflow engine; the contract defines no transition edges, so inventing a matrix
+  now would be stronger semantics than the product warrants. `abandoned → active` therefore stays
+  permissible, and the history explains the odd-looking transition instead of the writer refusing a
+  legitimate research decision. No prohibition table exists, by decision rather than omission.
+- **Row-level authorship approximating text-level provenance** (§2) — documented, tested against the
+  realistic handoff, and deliberately not expanded into per-field provenance infrastructure.
 - **Whether history must survive entity deletion** — the U1 retention boundary, unchanged: this chunk
   writes history, it does not make history outlive its subject.
 - **Ordering and layout** of anything rendered — U4 onward.
