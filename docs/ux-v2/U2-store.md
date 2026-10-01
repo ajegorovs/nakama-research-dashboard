@@ -10,8 +10,16 @@ each one invents its own answers to "what is stale?", "what is in scope?", "whos
 the same question gets two answers in two panels. So the semantics land here, once, with tests, and the
 views read them.
 
-Status: **design fixed, implementation in flight.** Numbers are added when the tests are run; nothing in
-this file is a measurement until it says so.
+Status: **the writer half is implemented and tested; the read-model half is not written yet.**
+
+Measured: `bun run check` — **104 pass · 0 fail · 552 expect() calls**, across 4 files. Before this chunk it
+was 82 · 0 · 472 across 3; the 22 new tests live in `src/store-ux-v2.test.ts`. Two bugs were found by those
+tests and fixed (a non-reentrant read snapshot, and a claim annotation that silently acquired a second
+target).
+
+**Still owed by this chunk** — the read-model half: the one stale derivation, the visible-set helper, the
+Overview recency projection, both Progress projections, and the §11 audit of every projection. The acceptance
+list below marks what is covered and what is not, rather than implying the whole chunk is done.
 
 ## 1. Transitions: one writer, one refusal
 
@@ -68,7 +76,11 @@ carries the same note where the rule would live.
 
 Rule, at **field** level in intent and row level in implementation:
 
-- *Authored text*: `problems.statement`, `plans.summary`, `plan_steps.title`, `annotations.text`.
+- *Authored text*: `problems.statement`, `plans.summary`, `annotations.text`.
+- **Known gap, stated rather than smoothed over**: `plan_steps` carries no authorship columns, so a step
+  title cannot be protected — there is nothing on the row to compare an incoming author against, and the
+  step writer therefore permits anyone to edit it. Giving steps authorship is a schema change with its own
+  review; it is not folded into this chunk because nothing has asked for step-level provenance yet.
 - An **agent**-origin update that would change authored text on a row whose authorship is `human` is
   **refused** (`human-authored: …`), and nothing is written.
 - An agent may still change what is *machine-owned*: state (through the transition writer, as an appended
@@ -135,30 +147,30 @@ the views render nothing for it, and a test asserts that a never-claimed entity 
 
 ## 5. Acceptance — the tests that define this chunk
 
-Alongside keeping every existing test green:
+Alongside keeping every existing test green — **✅ covered by a test, ⏳ still owed**:
 
-1. a valid transition appends exactly one row with the right `from_state`/`to_state`/`origin`/`actor_id`,
-   and leaves `state` updated and `version` bumped;
-2. a no-op transition writes **nothing** — log count and subject row unchanged;
-3. an invalid state name is a fixable error, not a crash, and nothing is written;
-4. reopenings (`usable → active`, `parked → active`, `completed → active`) keep the prior state in history;
-5. a problem's `resolved → open` reopen shows both rows in its history;
-6. an agent update to human-authored text is refused, and the text is unchanged;
-7. every new write carries its author/origin fields (traceability is asserted, not assumed);
-8. the annotation target rule: a new `interpretation`/`steering` annotation with two targets is refused; a
-   legacy-shaped `note` with two targets still inserts (the U1 preservation rule, now enforced on the write
-   path as well);
-9. a problem with no repository, no plan step and no activity is still meaningful;
-10. a plan with unordered steps returns `position = null` rather than a synthesized order;
-11. stale ≠ blocked, **and the value that decides stale is the same value that sorts that object**;
-12. an entity with no claim reports `null`, not `confirmed`;
-13. **the handoff case**: an agent creates a problem, a human rewrites its `statement`, and a later agent
-    write is refused for the statement (text unchanged) while still permitted for its links and state;
-14. **the concurrency case**: two writers holding the same `expectedVersion` request different targets —
-    exactly one wins, the loser gets `conflict: `, `state_log` gains exactly one row, and the loser
-    appended nothing derived from a state it no longer owned;
-15. **the atomicity case**: a failure between the history append and the subject update leaves both the log
-    and the subject unchanged — state, version and row count all identical.
+| # | Test | State |
+|---|---|---|
+| 1 | a valid transition appends exactly one row with the right `from_state`/`to_state`/`origin`/`actor_id`, and leaves `state` updated and `version` bumped | ✅ |
+| 2 | a no-op transition writes **nothing** — log count and subject row unchanged | ✅ |
+| 3 | an invalid state name is a fixable error, not a crash, and nothing is written | ✅ |
+| 4 | a reopen keeps the prior state in history (`usable → active`; `parked`/`completed` take the same path) | ✅ |
+| 5 | a problem's `resolved → open` shows the whole arc in its history, including the row its creation wrote | ✅ |
+| 6 | an agent update to human-authored text is refused, and the text is unchanged | ✅ |
+| 7 | every new write carries its author/origin fields (traceability asserted, not assumed) | ✅ |
+| 8 | a new `interpretation`/`steering` claim with two targets is refused; a legacy-shaped `note` with two targets still inserts | ✅ |
+| 9 | a problem with no repository, no plan step and no activity is still meaningful | ✅ |
+| 10 | a plan with unordered steps returns `position = null` rather than a synthesized order | ✅ |
+| 11 | stale ≠ blocked, **and the value that decides stale is the same value that sorts that object** | ⏳ needs the stale derivation |
+| 12 | an entity with no claim reports `null`, not `confirmed` (the §11 audit, run over every projection) | ⏳ needs the projections |
+| 13 | **the handoff case**: agent creates, human rewrites the statement, a later agent write is refused for the text and permitted for the links and state | ✅ |
+| 14 | **the concurrency case**: two writers holding the same `expectedVersion` — exactly one wins, the loser conflicts, `state_log` gains one row | ✅ |
+| 15 | **the atomicity case**: a failure mid-transition leaves the log and the subject unchanged | ✅ |
+
+Two of these found real bugs rather than confirming the design, which is the point of writing them: the read
+snapshot was not reentrant (a plan assembled from its steps issued a second `BEGIN`), and `addAnnotation`
+derived a topic from the axis for *every* kind, so a steering claim on an axis arrived at the database with
+two targets — precisely the row the schema refuses.
 
 **Seeding discipline.** These tests seed the *common* shape, not the convenient one: an activity that names
 its problem and lets its axis and repository be implied by the problem's links — because that is what the

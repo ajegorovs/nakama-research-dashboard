@@ -12,7 +12,7 @@ any view reads them.
 |---|---|---|
 | **U0** Contract, baseline, runnable pass | **done** | `contract/` published verbatim · `BASELINE.md` · the pass moved in-repo and reproduces from a *fresh clone* on a *pristine checkout* (measured below) · PR #1 merged, tagged `pre-ux-v2` · three harness defects found by that run and fixed |
 | **U1** Migration 004 (`usable`, state log, Problems, Plans) | **done** | `migrations/004-ux-v2-model.sql` · design note + truth table in `U1-migration.md` (§3.2, §4, §1a, §1b) · `harness/test-004.mjs`: **79 checks, 0 failed**, including the crash-after-COMMIT re-run · applied to the dev instance by the host's own applier — new generation `g9e344…`, ledger 001–004 · both acceptance passes green afterwards, plus the `abandoned` fixture axis and a check that every state the payload carries renders as itself |
-| **U2** Store writers + read models | **in progress** | design pinned in `U2-store.md` — the transition table, the refusal vocabulary, the human-authored-text rule, traceability, one stale derivation, one visible-set helper; implementation and tests in flight (numbers added when they run) |
+| **U2** Store writers + read models | **in progress — the writers are done** | `U2-store.md` (semantics, reviewer-approved) · writers and the problem/plan/state-history read models landed · `bun run check` **104 pass · 0 fail · 552 expect() calls** (was 82 · 0 · 472; +22 tests in `store-ux-v2.test.ts`) · **owed**: the one stale derivation, the visible-set helper, the Overview recency projection, both Progress projections, and the §11 audit of every projection |
 | U3 Action surface + skill | not started | — |
 | U4 Five tabs + canonical navigation | not started | — |
 | U5 Overview | not started | — |
