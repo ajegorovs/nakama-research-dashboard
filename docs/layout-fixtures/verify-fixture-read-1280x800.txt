@@ -1,6 +1,6 @@
 # harness/read-pass.sh — read pass · dataset fixture · viewport 1280x800
 # dashboard: http://127.0.0.1:3005
-# generated: 2026-10-01T22:36:59+03:00
+# generated: 2026-10-01T22:45:15+03:00
 
 PASS  login — status 200
 corpus: {"axes":6,"blocked":1,"people":2,"repositories":2,"topic":"Layout fixture — crowded card","windowEvents":8}
