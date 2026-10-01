@@ -1,5 +1,10 @@
 # U10 corpus coverage — the provenance rule, two derived seeds, and one finding
 
+> **Ruled on (reviewer, 2026-10-02): option (a)** — remove `?? axesModeProblems[0]` in Axes mode; no central
+> Problem card when an axis has zero open problems; resolved Problems stay reachable in the Problems subview;
+> **do not** alter the corpus seeds or reduce the remaining truthful skips. Fixed and re-measured: corpus
+> **84 · 0 · 22**, fixture **107 · 0 · 0** (both viewports), release `0.2.0+dev.5a98360ab6cc`.
+
 **Date:** 2026-10-02 · **Chunk:** U10 (fixtures and harness robustness) · **Runner:** harness/read-pass.sh
 
 ## What was asked

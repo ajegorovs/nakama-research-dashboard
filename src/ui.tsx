@@ -2660,9 +2660,12 @@ export function apply(ctx: Context) {
       ? (chosenProblem ?? problemRows[0] ?? null)
       : chosenProblem && chosenProblem.axisId === axesModeAxis?.id
         ? chosenProblem
-        : (axesModeProblems.filter((row) => row.state === "open")[0] ??
-          axesModeProblems[0] ??
-          null);
+        : // Axes mode emphasizes CURRENT work: the card is the axis's first open Problem in projection
+          // order, or the one explicitly selected. A resolved Problem is never shown here — with none open
+          // there is no card, and the axis still stands (the Activity column still follows it). Resolved
+          // Problems stay inspectable in the Problems subview, which is the view that shows the full
+          // inventory. The fallback to `axesModeProblems[0]` contradicted the heading's own count.
+          (axesModeProblems.filter((row) => row.state === "open")[0] ?? null);
     // In `Axes` the columns follow the selected axis. In `Problems` the axis follows the problem on screen,
     // so the card, the plan, the sections and the Activity feed all describe that problem's own parent
     // context — read off the projection's relations, never re-derived in the markup. With no problem on
@@ -2996,7 +2999,9 @@ export function apply(ctx: Context) {
             <p className="rd-muted" data-rd-progress-problem-empty="true">
               {problemsMode
                 ? "No problem is recorded yet."
-                : "Nothing is recorded against this axis."}
+                : axesModeProblems.length > 0
+                  ? "No open problems on this axis."
+                  : "Nothing is recorded against this axis."}
             </p>
           ) : (
             <div className="rd-problem-card" data-rd-problem={shownProblem.id}>

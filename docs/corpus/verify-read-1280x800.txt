@@ -1,6 +1,6 @@
 # harness/read-pass.sh — read pass · dataset corpus · viewport 1280x800
 # dashboard: http://127.0.0.1:3007
-# generated: 2026-10-02T02:11:06+03:00
+# generated: 2026-10-02T02:17:56+03:00
 
 PASS  login — status 200
 identity: expected corpus · 1 topic(s) (0 fixture-named) · 0 of 1 repository(ies) under fixture/ · observed corpus markers (no fixture-named topic or repository)
@@ -58,7 +58,7 @@ PASS  the Progress top area shows the index, the Problem column and the Activity
 PASS  the axis index opens on the projection's first row, and the detail columns follow it — active 2ca978d4, projection first 2ca978d4, problem column 2ca978d4, feed 2ca978d4
 PASS  the Problem column shows the projection's first open problem, under the projection's own count — axis "Signal analysis — `analysis/`, SA1": heading "Open problems (2)" (projection 2), shown c80a91ba vs first open c80a91ba
 PASS  the Activity feed is the projection's bucket for the selected axis, in the projection's order — feed axis 2ca978d4, count 107 (projection 107), heading "Activity (107)" (index row 107), 50 rows vs 50 in the projection
-FAIL  selecting another axis moves the Problem and Activity columns to that axis — selected 3e5b5f94: problem axis 3e5b5f94, feed axis 3e5b5f94, shown 0794cec7 (projection none open), 43 feed rows vs 43
+PASS  selecting another axis moves the Problem and Activity columns to that axis — selected 3e5b5f94: problem axis 3e5b5f94, feed axis 3e5b5f94, shown  (projection none open), 43 feed rows vs 43
 SKIP  the plan renders below the composition, from the projection — no axis in this dataset carries a plan
 SKIP  the problem's step and the step's problem are marked, both ways — no axis in this dataset has a plan and a problem naming one of its steps
 SKIP  an unordered plan keeps the store's order and invents no sequence — no axis in this dataset carries a multi-step plan with no positions
@@ -120,7 +120,7 @@ PASS  the grammar traversal wrote nothing: no write action, and the projection i
 screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/screenshots/1280x800/research-dashboard-read.png
 console issues after login: []
 
-read pass: 1 FAILED; 22 skipped for want of a subject in this corpus
+read pass: all checks passed; 22 skipped for want of a subject in this corpus
 skipped (each with its reason):
   - the blocked axis shows its blocker text — no axis in this corpus is blocked
   - a topic with a blocked axis is visually distinct — no axis in this corpus is blocked, so the attention styling has no subject here
@@ -144,4 +144,3 @@ skipped (each with its reason):
   - and the steering section follows the data: it is absent unless the axis itself carries a claim — this dataset carries no problem with nothing behind it (no repositories, no evidence, no steering), so the negative cases have no subject — the fixture's sparse problem does, so that run discriminates
   - a person filter that matches nothing attributable says so, and shows no unrelated events — every person in this corpus maps to a platform account, so the unattributable case has no subject
   - an exceptional state says which one it is, and never navigates — this dataset renders no exceptional-state subject (no bare repository, no card hiding axes), 0 notice(s) seen: none
-failed checks: selecting another axis moves the Problem and Activity columns to that axis

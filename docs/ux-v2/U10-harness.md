@@ -155,7 +155,30 @@ now name theirs.`
 
 Measured: **74 · 0 · 32 → 83 · 1 · 22** — ten more skips execute, and **one fails**.
 
-### The failure this pass surfaced (a finding, handed to the reviewer)
+### The failure this pass surfaced — ruled, fixed, and re-measured
+
+**Ruling (reviewer, 2026-10-02): remove the fallback (option a).** *"In Axes mode, the central Problem card is
+the selected axis's first open Problem in projection order. If there are zero open Problems, then there is no
+Problem card to show for that axis. The axis itself still remains meaningful and the Activity column still
+follows it."* Showing a resolved Problem under `Open problems (0)` is internally contradictory and weakens the
+deliberate distinction between **Axes** (current/open work) and **Problems** (the full inventory, resolved
+included). The seeds were not changed and no truthful skip was reduced.
+
+**Fix** (`src/ui.tsx`, Axes mode): the card is now `axesModeProblems.filter((row) => row.state === "open")[0]
+?? null` — no `axesModeProblems[0]` fallback. The empty state's text is now accurate to its cause: an axis with
+resolved problems and none open reads **"No open problems on this axis."**, and only an axis with no problems at
+all reads "Nothing is recorded against this axis." Resolved problems remain in the **Problems** subview, and the
+corpus record proves it: *"the Problems index lists the projection's problems, in the server's order, with each
+row's own state, axis, topic and recency — 3 row(s) of 3; order matches; fields match"*.
+
+**Re-measured after the fix** (both viewports, separate instances): corpus **84 · 0 · 22** — the failing check
+now passes as *"selected 3e5b5f94: problem axis 3e5b5f94, feed axis 3e5b5f94, shown (projection none open), 43
+feed rows vs 43"*, i.e. no card, the axis still standing and the Activity column still following it. Fixture
+**107 · 0 · 0**, unchanged by the fix. Release `0.2.0+dev.5a98360ab6cc` installed on both instances; source
+`ui/app.js` `7f97ce64c530ab80128f` identical in the repo and the vendored checkout, and the two instances serve
+byte-identical assets (Nakama route `ca730ec7fc2b7edb7277`, dashboard route `c80ada07b81f13e6164a`).
+
+### The failure, as it was found (kept for the record)
 
 `selecting another axis moves the Problem and Activity columns to that axis` fails because the page and the
 projection disagree about an axis that has a **resolved** problem and no open one (the acquisition axis, from
@@ -190,8 +213,8 @@ extraordinary-state subject). The table is the decision, not an omission:
 | 1 | every person maps to a platform account | 3 | left — the material has no unmapped person |
 | 1 | no exceptional-state subject (no bare repository, no card hiding axes) | 3 | left — neither subject exists in the material |
 
-**Counts after the pass** (both viewports, separate instances): fixture **107 · 0 · 0** (unchanged — its data
-and the page are untouched), corpus **83 · 1 · 22** (with the finding above).
+**Counts after the ruling and the fix** (both viewports, separate instances): fixture **107 · 0 · 0**
+(unchanged — the ruling did not touch it), corpus **84 · 0 · 22** (the finding above, closed).
 
 ### One harness regression found while recording this pass
 

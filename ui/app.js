@@ -1427,7 +1427,7 @@ function apply(ctx) {
     const chosenProblem = selectedProblemId ? problemRows.find((row) => row.id === selectedProblemId) ?? null : null;
     const axesModeAxis = selectedAxisRow ?? axisRows[0] ?? null;
     const axesModeProblems = problemRows.filter((row) => row.axisId === axesModeAxis?.id);
-    const shownProblem = problemsMode ? chosenProblem ?? problemRows[0] ?? null : chosenProblem && chosenProblem.axisId === axesModeAxis?.id ? chosenProblem : axesModeProblems.filter((row) => row.state === "open")[0] ?? axesModeProblems[0] ?? null;
+    const shownProblem = problemsMode ? chosenProblem ?? problemRows[0] ?? null : chosenProblem && chosenProblem.axisId === axesModeAxis?.id ? chosenProblem : axesModeProblems.filter((row) => row.state === "open")[0] ?? null;
     const parentAxisOfShownProblem = shownProblem === null ? null : axisRows.find((row) => row.id === shownProblem.axisId) ?? null;
     const activeAxis = problemsMode ? parentAxisOfShownProblem ?? axesModeAxis : axesModeAxis;
     const axisProblems = problemRows.filter((row) => row.axisId === activeAxis?.id);
@@ -1604,7 +1604,7 @@ function apply(ctx) {
     }, "No axis is selected.") : shownProblem === null ? /* @__PURE__ */ React.createElement("p", {
       className: "rd-muted",
       "data-rd-progress-problem-empty": "true"
-    }, problemsMode ? "No problem is recorded yet." : "Nothing is recorded against this axis.") : /* @__PURE__ */ React.createElement("div", {
+    }, problemsMode ? "No problem is recorded yet." : axesModeProblems.length > 0 ? "No open problems on this axis." : "Nothing is recorded against this axis.") : /* @__PURE__ */ React.createElement("div", {
       className: "rd-problem-card",
       "data-rd-problem": shownProblem.id
     }, /* @__PURE__ */ React.createElement("div", {

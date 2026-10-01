@@ -70,7 +70,18 @@ row while also naming its problem. Nothing is hand-typed: the two derived calls 
 and the created problems' ids are read back from the projection and matched on the PR's own subject line
 rather than assumed.
 
-### The one failing check — a finding, not a seeded defect
+### The one failing check that this pass surfaced — ruled and fixed
+
+Ruled by the reviewer (2026-10-02) as option (a): **remove the fallback**. *"In Axes mode, the central Problem
+card is the selected axis's first open Problem in projection order… If there are zero open Problems, then there
+is no Problem card to show for that axis. The axis itself still remains meaningful and the Activity column still
+follows it."* `src/ui.tsx` Axes mode no longer falls back to `axesModeProblems[0]`, and the empty state now
+reads **"No open problems on this axis."** when the axis has problems but none open (it said "Nothing is
+recorded against this axis." for both cases before). Resolved problems remain available in the **Problems**
+subview — this record shows all three listed with their own states. Re-measured after the fix: corpus
+**84 · 0 · 22**, fixture **107 · 0 · 0**.
+
+The finding, as it was recorded before the ruling:
 
 `selecting another axis moves the Problem and Activity columns to that axis` fails on this dataset
 because the page and the projection disagree about an axis that has a **resolved** problem and no open
@@ -151,7 +162,7 @@ would mix fixture data into a real-corpus pack.
 They are produced by the page harness (in the services tree, `services/nakama/scripts/verify-read.sh`,
 which wraps `verify-page.mjs`), and the pass that produced them is kept here verbatim as
 [`verify-read.txt`](verify-read.txt) — with `verify-read-1280x800.txt` for the narrow viewport:
-**83 checks passed, 1 failed, 22 skipped** at both viewports, re-measured at U10's corpus-coverage pass
+**84 checks passed, 0 failed, 22 skipped** at both viewports, re-measured at U10's corpus-coverage pass
 (2026-10-02) on a **corpus-only instance** (its own empty data root, this corpus seeded into it by the
 committed 695-call replay); the step-7 record was **64 · 0 · 32**, step-6 **56 · 0 · 30**, step-5
 **52 · 0 · 26**. The single failure is a finding rather than a seeded defect — *The one failing check*
