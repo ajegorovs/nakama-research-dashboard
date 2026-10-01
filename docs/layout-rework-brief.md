@@ -1,5 +1,14 @@
 # Layout rework — acceptance brief
 
+> **Historical — this was the pre-pivot acceptance contract (steps 1–7 of the layout rework).** It is kept as
+> the before/after reference the v2 docs quote. The live contract and the current acceptance records are
+> `docs/ux-v2/` (`README.md` maps each contract file to the chunk that satisfies it; `STATUS.md` carries the
+> per-chunk state) — the two dataset records are `docs/corpus/verify-read.txt` and
+> `docs/layout-fixtures/verify-fixture-read-1440x900.txt`. The counts under **Measured starting point** and
+> **Definition of done** below are the **baseline** numbers this brief was written against, kept verbatim as
+> the "before" side.
+
+
 What to change and what must not change. The corpus and the fixture are the two datasets
 (`docs/corpus/README.md`, `docs/layout-fixtures/README.md`); this file is the contract for the rework
 itself. Where a requirement came from a review note, it says so.
@@ -26,9 +35,9 @@ not offered).
 Two datasets, deliberately different jobs:
 
 - **`docs/corpus/`** — a real public repository's history, seeded through the plugin's action surface.
-  This is the realism and density reference. 36 checks pass, 7 are skipped.
-- **`docs/layout-fixtures/`** — a small synthetic dataset that supplies the seven states above. 43
-  checks pass, none skipped.
+  This is the realism and density reference. *Baseline:* 36 checks pass, 7 are skipped.
+- **`docs/layout-fixtures/`** — a small synthetic dataset that supplies the seven states above. *Baseline:*
+  43 checks pass, none skipped.
 
 Neither is optional. Judging density only on the fixture is unrepresentative; judging correctness only
 on the corpus misses the states with no subject there.

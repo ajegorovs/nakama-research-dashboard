@@ -244,6 +244,28 @@ and `NAKAMA_DASHBOARD` for the web origin). Arguing a flag through an npm script
 `bun run harness:read -- --env-file /tmp/nakama-review.env` — and if a script cannot find credentials it
 says which names it looked for and exits 2 rather than failing checks.
 
+**Reading a transcript: three outcomes, and one value that is time-relative.**
+
+A run has four exits, and `harness/read-pass.sh` archives only two of them:
+
+| exit | meaning | the committed record |
+|---|---|---|
+| `0` | every check passed | **replaced** (a PASS verdict) |
+| `1` | checks failed — still a verdict, not an incident | **replaced** (a FAIL verdict) |
+| `2` | **ABORTED** — the pass died mid-run | left untouched; the run stays in `$TMPDIR`, and the transcript says `ABORTED … this transcript is PARTIAL` |
+| `3` | **REFUSED** — the instance is not the dataset this run asked for | left untouched |
+
+The guard is why exit 3 exists: the pass derives the instance's dataset from durable markers (the fixture's
+`Layout fixture …` topics and repositories under `fixture/`, and the corpus's *absence* of both) **before any
+check runs**, and refuses when that does not match `--dataset`, including the mixed case. A run that measured
+the wrong dataset used to look exactly like a short successful one; now it cannot be recorded at all.
+
+One recorded value is **legitimately time-relative**: the topic card's `Recent: N events` is the projection's
+own count over a wall-clock window (`activitySinceDays`, default 14), so a record taken on a different day may
+differ by a small number **in that one line**. That is drift, not a failure — a stable clock would be a
+projection design change, not a harness fix. Every other recorded detail is byte-reproducible: three
+consecutive runs per dataset produce identical transcripts apart from the `# generated:` timestamp.
+
 **Serving a new build.** `install-plugin.mjs` installs and enables; it does not serve changed bytes. After
 `bun run build` and `vendor/vendor-into-nakama.sh`, mint a release from the vendored checkout with:
 
