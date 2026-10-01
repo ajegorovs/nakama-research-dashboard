@@ -625,6 +625,10 @@
       {
         "id": "003-drop-legacy",
         "path": "migrations/003-drop-legacy.sql"
+      },
+      {
+        "id": "004-ux-v2-model",
+        "path": "migrations/004-ux-v2-model.sql"
       }
     ]
   },

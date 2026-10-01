@@ -1,7 +1,10 @@
 # U1 — migration 004: the design note
 
-**Status: proposed, nothing executed.** This is the artifact to review *before* 004 exists: the schema, the
-truth table, the safety argument and the rollback. Line references are to files in this repository.
+**Status: executed.** 004 is written (`migrations/004-ux-v2-model.sql`), applied to the dev instance by the
+host's own applier (new database generation `g9e344…`), and its acceptance tests pass on bun:sqlite —
+including the re-run case. This note was the review artifact *before* 004 existed; §1a records what
+building it proved, and §6 is the Problem/Plan schema the reviewer approved before those columns were
+written.
 
 Read with `docs/ux-v2/STATUS.md` (chunk state) and `docs/ux-v2/README.md` (chunk map). The reviewer's U1
 charter is summarised in §7; anything in it that this note does not answer is a gap, not an oversight to
@@ -24,6 +27,30 @@ Concretely, the invariant 004 must preserve:
 | every axis's `state` string | identity map, §3.2 |
 | every relationship (`axis_repositories`, `axis_people`, `topic_*`) | row counts + `PRAGMA foreign_key_check` |
 | provenance columns (`source_type`, `actor_type`, confidence triplets) | their distributions, unchanged |
+
+## 1a. What implementing it proved (three findings only the real engine produced)
+
+Each of these surfaced when the file ran on the host's own engine (bun:sqlite 3.53.2), found by a test
+failing rather than by reading documentation, and each is now written into the migration with the evidence
+next to it:
+
+| Finding | Evidence | Consequence in 004 |
+|---|---|---|
+| `DROP TABLE` of a parent table, with foreign-key enforcement ON, **silently cascade-deletes every child row** | probed directly: dropping `p` left `c` at 0 rows; with enforcement OFF the children survived | `PRAGMA foreign_keys = OFF` is load-bearing, not decorative — it is the single line between this migration and mass deletion |
+| a plain `BEFORE DELETE … RAISE(ABORT)` on the log **also fires for foreign-key cascades**, which makes deleting an axis or a problem impossible | the acceptance test's `deleteAxis` case failed with `state_log is append-only`; the same delete passes once the trigger carries `WHEN EXISTS (subject)` | the DELETE trigger is guarded: history may not be erased while its subject exists, and a subject's own deletion takes its history with it |
+| `ALTER TABLE … RENAME TO` re-parses the whole schema, so the **second execution fails** once the log's triggers mention the just-dropped table | the re-run died with `no such table: main.development_axes`; with `legacy_alter_table=ON` both executions succeed | `PRAGMA legacy_alter_table = ON`, without which the file is not re-runnable at all |
+
+The third is the re-runnability requirement earning its keep: it was invisible until the file was executed
+twice, which is precisely what the crash-after-COMMIT case does.
+
+One more operational fact, discovered applying it: the host runs migrations only during an
+install/enable/update cycle, never at boot, and a pending migration makes it build a **new database
+generation** — a copy of the current one with the migrations applied. For a checkout loaded as a bundled
+plugin, that cycle is `POST /v1/plugins/official/<id>/reinstall` ("reload a bundled official plugin while
+preserving organization data"), and the checkout must be re-vendored first
+(`./vendor/vendor-into-nakama.sh <checkout>`) or the instance never sees the new files. So the pre-004
+database is not merely backed up before migrating — it is left in place, unmodified, which is what makes
+the rollback in §5.3 a real path rather than a reconstruction.
 
 ## 2. What the host does with a migration (the failure model 004 must live inside)
 
@@ -282,30 +309,33 @@ alone would not be evidence, so the check is five-part:
 
 ### 5.3 Rollback (#6)
 
-Rollback is a **file restore**, because the ledger lives inside the same SQLite file as the data:
+Two routes, and the first one is a correction to what this note originally claimed.
 
-1. stop the API process (or the org's plugin execution);
-2. restore the pre-004 snapshot over the org's plugin database path;
-3. start it again — the ledger now lists 001–003 only, and the plugin re-applies 004 on boot.
+**Route A — the host's generation switch, which is the reason the migration is safe to attempt.** Applying
+004 did not transform the existing database: the host built a **new generation** (a copy of the current one
+with the migration applied) and moved the install to it. The pre-004 database file is still on disk,
+untouched — verified after the fact: the old generation still has no `state_log`, still reports
+`journal_mode=wal`, and still holds the same 3 axes, 694 activities and 7 annotations. So the pre-migration
+data is not a backup that has to be restored correctly; it is a file nothing has written to. Rolling back
+the *data* is a matter of pointing the install back at that generation. No documented endpoint was found
+for switching generations, so treat this as the safety net rather than the procedure.
 
-So rollback leaves the system in a state the forward path is *designed* to migrate from, rather than in a
-hand-repaired intermediate. The estate keeps the snapshot under `/mnt/otrais/data/nakama-dev/backups/`
-(estate path, not recorded in this repository's docs); for a clone, `pre004-snapshot.py` works on any
-plugin database and takes seconds.
-
-**"File restore", defined operationally** (the reviewer's caveat, and it matters — a casual copy is not a
-rollback):
+**Route B — the documented file restore**, because the ledger lives inside the same SQLite file as the data
+(the host's `_nakama_plugin_migrations` table was in the plugin database's own schema):
 
 1. **Stop the API process** that owns the plugin database. Restoring under a live writer is not recovery,
    it is corruption with extra steps.
 2. **Restore a known-consistent snapshot**, not a raw file copy. The supported artifact is the one
    `pre004-snapshot.py` produces, because it is written with SQLite's `VACUUM INTO`: that opens a read
    transaction on the source and writes a complete, self-contained database, so nothing can be split
-   between a `.sqlite` file and a `-wal`/`-shm` sidecar. A plain `cp` of the `.sqlite` while WAL holds
-   committed pages loses data — if somebody must copy by hand instead, they checkpoint first
-   (`PRAGMA wal_checkpoint(TRUNCATE)`) and stop the writer.
-3. **Start it again.** The restored file's ledger lists 001–003, so the plugin re-applies 004 on boot —
-   the same path a fresh install takes.
+   between a `.sqlite` file and a `-wal`/`-shm` sidecar. This is not theoretical here — the live pre-004
+   database runs in WAL mode, so a plain `cp` of the `.sqlite` while WAL holds committed pages loses data.
+   If somebody must copy by hand instead, they checkpoint first (`PRAGMA wal_checkpoint(TRUNCATE)`) and stop
+   the writer.
+3. **Start it again, then run one install/enable/reinstall cycle.** Correcting this note's earlier claim:
+   the host applies plugin migrations during an install/enable/update cycle, **not at boot**, so a restored
+   database is not auto-migrated by starting the server. The enable/reinstall cycle is what re-applies 004
+   into a fresh generation — the same path a first install takes.
 
 The same rule applies in the other direction: the pre-004 snapshot used as *input* to the U1 tests is a
 `VACUUM INTO` artifact for the same reason. Copying the live dev database by hand for testing would test a

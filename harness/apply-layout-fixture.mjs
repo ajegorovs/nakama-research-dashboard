@@ -21,8 +21,8 @@ loadEnvFileArg();
 
 const PLUGIN_ID = process.env.NAKAMA_PLUGIN_ID ?? "research-dashboard";
 const BASE = (process.env.NAKAMA_URL ?? "http://127.0.0.1:4399").replace(/\/+$/, "");
-const EMAIL = process.env.NAKAMA_EMAIL ?? "";
-const PASSWORD = process.env.NAKAMA_PASSWORD ?? "";
+const EMAIL = process.env.NAKAMA_EMAIL ?? process.env.NAKAMA_DEV_EMAIL ?? "";
+const PASSWORD = process.env.NAKAMA_PASSWORD ?? process.env.NAKAMA_DEV_PASSWORD ?? "";
 
 const repo = (fullName, description) => ({ description, fullName, relationship: "primary" });
 const repoLink = (fullName) => ({ fullName });

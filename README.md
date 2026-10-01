@@ -242,6 +242,40 @@ over the committed record, by design: re-running is how the record is refreshed.
 `--write` also creates a topic, opens its editor and records an activity through the page. It **mutates
 the dataset** — wipe and re-seed afterwards; the corpus must not carry a `smoke-check` topic.
 
+## Applying a plugin migration
+
+Migrations are declared in `nakama.plugin.json` (`database.migrations`) — a `.sql` file that is not
+registered there is never run, and `bun harness/update-plugin.mjs` refuses to start if the manifest and
+`migrations/` disagree.
+
+The host applies migrations **during an install/enable/update cycle, never at boot**, and a pending
+migration makes it build a **new database generation** — a copy of the current one with the migration
+applied. The previous generation is left in place, untouched, which is what makes a rollback a file that
+nothing has written to rather than a reconstruction. (`docs/ux-v2/U1-migration.md` §5.3.)
+
+On a checkout loaded as a bundled plugin:
+
+```bash
+./vendor/vendor-into-nakama.sh /path/to/nakama        # the instance reads the vendored copy, not this tree
+bun harness/update-plugin.mjs --env-file /tmp/review.env --data-root /path/to/nakama/data
+```
+
+`update-plugin.mjs` drives `POST /v1/plugins/official/<id>/reinstall` ("reload a bundled official plugin
+while preserving organization data"), waits for the install to settle, and — with `--data-root` — prints the
+old and new generation with their row counts, so "did my data survive" is answered by the run rather than
+by hope.
+
+Migration 004's own tests run without any instance:
+
+```bash
+bun harness/test-004.mjs                                       # self-contained: applies 001→003, then 004
+bun harness/test-004.mjs --db /path/to/pre-004-database.sqlite  # and against a real one, on a copy
+```
+
+They cover preservation (by identity, not just counts), the foreign-key definitions the rebuilds must not
+lose, every state-log combination that must be rejected, the reopen cycles, and the crash-after-COMMIT
+re-run that the host's ledger ordering makes possible. 79 checks, and a failing one prints what it got.
+
 ## What a reviewer should look at
 
 | File | Question |
