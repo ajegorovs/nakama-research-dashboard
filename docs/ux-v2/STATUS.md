@@ -13,7 +13,7 @@ any view reads them.
 | **U0** Contract, baseline, runnable pass | **done** | `contract/` published verbatim · `BASELINE.md` · the pass moved in-repo and reproduces from a *fresh clone* on a *pristine checkout* (measured below) · PR #1 merged, tagged `pre-ux-v2` · three harness defects found by that run and fixed |
 | **U1** Migration 004 (`usable`, state log, Problems, Plans) | **done** | `migrations/004-ux-v2-model.sql` · design note + truth table in `U1-migration.md` (§3.2, §4, §1a, §1b) · `harness/test-004.mjs`: **79 checks, 0 failed**, including the crash-after-COMMIT re-run · applied to the dev instance by the host's own applier — new generation `g9e344…`, ledger 001–004 · both acceptance passes green afterwards, plus the `abandoned` fixture axis and a check that every state the payload carries renders as itself |
 | **U2** Store writers + read models | **the store layer is complete; not yet wired to anything** | `U2-store.md` (semantics, reviewer-approved) · writers, both Progress projections, the Overview recency projection, one scope builder, one recency/stale derivation and the §11 audit all landed · `bun run check` **111 pass · 0 fail · 596 expect() calls** (was 82 · 0 · 472) · 19 acceptance items covered by named tests · **owed by U3**: nothing here is reachable from an action or a page, and `usable` is still absent from `nakama.plugin.json`'s `axes[].state` enum → **the action half is delivered in U3** (`transitions[]`/`problems[]`/`plans[]`, `usable` in the enum); the page half is U4+ |
-| **U4** Progress-first vertical slice | **in progress — the data boundary is done; the render is next** | `U4-progress.md`. Finding: `progressAxes`/`progressProblems`/`overviewRecency` existed in the store and **no action exposed them**, so the slice's first half was a read action. `get_progress` returns both Progress projections from one window (read-only, `exposeAsTool: false` — still five tools; host schema validation accepted it on reinstall). Traceability: the payload is deep-equal to the store's own projections, and the field set is pinned (3 · 3 · 16 · 4 · 19 keys + no V1 `scope/approach/progress/nextStep`) so a display-only field must be declared in the test before a component can rely on it. `bun run check` = **0 typecheck · 121 pass · 0 fail · 705 expect()**. Live (`dev.e39055d638ba`, revision 289, generation unchanged): both halves on one window, and the live JSON key set is **byte-for-byte the pinned inventory** — the page can rely on every key. Gap the live read exposed: the dataset has **0 problem rows**, so the Problems subview has nothing to render against → **fixture E is now seeded** (`harness/apply-layout-fixture.mjs`, contract `fixtures.md` §E: one open Problem on two repositories, a person link, an activity, an evidence record, a human-authored steering note, a plan step it sits on, and a second Problem with `planStep = null`), idempotent on re-apply, and **measured to leave the frozen baseline untouched**: fixture pass still **50/0/0** with it present, instance still 2 topics / 7 axes / 2 people / 2 repositories. Seeding it found and fixed a real defect: a claim with two targets (or none) answered **HTTP 500 with no `kind`** instead of a refusal — the JS target check lived only in `addAnnotation`, while the reconcile loop calls `insertAnnotation` directly and died on migration 004's CHECK constraint, a raw `SQLiteError` that escaped `run()`. The check now sits in the single insert path (no caller can skip it), `StoreErrorCode` gained `invalid-input`, and tests pin two-target/none/one-target. `bun run check` = **0 typecheck · 124 pass · 0 fail · 715 expect()** |
+| **U4** Progress-first vertical slice | **in progress — step 1 (the axis index) is rendered; steps 2–7 remain** | `U4-progress.md`. Finding: `progressAxes`/`progressProblems`/`overviewRecency` existed in the store and **no action exposed them**, so the slice's first half was a read action. `get_progress` returns both Progress projections from one window (read-only, `exposeAsTool: false` — still five tools; host schema validation accepted it on reinstall). Traceability: the payload is deep-equal to the store's own projections, and the field set is pinned (3 · 3 · 16 · 4 · 19 keys + no V1 `scope/approach/progress/nextStep`) so a display-only field must be declared in the test before a component can rely on it. `bun run check` = **0 typecheck · 121 pass · 0 fail · 705 expect()**. Live (`dev.e39055d638ba`, revision 289, generation unchanged): both halves on one window, and the live JSON key set is **byte-for-byte the pinned inventory** — the page can rely on every key. Gap the live read exposed: the dataset has **0 problem rows**, so the Problems subview has nothing to render against → **fixture E is now seeded** (`harness/apply-layout-fixture.mjs`, contract `fixtures.md` §E: one open Problem on two repositories, a person link, an activity, an evidence record, a human-authored steering note, a plan step it sits on, and a second Problem with `planStep = null`), idempotent on re-apply, and **measured to leave the frozen baseline untouched**: fixture pass still **50/0/0** with it present, instance still 2 topics / 7 axes / 2 people / 2 repositories. Seeding it found and fixed a real defect: a claim with two targets (or none) answered **HTTP 500 with no `kind`** instead of a refusal — the JS target check lived only in `addAnnotation`, while the reconcile loop calls `insertAnnotation` directly and died on migration 004's CHECK constraint, a raw `SQLiteError` that escaped `run()`. The check now sits in the single insert path (no caller can skip it), `StoreErrorCode` gained `invalid-input`, and tests pin two-target/none/one-target. `bun run check` = **0 typecheck · 124 pass · 0 fail · 715 expect()**. **The render is in (step 1 complete):** the Progress axis index reads `get_progress.axes.axes` directly — order preserved, no client-side sort, no client-side staleness, no re-derived counts — and shows title, state + confidence, topic, problem count and recency; selection only marks a row active. The page declares its own view types (it cannot import the store's), and the first mirror flattened one level of nesting, which **no typecheck could catch** and which rendered the view empty at runtime; the harness caught it in one run because its check compares the DOM against the live action. The harness gained the window check the reviewer asked for (**C7b**: the index must equal the projection for the current window at 30 and 7 days, replaced and not extended), measured on the isolated fixture-only instance at **51/0/0 both viewports** — 51, not 50, because the harness gained that check. See `U4-progress.md` §8–§11 |
 | **U3** Action surface + skill | **done — steps 1–10** | Steps 1–8: real typechecking (0 diagnostics, both modes), `usable` in the exposed enum, `transitions[]`/`problems[]`/`plans[]` on `reconcile_topic`, a machine-readable `kind` on every refusal, `get_topic` carrying problems/plan/state history, and the skill stating the new semantics + the retention rule. `bun run check` = **0 typecheck · 117 pass · 0 fail · 654 expect()**. Live: release re-minted (`dev.cc3e078d2bb6`, generation unchanged — U3 adds no migration), the **Axis and Problem** lifecycles proven through the host's action route, corpus **43/0/7** and fixture **50/0/0 at both viewports** on an isolated fixture-only instance. See `U3-surface.md` |
 | U5 Overview | not started | — |
 | U6 Topics | not started | — |
@@ -95,6 +95,22 @@ filtered view names that instead. It is a harness assumption, not a plugin or mi
 fixture-only, the same checks are 50 · 0 · 0. Recorded rather than smoothed over, because a reader
 comparing the two tables would otherwise wonder which number to trust.
 
+**Current (U4 step 1), measured on the isolated fixture-only instance** — its own instance, its own empty data
+root, plugin rows wiped first, the same recipe as the rows above: fixture **51 · 0 · 0** at both 1440×900 and
+1280×800. It is 51 rather than 50 because U4's step 1 added the window check (`U4-progress.md` §9): at 30 days
+and at 7 days the DOM's index is compared against `get_progress`'s own answer for that window — order, activity,
+problem count, state, stale flag — so a client that kept rows from the previous result, re-sorted them, or
+re-derived the counts would disagree on any dataset.
+
+Run instead on the **shared dev instance** (corpus + fixture + Fixture E), the same pass reports
+**50 · 1 · 0**. The 7 skips of the corpus-only record become real checks once fixture data is present, and the
+one failure is **the coupling recorded in the paragraph above, surfacing in the other direction**: the
+repository-filter check's expectation comes from `CORPUS.topic` (the first timeline group) while the filter it
+applies comes from `CORPUS.repositories[0]`, and on a mixed instance those two describe different origins — the
+rails themselves were clean (`stray []`). The committed corpus record (`docs/corpus/verify-read.txt`,
+43 · 0 · 7) was therefore **not** overwritten with a mixed-instance result: a corpus figure a reviewer can
+reproduce needs a corpus-only instance, which is U10's work.
+
 ## Open
 
 - **Nothing writes `state_log` yet.** That lands in U2/U3 with the transition writer. Consequence today:
@@ -166,13 +182,20 @@ comparing the two tables would otherwise wonder which number to trust.
   the reason (classic JSX runtime + the global `JSX` namespace the host injects) recorded next to the
   dependency policy in the README so nobody upgrades it casually.
 
-  **One unreproduced test flake, recorded rather than smoothed.** A single `bun run check` during U3's step 10
-  reported 117 pass / 1 fail; the failing name was not captured (only the tail was). It did not reproduce:
-  `bun test src` and `bun run check` were then green twice, and the 50-test concurrency-heavy file that holds
-  the timing-sensitive cases (two-writer lock waits, `SQLITE_BUSY` behaviour) passed three times
-  consecutively. The observed run was competing with an isolated Nakama server, a vite dev server and two
-  Chromium sessions on the same machine, so contention is the likeliest cause. Left as an open observation,
-  not a claim that the suite is stable: if it recurs, capture the check name before assuming the same cause.
+  **The one unreproduced test flake, now root-caused.** A single `bun run check` during U3's step 10 reported
+  117 pass / 1 fail; the failing name was not captured (only the tail was). It did not reproduce at the time:
+  `bun test src` and `bun run check` were green twice, and the 50-test concurrency-heavy file passed three
+  consecutive runs — the observed run was competing with an isolated Nakama server, a vite dev server and two
+  Chromium sessions, so contention stayed the likeliest cause. Running `bun run check` after U4's render then
+  made the same class reproducible: *"a refusal keeps its kind across the action boundary"* failed 3 runs in 6.
+  The cause is not contention and not the store. A topic's axes come back `ORDER BY updated_at DESC, title ASC`;
+  whether the two fixture axes land in the **same millisecond** decides whether the title tiebreak is reached at
+  all, so the asserted order flips whenever the inserts straddle a millisecond boundary. The store is
+  deterministic given its data — the assertion pinned a timing artifact. It now compares as a set, with the
+  reason written next to it. Whether the U3 run was *this* test cannot be proven after the fact, but the class
+  is no longer unexplained. The same pattern (order assertions over `updated_at DESC` lists) still exists at
+  five sites in `store.test.ts`; they passed 5 consecutive full runs, but they carry the same latent
+  sensitivity and should be compared as sets when next touched.
 
 ## What a reviewer can usefully do at this point
 

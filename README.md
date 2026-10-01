@@ -279,7 +279,8 @@ the referencing pass second.
 
 Expected as of the U1 commit: corpus **43 pass · 0 fail · 7 skip** and fixture **50 · 0 · 0**, at
 both viewports. (Before U1 it was 42 and 49 — U1 added one check, "every axis state the payload carries
-reaches the page as that state", and the `abandoned` fixture axis it needs.) The counts move whenever a
+reaches the page as that state", and the `abandoned` fixture axis it needs. U4 added one more, the Progress
+window check, so the fixture pass now reports **51**.) The counts move whenever a
 check is added, so read the run's own summary line rather than a number in a document. Each run writes its transcript to
 `docs/corpus/verify-read[-<viewport>].txt` or `docs/layout-fixtures/verify-fixture-read-<viewport>.txt`
 and its screenshots under `docs/screenshots/` or `docs/layout-fixtures/screenshots/<viewport>/` — i.e.

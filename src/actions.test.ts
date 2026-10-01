@@ -1160,7 +1160,11 @@ describe("U3 action surface", () => {
     const states = ((readBack.axes ?? []) as Array<{ state: string; title: string }>).map(
       (axis) => [axis.title, axis.state]
     );
-    expect(states).toEqual([
+    // Compared as a set, not in order. A topic's axes come back `ORDER BY updated_at DESC, title ASC`, and
+    // whether the two inserts land in the same millisecond decides whether the title tiebreak is reached —
+    // so the order here flips roughly half the time. That is a property of the query's key, not of the
+    // refusal this test is about; pinning it made the test time-sensitive and it failed intermittently.
+    expect(states.sort()).toEqual([
       ["Parameter automation", "active"],
       ["Signal explorer", "draft"],
     ]);

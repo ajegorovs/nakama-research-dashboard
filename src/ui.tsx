@@ -220,6 +220,49 @@ type RepositoryRollup = {
   lastActivityAt: string | null;
 };
 
+/**
+ * One row of the Progress axis index, exactly as `get_progress` returns it.
+ *
+ * Deliberately a **subset** of the store's `ProgressAxisRow`: the page declares what it renders, and the
+ * store stays the source of truth — the row's field set is pinned by `src/actions.test.ts` (16 keys), so a
+ * field added or renamed there fails there first. The fields not listed (blocker, blockerConfidence, plan,
+ * stateHistory) belong to steps this slice has not reached; they are out of scope, not dropped.
+ */
+type ProgressAxisRow = {
+  activityInWindow: number;
+  id: string;
+  lastActivityAt: string | null;
+  openProblems: number;
+  problems: number;
+  recencyAt: string | null;
+  stale: boolean;
+  state: AxisState;
+  stateConfidence: Confidence;
+  title: string;
+  topicId: string;
+  topicName: string;
+};
+
+/**
+ * `get_progress`'s payload, as far as this view reads it.
+ *
+ * The nesting is the contract's, not a local convenience: the **outer** `axes` is the projection — the window
+ * it was scoped to, the staleness threshold, and the rows — and the row list is `axes.axes`. That shape is
+ * pinned by the U2 contract and the action tests, so it is read as-is rather than renamed to `rows` for
+ * readability here. Getting this one level wrong is invisible to `tsc` (a client-side mirror is still
+ * type-correct against itself) and shows up as an empty view at runtime, so it is worth naming plainly.
+ *
+ * `problems` also arrives in the payload; the Problems half of the subview is a later step, so it is not
+ * declared here yet — undeclared, not dropped.
+ */
+type ProgressIndex = {
+  axes: {
+    activitySinceDays: number;
+    axes: ProgressAxisRow[];
+    staleAfterDays: number;
+  };
+};
+
 type Activity = {
   id: string;
   axisId: string | null;
@@ -1748,17 +1791,33 @@ export function apply(ctx: Context) {
    * page already holds — no re-query, no new call — and the two *context* filters (topic, repository)
    * read the axis, which is exactly how an event that named only its axis still filters correctly.
    */
+  /**
+   * The two counts the projection carries, phrased. Not a computation: `problems` and `openProblems` are the
+   * projection's own numbers — this only decides how to say them.
+   */
+  function problemCountLine(row: ProgressAxisRow): string {
+    if (row.problems === 0) {
+      return "no problems";
+    }
+    return row.openProblems === row.problems
+      ? `${row.problems} problem${row.problems === 1 ? "" : "s"}`
+      : `${row.openProblems} open of ${row.problems}`;
+  }
+
   function ProgressView({
     people,
+    progress,
     repositories,
     timeline,
     windowDays,
   }: {
     people: PersonRollup[];
+    progress: ProgressIndex | null;
     repositories: RepositoryRollup[];
     timeline: TimelineGroup[];
     windowDays: number;
   }) {
+    const [selectedAxisId, setSelectedAxisId] = React.useState<string | null>(null);
     const [topicFilter, setTopicFilter] = React.useState("all");
     const [personFilter, setPersonFilter] = React.useState("all");
     const [repositoryFilter, setRepositoryFilter] = React.useState("all");
@@ -1807,6 +1866,62 @@ export function apply(ctx: Context) {
 
     return (
       <div className="rd-stack" data-rd-view="progress">
+        {/*
+         * The axis index — this slice's one new element, rendered straight from `get_progress.axes.axes`.
+         *
+         * Server order is the presentation order: no re-sorting, no re-grouping, no client-side recomputation
+         * of `stale` or of either problem count. The row's two numbers and its stale flag are read off the
+         * projection; only their phrasing is decided here.
+         *
+         * Selection marks a row active and does nothing else — it filters nothing, because nothing on this
+         * view reads the selection until the Problem and Activity columns arrive. The index is a projection
+         * renderer, not a second model.
+         *
+         * Geometry note: the contract puts this index on the left with Problem + Activity beside it. There is
+         * nothing to put beside it yet, so it sits above the window's existing content; the split is the next
+         * step's layout work, not a decision taken here.
+         */}
+        <div
+          className="rd-progress-index"
+          data-rd-progress-index="true"
+          data-rd-progress-index-rows={(progress?.axes.axes ?? []).length}
+          data-rd-progress-index-stale-after={progress?.axes.staleAfterDays ?? 0}
+          data-rd-progress-index-window={progress?.axes.activitySinceDays ?? 0}
+        >
+          <ul className="rd-index">
+            {(progress?.axes.axes ?? []).map((row) => (
+              <li key={row.id}>
+                <button
+                  aria-pressed={selectedAxisId === row.id}
+                  className="rd-index-item"
+                  data-rd-index-activity={row.activityInWindow}
+                  data-rd-index-axis={row.id}
+                  data-rd-index-open-problems={row.openProblems}
+                  data-rd-index-problems={row.problems}
+                  data-rd-index-stale={row.stale}
+                  data-rd-index-state={row.state}
+                  data-rd-index-topic={row.topicName}
+                  onClick={() => setSelectedAxisId(row.id)}
+                  type="button"
+                >
+                  <span className="rd-strong">{row.title}</span>
+                  <span className="rd-meta">
+                    <StateBadge confidence={row.stateConfidence} state={row.state} />
+                    {` · ${row.topicName} · ${problemCountLine(row)} · ${
+                      row.stale ? "stale · " : ""
+                    }last activity ${describeAge(row.recencyAt)}`}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          {progress && progress.axes.axes.length === 0 ? (
+            <p className="rd-muted" data-rd-progress-index-empty="true">
+              No axes yet.
+            </p>
+          ) : null}
+        </div>
+
         <div className="rd-cluster rd-filters">
           <FilterSelect
             label="Filter by topic"
@@ -1975,6 +2090,11 @@ export function apply(ctx: Context) {
     >(null);
     const [newName, setNewName] = React.useState("");
     const [detail, setDetail] = React.useState<TopicDetail | null>(null);
+    /**
+     * The Progress index, straight from `get_progress`. Held here rather than inside the view for the same
+     * reason the window is: it is scoped by the window, and it is replaced whole on every window change.
+     */
+    const [progress, setProgress] = React.useState<ProgressIndex | null>(null);
     const [correction, setCorrection] = React.useState<AxisCorrection | null>(
       null
     );
@@ -2032,14 +2152,26 @@ export function apply(ctx: Context) {
      * The whole default screen comes from this one call. The window is the only thing that changes
      * the query; `includeArchived` is additive and only sent when it is on, so a request body shows
      * exactly what the page asked for.
+     *
+     * The Progress index rides the same trigger rather than its own: the contract says switching views never
+     * queries, so the second read happens when the *window* changes, not when Progress is opened. That costs
+     * one extra read per window change and keeps view switching free, which is the trade the contract asks
+     * for.
      */
     async function load(nextWindow: number, archived: boolean): Promise<void> {
-      const result = await call<{ ok?: boolean } & Overview>("get_overview", {
+      const scope = {
         activitySinceDays: nextWindow,
         ...(archived ? { includeArchived: true } : {}),
-      });
+      };
+      const result = await call<{ ok?: boolean } & Overview>("get_overview", scope);
       if (!ctx.signal.aborted && result) {
         setOverview(result as Overview);
+      }
+      const progressResult = await call<{ ok?: boolean } & ProgressIndex>("get_progress", scope);
+      if (!ctx.signal.aborted) {
+        // Replaced wholesale, never merged: the index is the projection for *this* window, and a row kept
+        // from the previous result would be a client-side model the projection never answered for.
+        setProgress(progressResult ? (progressResult as ProgressIndex) : null);
       }
     }
 
@@ -2811,6 +2943,7 @@ export function apply(ctx: Context) {
         {view === "progress" ? (
           <ProgressView
             people={overview?.people ?? []}
+            progress={progress}
             repositories={overview?.repositories ?? []}
             timeline={overview?.timeline ?? []}
             windowDays={windowDays}

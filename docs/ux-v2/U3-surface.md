@@ -195,7 +195,9 @@ the manifest does not enumerate either.
 - **Fixture: 50 PASS / 0 FAIL / 0 skip at both viewports** (1440×900 and 1280×800), on a **fixture-only**
   instance — a fresh server on `:4400` with its own config dir and its own web dev server, the plugin
   installed and enabled there, then the fixture applied. The committed transcript *and* screenshots were
-  refreshed from these runs, which is the documented way the record is kept.
+  refreshed from these runs, which is the documented way the record is kept. (U4's step 1 has since added one
+  check to the pass, so the same fixture runs now report **51/0/0**; see `U4-progress.md` §9. U3's numbers are
+  kept as U3 measured them.)
 - **Corpus: 43 PASS / 0 FAIL / 7 skip**, unchanged from its committed shape.
 
 The earlier fixture run's 49 PASS / 1 FAIL is now fully explained, and it was the harness's dataset

@@ -221,3 +221,81 @@ fixture E: problem with nothing behind it — repositories 0, step null, history
 problem (6 activity records there rather than 2) and one duplicated plan from the first failed attempt. The
 numbers above are from the isolated instance, which is where the fixture is meant to be read; the dev
 instance is mixed by design and its corpus record stands as U3's step 10 left it.
+
+## 8. The axis-index render (step 1, second half)
+
+The index is this slice's one new element. It reads `get_progress.axes.axes` and nothing else:
+
+| On screen | Comes from | Not from |
+|---|---|---|
+| row order | the projection's own order (attention, then recency) | no sort, no group-by, no ranking in the client |
+| axis title | `row.title` | — |
+| state + confidence | `row.state`, `row.stateConfidence` via the existing `StateBadge` | no vocabulary of its own, no mapping table |
+| topic context | `row.topicName` | — |
+| problem count | `row.problems`, `row.openProblems` | only their phrasing is decided here |
+| recency | `row.recencyAt` through the page's existing `describeAge`, and `row.stale` as the projection computed it | **no client-side staleness derivation**, no threshold arithmetic |
+
+Selection state (`selectedAxisId`) marks a row `aria-pressed` and **does nothing else** — it filters nothing,
+because nothing on the view reads it yet. The contract puts the index on the left with Problem + Activity
+beside it; there is nothing to put beside it yet, so it sits above the window's existing content and the
+split is the next step's layout work. The window is not something the index owns either: it rides the same
+`load()` that already re-queries on a window change, so **switching views still queries nothing**, at the
+cost of one extra read per window change.
+
+### The one thing that went wrong, and why the harness caught it and `tsc` could not
+
+The page cannot import the store's types (the browser bundle must not pull in `bun:sqlite`), so it declares
+its own view types. The first version of that mirror flattened the payload — it declared `{ activitySinceDays,
+axes: ProgressAxisRow[], staleAfterDays }` where the contract has `{ axes: { … }, problems: { … } }`. Every
+field of every row was right; one level of nesting was wrong, and **a client-side mirror is always type-correct
+against itself**, so `bun run check` stayed green while the view threw
+`TypeError: ((intermediate value) ?? []).map is not a function` at runtime and rendered nothing. The harness
+found it in one run, because its check compares the DOM against the live action rather than against the
+client's own idea of the payload. The mirror now names the nesting and says why: the outer `axes` is the
+projection (window, threshold, rows), the rows are `axes.axes`, and the shape is read as-is rather than renamed
+to `rows` for local readability.
+
+## 9. The window check (C7b), and what it is really asserting
+
+`harness/verify-page.mjs` gained one check: at 30 days and at 7 days it reads the index out of the DOM
+(row ids and order, per-row activity, problem count, state, stale flag, and the window the index reports) and
+compares it against **`get_progress`'s own answer for that window**, then restores the window.
+
+Comparing against the projection rather than against a remembered expectation is what makes this a check on
+the client's state instead of on the corpus: on any dataset, a row that carried its previous count forward, a
+client that re-sorted, or one that kept rows from the last result would disagree with the projection. The
+element missing is a failure of this check, not an abort of the pass — the first version of the check threw a
+`TimeoutError` that killed the whole run, which said nothing about the page.
+
+**Measured (isolated fixture-only instance, both viewports): 51 PASS / 0 FAIL / 0 skip**, at 1440×900 and at
+1280×800. The committed fixture record is therefore 51 checks, not 50: the harness gained one. The new check's
+own line reads
+
+```
+PASS  the Progress index is the projection for the current window — replaced on change, not extended — matched the projection at 30 and 7 days (7d restored)
+```
+
+## 10. What the shared dev instance measured, and the corpus record
+
+Run on the shared dev instance (corpus + fixture + Fixture E), the same pass reports **50 pass · 1 fail · 0
+skip**: the 7 skips of the corpus-only record became real checks once fixture data was present, and one of them
+fails. It is not the render. The check
+*"filtering by a repository keeps only the axes that name it, and says it is filtered"* derives two things
+from two different places: `CORPUS.repositories[0]` (the corpus repository, and therefore its topic) and
+`CORPUS.topic` (the topic of the **first timeline group**, which on a mixed instance is a fixture topic). The
+filter and the expectation describe different origins, so they disagree — the rails themselves were clean
+(`stray []`). This is the mixed-dataset coupling U10 already owns; it is recorded here rather than papered over,
+and the **committed corpus record was not overwritten** with a mixed-instance result. A corpus number that a
+reviewer can reproduce needs a corpus-only instance, which is U10's work.
+
+## 11. A pre-existing flake, root-caused
+
+While running `bun run check` after the render, the U3 action test *"a refusal keeps its kind across the action
+boundary"* failed — and then failed 3 runs in 6. It is not timing in the store: a topic's axes come back
+`ORDER BY updated_at DESC, title ASC`, and whether the two fixture axes land in the same millisecond decides
+whether the title tiebreak is reached, so the order flips. The store is deterministic given its data; the
+assertion pinned a timing artifact, and it now compares as a set with the reason written next to it. This is
+very likely the same class as the single unexplained `117/1` run recorded at U3's close — reproduced here, so
+it is no longer an unexplained observation, though whether that run *was* this test cannot be proven after the
+fact. The same pattern (order assertions over `updated_at DESC` lists) still exists at five sites in
+`store.test.ts`; they passed 5 consecutive full runs, but they carry the same latent sensitivity.

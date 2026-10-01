@@ -996,12 +996,20 @@ function apply(ctx) {
       value: option.value
     }, option.label))));
   }
+  function problemCountLine(row) {
+    if (row.problems === 0) {
+      return "no problems";
+    }
+    return row.openProblems === row.problems ? `${row.problems} problem${row.problems === 1 ? "" : "s"}` : `${row.openProblems} open of ${row.problems}`;
+  }
   function ProgressView({
     people,
+    progress,
     repositories,
     timeline,
     windowDays
   }) {
+    const [selectedAxisId, setSelectedAxisId] = React.useState(null);
     const [topicFilter, setTopicFilter] = React.useState("all");
     const [personFilter, setPersonFilter] = React.useState("all");
     const [repositoryFilter, setRepositoryFilter] = React.useState("all");
@@ -1019,6 +1027,38 @@ function apply(ctx) {
       className: "rd-stack",
       "data-rd-view": "progress"
     }, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-progress-index",
+      "data-rd-progress-index": "true",
+      "data-rd-progress-index-rows": (progress?.axes.axes ?? []).length,
+      "data-rd-progress-index-stale-after": progress?.axes.staleAfterDays ?? 0,
+      "data-rd-progress-index-window": progress?.axes.activitySinceDays ?? 0
+    }, /* @__PURE__ */ React.createElement("ul", {
+      className: "rd-index"
+    }, (progress?.axes.axes ?? []).map((row) => /* @__PURE__ */ React.createElement("li", {
+      key: row.id
+    }, /* @__PURE__ */ React.createElement("button", {
+      "aria-pressed": selectedAxisId === row.id,
+      className: "rd-index-item",
+      "data-rd-index-activity": row.activityInWindow,
+      "data-rd-index-axis": row.id,
+      "data-rd-index-open-problems": row.openProblems,
+      "data-rd-index-problems": row.problems,
+      "data-rd-index-stale": row.stale,
+      "data-rd-index-state": row.state,
+      "data-rd-index-topic": row.topicName,
+      onClick: () => setSelectedAxisId(row.id),
+      type: "button"
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-strong"
+    }, row.title), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, /* @__PURE__ */ React.createElement(StateBadge, {
+      confidence: row.stateConfidence,
+      state: row.state
+    }), ` · ${row.topicName} · ${problemCountLine(row)} · ${row.stale ? "stale · " : ""}last activity ${describeAge(row.recencyAt)}`))))), progress && progress.axes.axes.length === 0 ? /* @__PURE__ */ React.createElement("p", {
+      className: "rd-muted",
+      "data-rd-progress-index-empty": "true"
+    }, "No axes yet.") : null), /* @__PURE__ */ React.createElement("div", {
       className: "rd-cluster rd-filters"
     }, /* @__PURE__ */ React.createElement(FilterSelect, {
       label: "Filter by topic",
@@ -1127,6 +1167,7 @@ function apply(ctx) {
     const [editing, setEditing] = React.useState(null);
     const [newName, setNewName] = React.useState("");
     const [detail, setDetail] = React.useState(null);
+    const [progress, setProgress] = React.useState(null);
     const [correction, setCorrection] = React.useState(null);
     const [historyAxisId, setHistoryAxisId] = React.useState(null);
     const [topicNote, setTopicNote] = React.useState("");
@@ -1166,12 +1207,17 @@ function apply(ctx) {
       }
     }
     async function load(nextWindow, archived) {
-      const result = await call("get_overview", {
+      const scope = {
         activitySinceDays: nextWindow,
         ...archived ? { includeArchived: true } : {}
-      });
+      };
+      const result = await call("get_overview", scope);
       if (!ctx.signal.aborted && result) {
         setOverview(result);
+      }
+      const progressResult = await call("get_progress", scope);
+      if (!ctx.signal.aborted) {
+        setProgress(progressResult ? progressResult : null);
       }
     }
     React.useEffect(() => {
@@ -1694,6 +1740,7 @@ function apply(ctx) {
       windowDays
     }) : null, view === "progress" ? /* @__PURE__ */ React.createElement(ProgressView, {
       people: overview?.people ?? [],
+      progress,
       repositories: overview?.repositories ?? [],
       timeline: overview?.timeline ?? [],
       windowDays

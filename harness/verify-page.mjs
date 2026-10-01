@@ -1001,6 +1001,130 @@ const progressShot = `${OUT}/research-dashboard-${WRITE ? "write" : "read"}-prog
 await root.screenshot({ path: progressShot });
 console.log("progress screenshot:", progressShot);
 
+// ---------------------------------------- C7b: the index *is* the projection, for the current window
+// The axis index reads `get_progress`, so it has to equal what the store reports for the window on screen —
+// and changing the window must **replace** it, never extend it. Comparing the DOM against the action's own
+// answer, rather than against a remembered expectation, is what makes this a check on the client's state
+// instead of on the corpus: a row carrying its previous count forward would disagree with the projection
+// whatever the dataset, and so would a client that re-sorted or re-derived the rows. Run after the
+// screenshot so the recorded image still shows the default window; the window is restored at the end.
+const readIndex = () =>
+  page.evaluate(() => {
+    const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+    const index = scope?.querySelector('[data-rd-progress-index="true"]');
+    if (!index) {
+      return null;
+    }
+    return {
+      rows: [...index.querySelectorAll("[data-rd-index-axis]")].map((node) => ({
+        activity: Number(node.getAttribute("data-rd-index-activity")),
+        id: node.getAttribute("data-rd-index-axis"),
+        problems: Number(node.getAttribute("data-rd-index-problems")),
+        stale: node.getAttribute("data-rd-index-stale") === "true",
+        state: node.getAttribute("data-rd-index-state"),
+      })),
+      window: Number(index.getAttribute("data-rd-progress-index-window")),
+    };
+  });
+const apiIndex = (days) =>
+  page.evaluate(
+    async ([plugin, since]) => {
+      const cookie = (name) =>
+        document.cookie
+          .split("; ")
+          .find((entry) => entry.startsWith(`${name}=`))
+          ?.slice(name.length + 1) ?? "";
+      const orgs = await fetch("/v1/auth/orgs", { credentials: "include" }).then((r) => r.json());
+      const body = await fetch(`/v1/plugins/${plugin}/actions/get_progress`, {
+        body: JSON.stringify({ input: { activitySinceDays: since } }),
+        credentials: "include",
+        headers: {
+          "content-type": "application/json",
+          "x-csrf-token": cookie("nakama_csrf"),
+          "x-org-id": orgs.orgs?.[0]?.id ?? "",
+        },
+        method: "POST",
+      }).then((r) => r.json());
+      // The row list is `axes.axes`: the outer object is the projection (window, threshold, rows).
+      return (body.result ?? {}).axes?.axes ?? null;
+    },
+    [PLUGIN_ID, days]
+  );
+const setWindow = async (days) => {
+  await root.locator(`[data-rd-window="${days}"]`).click();
+  // Returns false instead of throwing: an index that never appears would otherwise abort the whole pass with
+  // a TimeoutError, which says nothing about the page. A missing element is a failure of *this* check.
+  try {
+    await page.waitForFunction(
+      (wanted) =>
+        document
+          .querySelector('[data-rd-progress-index="true"]')
+          ?.getAttribute("data-rd-progress-index-window") === String(wanted),
+      days,
+      { timeout: 10000 }
+    );
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const startWindow = (await readIndex())?.window ?? 7;
+const indexMismatches = [];
+for (const days of [30, 7]) {
+  if (!(await setWindow(days))) {
+    indexMismatches.push(`${days}d: the index never reported the new window — element missing, or the client kept the old result`);
+    continue;
+  }
+  const dom = await readIndex();
+  const projection = await apiIndex(days);
+  if (!dom || !projection) {
+    indexMismatches.push(`${days}d: no index (${Boolean(dom)}) or no projection (${Boolean(projection)})`);
+    continue;
+  }
+  if (dom.window !== days) {
+    indexMismatches.push(`${days}d: the index reports window ${dom.window}`);
+  }
+  if (dom.rows.length !== projection.length) {
+    indexMismatches.push(`${days}d: ${dom.rows.length} rows on screen, ${projection.length} in the projection`);
+  }
+  for (const row of dom.rows) {
+    const expected = projection.find((entry) => entry.id === row.id);
+    if (!expected) {
+      indexMismatches.push(`${days}d: a row (${row.id.slice(0, 8)}) is not in the projection`);
+      continue;
+    }
+    if (row.activity !== expected.activityInWindow) {
+      indexMismatches.push(
+        `${days}d: "${expected.title}" shows ${row.activity} events, the projection says ${expected.activityInWindow}`
+      );
+    }
+    if (row.problems !== expected.problems) {
+      indexMismatches.push(
+        `${days}d: "${expected.title}" shows ${row.problems} problems, the projection says ${expected.problems}`
+      );
+    }
+    if (row.state !== expected.state) {
+      indexMismatches.push(`${days}d: "${expected.title}" shows state ${row.state}, the projection says ${expected.state}`);
+    }
+    if (row.stale !== expected.stale) {
+      indexMismatches.push(`${days}d: "${expected.title}" shows stale=${row.stale}, the projection says ${expected.stale}`);
+    }
+  }
+  // Server order is the presentation order: the page must not re-sort what the projection ordered.
+  const screenOrder = dom.rows.map((row) => row.id).join(",");
+  const projectionOrder = projection.map((entry) => entry.id).join(",");
+  if (screenOrder !== projectionOrder) {
+    indexMismatches.push(`${days}d: the on-screen row order differs from the projection's`);
+  }
+}
+check(
+  "the Progress index is the projection for the current window — replaced on change, not extended",
+  indexMismatches.length === 0,
+  indexMismatches.slice(0, 4).join("; ") || `matched the projection at 30 and 7 days (${startWindow}d restored)`
+);
+await setWindow(startWindow);
+
 // ------------------------------------------------ C8: no bare state, one vocabulary for the evidence
 // A state is a claim, and the record often holds only an inference. Every rendered state must carry
 // its confidence, and one that is not confirmed must say so where it is read — otherwise the temporal
