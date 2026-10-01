@@ -3,8 +3,9 @@
  * environment directly).
  *
  * The file is KEY=VALUE, one per line: `#` comments, blank lines, a leading `export `, and surrounding
- * quotes are all tolerated. A variable already present in the environment wins, so an explicit export
- * beats the file. Credentials stay out of command lines and shell history this way.
+ * quotes are all tolerated. A value from the file wins over the environment: passing `--env-file` is a
+ * deliberate act — it names an instance — and a variable left over in the shell must not silently
+ * redirect the run at a different one. Credentials stay out of command lines and shell history this way.
  *
  *   import { loadEnvFileArg } from "./env-file.mjs";
  *   loadEnvFileArg();
@@ -51,7 +52,7 @@ export const loadEnvFileArg = (name = "env-file") => {
         value = value.slice(1, -1);
       }
     }
-    if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) && process.env[key] === undefined) {
+    if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) {
       process.env[key] = value;
     }
   }
