@@ -13,7 +13,7 @@ any view reads them.
 | **U0** Contract, baseline, runnable pass | **done** | `contract/` published verbatim · `BASELINE.md` · the pass moved in-repo and reproduces from a *fresh clone* on a *pristine checkout* (measured below) · PR #1 merged, tagged `pre-ux-v2` · three harness defects found by that run and fixed |
 | **U1** Migration 004 (`usable`, state log, Problems, Plans) | **done** | `migrations/004-ux-v2-model.sql` · design note + truth table in `U1-migration.md` (§3.2, §4, §1a, §1b) · `harness/test-004.mjs`: **79 checks, 0 failed**, including the crash-after-COMMIT re-run · applied to the dev instance by the host's own applier — new generation `g9e344…`, ledger 001–004 · both acceptance passes green afterwards, plus the `abandoned` fixture axis and a check that every state the payload carries renders as itself |
 | **U2** Store writers + read models | **the store layer is complete; not yet wired to anything** | `U2-store.md` (semantics, reviewer-approved) · writers, both Progress projections, the Overview recency projection, one scope builder, one recency/stale derivation and the §11 audit all landed · `bun run check` **111 pass · 0 fail · 596 expect() calls** (was 82 · 0 · 472) · 19 acceptance items covered by named tests · **owed by U3**: nothing here is reachable from an action or a page, and `usable` is still absent from `nakama.plugin.json`'s `axes[].state` enum |
-| U3 Action surface + skill | not started | — |
+| **U3** Action surface + skill | **started — step 1 of 10 (typecheck) is done** | `bun run check` is now `typecheck && build && test`: 3 dev dependencies, a committed `tsconfig.json`, `types/host.d.ts`, and `bun run typecheck:host` for the authoritative run against the real host types. 0 diagnostics over 6 files / ~11,900 lines under `strict`, both modes agreeing. **The meaning of green changed** — see the note on the new baseline below. Steps 2–10 (expose `usable`, the transition writer, Problem/Plan operations, the refusal and conflict semantics through the action boundary, the skill, re-vendor, acceptance reruns) are not started |
 | U4 Five tabs + canonical navigation | not started | — |
 | U5 Overview | not started | — |
 | U6 Topics | not started | — |
@@ -130,14 +130,22 @@ comparing the two tables would otherwise wonder which number to trust.
   run on an instance that also holds the corpus. The frozen protocol isolates the datasets, so it is not a
   migration failure — it is a page check that should assert the *selected* topic rather than assume there is
   exactly one. U10's, with this evidence.
-- **Nothing in this repo typechecks, and that is now recorded as a defect with a measurement**
-  (`U2-store.md` §7). `bun run check` is `bun build` + `bun test`: types are stripped, never verified, and
-  the repo has no `typescript` dependency and no `tsconfig.json`. It hid a real bug in U2 — a projection
-  dated every axis from a property `AxisScan` does not have, so `undefined` became `null` and no axis was
-  ever stale, with nothing failing. An ad-hoc `tsc --noEmit --strict` over the two U2 files reports 7
-  diagnostics, all missing type *declarations* (`bun:sqlite`, `node:fs`, `process`, …) and **zero real type
-  errors**: the code is essentially type-clean and the fix is small. It is left as a decision rather than
-  folded into U2 because it changes what a green `bun run check` means for the clean-clone reproduction.
+- **Nothing in this repo typechecked — found in U2, closed as U3's first commit** (`U2-store.md` §7).
+  `bun run check` used to be `bun build` + `bun test`: types were stripped, never verified, and the repo had
+  no `typescript` dependency and no `tsconfig.json`. It hid a real bug in U2 — a projection dated every axis
+  from a property `AxisScan` does not have, so `undefined` became `null` and no axis was ever stale, with
+  nothing failing. Now: `typescript` + `@types/bun` + `@types/react`, a committed `tsconfig.json`
+  (`strict`, `src/` + `types/`), `types/host.d.ts` for the unpublished host surface, `bun run typecheck`, and
+  `bun run typecheck:host` — the same compiler options against the real host types, which is authoritative.
+  **0 diagnostics** over 6 files / ~11,900 lines, both modes agreeing; nothing legacy was suppressed or
+  excluded. Measured along the way: 427 → 18 → 3 → 0, where the only three that were ever *code* were in a U2
+  test file, fixed by making the tests assert what they meant.
+
+  **The baseline moved on purpose, and the counts are not comparable across it.** Before U3's first commit,
+  `bun run check` green meant *bundles + tests pass*. It now means **typechecks + bundles + tests pass**. The
+  test counts (111 · 0 · 596) are unchanged by this: only the meaning of the command grew. Anyone re-running
+  an older number against this tree is running a different check, so `harness/clean-clone-verify.sh` should be
+  read with that in mind until U3 reruns the acceptance passes.
 
 ## What a reviewer can usefully do at this point
 

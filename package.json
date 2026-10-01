@@ -5,9 +5,11 @@
   "type": "module",
   "description": "Research dashboard plugin for a self-hosted Nakama instance: one dashboard page plus five agent tools over shared coordination state (topics, development axes, evidence).",
   "scripts": {
+    "typecheck": "tsc --noEmit",
+    "typecheck:host": "bun harness/typecheck-host.mjs",
     "build": "bun build ./src/actions.ts --outdir actions --target bun && bun build ./src/ui.tsx --outfile ui/app.js --target browser",
     "test": "bun test src",
-    "check": "bun run build && bun test src",
+    "check": "bun run typecheck && bun run build && bun test src",
     "harness:read": "bash harness/read-pass.sh",
     "harness:fixture": "bash harness/read-pass.sh --dataset fixture",
     "harness:seed": "bun harness/replay-corpus.mjs",
@@ -17,6 +19,9 @@
     "harness:write": "bash harness/read-pass.sh --write"
   },
   "devDependencies": {
-    "playwright-core": "^1.63.0"
+    "@types/bun": "^1.4.2",
+    "@types/react": "18",
+    "playwright-core": "^1.63.0",
+    "typescript": "^7.0.2"
   }
 }

@@ -553,13 +553,18 @@ describe("U2 claims and evidence links", () => {
     const { store } = openStore();
     const axis = seedAxis(store);
     const topic = store.getTopic(axis.topicId);
+    if (!topic) {
+      // Asserted rather than chained away: the rest of this test is about what was written *to the topic*,
+      // so a missing topic must fail here by name instead of turning every expectation below into `undefined`.
+      throw new Error("the seeded topic should exist");
+    }
 
     // Five of the seven rows in the real corpus database are shaped like this; the write path must keep
     // accepting them, or preserving history would mean refusing new rows shaped like old ones.
     const note = store.addAnnotation({
       axisId: axis.id,
       text: "Sits on the topic and the axis, the way the corpus's notes do.",
-      topicId: topic?.id,
+      topicId: topic.id,
     });
     expect(note.kind).toBe("note");
     expect(note.confidence).toBeNull();
@@ -762,10 +767,15 @@ describe("U2 projections: recency", () => {
     expect(wide.activitySinceDays).toBe(0);
     for (const row of narrow.axes) {
       const same = wide.axes.find((other) => other.id === row.id);
+      if (!same) {
+        // The comparison below is the whole point of this test, so the axis has to be in both windows.
+        // Chaining here would turn a missing axis into `undefined === undefined` and quietly pass.
+        throw new Error(`the windowed projection lost axis ${row.id}`);
+      }
       // A window is a question about the display ("what happened lately?"), never a re-dating of the
       // object. Narrowing it must not change how old anything is.
-      expect(row.stale).toBe(same?.stale);
-      expect(row.recencyAt).toBe(same?.recencyAt);
+      expect(row.stale).toBe(same.stale);
+      expect(row.recencyAt).toBe(same.recencyAt);
     }
     expect(
       narrow.axes.find((row) => row.id === quiet.id)?.activityInWindow

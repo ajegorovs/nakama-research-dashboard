@@ -15,8 +15,8 @@ here: `vendor/` holds the recipe that puts the plugin into a checkout, because N
 > layout, extra functionality, multi-user, service delivery, updates). This README covers build,
 > layout, loading it into Nakama, and a per-file review table.
 >
-> Everything needed to build is in here: `bun run check` is the whole build and test story — no
-> network access, private registry or credentials required.
+> Everything needed to build is in here: `bun run check` is the whole story — it typechecks, bundles and
+> runs the tests. No network access, private registry or credentials required.
 >
 > **The V2 rework this review triggered is planned in [`docs/V2-PLAN.md`](docs/V2-PLAN.md)** — chunked
 > work packages with acceptance tests, the platform facts that changed three points of the proposal,
@@ -100,14 +100,32 @@ would ship.
 
 ## Build and test on any machine
 
-Needs only [Bun](https://bun.sh). No checkout of Nakama, no dependencies: every `@nakama/*` and
-`react` import in `src/` is **type-only**, so nothing is resolved at build time.
+Needs only [Bun](https://bun.sh) and `bun install`. No checkout of Nakama and no runtime dependencies:
+every `@nakama/*` and `react` import in `src/` is **type-only**, so nothing is resolved at build time.
+
+That last point is why this repo carries `types/host.d.ts`: "type-only" means nothing is *bundled*, not that
+nothing is *checked*. The host packages (`@nakama/ui`, `@nakama/core`) are not published, so the slice of them
+this plugin uses is declared in that file — derived from the host's sources, and cross-checked against the real
+thing by `bun run typecheck:host` (which needs a Nakama checkout). See `types/host.d.ts` for the full rationale.
 
 ```bash
-bun run check      # build (actions/actions.js, ui/app.js) + store tests
+bun install        # dev dependencies: typescript, @types/bun, @types/react, playwright-core
+bun run check      # typecheck + build (actions/actions.js, ui/app.js) + store tests
+bun run typecheck  # tsc --noEmit over src/ and types/ — the part that is not a bundler
+bun run typecheck:host  # the same check against the REAL host types, from a checkout (authoritative)
 bun run build      # build only
 bun test src       # tests only — the store is testable without a host
 ```
+
+`bun run check` being green means **three** things: the code typechecks, it bundles, and the tests pass. It
+did not always mean that — `bun build` strips types rather than checking them, so before the `typecheck` step
+existed nothing in this repository had ever verified a type, and a projection that read a property its type
+does not have reported every axis as never stale without a single failure. `tsconfig.json` and
+`types/host.d.ts` exist because of that; both carry the reasoning.
+
+`harness/*.mjs` is deliberately outside the typechecked program: it is operator tooling (replays, page
+verification, install), not shipped plugin code. That is a scope decision, not a suppression — it is stated in
+`tsconfig.json` where the scope is set.
 
 `actions/` and `ui/` are **committed on purpose**: the manifest points at them and a reviewer should be
 able to read what the server actually executes. To confirm they match `src/`, run `bun run build` and
@@ -283,6 +301,8 @@ re-run that the host's ledger ordering makes possible. 79 checks, and a failing 
 |---|---|
 | `src/actions.ts` | Does every action validate its input, and does a caller-fixable failure come back as `{ok:false,error}` rather than a thrown error? |
 | `src/store.ts` | Are all queries scoped to the organization's database handle, and are identifiers parameterised? |
+| `tsconfig.json` | Are the include scope and the strictness flags the ones you would have chosen — and is anything excluded that you would expect to be checked? |
+| `types/host.d.ts` | Does the declared host surface match `packages/ui/src` and `packages/core/src/plugins.ts`? It is derived from them, not published by them, and `bun run typecheck:host` is what keeps it honest. |
 | `nakama.plugin.json` | Are the action schemas tight enough to reject junk (enums, lengths, required fields)? |
 | `skills/research-coordinator/SKILL.md` | Does it draw the line between recorded facts and interpretations? |
 | `migrations/001-research.sql` | Additive and idempotent? Migrations are forward-only — the host refuses downgrades. |

@@ -227,27 +227,53 @@ the real one.
   writes history, it does not make history outlive its subject.
 - **Ordering and layout** of anything rendered — U4 onward.
 
-## 7. A finding about the harness: nothing in this repo typechecks
+## 7. A finding about the harness: nothing in this repo typechecked — **closed in U3, step 1**
 
-Not a U2 decision — a defect found while writing U2's tests, recorded here because the U2 numbers depend on
-it.
+This was a defect found while writing U2's tests, recorded because the U2 numbers depended on it. It is kept
+here as the reason the typecheck exists rather than as an open item.
 
-`bun run check` is `bun run build && bun test src`. `build` is `bun build` (a bundler: it strips types rather
-than checking them) and `bun test` uses the same pipeline. **The repository has no `typescript` dependency
-and no `tsconfig.json`**, so no step in this repo has ever verified a type. A green `check` means "it bundles
-and the tests pass", which is a weaker claim than the same words would carry in a typed project.
+`bun run check` was `bun run build && bun test src`. `build` is `bun build` (a bundler: it strips types rather
+than checking them) and `bun test` uses the same pipeline. The repository had no `typescript` dependency and no
+`tsconfig.json`, so no step in this repo had ever verified a type. A green `check` meant "it bundles and the
+tests pass", which is a weaker claim than the same words would carry in a typed project.
 
 What that hid, concretely: `progressAxes` read `scan.createdAt`, which does not exist on `AxisScan`. The
 property was `undefined`, `newestOf` returned `null`, and every axis was projected as never stale. Nothing
 threw, nothing failed, and the number it produced was plausible.
 
-Measured, not guessed: an ad-hoc `tsc --noEmit --strict` over `src/store.ts` and `src/store-ux-v2.test.ts`
-reports **7 diagnostics, all of them missing type *declarations*** (`bun:sqlite`, `bun:test`, `node:fs`,
-`node:path`, `import.meta.dir`, `process`) — **zero real type errors**. So the code is essentially
-type-clean; the repo simply never installed the type packages. Adding `typescript` + `@types/bun`, a minimal
-`tsconfig.json`, and a `typecheck` step to `check` is a small, bounded change that would have caught the
-above for free.
+**How it was closed** (U3's first commit, by the reviewer's ruling that this is an engineering safety boundary
+rather than cleanup):
 
-It is *not* folded into U2, because it changes what `bun run check` means for every future claim in this
-repo — including the reviewer's clean-clone reproduction — and that is a baseline decision to make
-explicitly, not to slip in alongside a store chunk. Recommend it for U3 or U10.
+- `typescript`, `@types/bun` and `@types/react` as dev dependencies, and a committed `tsconfig.json`
+  (`strict`, `src/` + `types/`). The scoping decision is recorded in that file: `harness/*.mjs` is operator
+  tooling and deliberately outside the program.
+- `bun run typecheck` (`tsc --noEmit`), and `bun run check` is now `typecheck && build && test`.
+- `types/host.d.ts` declares the host surface this plugin uses, derived from the host's sources, because
+  `@nakama/ui` and `@nakama/core` are unpublished and were previously resolving to `any` — which is what made
+  the 13 implicit-`any` callback parameters in `src/ui.tsx` invisible as well as unchecked.
+- `bun run typecheck:host` re-runs the same compiler options with `paths` pointed at the real host packages in
+  a checkout, and **that run is authoritative**. It exists so the committed declaration cannot quietly become a
+  lie: if the declaration accepts something the real types reject, the two runs disagree.
+
+Measured at each step, because the first configuration was not an honest number — the diagnostic count fell
+from 427 to 0 across the five rows below, and only three of those diagnostics, ever, were code that was
+actually wrong:
+
+| Configuration | Diagnostics |
+|---|---|
+| No config, ad-hoc `--strict` over the two U2 files | 7 — all missing type *declarations* (`bun:sqlite`, `node:fs`, `process`), zero real type errors |
+| Full `tsconfig.json`, before `@types/react` | 427 — 390 of them the JSX namespace missing, i.e. one dependency |
+| Full `tsconfig.json`, with `@types/react` | 18 — 13 implicit-`any` (the `ui` namespace was `any`), 3 unresolved host modules, 3 in a U2 test |
+| Full `tsconfig.json` + `types/host.d.ts` | **0** |
+| Against the real host types (`typecheck:host`) | **0** in this repository, agreeing with the run above |
+
+The whole existing surface — 6 files, ~11,900 lines — is clean under `strict: true`; nothing legacy had to be
+suppressed, and nothing was. The only three real errors the checker ever found were in a U2 test file, and they
+were fixed by making the tests assert what they meant (a topic that must exist; an axis that must be present in
+both windows) rather than by chaining optionals into `undefined === undefined`.
+
+**What a green `bun run check` means now, and what it meant before** — this is a deliberate baseline
+discontinuity, not a like-for-like number:
+
+- before: bundles + tests pass
+- now: **typechecks + bundles + tests pass**
