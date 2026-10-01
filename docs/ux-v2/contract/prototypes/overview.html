@@ -1,0 +1,773 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Research dashboard — activity overview prototype</title>
+<style>
+  * { box-sizing: border-box; }
+
+  :root {
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --panel-soft: #f9fafb;
+    --line: #e2e5e9;
+    --text: #17191c;
+    --muted: #6d737c;
+    --soft: #969ca5;
+
+    --fresh: #176b4d;
+    --fresh-bg: #eaf5ef;
+
+    --aging: #9a6415;
+    --aging-bg: #fff6df;
+
+    --stale: #a33f2c;
+    --stale-bg: #fff0eb;
+
+    --complete: #59616d;
+    --complete-bg: #eef0f3;
+
+    --accent: #a84f0e;
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family:
+      Inter, ui-sans-serif, system-ui, -apple-system,
+      BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  button { font: inherit; }
+
+  .shell {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 26px 32px 48px;
+  }
+
+  .topbar {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 26px;
+    margin-bottom: 26px;
+  }
+
+  .brand {
+    font-size: 19px;
+    font-weight: 680;
+    letter-spacing: -0.02em;
+  }
+
+  .tabs {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .tab {
+    border: 0;
+    background: transparent;
+    padding: 8px 12px;
+    border-radius: 8px;
+    color: var(--muted);
+    cursor: pointer;
+  }
+
+  .tab:hover {
+    background: #eceef1;
+    color: var(--text);
+  }
+
+  .tab.active {
+    background: white;
+    color: var(--text);
+    box-shadow: 0 0 0 1px var(--line);
+    font-weight: 620;
+  }
+
+  .button {
+    border: 1px solid var(--line);
+    background: white;
+    border-radius: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+  }
+
+  .intro {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    gap: 28px;
+    margin-bottom: 22px;
+  }
+
+  .intro h1 {
+    margin: 0 0 4px;
+    font-size: 29px;
+    letter-spacing: -0.035em;
+  }
+
+  .intro p {
+    margin: 0;
+    max-width: 760px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .window {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    background: #eaecf0;
+    border-radius: 9px;
+  }
+
+  .window button {
+    border: 0;
+    background: transparent;
+    padding: 6px 9px;
+    border-radius: 6px;
+    color: var(--muted);
+    cursor: pointer;
+  }
+
+  .window button.active {
+    background: white;
+    color: var(--text);
+    box-shadow: 0 1px 2px rgba(0,0,0,.07);
+  }
+
+  .page-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, .85fr);
+    gap: 22px;
+    align-items: start;
+  }
+
+  .section-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 9px;
+  }
+
+  .section-title {
+    margin: 0;
+    font-size: 17px;
+    letter-spacing: -.015em;
+  }
+
+  .section-note {
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .stack {
+    display: grid;
+    gap: 12px;
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 13px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.025);
+  }
+
+  .activity-card {
+    padding: 17px 18px 16px;
+  }
+
+  .card-top {
+    display: grid;
+    grid-template-columns: minmax(0,1fr) auto;
+    gap: 18px;
+    align-items: start;
+  }
+
+  .card-title {
+    margin: 0;
+    font-size: 17px;
+    letter-spacing: -.02em;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-wrap: wrap;
+  }
+
+  .card-subtitle {
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .age {
+    min-width: 112px;
+    text-align: right;
+  }
+
+  .age strong {
+    display: block;
+    font-size: 18px;
+    letter-spacing: -.02em;
+  }
+
+  .age span {
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .age.fresh strong { color: var(--fresh); }
+  .age.aging strong { color: var(--aging); }
+  .age.stale strong { color: var(--stale); }
+
+  .latest {
+    display: grid;
+    grid-template-columns: 88px minmax(0,1fr);
+    gap: 12px;
+    margin-top: 15px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+  }
+
+  .latest-label {
+    color: var(--soft);
+    padding-top: 1px;
+  }
+
+  .latest-kicker {
+    display: block;
+    font-size: 10px;
+    font-weight: 720;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+
+  .latest-date {
+    display: block;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.25;
+    white-space: nowrap;
+  }
+
+  .latest-title {
+    font-size: 13px;
+    font-weight: 620;
+    line-height: 1.45;
+  }
+
+  .latest-meta {
+    margin-top: 3px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  .topic-state {
+    margin-top: 12px;
+    color: #474d56;
+    font-size: 13px;
+    line-height: 1.48;
+  }
+
+  .axis-list {
+    display: flex;
+    gap: 7px;
+    flex-wrap: wrap;
+    margin-top: 11px;
+  }
+
+  .axis-pill {
+    background: var(--panel-soft);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 5px 8px;
+    font-size: 11px;
+    color: #4e555f;
+  }
+
+  .axis-pill.inferred {
+    background: var(--aging-bg);
+    border-color: #ecd9aa;
+    color: #7e5819;
+  }
+
+  .card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    margin-top: 14px;
+  }
+
+  .misc {
+    color: var(--soft);
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  .link {
+    border: 0;
+    background: transparent;
+    color: var(--accent);
+    font-weight: 650;
+    padding: 4px 0;
+    cursor: pointer;
+  }
+
+  .stale-card {
+    border-color: #edc9c1;
+    background:
+      linear-gradient(90deg, var(--stale-bg) 0, var(--stale-bg) 5px, var(--panel) 5px);
+  }
+
+  .repo-card .latest {
+    grid-template-columns: 76px minmax(0,1fr);
+  }
+
+  .repo-meta {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+    color: var(--muted);
+    font-size: 11px;
+  }
+
+  .repo-chip {
+    background: #f4f5f7;
+    border-radius: 6px;
+    padding: 4px 6px;
+  }
+
+  .misc-panel {
+    margin-top: 18px;
+    padding: 14px 16px;
+    background: transparent;
+    border: 1px dashed #d6d9de;
+    border-radius: 11px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  .misc-panel strong {
+    color: #4d535c;
+    font-weight: 650;
+  }
+
+
+  .tag-row {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--line);
+    background: #f5f6f8;
+    border-radius: 999px;
+    padding: 4px 8px;
+    color: #505761;
+    font-size: 11px;
+    line-height: 1.2;
+    text-decoration: none;
+  }
+
+  .tag:hover {
+    background: #eceff3;
+    color: var(--text);
+  }
+
+  .status-tag {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 3px 7px;
+    margin-right: 6px;
+    font-size: 10px;
+    font-weight: 720;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    vertical-align: 1px;
+  }
+
+  .stale-tag {
+    background: var(--stale-bg);
+    color: var(--stale);
+    border: 1px solid #edc9c1;
+  }
+
+  @media (max-width: 1080px) {
+    .topbar {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    .intro {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+
+    .page-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+</head>
+
+<body>
+<div class="shell">
+
+  <header class="topbar">
+    <div class="brand">Research dashboard</div>
+
+    <nav class="tabs">
+      <button class="tab active">Overview</button>
+      <button class="tab" id="topics">Topics</button>
+      <button class="tab" id="people">People</button>
+      <button class="tab" id="repositories">Repositories</button>
+      <button class="tab">Progress</button>
+    </nav>
+
+    <button class="button">Refresh</button>
+  </header>
+
+
+  <section class="intro">
+    <div>
+      <h1>Overview</h1>
+    </div>
+
+    <div class="window">
+      <button>7d</button>
+      <button class="active">14d</button>
+      <button>30d</button>
+      <button>All</button>
+    </div>
+  </section>
+
+
+  <main class="page-grid">
+
+    <section id="stale">
+      <div class="section-head">
+        <h2 class="section-title">Topic activity</h2>
+        <span class="section-note">Newest activity first</span>
+      </div>
+
+      <div class="stack">
+
+        <article class="card activity-card">
+          <div class="card-top">
+            <div>
+              <h3 class="card-title">UDV Echo Process</h3>
+              <div class="card-subtitle">
+                Signal analysis, acquisition automation and supporting documentation.
+              </div>
+            </div>
+
+            <div class="age fresh">
+              <strong>2 days ago</strong>
+              <span>last recorded activity</span>
+            </div>
+          </div>
+
+          <div class="topic-state">
+            Signal analysis remains active; the SA5 cross-sitting slice has been
+            published and independently verified.
+          </div>
+
+          <div class="axis-list">
+            <span class="axis-pill">Signal analysis · active</span>
+            <span class="axis-pill inferred">Docs &amp; agent skills · inferred active</span>
+            <span class="axis-pill">Acquisition · completed</span>
+          </div>
+
+          <div class="latest">
+            <div class="latest-label">
+              <span class="latest-kicker">Last event</span>
+              <span class="latest-date">Mon · 28 Sep</span>
+            </div>
+            <div>
+              <div class="latest-title">
+                SA5 artefacts published and independently verified
+              </div>
+              <div class="latest-meta">Signal analysis · ajegorovs/udv-echo-process · PR #67
+              </div>
+            </div>
+          </div>
+
+          <div class="card-footer">
+            <div class="tag-row">
+              <a class="tag nav-tag" href="#people">ajegorovs</a>
+              <a class="tag nav-tag" href="#repositories">ajegorovs/udv-echo-process</a>
+            </div>
+            <button class="link">Open topic →</button>
+          </div>
+        </article>
+
+
+        <article class="card activity-card">
+          <div class="card-top">
+            <div>
+              <h3 class="card-title">Example validation campaign</h3>
+              <div class="card-subtitle">
+                Experimental validation topic using several supporting repositories.
+              </div>
+            </div>
+
+            <div class="age aging">
+              <strong>6 days ago</strong>
+              <span>last recorded activity</span>
+            </div>
+          </div>
+
+          <div class="topic-state">
+            Current work is concentrated in the analysis repository; two linked
+            repositories have had no recent changes.
+          </div>
+
+          <div class="axis-list">
+            <span class="axis-pill">Benchmark analysis · active</span>
+            <span class="axis-pill">Rig documentation · parked</span>
+          </div>
+
+          <div class="latest">
+            <div class="latest-label">
+              <span class="latest-kicker">Last event</span>
+              <span class="latest-date">Thu · 24 Sep</span>
+            </div>
+            <div>
+              <div class="latest-title">
+                Benchmark comparison table updated after the latest run
+              </div>
+              <div class="latest-meta">Benchmark analysis · example/analysis-tools · commit
+              </div>
+            </div>
+          </div>
+
+          <div class="card-footer">
+            <div class="tag-row">
+              <a class="tag nav-tag" href="#repositories">example/analysis-tools</a>
+              <a class="tag nav-tag" href="#repositories">example/rig-control</a>
+              <a class="tag nav-tag" href="#repositories">example/project-notes</a>
+            </div>
+            <button class="link">Open topic →</button>
+          </div>
+        </article>
+
+
+        <article class="card activity-card stale-card">
+          <div class="card-top">
+            <div>
+              <h3 class="card-title">
+                Example dormant topic
+                <a class="status-tag stale-tag stale-filter" href="#stale">Stale</a>
+              </h3>
+              <div class="card-subtitle">
+                A topic intentionally included here to show the inactivity treatment.
+              </div>
+            </div>
+
+            <div class="age stale">
+              <strong>11 days ago</strong>
+              <span>last recorded activity</span>
+            </div>
+          </div>
+
+
+
+          <div class="latest">
+            <div class="latest-label">
+              <span class="latest-kicker">Last event</span>
+              <span class="latest-date">Sat · 19 Sep</span>
+            </div>
+            <div>
+              <div class="latest-title">
+                Documentation notes updated after hardware discussion
+              </div>
+              <div class="latest-meta">example/project-notes · document update
+              </div>
+            </div>
+          </div>
+
+          <div class="card-footer">
+            <div class="tag-row">
+              <a class="tag nav-tag" href="#people">Fixture Zeta</a>
+              <a class="tag nav-tag" href="#repositories">example/project-notes</a>
+            </div>
+            <button class="link">Open topic →</button>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+
+    <section>
+      <div class="section-head">
+        <h2 class="section-title">Repository activity</h2>
+        <span class="section-note">Newest activity first</span>
+      </div>
+
+      <div class="stack">
+
+        <article class="card activity-card repo-card">
+          <div class="card-top">
+            <div>
+              <h3 class="card-title">ajegorovs/udv-echo-process</h3>
+              <div class="card-subtitle">
+                Main implementation repository for UDV Echo Process.
+              </div>
+            </div>
+
+            <div class="age fresh">
+              <strong>2 days ago</strong>
+              <span>last recorded activity</span>
+            </div>
+          </div>
+
+          <div class="latest">
+            <div class="latest-label">
+              <span class="latest-kicker">Last event</span>
+              <span class="latest-date">Mon · 28 Sep</span>
+            </div>
+            <div>
+              <div class="latest-title">
+                SA5 artefacts published and independently verified
+              </div>
+              <div class="latest-meta">PR #67 · Signal analysis
+              </div>
+            </div>
+          </div>
+
+          <div class="tag-row repo-meta">
+            <a class="tag nav-tag" href="#topics">UDV Echo Process</a>
+            <a class="tag nav-tag" href="#people">ajegorovs</a>
+            <span class="repo-chip">3 development axes</span>
+          </div>
+
+          <div class="card-footer">
+            <div class="misc">
+              607 recorded events in the selected window
+            </div>
+            <button class="link">Expand activity →</button>
+          </div>
+        </article>
+
+
+        <article class="card activity-card repo-card">
+          <div class="card-top">
+            <div>
+              <h3 class="card-title">example/analysis-tools</h3>
+              <div class="card-subtitle">
+                Analysis support for the validation campaign.
+              </div>
+            </div>
+
+            <div class="age aging">
+              <strong>6 days ago</strong>
+              <span>last recorded activity</span>
+            </div>
+          </div>
+
+          <div class="latest">
+            <div class="latest-label">
+              <span class="latest-kicker">Last event</span>
+              <span class="latest-date">Thu · 24 Sep</span>
+            </div>
+            <div>
+              <div class="latest-title">
+                Benchmark comparison table updated after the latest run
+              </div>
+              <div class="latest-meta">commit · Benchmark analysis
+              </div>
+            </div>
+          </div>
+
+          <div class="tag-row repo-meta">
+            <a class="tag nav-tag" href="#topics">Example validation campaign</a>
+          </div>
+
+          <div class="card-footer">
+            <div class="misc">Currently the active repository for this topic</div>
+            <button class="link">Expand activity →</button>
+          </div>
+        </article>
+
+
+        <article class="card activity-card repo-card stale-card">
+          <div class="card-top">
+            <div>
+              <h3 class="card-title">example/rig-control</h3>
+              <div class="card-subtitle">
+                Linked repository with no recent recorded changes.
+              </div>
+            </div>
+
+            <div class="age stale">
+              <strong>13 days ago</strong>
+              <span>last recorded activity</span>
+            </div>
+          </div>
+
+          <div class="latest">
+            <div class="latest-label">
+              <span class="latest-kicker">Last event</span>
+              <span class="latest-date">Thu · 17 Sep</span>
+            </div>
+            <div>
+              <div class="latest-title">
+                Hardware configuration notes updated
+              </div>
+              <div class="latest-meta">documentation change
+              </div>
+            </div>
+          </div>
+
+          <div class="tag-row repo-meta">
+            <a class="tag nav-tag" href="#topics">Example validation campaign</a>
+          </div>
+
+          <div class="card-footer">
+            <div class="misc">
+              Quiet repository; topic activity may be occurring elsewhere.
+            </div>
+            <button class="link">Expand activity →</button>
+          </div>
+        </article>
+
+      </div>
+
+
+      <div class="misc-panel">
+        <strong>Reference:</strong>
+        <a class="tag nav-tag" href="#people">ajegorovs</a>
+        <a class="tag nav-tag" href="#topics">UDV Echo Process</a>
+        <a class="tag nav-tag" href="#repositories">ajegorovs/udv-echo-process</a>
+      </div>
+
+    </section>
+
+  </main>
+</div>
+</body>
+</html>
+
+<script>
+  // Prototype behavior only: clicking a stale tag currently anchors to the topic activity section.
+  // In the plugin this can become a real filter for all stale topics/repositories.
+</script>

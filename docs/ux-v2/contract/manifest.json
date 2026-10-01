@@ -1,0 +1,24 @@
+{
+  "package": "dashboard-ux-v2",
+  "version": "2.0-draft",
+  "files": [
+    "README.md",
+    "acceptance-checklist.md",
+    "component-contract.md",
+    "fixtures.md",
+    "information-architecture.md",
+    "interaction-spec.md",
+    "prototypes/overview.html",
+    "prototypes/people.html",
+    "prototypes/progress.html",
+    "prototypes/repositories.html",
+    "prototypes/topics.html"
+  ],
+  "prototype_copy_status": {
+    "overview.html": true,
+    "topics.html": true,
+    "people.html": true,
+    "repositories.html": true,
+    "progress.html": true
+  }
+}
