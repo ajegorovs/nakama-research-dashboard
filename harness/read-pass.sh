@@ -148,6 +148,10 @@ if [[ "$PASS" == "write" ]]; then ARGS+=(--write); fi
 # cannot overwrite the committed record with a partial one. Only a verdict — 0 (all checks passed) or 1
 # (checks failed, which is itself a record) — is copied into the transcript path.
 SCRATCH_TRANSCRIPT="$(mktemp "${TMPDIR:-/tmp}/nakama-read-pass-XXXXXX.txt")"
+# `set -e` must not apply to this pipeline: the runner exits 1 for a pass WITH FAILURES, which is a verdict and
+# must still be recorded. Without this, a failing pass would abort this script before the copy below, and the
+# previous (green) transcript would silently survive a red run.
+set +e
 {
   echo "# harness/read-pass.sh — $PASS pass · dataset $DATASET · viewport $VIEWPORT"
   echo "# dashboard: $NAKAMA_DASHBOARD"
@@ -156,6 +160,7 @@ SCRATCH_TRANSCRIPT="$(mktemp "${TMPDIR:-/tmp}/nakama-read-pass-XXXXXX.txt")"
   "$RUNNER" "$HERE/verify-page.mjs" "${ARGS[@]+"${ARGS[@]}"}"
 } 2>&1 | tee "$SCRATCH_TRANSCRIPT"
 status="${PIPESTATUS[0]}"
+set -e
 
 if [[ "$status" -eq 2 || "$status" -eq 3 ]]; then
   why="ABORTED (the pass died mid-run)"

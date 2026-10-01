@@ -37,7 +37,9 @@ axes of different kinds, not a list of many topics.
 
 `../corpus/transcript/actions.jsonl` is the verbatim transcript: **695 accepted action calls** —
 694 × `record_activity` (one per commit and per PR) and 1 × `reconcile_topic` (the topic, its three
-axes, its notes and its links). They were replayed in 76 s at ~0.09 s per call, so the *complete*
+axes, its notes and its links). Two further derived calls (U10, *What the replay derives* below) carry the
+three unmerged pull requests as problems and the events that name them; every one of the 694 published rows
+still comes from the transcript, and the transcript itself is unchanged. They were replayed in 76 s at ~0.09 s per call, so the *complete*
 history is recorded rather than a sample: sampling would have been a judgement call we did not need
 to make. Each call is the plugin's own write path, so reconcile, idempotency and conflict semantics
 were exercised rather than bypassed.
@@ -47,9 +49,42 @@ subject, date, ISO week, files touched, axis and **the reason for that axis**), 
 `branches.json`, `summary.json`, `identities.json`.
 
 **Re-seeding it on another instance:** `bun harness/replay-corpus.mjs --env-file <env>` replays the same
-695 calls (about 75 s) and refuses if the topic is already there. It rewrites the one call that names the
+695 calls (about 75 s) and refuses if the topic is already there. It also installs the plugin into the fresh
+store first, and derives the two things listed under *What the replay derives* below. It rewrites the one call that names the
 contributor's platform account to the id of the account it logs in as, so the dataset's attribution
 follows the instance instead of depending on which one seeded it.
+
+## What the replay derives, and why (U10)
+
+The transcript is verbatim and stays verbatim. Two things the dashboard shows are *derived* by
+`../harness/replay-corpus.mjs` from the material's own contents, and the replay prints both counts:
+
+| derived | from | why it is corpus-derived, not authored |
+|---|---|---|
+| each event's repository — **694 of 694** | the event's own `sourceUrl` (`.../udv-echo-process/commit/<sha>`, `.../pull/<n>`) | the event *is* from that repository, and the axes declare the same one as primary. `record_activity` has always accepted `repositoryFullName`; the replay simply never passed it, so no dataset could exercise the Activity-column repository tag |
+| **3 problems** | the three pull requests that never merged: **#68** and **#70 open**, **#48 closed, unmerged** | the statement is the PR's own subject line, the axis is the axis this corpus already assigned that PR, the repository is the PR's own. A merged PR is finished work, not a problem. #48's `resolved` state is an **explicit inference** (`stateConfidence: inferred`) — the same habit this corpus already documents for its axis states |
+
+The three problems' own events are recorded through the topic write path, because `reconcile_topic`'s
+`activities[]` carry `problemId` and `record_activity`'s schema does not — so each event stays **one**
+row while also naming its problem. Nothing is hand-typed: the two derived calls are the 696th and 697th,
+and the created problems' ids are read back from the projection and matched on the PR's own subject line
+rather than assumed.
+
+### The one failing check — a finding, not a seeded defect
+
+`selecting another axis moves the Problem and Activity columns to that axis` fails on this dataset
+because the page and the projection disagree about an axis that has a **resolved** problem and no open
+one (the acquisition axis, from PR #48): the column's own count attribute says `0` and its heading reads
+`Open problems (0)`, yet it renders a problem card. In `src/ui.tsx`, Axes mode resolves the column's
+problem as `axesModeProblems.filter((row) => row.state === "open")[0] ?? axesModeProblems[0] ?? null`, so
+a resolved problem is shown when nothing is open. The accepted step-6 rule is *"the Problem column shows
+the projection's first open problem, under the projection's own count"* — the check encodes that rule and
+the page deviates from it. No dataset could exercise the case until this pass (it needs a corpus with a
+resolved problem and no open one on the same axis). It is left **unfixed and recorded**: changing the page
+is product design, and this pass is data/harness work. For the reviewer: (a) dropping the
+`?? axesModeProblems[0]` fallback restores the accepted rule and turns this record green; (b) keeping the
+fallback means the check must expect a resolved problem for a resolved-only axis *and* the heading must
+stop saying `Open problems`.
 
 ## Attribution and hygiene
 
@@ -116,13 +151,16 @@ would mix fixture data into a real-corpus pack.
 They are produced by the page harness (in the services tree, `services/nakama/scripts/verify-read.sh`,
 which wraps `verify-page.mjs`), and the pass that produced them is kept here verbatim as
 [`verify-read.txt`](verify-read.txt) — with `verify-read-1280x800.txt` for the narrow viewport:
-**64 checks passed, 0 failed, 32 skipped** at both viewports, re-measured at U4's step 7 on a
-**corpus-only instance** (its own empty data root, this corpus seeded into it by the committed 695-call
-replay); the step-6 record was **56 · 0 · 30** and the step-5 record **52 · 0 · 26**. The 32 skips are the
-states a corpus with no problem row and no plan cannot exercise, each printed with its reason — including the
-step-7 Activity-column repository tag, which no dataset can exercise yet because **no recorded event carries a
-`repositoryId`** (repositories are linked through topics and axes, not per event). The harness reads the corpus from the same
-payload the page reads, so it holds for any dataset rather than being a snapshot of this one.
+**83 checks passed, 1 failed, 22 skipped** at both viewports, re-measured at U10's corpus-coverage pass
+(2026-10-02) on a **corpus-only instance** (its own empty data root, this corpus seeded into it by the
+committed 695-call replay); the step-7 record was **64 · 0 · 32**, step-6 **56 · 0 · 30**, step-5
+**52 · 0 · 26**. The single failure is a finding rather than a seeded defect — *The one failing check*
+below. The 22 skips are the states this corpus cannot honestly exercise; each prints its reason, and every
+one of them is classified **rung 3** (left skipped) under the provenance rule in
+[`../ux-v2/U10-harness.md`](U10-harness.md) §4, because activating them would mean inventing a blocked
+axis, a second repository, a plan, or a problem with nothing behind it. The harness reads the corpus from
+the same payload the page reads, so it holds for any dataset rather than being a snapshot of this one.
+
 
 **One caveat on `dashboard-detail.png`, and it is a finding rather than an artifact choice:** the
 capture shows the topic with its **editor open**. A collapsed card offers an expander only when it

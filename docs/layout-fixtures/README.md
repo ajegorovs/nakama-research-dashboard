@@ -40,10 +40,13 @@ repository tag had nothing to render. **U10 §1 closed that with fixture data, n
 activity carries `repositoryFullName`, so the tag renders, its navigation check executes, and the repository it
 names is linked to no topic and no axis (the Repositories view then renders the `empty` notices). This
 directory now records **zero skips** at both viewports, with nothing failing. See `docs/ux-v2/U10-harness.md`.
-**Measured against each other at U10 §1, on separate instances:** this directory **107 · 0 · 0** and the
-corpus **73 · 0 · 33** — the corpus record is taken on a corpus-only instance, and its 33 skips are the
-checks a corpus with no problem row and no plan cannot exercise, each printed with its reason. So the pair
-that once read 36/43 reads **64/96** (at U4's step 6 it read 56/87; at step 5, 52/80). The pass also *swapped* one check for
+**Measured against each other at U10, on separate instances:** this directory **107 · 0 · 0** and the
+corpus **83 · 1 · 22** — the corpus record is taken on a corpus-only instance, and its 22 skips are the checks
+this corpus cannot honestly exercise (13 causes, all classified rung 3 in `docs/ux-v2/U10-harness.md` §4:
+one repository, no plan, no blocked axis, no bare problem), each printed with its reason. The corpus's single
+failure is a **finding about the page**, not about the data — an axis with a resolved problem and none open
+renders a problem card under `Open problems (0)`; see `docs/reviews/2026-10-02-u10-corpus-coverage.md`. So
+the pair that once read 36/43 reads **107/83** (at U4's step 7 it read 96/64; step 6, 87/56; step 5, 80/52). The pass also *swapped* one check for
 another at step 5 — the closed-out precondition folded into the conditional that replaced it, and a new
 precondition that `get_progress` carries all three halves the page reads — which is why the fixture total
 stayed **80** rather than moving to 81.

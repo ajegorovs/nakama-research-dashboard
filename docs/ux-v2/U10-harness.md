@@ -114,3 +114,89 @@ in its own legitimate summary — `grep -c ABORTED` on it: **0**.
 
 **Measured after the guard** (both viewports, each dataset on its own instance): fixture **107 · 0 · 0**,
 corpus **73 · 0 · 33** — unchanged by this pass, which is the point: the guard adds a refusal, not a measurement.
+
+
+## 4. Corpus coverage, under the provenance rule (2026-10-02)
+
+The reviewer's hierarchy for this pass, verbatim: *(1) prefer corpus-derived facts already present in the
+replay/source material; (2) if a useful state cannot be derived, allow an explicitly owner-authored row,
+clearly labelled as such in the corpus documentation; (3) if neither is truthful, leave the check skipped and
+keep the reason.* And the constraint: **"Do not optimize for `0 skips`. The corpus is valuable precisely because
+it remains an honest public-data corpus"**, with additions kept minimal and no artificial blocked/abandoned
+states introduced merely because a check exists.
+
+### 4a — each event's repository, derived from its own `sourceUrl` (rung 1)
+
+Every one of the corpus's 694 events is read from one public repository's history, and the event's own
+`sourceUrl` names that repository (`.../udv-echo-process/commit/<sha>`, `.../pull/<n>`); the axes declare the
+same repository as primary. `record_activity` has always accepted `repositoryFullName` — the replay simply
+never passed it, so **the corpus's activity rows carried no repository and the Activity-column repository tag
+had no subject in any dataset**. `harness/replay-corpus.mjs` now derives it from the event's own URL, and the
+replay reports the count (`694 event(s) take their repository from their own sourceUrl`). No row was added and
+no field invented: the link was in the material and simply was not recorded.
+
+Measured (both viewports, corpus-only instance): **73 · 0 · 33 → 74 · 0 · 32**. Exactly one check flipped,
+the Activity-column repository tag, with no other change anywhere in the transcript.
+
+### 4b — the corpus's own unmerged pull requests, as its problems (rung 1, one explicit inference)
+
+The corpus's pull requests that never merged are the repository's own open work: **#68** and **#70** are OPEN
+in the PR's own status (`PR #70 (open)`), and **#48** is a design review the repository CLOSED without merging.
+The replayer derives one problem per unmerged PR — the statement is the PR's own subject line, the axis is the
+axis this corpus already assigned that PR, the repository is the PR's own — and reads `resolved` for #48 by
+**explicit inference** (`stateConfidence: inferred`), which is the habit this corpus already documents for its
+axis states. Merged PRs are finished work, not problems, so none of them is seeded.
+
+The three problems' own events are re-recorded through the topic write path (`reconcile_topic`'s `activities[]`
+carry `problemId`; `record_activity`'s schema does not), so each event stays **one** row while also naming its
+problem; the created ids are read back from the projection and matched on the PR's own subject line rather than
+assumed. Replay output: `derived 3 problem(s) from this corpus's own unmerged pull requests, and 3 event(s)
+now name theirs.`
+
+Measured: **74 · 0 · 32 → 83 · 1 · 22** — ten more skips execute, and **one fails**.
+
+### The failure this pass surfaced (a finding, handed to the reviewer)
+
+`selecting another axis moves the Problem and Activity columns to that axis` fails because the page and the
+projection disagree about an axis that has a **resolved** problem and no open one (the acquisition axis, from
+PR #48): the column's own attribute says `data-rd-progress-problem-open="0"` and its heading reads
+`Open problems (0)`, yet it renders a problem card. In `src/ui.tsx`, Axes mode picks the column's problem as
+`axesModeProblems.filter((row) => row.state === "open")[0] ?? axesModeProblems[0] ?? null` — the `all[0]`
+fallback was introduced with the accepted step-6 inversion and no dataset could exercise it until now (it
+needs a corpus with a resolved problem and nothing open on the same axis). The accepted rule is *"the Problem
+column shows the projection's first open problem, under the projection's own count"*, so **the check encodes
+the rule and the page deviates from it**. It is left unfixed and recorded: the page is product design and this
+pass is data/harness work. Ruling options: (a) drop the `?? axesModeProblems[0]` fallback — restores the
+accepted rule, record goes green; (b) keep the fallback and change the check to expect a resolved problem for a
+resolved-only axis, which also requires the heading to stop saying `Open problems`.
+
+### What stays skipped, and why (rung 3 — every remaining skip)
+
+22 skips remain, in **13 causes**; none is a candidate for an authored row, because each would require the
+corpus to state something it does not (a blocked axis, a second repository, a plan, a bare problem, an
+unattributable person, a topic with more than three axes, an evidence-free axis, a second topic, or an
+extraordinary-state subject). The table is the decision, not an omission:
+
+| skips | cause | rung | decision |
+|---|---|---|---|
+| 7 | no problem with more than one repository (the corpus has **one**) | 3 | left — a second repository would be invented |
+| 3 | no problem with nothing behind it | 3 | left — a bare problem would be authored content |
+| 3 | no axis carries a plan (incl. a plan step a problem names, and an unordered multi-step plan) | 3 | left — the material's axes carry prose states, not plans |
+| 2 | all 3 axes carry evidence (the bare axis state) | 3 | left — an evidence-free axis would be hollow |
+| 2 | no axis in this corpus is blocked | 3 | left — **explicitly** the artificial state the reviewer warned against |
+| 1 | the topic leads with all 3 axes (LEAD_AXES = 3), so none are hidden | 3 | left — a fourth axis would be invented |
+| 1 | the corpus links one person to 1 topic | 3 | left — the corpus is deliberately one topic |
+| 1 | no resolved problem **on the axis on screen** (the axis has 2, both open) | 3 | left — #48's resolved problem is on another axis; moving it would falsify the corpus |
+| 1 | every person maps to a platform account | 3 | left — the material has no unmapped person |
+| 1 | no exceptional-state subject (no bare repository, no card hiding axes) | 3 | left — neither subject exists in the material |
+
+**Counts after the pass** (both viewports, separate instances): fixture **107 · 0 · 0** (unchanged — its data
+and the page are untouched), corpus **83 · 1 · 22** (with the finding above).
+
+### One harness regression found while recording this pass
+
+The `set -euo pipefail` wrapper aborted *before* its new scratch-copy step when the runner exited 1 (a pass
+with failures) — so a **red run silently left the previous green transcript in place**. The runner's exit 1 is a
+verdict and must be recorded; the pipeline is now run under `set +e`. Caught because the record's mtime did not
+move while the run printed `1 FAILED` — the same class as the mid-run crash that masqueraded as a short record,
+one layer up.
