@@ -56,6 +56,12 @@ state TEXT NOT NULL DEFAULT 'active'
 After 004: the same six, **plus `usable`** — seven. SQLite cannot alter a `CHECK`, so the column's
 constraint changes only by rebuilding the table (§4).
 
+Worth stating precisely, because "seven" is the number everyone will repeat: the contract's own sentence
+lists six states and includes `usable` but not `draft` (`information-architecture.md:41`), while the code
+lists six including `draft` but not `usable` (`migrations/002-coordination-model.sql:100-101`). Seven is
+the **union of two vocabularies**, not "the contract's six plus one" — and `draft` is a state this project
+has that the contract never mentions (§6.1).
+
 `usable` is not a synonym for the others: `completed` means the work is finished, `parked` means
 deliberately set aside, `abandoned` means given up on, `usable` means *it works well enough to build on
 and is expected to change*. It is the state a reviewer is most likely to care about, because it is the one
@@ -320,18 +326,41 @@ Proof #1 is a comparison, so both halves and the transcript that connects them a
 The bundle goes with the U1 handoff; the fingerprints are the part a reviewer can re-derive from the two
 snapshots without trusting this note.
 
-## 6. Problem and Plan — **not yet specified here** (the next review gate)
+## 6. Problem and Plan — the minimum durable schema (proposal, for review)
 
-The charter is explicit: do not encode assumptions about these two into 004, and stop and bring the
-schema back if the design is ambiguous. It is, in places — the contract describes them as UX entities, and
-the fields it names are not all field names.
+This is the section the charter reserved. Nothing here is in 004 yet.
 
-So §6 is deliberately empty in this revision, and the reviewer has set its acceptance criterion for me:
-**separate the minimum durable schema from what can stay a claim or an annotation.** The Progress mockup is
-a rendering of a design, not a table description, and the failure mode to avoid is turning every concept
-visible in it into a column.
+### 6.1 What the contract actually says
 
-The test a proposed field has to pass before it earns a column:
+Read from `contract/`, not recalled; the line numbers are the contract's own:
+
+| Element | The contract's words | Where |
+|---|---|---|
+| Problem | "A Problem is the concrete thing currently preventing, enabling, or advancing the axis." | `information-architecture.md:50` |
+| | "A Problem should be traceable downward to implementation/evidence." | `:56` |
+| | "Typical fields: statement, state, parent axis, affected repository/repositories, people, latest activity, optional current interpretation, optional linked plan step, evidence/artifacts, resolution/reopen history." | `:58–69` |
+| Axis | "can be active, blocked, parked, usable, completed, abandoned" · "can be reopened" · "may or may not have a formal plan/work package" | `:41–43` |
+| Plan | "Optional execution structure beneath an Axis." · "A plan can contain ordered or unordered steps." · "It is not required for: exploratory research, open-ended investigation, ad-hoc debugging, loosely structured analysis." | `:104`, `:113`, `:116–120` |
+| PlanCard | "show plan summary" · "show ordered or unordered steps" · "allow step state such as done/current/next/blocked" · "Absence of a PlanCard is valid." | `component-contract.md:122–127` |
+| ProblemCard | "make the problem statement visually dominant" · "show concise current interpretation if useful" | `component-contract.md:112–113` |
+| Steering note | "A human steering note is explicit interpretive context." Rules: it constrains librarian summaries; "automation must not silently override them"; conflicts surface rather than rewriting intent. | `:160`, `:170–172` |
+| Confidence | "Confidence describes a claim, not the existence of an entity." · "If there is no claim, confidence should be null rather than defaulting to confirmed." · suggested: confirmed / inferred / uncertain | `:212–220` |
+| Evidence | "Evidence is not the same as activity, although one record may serve both roles." | `:156` |
+| `stale` | appears as a `StatusBadge` example, i.e. a state *indicator* | `component-contract.md:44` |
+| Recency | "Must be derived from the same timestamp used for sorting." | `component-contract.md:63` |
+| The two subviews | "preserves shared data model; does not create two disconnected tracking systems." | `component-contract.md:175` |
+
+Two things this reading corrects, both worth stating because they change decisions:
+
+- **`draft` is ours, not the contract's.** The contract's axis-state sentence names six values and
+  `usable` is among them; `draft` is not. The code's `CHECK` names six and `usable` is *not* among them;
+  `draft` is. The seven-state enum is the **union** of the two vocabularies, which is what D2 approved —
+  not "the contract's six plus one".
+- **`stale` is not a state.** It has no `CHECK` membership anywhere in the contract; it is a badge. That
+  matches the earlier finding that the word never appears in the source: it is an observation about
+  recency, and it will be derived from the same timestamp the sort uses.
+
+### 6.2 The test a field has to pass before it earns a column
 
 | Question | If "no" |
 |---|---|
@@ -340,22 +369,153 @@ The test a proposed field has to pass before it earns a column:
 | does anything *write* it — a human, or an action? | it is decoration; it belongs to the renderer, not the database |
 | would losing it lose information that cannot be reconstructed from the log or the activities? | it is a cache, and caches do not go in migrations |
 
-What is *decided* already, because the charter states it and it constrains the schema:
+### 6.3 Proposed additions to the schema
 
-| Decided | Consequence for the schema |
+```sql
+-- 1. Problems: the two contract-required links (axis, repositories) plus the statement.
+CREATE TABLE IF NOT EXISTS problems (
+  id          TEXT PRIMARY KEY,
+  org_id      TEXT NOT NULL,
+  axis_id     TEXT NOT NULL REFERENCES development_axes (id) ON DELETE CASCADE,  -- "parent axis"
+  statement   TEXT NOT NULL,                                                     -- "statement"
+  state       TEXT NOT NULL DEFAULT 'open' CHECK (state IN ('open', 'resolved')), -- "state" (see 6.6.1)
+  author_type TEXT NOT NULL CHECK (author_type IN ('human', 'agent')),           -- human-authored vs librarian
+  author_id   TEXT NOT NULL DEFAULT '',
+  created_at  TEXT NOT NULL
+);
+
+-- 2. "affected repository/repositories" — many, and evidence rather than parentage.
+CREATE TABLE IF NOT EXISTS problem_repositories (
+  problem_id    TEXT NOT NULL REFERENCES problems (id)     ON DELETE CASCADE,
+  repository_id TEXT NOT NULL REFERENCES repositories (id) ON DELETE CASCADE,
+  PRIMARY KEY (problem_id, repository_id)
+);
+
+-- 3. "people"
+CREATE TABLE IF NOT EXISTS problem_people (
+  problem_id TEXT NOT NULL REFERENCES problems (id) ON DELETE CASCADE,
+  person_id  TEXT NOT NULL REFERENCES people (id)   ON DELETE CASCADE,
+  PRIMARY KEY (problem_id, person_id)
+);
+
+-- 4. "latest activity" — the link, not the answer. No table rebuild: ADD COLUMN with a NULL default is
+--    legal with foreign keys enforced (probed, §6.8).
+ALTER TABLE activities ADD COLUMN problem_id TEXT REFERENCES problems (id) ON DELETE SET NULL;
+
+-- 5. Plans: optional, axis-owned, and nothing references them from above.
+CREATE TABLE IF NOT EXISTS plans (
+  id          TEXT PRIMARY KEY,
+  org_id      TEXT NOT NULL,
+  axis_id     TEXT NOT NULL REFERENCES development_axes (id) ON DELETE CASCADE,
+  summary     TEXT NOT NULL,
+  author_type TEXT NOT NULL CHECK (author_type IN ('human', 'agent')),
+  created_at  TEXT NOT NULL
+);
+
+-- 6. Steps: "ordered or unordered" is one nullable column, not two shapes.
+CREATE TABLE IF NOT EXISTS plan_steps (
+  id       TEXT PRIMARY KEY,
+  plan_id  TEXT NOT NULL REFERENCES plans (id) ON DELETE CASCADE,
+  title    TEXT NOT NULL,
+  position INTEGER,                       -- NULL = unordered
+  state    TEXT NOT NULL DEFAULT 'next'
+    CHECK (state IN ('done', 'current', 'next', 'blocked'))
+);
+
+-- 7. "optional linked plan step" — declared here, so no ALTER is needed for it.
+--    (added to the problems CREATE above as: plan_step_id TEXT REFERENCES plan_steps (id) ON DELETE SET NULL)
+
+-- 8. Interpretation and steering: annotations, extended. Not new columns on the entities.
+ALTER TABLE annotations ADD COLUMN problem_id TEXT REFERENCES problems (id) ON DELETE CASCADE;
+ALTER TABLE annotations ADD COLUMN kind TEXT NOT NULL DEFAULT 'note'
+  CHECK (kind IN ('note', 'interpretation', 'steering'));
+ALTER TABLE annotations ADD COLUMN confidence TEXT
+  CHECK (confidence IN ('confirmed', 'inferred', 'uncertain'));
+```
+
+### 6.4 What is deliberately *not* a column
+
+| Contract element | Why it is not stored |
 |---|---|
-| Problems are children of an axis (§5 of the charter) | `problems.axis_id` is NOT NULL → an axis is required, a repository is not |
-| a Problem may reference one or many repositories | a join table (`problem_repositories`), not a column |
-| a Problem is meaningful with no repository, PR or artifact | no NOT NULL repository link, no required PR column |
-| repository links are evidence, not parentage | repositories never become the parent of an axis or a problem |
-| owner-authored vs librarian-inferred must be distinguishable | an `origin`-style column on Problem (and on Plans), mirroring `annotations.author_type` |
-| Plans are optional | `plans.axis_id`/`problem_id` nullable, and no backfill: zero plans is a valid v2 database |
-| confidence applies to claims, not existence | confidence lives on claim-like fields (`state_confidence`, a problem's *description* provenance), never on "this row exists" |
-| human text is never silently rewritten | agent-authored edits are separate rows/columns, not overwrites of a human's text |
+| "latest activity" | derived: the newest `activities` row whose `problem_id` matches. Storing it would be a second copy of an ordering the query already has |
+| "evidence/artifacts" | derived from the same linkage — the contract itself says one record can be activity *and* evidence. If a *claim* about evidence is needed ("this PR is the proof"), that is an annotation, not a column |
+| "current interpretation" | an annotation (`kind='interpretation'`) — it is a claim by an author, it carries confidence, and as an annotation it can never be overwritten by later automation, which is exactly the §9 rule |
+| steering notes | the same table (`kind='steering'`), same protection |
+| "resolution/reopen history" | the state log (§3.3), extended — see §6.5 |
+| `stale` | derived from the last-activity timestamp; a badge |
+| recency labels (`2d`, `Mon · 28 Sep`) | derived, from the same timestamp used for sorting |
+| counts, progress, "gone quiet" | derived; the Overview's job is to compute them |
+| the `Axes | Problems` toggle | a view state, not data: the contract explicitly forbids two disconnected tracking systems, so it is one model read two ways |
+| the 7-day staleness threshold | a rendering constant (fixture G's number), not schema — changing it must not require a migration |
 
-The field inventory that fills this section is being extracted from the contract package *with line
-references*, so that every proposed column can be traced to a sentence in `contract/` — or be visible as an
-invention, which is the point of writing it down.
+### 6.5 One amendment this section forces on §3.3
+
+Problems have "resolution/reopen history", so a *problem* can move between states too — which the approved
+log (§3.3) cannot express, because its `axis_id` is `NOT NULL REFERENCES development_axes`. Two ways out:
+
+| Option | Cost |
+|---|---|
+| **A (proposed):** keep one table, make the parent columns nullable with a `CHECK` that exactly one is set: `axis_id … REFERENCES development_axes(id)`, `problem_id … REFERENCES problems(id)`, `CHECK ((axis_id IS NOT NULL) <> (problem_id IS NOT NULL))` | the bootstrap index becomes `(COALESCE(axis_id, problem_id)) WHERE origin='migration'`; real foreign keys both ways are kept |
+| **B:** a second table `problem_state_log` mirroring the first | duplicated DDL and duplicated triggers; two places to keep honest |
+
+Proposed: **A**, because it keeps one append-only table and real referential integrity, and the `CHECK` is
+the kind of constraint SQLite can enforce cheaply. It is an amendment to an approved section, so it is
+called out here rather than folded in silently.
+
+### 6.6 Open decisions — the "stop here" branch of the charter
+
+1. **The Problem state enum.** The contract lists `state` as a field and never enumerates its values —
+   the one genuinely ambiguous point. Proposal: `open` / `resolved`, on the strength of
+   "resolution/reopen history". If a problem should also be able to read as `blocked` or `parked` on
+   screen, that changes the enum, and I would rather hear it now than widen a `CHECK` later. (A wider enum
+   is cheap while 004 is unwritten and expensive afterwards.)
+2. **`author_type ('human','agent')` vs the charter's words** "owner-authored vs librarian-inferred".
+   Proposal: reuse `author_type` — it already exists on `annotations`, with exactly these values — and
+   document that `agent` is the librarian. A second vocabulary for the same distinction would be worse than
+   slightly awkward naming.
+3. **Steering-note scope.** The contract never says whether a steering note belongs to a topic or an axis.
+   Proposal: since `annotations` already carries `topic_id` and `axis_id`, adding `problem_id` makes it
+   attachable to any of the three; the "never silently override" rule is a write/read rule, not a schema
+   one.
+4. **`position` nullable** for "ordered or unordered steps" — one column covering both, rather than a
+   boolean plus an integer.
+5. **Step states.** The contract says "such as done/current/next/blocked", so the list is illustrative.
+   Proposal: those four exactly; note that `current` could be derived as "the first step that is not done",
+   which would be one fewer state to keep true — but the contract names it as a state, so it is stored,
+   and this is worth a second opinion.
+
+### 6.7 Inventions, listed as inventions
+
+Everything below is *not* in the contract; each is a choice this proposal makes, so it can be rejected:
+
+- `problems.id`, `org_id`, `created_at`, `author_id` — bookkeeping, matching the existing tables' shape;
+- the **problem state values** (`open`/`resolved`) — see 6.6.1;
+- the existence and shape of a state log at all (the contract says history must be preserved, never how);
+- `kind` values on annotations (`note`/`interpretation`/`steering`);
+- `plan_steps.position` as the ordering mechanism ("ordered or unordered" says nothing about storage);
+- `plan_step_id` on problems — the contract says "optional linked plan step" without saying what a step is;
+- the `author_type` naming for provenance (6.6.2);
+- the 7-day `stale` threshold — it appears only in fixture G, never in the prose, and it lives in the view;
+- the **completeness of the transition graph**: three reopen transitions are listed, and the rest of the
+  graph (e.g. `blocked → active`) is not enumerated anywhere;
+- whether `abandoned` may be reopened — D4 excludes it, the prose is silent;
+- whether `stale` applies to people and problems as well as axes/topics/repositories (it is mentioned for
+  the latter set in the Overview).
+
+### 6.8 Verification done while writing this
+
+`ALTER TABLE ADD COLUMN` is central to the proposal (three of the new columns land on existing tables), and
+its restrictions are the kind of thing that is easy to mis-remember. Probed directly rather than assumed:
+
+| Probe | Result |
+|---|---|
+| add a `REFERENCES … ON DELETE CASCADE` column with `PRAGMA foreign_keys=ON` | accepted, existing rows get `NULL` |
+| add a column with a `CHECK` constraint | accepted, and the check fires on a violating insert/update |
+| add a nullable `TEXT` with a three-value `CHECK` | accepted |
+
+Caveat worth keeping: that probe ran on the SQLite bundled with this machine's Python, not on the
+`bun:sqlite` the host uses. The migration test repeats it under the host's own engine — the proof is the
+migration run, not the probe.
 
 ## 7. The charter, item by item
 
