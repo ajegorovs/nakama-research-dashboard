@@ -152,6 +152,75 @@ On a running instance (platform admin + org admin):
 5. After a rebuild: `POST /v1/plugins/official/research-dashboard/reinstall`, which snapshots the new
    bytes as an immutable `+dev.<digest>` release for that organization only, keeping its data.
 
+## Run the acceptance pass
+
+`harness/` is the pass that produces every number and screenshot in `docs/`: it logs into the dashboard,
+opens the plugin page in real Chromium, prints one `PASS`/`FAIL`/`SKIP` line per check, writes a
+transcript and captures the views. Read-only unless `--write` is given, and it refuses to silently skip —
+a check whose subject a dataset does not have prints `SKIP` **with its reason**, so "0 failed" can never
+hide "4 never exercised".
+
+The two datasets must not be mixed. Give each its own instance (or at least its own `NAKAMA_CONFIG_DIR`).
+
+**Once, for either dataset** — an instance with this plugin installed, and a chromium:
+
+```bash
+git clone <nakama-checkout> && cd nakama
+/path/to/this/repo/vendor/vendor-into-nakama.sh "$PWD"
+bun install
+# the instance, with a data root of its own
+NAKAMA_HOST=127.0.0.1 NAKAMA_PORT=4399 NAKAMA_CONFIG_DIR=/tmp/nakama-review \
+NAKAMA_SEED_ADMIN_EMAIL=admin@nakama.local NAKAMA_SEED_ADMIN_NAME=Admin \
+NAKAMA_SEED_ADMIN_PASSWORD=<pick-one> bun run apps/server/src/index.ts
+# and the dashboard web dev server in a second shell — plugin pages live inside it
+NAKAMA_SERVER_URL=http://127.0.0.1:4399 bun run dev:web        # http://127.0.0.1:3003
+
+cd /path/to/this/repo
+bun install                                   # playwright-core
+bunx playwright install chromium              # or point PLAYWRIGHT_CHROMIUM at a chrome binary
+```
+
+Install and enable the plugin on that instance (`POST /v1/plugins/official/research-dashboard/install`,
+then `POST /v1/plugins/research-dashboard/enable`), and write one env file — credentials stay out of
+command lines and shell history:
+
+```bash
+cat > /tmp/nakama-review.env <<ENV
+NAKAMA_URL=http://127.0.0.1:4399
+NAKAMA_DASHBOARD=http://127.0.0.1:3003
+NAKAMA_EMAIL=admin@nakama.local
+NAKAMA_PASSWORD=<the same one>
+ENV
+```
+
+**Corpus** (the real, public dataset) — seeded by replaying the committed transcript, which is the
+corpus's own record:
+
+```bash
+bun harness/replay-corpus.mjs --env-file /tmp/nakama-review.env   # 695 calls, ~75 s
+bun run harness:read
+bun run harness:read -- --viewport 1280x800                       # the second reference width
+```
+
+**Synthetic edge states** — on a *second* fresh instance, same env file pointed at it:
+
+```bash
+bun harness/apply-layout-fixture.mjs --env-file /tmp/nakama-review.env
+bun run harness:fixture
+bun run harness:fixture -- --viewport 1280x800
+```
+
+Expected, as of the `pre-ux-v2` tag: corpus **42 pass · 0 fail · 7 skip** and fixture **49 · 0 · 0**, at
+both viewports. The counts move whenever a check is added, so read the run's own summary line rather
+than a number in a document. Each run writes its transcript to
+`docs/corpus/verify-read[-<viewport>].txt` or `docs/layout-fixtures/verify-fixture-read-<viewport>.txt`
+and its screenshots under `docs/screenshots/` or `docs/layout-fixtures/screenshots/<viewport>/` — i.e.
+over the committed record, by design: re-running is how the record is refreshed. `--shots` and
+`--transcript` divert a scratch run so it does not.
+
+`--write` also creates a topic, opens its editor and records an activity through the page. It **mutates
+the dataset** — wipe and re-seed afterwards; the corpus must not carry a `smoke-check` topic.
+
 ## What a reviewer should look at
 
 | File | Question |

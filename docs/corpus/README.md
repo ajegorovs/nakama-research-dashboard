@@ -46,6 +46,11 @@ Everything else in this directory is derived from the same capture: `commits.jso
 subject, date, ISO week, files touched, axis and **the reason for that axis**), `pulls.json`,
 `branches.json`, `summary.json`, `identities.json`.
 
+**Re-seeding it on another instance:** `bun harness/replay-corpus.mjs --env-file <env>` replays the same
+695 calls (about 75 s) and refuses if the topic is already there. It rewrites the one call that names the
+contributor's platform account to the id of the account it logs in as, so the dataset's attribution
+follows the instance instead of depending on which one seeded it.
+
 ## Attribution and hygiene
 
 Attribution is **handle-only** (`ajegorovs`), and the three commit identities are reduced to opaque

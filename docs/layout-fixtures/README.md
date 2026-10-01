@@ -42,23 +42,24 @@ Apply the fixture to a checkout's instance (it wipes nothing itself — apply it
 throwaway instance so the two datasets do not mix):
 
 ```bash
-set -a; . <services>/compose/nakama/.env; set +a
-NAKAMA_URL=http://127.0.0.1:4399 node harness/apply-layout-fixture.mjs
+node harness/apply-layout-fixture.mjs --env-file /tmp/nakama-review.env
 ```
 
 It prints what it wrote and the resulting rollup, and exits non-zero if any write was refused — a
 fixture that silently fails to apply is worse than none.
 
-Capture, from the estate's services tree:
+Capture, from the repository root (see the README's "Run the acceptance pass" for the instance, the web
+dev server and the credentials file):
 
 ```bash
-NAKAMA_VIEWPORT=1440x900 \
-TRANSCRIPT=<plugin-repo>/docs/layout-fixtures/verify-fixture-read-1440x900.txt \
-PUBLISH_SHOT_DIR=<plugin-repo>/docs/layout-fixtures/screenshots/1440x900 \
-  scripts/verify-read.sh
+bun run harness:fixture                                            # 1440x900
+bun run harness:fixture -- --viewport 1280x800
 ```
 
-Then put the instance back the way you found it (wipe at row level, re-seed `docs/corpus/`).
+The run writes its transcript into this directory and its screenshots under `screenshots/<viewport>/`.
+
+Then put the instance back the way you found it — use a second instance (or a fresh `NAKAMA_CONFIG_DIR`)
+rather than wiping the corpus one, or wipe at row level and re-seed `docs/corpus/`.
 
 ## Caveats
 

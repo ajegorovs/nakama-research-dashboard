@@ -2,6 +2,7 @@
 // Apply the layout fixture state to a running Nakama instance, through the plugin's own action surface.
 //
 //   NAKAMA_URL=http://127.0.0.1:4399 NAKAMA_EMAIL=… NAKAMA_PASSWORD=… node harness/apply-layout-fixture.mjs
+//   node harness/apply-layout-fixture.mjs --env-file /tmp/nakama-review.env
 //
 // Why this exists: the canonical dataset in `docs/corpus/` is a real repository, which is the point of
 // it — but a real dataset also lacks states the layout still has to survive (a blocked axis, an axis
@@ -13,6 +14,10 @@
 // It is deliberately a *separate* dataset: apply it to a throwaway or dev instance, capture, then
 // re-seed whatever the instance is supposed to hold. Every write goes through
 // POST /v1/plugins/research-dashboard/actions/<key> — nothing here touches SQLite directly.
+
+import { loadEnvFileArg } from "./env-file.mjs";
+
+loadEnvFileArg();
 
 const PLUGIN_ID = process.env.NAKAMA_PLUGIN_ID ?? "research-dashboard";
 const BASE = (process.env.NAKAMA_URL ?? "http://127.0.0.1:4399").replace(/\/+$/, "");
@@ -208,7 +213,16 @@ async function main() {
     console.error("NAKAMA_EMAIL and NAKAMA_PASSWORD are required (they are never printed).");
     return 2;
   }
-  const login = await call("/v1/auth/login", { email: EMAIL, password: PASSWORD });
+  const login = await call("/v1/auth/login", { email: EMAIL, password: PASSWORD }).catch((error) => {
+    console.error(
+      `cannot reach ${BASE} (${error?.cause?.code ?? error.message}) — is the instance running, ` +
+        "and is NAKAMA_URL right?"
+    );
+    return { body: null, status: 0 };
+  });
+  if (login.status === 0) {
+    return 1; // the reason was printed by the catch above
+  }
   if (login.status !== 200) {
     console.error(`login failed: HTTP ${login.status}`);
     return 1;
