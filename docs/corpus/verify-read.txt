@@ -1,6 +1,6 @@
 # harness/read-pass.sh — read pass · dataset corpus · viewport 1440x900
 # dashboard: http://127.0.0.1:3007
-# generated: 2026-10-02T01:10:51+03:00
+# generated: 2026-10-02T01:43:23+03:00
 
 PASS  login — status 200
 corpus: {"axes":3,"blocked":0,"people":1,"repositories":1,"topic":"UDV Echo Process","windowEvents":30}
@@ -16,7 +16,7 @@ PASS  every topic in the payload has one card, carrying its own axes and none of
 PASS  a topic card leads with people and its state counts — ajegorovs on UDV Echo Process; payload states ["2 active","1 completed"]; card counts ["2 active","1 completed"]
 SKIP  the blocked axis shows its blocker text — no axis in this corpus is blocked
 SKIP  a topic with a blocked axis is visually distinct — no axis in this corpus is blocked, so the attention styling has no subject here
-PASS  each topic card reports its recent-activity summary — Recent: 594 events · last activity 3 days ago 
+PASS  each topic card reports its recent-activity summary — Recent: 590 events · last activity 3 days ago 
 PASS  the window control re-issues get_overview with the new window only — {"activitySinceDays":7}
 PASS  the page still renders after the window change
 PASS  the topic card offers one disclosure control, not two — card buttons ["ajegorovs/udv-echo-process","ajegorovs","Docs & agent skills — `docs/`, `.agents/skills`","ajegorovs/udv-echo-process","Signal analysis — `analysis/`, SA1–SA5, sparse","ajegorovs/udv-echo-process","Acquisition — `acquire/`, DOP3010 rig","ajegorovs/udv-echo-process","Read topic","Edit fields"]
@@ -44,7 +44,8 @@ people: ajegorovs | selected: ajegorovs | involved in: UDV Echo Process
 PASS  one person is exactly one row in the index, and the panel is theirs — rows 1, panel ajegorovs
 SKIP  one person on several topics shows each topic with its own axes underneath — this corpus links ajegorovs to 1 topic(s), so the grouping has one entry
 people screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/screenshots/research-dashboard-read-people.png
-PASS  the Repositories view is repository-first: what it supports and the work happening in it — 1 repositories ["ajegorovs/udv-echo-process"]; panel ajegorovs/udv-echo-process: supports 1, axes ["Docs & agent skills — `docs/`, `.agents/skills`","Signal analysis — `analysis/`, SA1–SA5, sparse","Acquisition — `acquire/`, DOP3010 rig"]
+PASS  the Repositories view is repository-first: the index is the set, and one of them is selected — 1 repositories ["ajegorovs/udv-echo-process"]; panel ajegorovs/udv-echo-process: supports 1, axes ["Docs & agent skills — `docs/`, `.agents/skills`","Signal analysis — `analysis/`, SA1–SA5, sparse","Acquisition — `acquire/`, DOP3010 rig"]
+PASS  a repository that supports work names the topics it supports and the axes happening in it — panel ajegorovs/udv-echo-process: supports 1 of 1, axes 3 of 3
 repositories screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/screenshots/research-dashboard-read-repositories.png
 PASS  switching back to Topics restores the topic view, with no residue from the other two — cards 1, form 1, people index 0, repository index 0
 PASS  the Progress view groups the window by topic → axis instead of one flat log — summary "Last 7 days · 30 events across 1 topic"; topics ["UDV Echo Process"]; rails ["Docs & agent skills — `docs/`, `.agents/skills`","Signal analysis — `analysis/`, SA1–SA5, sparse","Acquisition — `acquire/`, DOP3010 rig"]
@@ -107,9 +108,9 @@ palette screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/screenshots
 PASS  palette entry navigates to the page — http://127.0.0.1:3007/plugins/research-dashboard
 PASS  every state row in every view renders its claim through the one badge — topics: 3 row(s), 0 without a claim; people: 3 row(s), 0 without a claim; repositories: 3 row(s), 0 without a claim
 PASS  every recency label's words are the age of the timestamp it carries, in all four views — 7 label(s) across people, progress, repositories, topics; each matches its own timestamp
-SKIP  an exceptional state says which one it is, and never navigates — no view rendered an exceptional state in this dataset, so there is no notice to read
+SKIP  an exceptional state says which one it is, and never navigates — this dataset renders no exceptional-state subject (no bare repository, no card hiding axes), 0 notice(s) seen: none
 PASS  a person's topic tags are the topics their own rollup links them to, ids and names alike — 6 tag(s) covering 1 link(s); every tag names a linked topic
-PASS  a repository's topic tags are the topics its own rollup links it to, ids and names alike — 6 tag(s) covering 1 link(s); every tag names a linked topic
+PASS  a repository's topic tags are the topics its own rollup links it to, ids and names alike — 6 tag(s) covering 1 link(s) in ajegorovs/udv-echo-process; every tag names a linked topic
 PASS  a topic tag clicked in People lands in Topics with that topic open, under the same name — view topics, opened "UDV Echo Process" (wanted "UDV Echo Process")
 PASS  an axis tag clicked in Repositories lands in Progress/Axes with that axis selected — view progress, subview axes, active ccd11229-0540-4d57-aee2-67cd9338ed96 (wanted ccd11229-0540-4d57-aee2-67cd9338ed96)
 PASS  a repository tag clicked in Topics lands in Repositories with that repository selected — view repositories, panel "ajegorovs/udv-echo-process" (wanted "ajegorovs/udv-echo-process")
@@ -151,4 +152,4 @@ skipped (each with its reason):
   - a repository tag in the Activity column lands in Repositories with that repository selected — no event in this dataset's window names a repository, so no feed row renders a repository tag
   - a problem tag lands in Progress/Problems with that problem selected — no event in this dataset's window is evidence for a problem, so no feed row renders a problem tag
   - a person filter that matches nothing attributable says so, and shows no unrelated events — every person in this corpus maps to a platform account, so the unattributable case has no subject
-  - an exceptional state says which one it is, and never navigates — no view rendered an exceptional state in this dataset, so there is no notice to read
+  - an exceptional state says which one it is, and never navigates — this dataset renders no exceptional-state subject (no bare repository, no card hiding axes), 0 notice(s) seen: none

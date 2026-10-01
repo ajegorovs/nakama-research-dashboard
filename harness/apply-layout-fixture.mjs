@@ -130,6 +130,20 @@ const FIXTURE = [
         summary: "Second rig pass replayed; two of three sweeps clean.",
       },
       {
+        // U10 seed: one recorded activity that NAMES a repository, so the Progress feed's repository
+        // EntityTag has a subject and its check executes instead of skipping — and the repository it names
+        // is linked to no topic and no axis, so the Repositories view renders its `empty` notices ("no topic
+        // names it yet", "no axis names this repository") as well. Both are fixture-owned data: no page
+        // logic was added to make either render. The name sorts first by full_name, so the repository view's
+        // default selection is this bare one and the notices are on screen without a click.
+        axisTitle: "Fixture: active axis (with evidence)",
+        occurredAt: "2026-10-01T09:05:00+03:00",
+        repositoryFullName: "fixture/0-bare-repository",
+        sourceRef: "#92",
+        sourceType: "github_pr",
+        summary: "Fixture: opened the bare-repository PR that no topic or axis claims yet.",
+      },
+      {
         axisTitle: "Fixture: parked axis (inferred state)",
         occurredAt: "2026-10-01T13:00:00+03:00",
         sourceRef: "fixture-activity-3",

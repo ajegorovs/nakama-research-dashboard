@@ -3,7 +3,7 @@
 **Live page.** Updated as each chunk lands; every number is a run's own summary line, and every claim
 here should be checkable with `README.md` § "Run the acceptance pass".
 
-Last updated at the **close of U4**, reviewer-accepted on 2026-10-02 — **U0–U4 complete**. The shared
+Last updated in **U10 §1** (2026-10-02): **U0–U4 complete**, and U10 is under way with the two seed additions that un-skip the repository-tag and exceptional-state checks. The shared
 grammar, the tags/navigation primitive and the Progress interaction model are live and acceptance-covered;
 what remains is refinement, hardening and merge readiness (U10/U11), not proving the product concept.
 
@@ -21,7 +21,7 @@ what remains is refinement, hardening and merge readiness (U10/U11), not proving
 | **U7** Shared grammar / navigation | **pulled forward into U4 and completed** — `EntityTag` as the one navigation primitive, `DetailHeader`/`RecencyLabel`/`EventDate`+`ActivityLine`/`Notice` shared by every view, and the tag traversal exercised from Progress, People, Repositories and Topics | `U4-progress.md` §18, §19 |
 | **U8** People + Repositories refinement | **core views delivered in U4** (both on the shared grammar, with the topic/axis/repository tags each names); **remaining:** refinement and edge-state polish against §People/§Repositories | as above |
 | **U9** Visual grammar + density | **mostly delivered in U4** — the primitives this chunk names are extracted and shared (one `EntityTag`, one `StateBadge`, `RecencyLabel` vs `EventDate`, `DetailHeader`, `ActivityLine`, `Notice`); **remaining:** the density/emphasis pass the brief's steps 4 and 7 describe, and any component still local to one view | `contract/component-contract.md`, `U4-progress.md` §19 |
-| **U10** Fixtures A–J + harness coverage | **next** — the seed/harness work, not UI work. Two checks are wired and *skip* today because no dataset has their subject, so the first items are minimal, explicit additions that make them execute: (1) one activity carrying a real `repositoryId`, so the Activity column's repository tag renders and its check runs; (2) a case that actually renders an exceptional-state `Notice` (an axis with no open problem, or a collapsed card hiding axes), so the notice path is exercised rather than skipped. Then the remaining A–J states and the new v2 checks | the two skips are recorded with reasons in the frozen U4 records: corpus `72 · 0 · 33`, fixture `105 · 0 · 1` |
+| **U10** Fixtures A–J + harness coverage | **in progress — §1 (the two seeds) is in**, and the class it exposed is fixed: three checks chose their subject *by position* and went red on a legitimately bare first repository, so each now chooses by property from the projection (and one had crashed mid-run). Records: fixture **107 · 0 · 0** — *zero skips* — and corpus **73 · 0 · 33**, both viewports, on the same served bytes U4 closed on (`aa3a478c39ca045d7e96`), which is the evidence that this pass changed no page logic. See `U10-harness.md` §1. Remaining — the seed/harness work, not UI work. Two checks are wired and *skip* today because no dataset has their subject, so the first items are minimal, explicit additions that make them execute: (1) one activity carrying a real `repositoryId`, so the Activity column's repository tag renders and its check runs; (2) a case that actually renders an exceptional-state `Notice` (an axis with no open problem, or a collapsed card hiding axes), so the notice path is exercised rather than skipped. Then the remaining A–J states and the new v2 checks | the two skips are recorded with reasons in the frozen U4 records: corpus `72 · 0 · 33`, fixture `105 · 0 · 1` |
 | **U11** Screenshots, docs, handoff, merge readiness | not started | — |
 
 ## U1 in one screen
@@ -98,7 +98,7 @@ comparing the two tables would otherwise wonder which number to trust.
 
 **Current (U4 steps 1–7 complete), measured on the isolated fixture-only instance** — its own instance, its own empty data
 root, plugin installed and enabled, the fixture applied once, the same recipe as the rows above: fixture
-**105 · 0 · 1** at both 1440×900 and 1280×800 (at step 5 it was **80 · 0 · 0**, because the pass *swapped* one
+**107 · 0 · 0** at both 1440×900 and 1280×800 as of **U10 §1** (the fixture now records no skips: its two seeds supplied the subjects for the repository-tag and exceptional-state checks; before them it was **105 · 0 · 1**. At step 5 it was **80 · 0 · 0**, because the pass *swapped* one
 check for another — the total stayed 80 rather than moving to 81; step 6 added seven and the corpus pass skips
 three of those; step 7 added ten, of which one skips **here** — no recorded event in this fixture names a
 repository, so the Activity column's repository tag renders nowhere). It was 50 after U1, 51 after U4's step 1 and 57 after step 2; step 3 added five, all comparing the

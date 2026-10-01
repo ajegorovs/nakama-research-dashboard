@@ -35,11 +35,13 @@ dataset-independent claims — no action call, identical payload), and **96** at
 EntityTag contract: the context line's topic and axis tags, the Activity column's tags against the projection
 row by row, the attributed person as a tag, and topic/person/repository/problem/axis each landing in its
 canonical view with the entity selected — plus no status badge being a tag, and no write action with an
-identical payload). One of the ten **skips here**: no recorded event in this fixture names a repository, so the
-Activity column's repository tag has nothing to render (the repository *navigation* is still exercised, from
-the threads section, by the step-5 checks). At both viewports, with nothing failing.
-**Measured against each other at U4's step 7, on separate instances:** this directory **105 · 0 · 1** and the
-corpus **72 · 0 · 33** — the corpus record is taken on a corpus-only instance, and its 33 skips are the
+identical payload). One of the ten used to **skip here** — no recorded event named a repository, so the Activity column's
+repository tag had nothing to render. **U10 §1 closed that with fixture data, not page logic**: one seeded
+activity carries `repositoryFullName`, so the tag renders, its navigation check executes, and the repository it
+names is linked to no topic and no axis (the Repositories view then renders the `empty` notices). This
+directory now records **zero skips** at both viewports, with nothing failing. See `docs/ux-v2/U10-harness.md`.
+**Measured against each other at U10 §1, on separate instances:** this directory **107 · 0 · 0** and the
+corpus **73 · 0 · 33** — the corpus record is taken on a corpus-only instance, and its 33 skips are the
 checks a corpus with no problem row and no plan cannot exercise, each printed with its reason. So the pair
 that once read 36/43 reads **64/96** (at U4's step 6 it read 56/87; at step 5, 52/80). The pass also *swapped* one check for
 another at step 5 — the closed-out precondition folded into the conditional that replaced it, and a new
@@ -64,6 +66,8 @@ instead of the corpus and never mixed into `docs/corpus/`. Every file here is la
 | An axis that states no progress | "an axis that states no progress carries no confidence for it" | the same axis, with no current-state claim at all |
 | One person, several topics | "one person on several topics shows each topic with its own axes underneath" | `Fixture Alpha`, attributable, 2 topics / 4 axes |
 | A person with no mapped account | "a person filter that matches nothing attributable says so…" | `Fixture Zeta`, `attributable=false`, 1 topic |
+| An event that names a repository (U10 §1) | "a repository tag in the Activity column lands in Repositories with that repository selected" | one activity with `repositoryFullName: fixture/0-bare-repository` and `sourceType: github_pr` — the feed's repository tag has a subject, and clicking it lands on that repository |
+| A repository nothing else claims (U10 §1) | "an exceptional state says which one it is, and never navigates" (the `empty` kind) | the same repository, linked to no topic and no axis, sorting first by `full_name`: the Repositories view's default panel renders "no topic names it yet" and "no axis names this repository", and the check derives the expected kind from the dataset's own projection |
 
 ## Contents
 

@@ -229,6 +229,7 @@ const CORPUS = await page.evaluate(
       repositories: all.repositories.map((repo) => ({
         axes: repo.axes.map((axis) => axis.title),
         fullName: repo.repository.fullName,
+        topicCount: (repo.topics ?? []).length,
       })),
       timeline: all.timeline.map((group) => ({
         axes: group.axes.map((axis) => axis.axis.title),
@@ -919,14 +920,53 @@ const repositories = await page.evaluate(() => {
   };
 });
 check(
-  "the Repositories view is repository-first: what it supports and the work happening in it",
+  "the Repositories view is repository-first: the index is the set, and one of them is selected",
   repositories.count === repositories.names.length &&
     repositories.duplicated.length === 0 &&
     repositories.name !== "" &&
-    repositories.supports >= 1 &&
-    repositories.axes.length >= 1,
+    repositories.names.includes(repositories.name),
   `${repositories.count} repositories ${JSON.stringify(repositories.names)}; panel ${repositories.name}: supports ${repositories.supports}, axes ${JSON.stringify(repositories.axes)}`
 );
+// "What it supports and the work happening in it" is a claim about a repository that HAS links, not about
+// whichever row happens to be first: a repository may legitimately support nothing yet (the fixture's bare
+// one exists for exactly that, and the Repositories view renders its `empty` notices). So the subject is
+// chosen by PROPERTY from the projection and selected deliberately, and a dataset without such a repository
+// prints a skip instead of a red check on a state the view is right not to fabricate.
+const linkedRepository = (CORPUS.repositories ?? []).find(
+  (repository) => repository.topicCount > 0 && (repository.axes ?? []).length > 0
+);
+if (!linkedRepository) {
+  skip(
+    "a repository that supports work names the topics it supports and the axes happening in it",
+    "no repository in this dataset links both a topic and an axis"
+  );
+} else {
+  await root.locator(`[data-rd-repository="${linkedRepository.fullName}"]`).click();
+  await page.waitForTimeout(600);
+  const linked = await page.evaluate(() => {
+    const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+    const panel = scope?.querySelector("[data-rd-repository-panel]");
+    return {
+      axes: [...(panel?.querySelectorAll("[data-rd-scan-axis]") ?? [])].map(
+        (axis) => axis.getAttribute("data-rd-scan-axis")
+      ),
+      name: panel?.getAttribute("data-rd-repository-panel") ?? "",
+      supports: Number(
+        panel
+          ?.querySelector("[data-rd-repository-topics]")
+          ?.getAttribute("data-rd-repository-topics") ?? -1
+      ),
+    };
+  });
+  check(
+    "a repository that supports work names the topics it supports and the axes happening in it",
+    linked.name === linkedRepository.fullName &&
+      linked.supports === linkedRepository.topicCount &&
+      linked.axes.length === (linkedRepository.axes ?? []).length,
+    `panel ${linked.name}: supports ${linked.supports} of ${linkedRepository.topicCount}, ` +
+      `axes ${linked.axes.length} of ${(linkedRepository.axes ?? []).length}`
+  );
+}
 
 const repositoriesShot = `${OUT}/research-dashboard-${WRITE ? "write" : "read"}-repositories.png`;
 await root.screenshot({ path: repositoriesShot });
@@ -2737,8 +2777,14 @@ check(
 );
 
 // The context filters read the axis, so a repository filter keeps the axes that name that repository.
-const filterRepo = CORPUS.repositories[0]?.fullName ?? "";
-const repoAxes = CORPUS.repositories[0]?.axes ?? [];
+// Choose the subject by PROPERTY, not by position: a repository may legitimately support no axis (the
+// fixture's bare one exists exactly to exercise that), so the first row is not the right subject for a
+// check about filtering to a repository's axes.
+const filterSubject = CORPUS.repositories.find(
+  (repository) => (repository.axes ?? []).length > 0
+);
+const filterRepo = filterSubject?.fullName ?? "";
+const repoAxes = filterSubject?.axes ?? [];
 if (filterRepo === "") {
   skip(
     "filtering by a repository keeps only the axes that name it, and says it is filtered",
@@ -3206,6 +3252,9 @@ if (WRITE) {
           kind: n.getAttribute("data-rd-notice"),
           tags: tagsIn(n).length,
         })),
+        hiddenAxes: [
+          ...(scope?.querySelectorAll("[data-rd-hidden-axes]") ?? []),
+        ].map((n) => Number(n.getAttribute("data-rd-hidden-axes") ?? "0")),
         recency: [...(scope?.querySelectorAll("[data-rd-recency]") ?? [])].map((n) => ({
           at: n.getAttribute("data-rd-recency") ?? "",
           text: (n.textContent ?? "").trim(),
@@ -3296,7 +3345,9 @@ if (WRITE) {
     );
   }
 
-  // (3) A notice names which exceptional state it is, and a notice is never a navigation.
+  // (3) A notice names which exceptional state it is, and a notice is never a navigation. The kinds a
+  // dataset should render are derived from its own projection, so a dataset that has the state but no notice
+  // fails, while a dataset that genuinely lacks the state skips with that reason rather than passing.
   const notices = Object.entries(snapshots).flatMap(([view, snap]) =>
     snap.notices.map((entry) => ({ ...entry, view }))
   );
@@ -3304,17 +3355,34 @@ if (WRITE) {
     (entry) =>
       !["empty", "filtered", "truncated"].includes(entry.kind) || entry.tags > 0
   );
-  if (notices.length === 0) {
+  const kindsShown = new Set(notices.map((entry) => entry.kind));
+  const bareRepository = (overviewProjection?.repositories ?? []).find(
+    (repository) =>
+      (repository.topics ?? []).length === 0 && (repository.axes ?? []).length === 0
+  );
+  const wanted = [];
+  if (bareRepository) wanted.push("empty");
+  // The collapsed-card case is read from the DOM's own hidden-axis attribute rather than a guessed cap, so
+  // the derivation is the page's claim, not the check's.
+  if (Object.values(snapshots).some((snap) => (snap.hiddenAxes ?? []).some((n) => n > 0))) {
+    wanted.push("truncated");
+  }
+  const missing = wanted.filter((kind) => !kindsShown.has(kind));
+  if (wanted.length === 0) {
     skip(
       "an exceptional state says which one it is, and never navigates",
-      "no view rendered an exceptional state in this dataset, so there is no notice to read"
+      "this dataset renders no exceptional-state subject (no bare repository, no card hiding axes), " +
+        `${notices.length} notice(s) seen: ${[...kindsShown].join(", ") || "none"}`
     );
   } else {
     check(
       "an exceptional state says which one it is, and never navigates",
-      badNotices.length === 0,
+      badNotices.length === 0 && missing.length === 0,
       `${notices.length} notice(s) across the four views: ` +
-        notices.map((entry) => `${entry.view}/${entry.kind}`).join(", ")
+        notices.map((entry) => `${entry.view}/${entry.kind}`).join(", ") +
+        (missing.length === 0
+          ? ` — every kind this dataset has a subject for is rendered (${wanted.join(", ")})`
+          : ` — MISSING ${missing.join(", ")}`)
     );
   }
 
@@ -3360,22 +3428,34 @@ if (WRITE) {
   }
 
   const repositoryProjection = overviewProjection?.repositories ?? [];
-  const repositoryRow = snapshots.repositories;
-  const repository = repositoryProjection.find(
-    (entry) =>
-      entry.topics.length > 0 &&
-      repositoryRow.tags.some(
-        (tag) => tag.type === "topic" && tag.id === entry.topics[0].topic.id
-      )
+  // Choose the subject by PROPERTY and select it, rather than trusting whichever row the view happens to
+  // show first: a repository with no topic link is a legitimate first row (the fixture's bare one), and a
+  // check whose subject is absent must skip — never crash on a projection entry it cannot find.
+  const repositoryWithTopics = repositoryProjection.find(
+    (entry) => (entry.topics ?? []).length > 0
   );
-  if (repository === null) {
+  if (!repositoryWithTopics) {
     skip(
       "a repository's topic tags are the topics its own rollup links it to",
-      "no repository with a topic link is on screen, so the panel has no topic tag to check"
+      "no repository in this dataset links a topic, so no panel has a topic tag to check"
     );
   } else {
-    const wanted = repository.topics.map((link) => link.topic);
-    const shown = repositoryRow.tags.filter((tag) => tag.type === "topic");
+    await showView("repositories");
+    await root
+      .locator(`[data-rd-repository="${repositoryWithTopics.repository.fullName}"]`)
+      .click();
+    await page.waitForTimeout(600);
+    const shownTags = await page.evaluate(() => {
+      const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+      const root = scope?.querySelector("[data-rd-repository-panel]");
+      return [...(root?.querySelectorAll("[data-rd-entity-tag]") ?? [])].map((n) => ({
+        id: n.getAttribute("data-rd-entity-id"),
+        label: n.getAttribute("data-rd-tag-label"),
+        type: n.getAttribute("data-rd-entity-tag"),
+      }));
+    });
+    const wanted = repositoryWithTopics.topics.map((link) => link.topic);
+    const shown = shownTags.filter((tag) => tag.type === "topic");
     const covered = wanted.every((topic) =>
       shown.some((tag) => tag.id === topic.id && tag.label === topic.name)
     );
@@ -3385,7 +3465,7 @@ if (WRITE) {
     check(
       "a repository's topic tags are the topics its own rollup links it to, ids and names alike",
       covered && foreign.length === 0,
-      `${shown.length} tag(s) covering ${wanted.length} link(s); ` +
+      `${shown.length} tag(s) covering ${wanted.length} link(s) in ${repositoryWithTopics.repository.fullName}; ` +
         (foreign.length === 0
           ? "every tag names a linked topic"
           : `foreign: ${foreign.map((tag) => tag.label).join(", ")}`)
@@ -3431,6 +3511,18 @@ if (WRITE) {
   }
 
   await showView("repositories");
+  // Selecting a view resets it to the projection's first row, and that row may be a repository that names no
+  // axis (the fixture's bare one exists for exactly that case). Choose a repository that HAS axes — by
+  // property, from the projection — then read its panel's tags.
+  const repositoryWithAxes = repositoryProjection.find(
+    (entry) => (entry.axes ?? []).length > 0
+  );
+  if (repositoryWithAxes) {
+    await root
+      .locator(`[data-rd-repository="${repositoryWithAxes.repository.fullName}"]`)
+      .click();
+    await page.waitForTimeout(500);
+  }
   const repositoryAxisTag = (
     await readGrammar()
   ).tags.find((tag) => tag.type === "axis");
