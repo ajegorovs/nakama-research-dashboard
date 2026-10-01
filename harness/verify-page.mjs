@@ -1337,6 +1337,214 @@ if (firstProblems && firstProblems.open.length > 0) {
   }
 }
 
+// ---------------------------------- C7d: the Plan section — optional, projection-driven, and unordered-proof
+// Step 3: the axis's optional plan renders below the composition. Every assertion here is again against the
+// projection: which steps exist, their order, their stored state. The unordered case is the one that can
+// catch a client sorting what the model never ordered, so it is tested as a **discriminator** — the fixture's
+// two unpositioned steps are written zulu-first, alpha-second, so the store's order and an alphabetical sort
+// disagree, and the check fails if the page produces the sorted one.
+const readPlan = () =>
+  page.evaluate(() => {
+    const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+    const section = scope?.querySelector(".rd-progress-plan") ?? null;
+    const steps = [...(section?.querySelectorAll("[data-rd-plan-step]") ?? [])].map((node) => {
+      const badge = node.querySelector("[data-rd-step-state]");
+      return {
+        claimsConfidence: badge?.hasAttribute("data-rd-state-confidence") ?? null,
+        position: node.getAttribute("data-rd-plan-step-position"),
+        shown: Boolean(node.querySelector("[data-rd-plan-step-shown]")),
+        state: (badge?.textContent ?? "").trim(),
+        title: (node.querySelector(".rd-strong")?.textContent ?? "").trim(),
+      };
+    });
+    const box = section?.getBoundingClientRect();
+    return {
+      axis:
+        scope
+          ?.querySelector(".rd-progress-problem")
+          ?.getAttribute("data-rd-progress-problem-axis") ?? null,
+      // Any wording about a plan being absent would be the empty shell the reviewer ruled out.
+      mentionsMissingPlan: /no plan|missing plan|plan not/i.test(
+        (scope?.innerText ?? "").replace(/\s+/g, " ")
+      ),
+      present: section !== null,
+      steps,
+      summary: (section?.querySelector("p")?.textContent ?? "").trim(),
+      unordered: Boolean(section?.querySelector('[data-rd-progress-plan-unordered="true"]')),
+      y: box ? Math.round(box.top) : null,
+    };
+  });
+const selectAxis = async (axisId) => {
+  await root.locator(`[data-rd-index-axis="${axisId}"]`).click();
+  await page
+    .waitForFunction(
+      (wanted) =>
+        document
+          .querySelector('div[data-plugin-id="research-dashboard"] .rd-progress-problem')
+          ?.getAttribute("data-rd-progress-problem-axis") === wanted,
+      axisId,
+      { timeout: 10000 }
+    )
+    .catch(() => {});
+  await page.waitForTimeout(200);
+};
+
+const planOf = (result, axisId) =>
+  result.axes.axes.find((row) => row.id === axisId)?.plan ?? null;
+
+// (1) Below the composition, not a fourth column — and still on one row above it.
+{
+  const planned = allProgress.axes.axes.find((row) => planOf(allProgress, row.id) !== null) ?? null;
+  if (!planned) {
+    skip(
+      "the plan renders below the composition, from the projection",
+      "no axis in this dataset carries a plan"
+    );
+  } else {
+    await selectAxis(planned.id);
+    const shown = await readPlan();
+    const boxes = (await readTop()).boxes;
+    const rowBottom = Math.max(
+      ...[boxes.index, boxes.problem, boxes.feed].map((box) => (box?.y ?? 0) + (box?.h ?? 0))
+    );
+    const expected = planOf(allProgress, planned.id);
+    const titles = expected.steps.map((step) => step.title);
+    check(
+      "the plan renders below the top row, from the projection, with no fourth column",
+      shown.present &&
+        shown.axis === planned.id &&
+        shown.y !== null &&
+        shown.y >= rowBottom &&
+        shown.steps.length === expected.steps.length &&
+        shown.steps.every((step, position) => step.title === titles[position]) &&
+        shown.summary === expected.summary.trim() &&
+        shown.steps.every((step, position) => step.state === expected.steps[position].state),
+      `plan at y=${shown.y} vs row bottom ${rowBottom}; ${shown.steps.length} steps vs ${expected.steps.length}; titles ${JSON.stringify(shown.steps.map((s) => s.title))}`
+    );
+    // (2) A position is rendered only where a step claims one — here the fixture's plan claims them, so the
+    // numbers come from `position` and nothing is derived.
+    check(
+      "step numbers come from the stored position, and a stored step state carries no invented confidence",
+      shown.steps.every((step, position) => {
+        const claimed = expected.steps[position].position;
+        return claimed === null ? step.position === "" : step.position === String(claimed);
+      }) && shown.steps.every((step) => step.claimsConfidence === false),
+      `positions ${JSON.stringify(shown.steps.map((s) => s.position))} for ${JSON.stringify(expected.steps.map((s) => s.position))}; confidence attributes ${JSON.stringify(shown.steps.map((s) => s.claimsConfidence))}`
+    );
+  }
+}
+
+// (2b) The plan ↔ problem link, read in both directions. The projection's *first open* problem on this axis is
+// the unlinked one, so the marker must be absent for it — and this check deliberately switches to the linked
+// problem rather than trusting the default, which is the case that would silently pass if the marker were
+// hard-wired to the first step.
+{
+  const linkedFor = (result, axisId) =>
+    result.problems.problems.find((row) => row.axisId === axisId && row.planStepId) ?? null;
+  const axisWithLink =
+    allProgress.axes.axes.find((row) => planOf(allProgress, row.id) !== null && linkedFor(allProgress, row.id)) ??
+    null;
+  if (!axisWithLink) {
+    skip(
+      "the problem's step and the step's problem are marked, both ways",
+      "no axis in this dataset has a plan and a problem naming one of its steps"
+    );
+  } else {
+    const linked = linkedFor(allProgress, axisWithLink.id);
+    const stepTitle = planOf(allProgress, axisWithLink.id).steps.find(
+      (step) => step.id === linked.planStepId
+    )?.title ?? "";
+    await selectAxis(axisWithLink.id);
+    const before = await readPlan();
+    const alreadyShown = before.steps.some((step) => step.shown);
+    if (!alreadyShown) {
+      // It is listed rather than shown, so pick it. (If it is already the shown problem it is deliberately
+      // absent from the list — the card is it.)
+      await root.locator(`[data-rd-problem-choice="${linked.id}"]`).click();
+      await page.waitForTimeout(300);
+    }
+    const after = await readPlan();
+    const card = await page.evaluate(
+      (id) =>
+        (
+          document.querySelector(
+            `div[data-plugin-id="research-dashboard"] [data-rd-problem="${id}"] [data-rd-problem-facts="true"]`
+          )?.textContent ?? ""
+        )
+          .replace(/\s+/g, " ")
+          .trim(),
+      linked.id
+    );
+    check(
+      "the problem's step and the step's problem are marked, both ways",
+      after.steps.filter((step) => step.shown).length === 1 &&
+        after.steps.every((step, position) =>
+          position ===
+          planOf(allProgress, axisWithLink.id).steps.findIndex((s) => s.id === linked.planStepId)
+            ? step.shown
+            : !step.shown
+        ) &&
+        card.includes(stepTitle),
+      `marked steps ${JSON.stringify(after.steps.map((s) => s.shown))} for step ${linked.planStepId?.slice(0, 8)}; card facts "${card}"`
+    );
+  }
+}
+
+// (3) The unordered plan: the store's order, no invented numbers, no invented confidence, and the page says
+// the plan claims no order rather than letting the list read as a sequence.
+{
+  const unordered = allProgress.axes.axes.find((row) => {
+    const plan = planOf(allProgress, row.id);
+    return plan !== null && plan.steps.length > 1 && plan.steps.every((step) => step.position === null);
+  }) ?? null;
+  if (!unordered) {
+    skip(
+      "an unordered plan keeps the store's order and invents no sequence",
+      "no axis in this dataset carries a multi-step plan with no positions"
+    );
+  } else {
+    await selectAxis(unordered.id);
+    const shown = await readPlan();
+    const expected = planOf(allProgress, unordered.id);
+    const titles = expected.steps.map((step) => step.title);
+    const sortedAlphabetically = [...titles].sort((left, right) => left.localeCompare(right));
+    check(
+      "an unordered plan keeps the store's order and invents no sequence",
+      shown.present &&
+        shown.steps.length === titles.length &&
+        shown.steps.every((step, position) => step.title === titles[position]) &&
+        shown.steps.every((step) => step.position === "") &&
+        shown.unordered &&
+        // The check only means something if the two orders actually differ on this dataset.
+        titles.join("|") !== sortedAlphabetically.join("|") &&
+        shown.steps.every((step, position) => step.state === expected.steps[position].state) &&
+        shown.steps.every((step) => step.claimsConfidence === false),
+      `order ${JSON.stringify(shown.steps.map((s) => s.title))} vs projection ${JSON.stringify(titles)} (alphabetical would be ${JSON.stringify(sortedAlphabetically)}); positions ${JSON.stringify(shown.steps.map((s) => s.position))}; unordered marker ${shown.unordered}`
+    );
+  }
+}
+
+// (4) Absent plan stays absent: no shell, no warning. The axis chosen deliberately has no plan.
+{
+  const unplanned = allProgress.axes.axes.find((row) => planOf(allProgress, row.id) === null) ?? null;
+  if (!unplanned) {
+    skip(
+      "an axis with no plan renders no plan section at all",
+      "every axis in this dataset carries a plan"
+    );
+  } else {
+    await selectAxis(unplanned.id);
+    const shown = await readPlan();
+    check(
+      "an axis with no plan renders no plan section at all",
+      shown.axis === unplanned.id && !shown.present && !shown.mentionsMissingPlan,
+      `plan section present ${shown.present}, page mentions a missing plan ${shown.mentionsMissingPlan}`
+    );
+  }
+  // Back to the projection's first row for whatever follows.
+  await selectAxis(first.id);
+}
+
 // ------------------------------------------------ C8: no bare state, one vocabulary for the evidence
 // A state is a claim, and the record often holds only an inference. Every rendered state must carry
 // its confidence, and one that is not confirmed must say so where it is read — otherwise the temporal

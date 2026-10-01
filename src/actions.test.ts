@@ -1571,8 +1571,43 @@ describe("U4 — Progress reads the model as the store computes it", () => {
       const feed = activity.byAxis.find((bucket) => bucket.axisId === axis.id);
       expect(feed?.eventCount).toBe(axis.activityInWindow);
     }
-    // And the same agreement between the heading the Problem column shows and the rows it can list: the page
-    // takes the projection's rows for the selected axis, so the server's count has to be their count.
+    // The plan the axis row carries is the page's only source for the Plan section, so its shape — and a
+    // step's — is pinned here like every other rendered field. `position` is nullable **by design**: the page
+    // shows a number only where a step claims one, so the pin has to cover both shapes rather than assume a
+    // sequence.
+    const planned = axes.axes.find((row) => row.plan)?.plan as
+      | { steps: Array<Record<string, unknown>>; stepsDone: number }
+      | null;
+    expect(planned).toBeTruthy();
+    expect(Object.keys(planned as object).sort()).toEqual([
+      "id",
+      "steps",
+      "stepsDone",
+      "summary",
+    ]);
+    expect(planned?.steps.length).toBe(2);
+    expect(Object.keys(planned?.steps[0] ?? {}).sort()).toEqual([
+      "createdAt",
+      "id",
+      "planId",
+      "position",
+      "state",
+      "title",
+      "updatedAt",
+    ]);
+    for (const step of planned?.steps ?? []) {
+      expect(step.position === null || typeof step.position === "number").toBe(true);
+    }
+    // And the steps arrive in the store's own order, which is what the page renders as given: ordered steps
+    // first in non-decreasing position, then any step that claims none.
+    for (const axis of axes.axes) {
+      const steps =
+        (axis.plan as { steps: Array<{ position: number | null }> } | null)?.steps ?? [];
+      const positions = steps.map((step) => step.position);
+      const claimed = positions.filter((position): position is number => position !== null);
+      expect(claimed).toEqual([...claimed].sort((left, right) => left - right));
+      expect(positions.slice(0, claimed.length)).toEqual(claimed);
+    }
     for (const axis of axes.axes) {
       const mine = problems.problems.filter(
         (row) => row.axisId === axis.id && row.state === "open"

@@ -38,6 +38,12 @@ type AxisState =
 /** A problem's own vocabulary: distinct from an axis's, and deliberately not merged with it. */
 type ProblemState = "open" | "resolved";
 
+/**
+ * A plan step's vocabulary. Its own again: `blocked` means something different on a step than on an axis
+ * (work waiting, not an axis waiting on the world), so the three lists stay three lists.
+ */
+type PlanStepState = "pending" | "active" | "done" | "blocked";
+
 type Topic = {
   id: string;
   name: string;
@@ -232,11 +238,33 @@ type RepositoryRollup = {
  * field added or renamed there fails there first. The fields not listed (blocker, blockerConfidence, plan,
  * stateHistory) belong to steps this slice has not reached; they are out of scope, not dropped.
  */
+type ProgressPlan = {
+  id: string;
+  steps: ProgressPlanStep[];
+  stepsDone: number;
+  summary: string;
+};
+
+type ProgressPlanStep = {
+  createdAt: string;
+  id: string;
+  planId: string;
+  /** Null where the plan has no order at all — the page renders the number only where one is claimed. */
+  position: number | null;
+  state: PlanStepState;
+  title: string;
+  updatedAt: string;
+};
+
 type ProgressAxisRow = {
   activityInWindow: number;
+  blocker: string;
+  blockerConfidence: Confidence | null;
   id: string;
   lastActivityAt: string | null;
   openProblems: number;
+  /** The axis's plan, or null where it has none. Optional by construction — no plan, no section. */
+  plan: ProgressPlan | null;
   problems: number;
   recencyAt: string | null;
   stale: boolean;
@@ -310,6 +338,8 @@ type ProgressProblemRow = {
   axisId: string;
   id: string;
   people: Array<{ displayName: string; id: string }>;
+  /** The step this problem sits on, where it sits on one — the other half of the plan ↔ problem link. */
+  planStepId: string | null;
   planStepTitle: string | null;
   recencyAt: string | null;
   repositories: Array<{ fullName: string; id: string }>;
@@ -734,6 +764,35 @@ const css = `
   display: grid;
   gap: 2px;
 }
+/* The plan sits below the composition, separated by a rule rather than boxed: it is a secondary section, and
+   the top row is the glance. The step list is a plain list because the markup must not imply an order the
+   model may never have claimed — the numbers are rendered per step, only where a step carries a position. */
+[data-plugin-id="research-dashboard"] .rd-progress-plan {
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 4px;
+  padding-top: 10px;
+}
+[data-plugin-id="research-dashboard"] .rd-progress-plan p {
+  margin: 0;
+}
+[data-plugin-id="research-dashboard"] .rd-plan-steps {
+  display: grid;
+  gap: 4px;
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+[data-plugin-id="research-dashboard"] .rd-plan-step {
+  display: grid;
+  gap: 2px;
+}
+[data-plugin-id="research-dashboard"] .rd-step-state {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.85em;
+  padding: 0 6px;
+}
 [data-plugin-id="research-dashboard"] .rd-index-item[aria-pressed="true"] {
   border-color: var(--border);
   background: var(--muted, rgba(127, 127, 127, 0.1));
@@ -1152,16 +1211,28 @@ export function apply(ctx: Context) {
    */
   function StateBadge({
     confidence,
+    kind = "claim",
     state,
   }: {
-    confidence: Confidence | null;
+    confidence?: Confidence | null;
     /**
-     * An axis state or a problem state. One badge for both, because a state is a claim wherever it appears
-     * and a second component would be a second vocabulary; the subject decides which states are legal, and
-     * the `data-rd-state` attribute carries whichever it is.
+     * `claim` (default) is an axis's or a problem's state: something the record asserts, possibly only by
+     * inference, so it always carries its confidence. `stored` is a plan step's state — written by an author
+     * rather than inferred, with no confidence in the model at all (migration 004 has no such column for
+     * steps). It is rendered by this same component so the vocabulary stays one, but it carries no
+     * confidence attribute: inventing one would turn a stored fact into a claim, which is the error C8
+     * exists to catch in the other direction.
      */
-    state: AxisState | ProblemState;
+    kind?: "claim" | "stored";
+    state: AxisState | ProblemState | PlanStepState;
   }) {
+    if (kind === "stored") {
+      return (
+        <span className="rd-step-state" data-rd-step-state={state}>
+          {state}
+        </span>
+      );
+    }
     return (
       <span
         className="rd-state"
@@ -2000,6 +2071,12 @@ export function apply(ctx: Context) {
       (progress?.activity.byAxis ?? []).find(
         (bucket) => bucket.axisId === activeAxis?.id
       ) ?? null;
+    const axisPlan = activeAxis?.plan ?? null;
+    // Whether the plan claims an order is read off the projection's own `position` values and nothing else:
+    // a step that claims no position is never given one, and a plan whose steps claim none says so rather
+    // than letting the list's order read as a sequence the model never asserted.
+    const planClaimsOrder =
+      axisPlan?.steps.some((step) => step.position !== null) ?? false;
 
     /** The problem's own fields, phrased — nothing here is computed that the projection did not carry. */
     function problemFacts(problem: ProgressProblemRow): string {
@@ -2193,6 +2270,63 @@ export function apply(ctx: Context) {
           )}
         </div>
         </div>
+
+        {/*
+         * The axis's plan, below the top row rather than a fourth column: the composition's glance — which
+         * axis, which problem, what has been happening — is the strongest part of the layout, and a plan
+         * squeezed in beside it would cost that. Optional by construction: an axis with no plan renders
+         * **nothing** here, not an empty shell and not a warning that one is missing.
+         *
+         * The steps are the projection's own list in the projection's own order. A step's number is rendered
+         * only where the step claims a `position`; where the plan claims none, the page says so instead of
+         * letting the list order imply a sequence.
+         */}
+        {axisPlan ? (
+          <section
+            className="rd-progress-plan"
+            data-rd-progress-plan={axisPlan.id}
+            data-rd-progress-plan-claims-order={planClaimsOrder}
+            data-rd-progress-plan-steps={axisPlan.steps.length}
+          >
+            <div className="rd-cluster">
+              <span className="rd-section">
+                {`Plan · ${countLabel(axisPlan.steps.length, "step", "steps")}`}
+              </span>
+              <span className="rd-meta">
+                {`${axisPlan.stepsDone} of ${axisPlan.steps.length} done`}
+              </span>
+              {planClaimsOrder ? null : (
+                <span className="rd-meta" data-rd-progress-plan-unordered="true">
+                  unordered — no step claims a position
+                </span>
+              )}
+            </div>
+            <p className="rd-meta">{axisPlan.summary}</p>
+            <ul className="rd-plan-steps" data-rd-plan-steps={axisPlan.steps.length}>
+              {axisPlan.steps.map((step) => (
+                <li
+                  className="rd-plan-step"
+                  data-rd-plan-step={step.id}
+                  data-rd-plan-step-position={step.position === null ? "" : String(step.position)}
+                  key={step.id}
+                >
+                  <div className="rd-cluster">
+                    {step.position === null ? null : (
+                      <span className="rd-meta">{`${step.position + 1}.`}</span>
+                    )}
+                    <StateBadge kind="stored" state={step.state} />
+                    <span className="rd-strong">{step.title}</span>
+                  </div>
+                  {step.id === shownProblem?.planStepId ? (
+                    <span className="rd-meta" data-rd-plan-step-shown="true">
+                      the step the problem on screen sits on
+                    </span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
         <div className="rd-cluster rd-filters">
           <FilterSelect

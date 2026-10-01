@@ -364,7 +364,83 @@ installs is the previous one — the action answered with the old key set and no
 symptom was a `TypeError` in the harness rather than a wrong number, which is the right way for it to fail.
 The README's recipe now spells out the order (`vendor` → `update`).
 
-## 11. What the shared dev instance measured, and the corpus record
+## 11. The Plan section (step 3)
+
+Step 3 renders the axis's **optional** plan below the composition — a secondary section under the top row,
+not a fourth column, so the glance the layout gives (which axis, which problem, what has been happening) is
+untouched. `progressAxes` already carried the plan on the axis row (`{id, summary, stepsDone, steps}`), so
+this step added **no** read contract: it renders `activeAxis.plan` as it arrives, in the store's own step
+order.
+
+| On screen | Projection field |
+|---|---|
+| `Plan · N steps` | `plan.steps.length` |
+| `N of M done` | `plan.stepsDone` of `plan.steps.length` |
+| the plan's own description | `plan.summary` |
+| each step's chip | `step.state` — the stored `pending\|active\|done\|blocked` |
+| each step's number | `step.position`, and **only** where a step claims one |
+| the step the problem sits on | `problem.planStepId === step.id` |
+| `step: …` on the problem card | `problem.planStepTitle` |
+
+**Optional by construction.** An axis with no plan renders nothing at all — no section, no shell, no
+"missing plan" wording (the harness asserts the absence of the section *and* of such wording). It also took
+no server change to make this true: `plan` is `null` in the projection and the section is a conditional.
+
+**Absence as a first-class case, in the data rather than in the code.** Fixture E's plan lives on one axis and
+no other fixture axis has one, and the harness picks the planned axis and the unplanned axis **out of the
+projection** rather than naming them, so the two checks stay meaningful on any dataset: one axis proves the
+section renders from the projection, the other proves its absence is silent.
+
+**Nullable `position` kept honest.** The model's own comment is the rule: an unordered checklist is not an
+ordered one with gaps filled in. So the page renders a number exactly where a step claims a `position` and
+never fills one in; a plan whose steps claim none says `unordered — no step claims a position`, and the list
+is a plain `<ul>` rather than an `<ol>` so the markup does not assert a sequence either. Step 3's edge case —
+an **unordered plan with several steps** — now exists in Fixture E because it did not: the existing plan's
+steps carry positions 0 and 1, so nothing exercised the null path.
+
+**The unordered check is a discriminator, not a smoke test.** The fixture's two unpositioned steps are written
+**zulu first, alpha second** (in two calls, ~250 ms apart: `listPlanSteps` orders unpositioned steps by
+`created_at` and then by `id`, so one call would land both in the same millisecond and hand the order to a
+random uuid — the fixture has to be reproducible) and the check fails unless the DOM order is the store's
+*and* differs from the alphabetical one it prints. Measured on the fixture:
+
+```
+order ["Fixture E: unordered step — zulu, written first","Fixture E: unordered step — alpha, written second"]
+vs projection [same two]  (alphabetical would be ["… alpha …","… zulu …"]); positions ["",""]; unordered marker true
+```
+
+So a client that sorted null-position steps alphabetically — the failure the reviewer asked us to rule out —
+would be caught rather than silently tolerated.
+
+**Two vocabularies meet, and the page keeps them apart.** A plan step's state is **stored**, written by an
+author, and migration 004 has no confidence column for it; an axis's or a problem's state is a **claim**, often
+only inferred, and C8 requires every claim to carry its confidence where it is read. The step chip is rendered
+by the same `StateBadge` component with `kind="stored"`, which emits `data-rd-step-state` and **no**
+confidence attribute — inventing one would turn a stored fact into a claim, which is the error C8 exists to
+prevent in the other direction. The new checks assert the absence of that attribute on every step, and C8
+still counts claims only.
+
+**The plan ↔ problem link, both ways.** The Problem card names the step (`step: …` from `planStepTitle`), and
+the step names the problem (`data-rd-plan-step-shown`). The check for this deliberately does **not** trust the
+default: the projection's first open problem on Fixture E's axis is the *unlinked* one, so the harness first
+observes that nothing is marked, then selects the linked problem from the list and asserts exactly one step is
+marked and that the card names that step's title. Measured: `marked steps [false,true]` for step `8444037a`,
+card `owner-authored · step: Fixture step 2: reconcile the two rigs' floors · fixture/crowded-card,
+fixture/second-topic · 4 events · last activity today`.
+
+**No duplication with Activity:** this section renders the intended structure (`summary`, step states,
+positions, the linkage) and never an event; the feed renders what actually happened and never a step.
+
+**Measured:** `bun run check` = **0 typecheck · 125 pass · 0 fail · 743 expect()** (the plan and step key sets
+are now pinned, including that `position` is a number or null and that steps arrive in the store's order).
+Fixture acceptance **62 PASS / 0 FAIL / 0 skip at both viewports** — 57 plus the five checks step 3 added:
+the plan below the row and from the projection; numbers from the stored position with no invented confidence;
+the linkage both ways; the unordered discriminator; and the silent absence. Release `+dev.50252156e496`,
+**generation unchanged**. The fixture still reports **2 topics / 7 axes / 2 people / 2 repositories** with the
+unordered plan present — it adds structure, not entities, which is what keeps it invisible to the frozen V1
+checks.
+
+## 12. What the shared dev instance measured, and the corpus record
 
 
 Run on the shared dev instance (corpus + fixture + Fixture E), the same pass reports **50 pass · 1 fail · 0
@@ -378,7 +454,7 @@ filter and the expectation describe different origins, so they disagree — the 
 and the **committed corpus record was not overwritten** with a mixed-instance result. A corpus number that a
 reviewer can reproduce needs a corpus-only instance, which is U10's work.
 
-## 12. A pre-existing flake, root-caused
+## 13. A pre-existing flake, root-caused
 
 While running `bun run check` after the render, the U3 action test *"a refusal keeps its kind across the action
 boundary"* failed — and then failed 3 runs in 6. It is not timing in the store: a topic's axes come back

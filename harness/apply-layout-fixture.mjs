@@ -242,6 +242,16 @@ const FIXTURE_E_NOTE =
   "Fixture E evidence link: the rig-floor comparison sheet both rigs are measured against.";
 const FIXTURE_E_STEERING =
   "Fixture E (human-authored steering): do not reconcile the two floors by widening the reported spread.";
+// The unordered-plan case (U4 step 3). The model allows one plan per axis and Fixture E's axis already has
+// one, so this goes on a different fixture axis — the parked one, which has no problems either, giving the
+// plan section a case where it renders with both columns above it empty. The titles are written in reverse
+// alphabetical order so that any client-side sort (alphabetical, or by anything but the store's own order)
+// would visibly reorder them.
+const FIXTURE_E_UNORDERED_AXIS = "Fixture: parked axis (inferred state)";
+const FIXTURE_E_UNORDERED_FIRST = "Fixture E: unordered step — zulu, written first";
+const FIXTURE_E_UNORDERED_SECOND = "Fixture E: unordered step — alpha, written second";
+const FIXTURE_E_UNORDERED_SUMMARY =
+  "Fixture E: an unordered checklist, so nothing about it claims a sequence.";
 
 /**
  * Fixture E, idempotently. Re-applying the fixture must not pile up duplicates, and problems have no
@@ -325,6 +335,61 @@ async function applyFixtureE(headers) {
     );
   } else {
     console.log("fixture E: the problems and plan are already there — nothing to create");
+  }
+
+  // ---- Fixture E's unordered plan, on an axis that has none -------------------------------------------
+  // U4 step 3's edge case: a plan whose steps claim **no positions at all**. Written in two calls with a
+  // pause between, because `listPlanSteps` orders unpositioned steps by `created_at` and then `id`: one call
+  // would leave both rows in the same millisecond and hand their order to a random id, so the fixture — and
+  // therefore the check that compares the page against the projection — would not be reproducible.
+  const unorderedRow = (progress.result.axes?.axes ?? []).find(
+    (row) => row.topicName === FIXTURE_E_TOPIC && row.title === FIXTURE_E_UNORDERED_AXIS
+  );
+  if (!unorderedRow) {
+    return fail(`no axis "${FIXTURE_E_UNORDERED_AXIS}" on "${FIXTURE_E_TOPIC}"`, progress.raw);
+  }
+  const haveUnorderedPlan = (unorderedRow.plan?.steps ?? []).some(
+    (step) => step.title === FIXTURE_E_UNORDERED_FIRST
+  );
+  if (haveUnorderedPlan) {
+    console.log("fixture E: the unordered plan is already there — nothing to create");
+  } else {
+    const plan = {
+      axisTitle: FIXTURE_E_UNORDERED_AXIS,
+      steps: [
+        { position: null, state: "pending", title: FIXTURE_E_UNORDERED_FIRST },
+      ],
+      summary: FIXTURE_E_UNORDERED_SUMMARY,
+    };
+    const first = await act("reconcile_topic", {
+      plans: [plan],
+      topicName: FIXTURE_E_TOPIC,
+    });
+    if (!first.ok) {
+      return fail("creating the unordered plan", first.raw);
+    }
+    const unorderedPlanId = first.result.plans?.[0]?.id ?? "";
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const second = await act("reconcile_topic", {
+      plans: [
+        {
+          ...(unorderedPlanId ? { planId: unorderedPlanId } : {}),
+          axisTitle: FIXTURE_E_UNORDERED_AXIS,
+          steps: [
+            { position: null, state: "pending", title: FIXTURE_E_UNORDERED_SECOND },
+          ],
+          summary: FIXTURE_E_UNORDERED_SUMMARY,
+        },
+      ],
+      topicName: FIXTURE_E_TOPIC,
+    });
+    if (!second.ok) {
+      return fail("adding the second unordered step", second.raw);
+    }
+    console.log(
+      `fixture E: created an unordered plan on "${FIXTURE_E_UNORDERED_AXIS}" — 2 steps, no positions, ` +
+        `written "zulu" before "alpha" so any client-side sort would flip them`
+    );
   }
 
   // Re-read, so the ids are the store's own rather than anything assumed from the write.

@@ -320,6 +320,35 @@ var css = `
   display: grid;
   gap: 2px;
 }
+/* The plan sits below the composition, separated by a rule rather than boxed: it is a secondary section, and
+   the top row is the glance. The step list is a plain list because the markup must not imply an order the
+   model may never have claimed — the numbers are rendered per step, only where a step carries a position. */
+[data-plugin-id="research-dashboard"] .rd-progress-plan {
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 4px;
+  padding-top: 10px;
+}
+[data-plugin-id="research-dashboard"] .rd-progress-plan p {
+  margin: 0;
+}
+[data-plugin-id="research-dashboard"] .rd-plan-steps {
+  display: grid;
+  gap: 4px;
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+[data-plugin-id="research-dashboard"] .rd-plan-step {
+  display: grid;
+  gap: 2px;
+}
+[data-plugin-id="research-dashboard"] .rd-step-state {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.85em;
+  padding: 0 6px;
+}
 [data-plugin-id="research-dashboard"] .rd-index-item[aria-pressed="true"] {
   border-color: var(--border);
   background: var(--muted, rgba(127, 127, 127, 0.1));
@@ -566,8 +595,15 @@ function apply(ctx) {
   }
   function StateBadge({
     confidence,
+    kind = "claim",
     state
   }) {
+    if (kind === "stored") {
+      return /* @__PURE__ */ React.createElement("span", {
+        className: "rd-step-state",
+        "data-rd-step-state": state
+      }, state);
+    }
     return /* @__PURE__ */ React.createElement("span", {
       className: "rd-state",
       "data-rd-state": state,
@@ -1072,6 +1108,8 @@ function apply(ctx) {
     const shownProblem = chosenProblem ?? openAxisProblems[0] ?? axisProblems[0] ?? null;
     const otherOpenProblems = openAxisProblems.filter((problem) => problem.id !== shownProblem?.id);
     const feed = (progress?.activity.byAxis ?? []).find((bucket) => bucket.axisId === activeAxis?.id) ?? null;
+    const axisPlan = activeAxis?.plan ?? null;
+    const planClaimsOrder = axisPlan?.steps.some((step) => step.position !== null) ?? false;
     function problemFacts(problem) {
       const parts = [
         problem.authorType === "human" ? "owner-authored" : "librarian-inferred"
@@ -1192,7 +1230,43 @@ function apply(ctx) {
       className: "rd-strong"
     }, event.summary)), /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta"
-    }, describeSource(event.sourceType, event.sourceRef ?? ""), " · ", event.person ? event.person.displayName : "no account attributed", event.problemId && event.problemId === shownProblem?.id ? " · evidence for the problem shown" : "")))))), /* @__PURE__ */ React.createElement("div", {
+    }, describeSource(event.sourceType, event.sourceRef ?? ""), " · ", event.person ? event.person.displayName : "no account attributed", event.problemId && event.problemId === shownProblem?.id ? " · evidence for the problem shown" : "")))))), axisPlan ? /* @__PURE__ */ React.createElement("section", {
+      className: "rd-progress-plan",
+      "data-rd-progress-plan": axisPlan.id,
+      "data-rd-progress-plan-claims-order": planClaimsOrder,
+      "data-rd-progress-plan-steps": axisPlan.steps.length
+    }, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-cluster"
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-section"
+    }, `Plan · ${countLabel(axisPlan.steps.length, "step", "steps")}`), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, `${axisPlan.stepsDone} of ${axisPlan.steps.length} done`), planClaimsOrder ? null : /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta",
+      "data-rd-progress-plan-unordered": "true"
+    }, "unordered — no step claims a position")), /* @__PURE__ */ React.createElement("p", {
+      className: "rd-meta"
+    }, axisPlan.summary), /* @__PURE__ */ React.createElement("ul", {
+      className: "rd-plan-steps",
+      "data-rd-plan-steps": axisPlan.steps.length
+    }, axisPlan.steps.map((step) => /* @__PURE__ */ React.createElement("li", {
+      className: "rd-plan-step",
+      "data-rd-plan-step": step.id,
+      "data-rd-plan-step-position": step.position === null ? "" : String(step.position),
+      key: step.id
+    }, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-cluster"
+    }, step.position === null ? null : /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, `${step.position + 1}.`), /* @__PURE__ */ React.createElement(StateBadge, {
+      kind: "stored",
+      state: step.state
+    }), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-strong"
+    }, step.title)), step.id === shownProblem?.planStepId ? /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta",
+      "data-rd-plan-step-shown": "true"
+    }, "the step the problem on screen sits on") : null)))) : null, /* @__PURE__ */ React.createElement("div", {
       className: "rd-cluster rd-filters"
     }, /* @__PURE__ */ React.createElement(FilterSelect, {
       label: "Filter by topic",
