@@ -458,6 +458,61 @@ function optionalPosition(value: unknown): number | null {
   return value;
 }
 
+/**
+ * How long a silence makes an object stale. The contract supplies the number rather than us: its fixture G
+ * is "No activity for >7 days, no blocker" (`fixtures.md:98`), and it calls `STALE` "an observation about
+ * recency, not a diagnosis" (`interaction-spec.md:63`).
+ *
+ * `stale` is deliberately **not** a state and not derived from one: a blocked axis nobody has touched for a
+ * month is both blocked and stale, and a projection has to be able to carry both facts at once. Fixture G's
+ * "no blocker" describes that fixture's setup, not a rule that blockers are exempt from recency.
+ */
+export const STALE_AFTER_DAYS = 7;
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/** The newest of the timestamps we hold for an object, or null when we hold none. */
+function newestOf(values: Array<string | null | undefined>): string | null {
+  let newest: string | null = null;
+  let newestMs = Number.NEGATIVE_INFINITY;
+  for (const value of values) {
+    if (!value) {
+      continue;
+    }
+    const parsed = Date.parse(value);
+    if (!Number.isNaN(parsed) && parsed > newestMs) {
+      newestMs = parsed;
+      newest = value;
+    }
+  }
+  return newest;
+}
+
+/**
+ * The single age function. Both the stale decision and the recency sort read *this* value from the object's
+ * `recencyAt`, so a panel cannot sort something as current while another marks it stale — the failure that
+ * two helpers sharing a threshold would eventually produce.
+ */
+function ageInDays(recencyAt: string | null, nowMs: number): number | null {
+  if (!recencyAt) {
+    return null;
+  }
+  const parsed = Date.parse(recencyAt);
+  return Number.isNaN(parsed) ? null : (nowMs - parsed) / MS_PER_DAY;
+}
+
+function isStale(recencyAt: string | null, nowMs: number): boolean {
+  const age = ageInDays(recencyAt, nowMs);
+  return age !== null && age > STALE_AFTER_DAYS;
+}
+
+/** Most recent first, by the same `recencyAt` the stale decision uses. Objects with no timestamp sink. */
+function byRecencyDesc<T extends { recencyAt: string | null }>(rows: T[]): T[] {
+  return [...rows].sort(
+    (left, right) => Date.parse(right.recencyAt ?? "") - Date.parse(left.recencyAt ?? "")
+  );
+}
+
 function clampLimit(value: unknown, fallback: number, max: number): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return fallback;
@@ -1038,6 +1093,90 @@ export type TimelineGroup = {
   axes: TimelineAxis[];
   eventCount: number;
   lastActivityAt: string | null;
+};
+
+/**
+ * A card on the overview: one object, the timestamp that decides its place in the order, and whether it has
+ * gone quiet. Both `recencyAt` and `stale` are here so a reader — or a test — can check the verdict against
+ * the value rather than trusting that two panels agree.
+ */
+export type RecencyCard = {
+  activityInWindow: number;
+  id: string;
+  kind: "topic" | "repository";
+  lastActivityAt: string | null;
+  liveAxisCount: number;
+  name: string;
+  recencyAt: string | null;
+  stale: boolean;
+};
+
+export type OverviewRecency = {
+  activitySinceDays: number;
+  repositories: RecencyCard[];
+  staleAfterDays: number;
+  topics: RecencyCard[];
+};
+
+/** One axis as the Progress view needs it: its own facts, plus the recency verdict shared with the Overview. */
+export type ProgressAxisRow = {
+  activityInWindow: number;
+  /** What it is waiting on, and the strength of that claim — null where no claim has been made. */
+  blocker: string;
+  blockerConfidence: Confidence | null;
+  id: string;
+  lastActivityAt: string | null;
+  openProblems: number;
+  plan: {
+    id: string;
+    steps: PlanStep[];
+    stepsDone: number;
+    summary: string;
+  } | null;
+  problems: number;
+  recencyAt: string | null;
+  stale: boolean;
+  state: AxisState;
+  stateConfidence: Confidence;
+  stateHistory: StateLogEntry[];
+  title: string;
+  topicId: string;
+  topicName: string;
+};
+
+export type ProgressAxes = {
+  activitySinceDays: number;
+  axes: ProgressAxisRow[];
+  staleAfterDays: number;
+};
+
+/** One problem as the Progress view needs it, read from the problem outwards. */
+export type ProgressProblemRow = {
+  activityCount: number;
+  authorId: string | null;
+  authorType: Author;
+  axisId: string;
+  axisTitle: string;
+  history: StateLogEntry[];
+  id: string;
+  lastActivityAt: string | null;
+  people: Array<{ displayName: string; id: string }>;
+  planStepId: string | null;
+  planStepTitle: string | null;
+  recencyAt: string | null;
+  repositories: Array<{ fullName: string; id: string }>;
+  stale: boolean;
+  state: ProblemState;
+  stateConfidence: Confidence;
+  statement: string;
+  topicId: string;
+  topicName: string;
+};
+
+export type ProgressProblems = {
+  activitySinceDays: number;
+  problems: ProgressProblemRow[];
+  staleAfterDays: number;
 };
 
 /**
@@ -1802,13 +1941,31 @@ export class ResearchStore {
    * The context C6 and C7 group by: every visible topic, and every axis of a visible topic with its
    * repositories. One definition of "visible", so the rollups, the progress view and the front page
    * cannot drift apart on archived work.
+   *
+   * It also owns the **activity window**, so the two halves of "what is in scope" — the archived rule and
+   * the window — are resolved in one place per call and read by every projection. A projection that built
+   * its own window could answer a different question from the panel beside it without anything failing.
    */
-  private visibleContext(includeArchived: boolean): {
+  private visibleContext(input: {
+    includeArchived: boolean;
+    activitySinceDays?: number;
+  }): {
+    activitySinceDays: number;
+    inWindow: (at: string | null | undefined) => boolean;
+    nowMs: number;
     repositoriesByAxis: Map<string, LinkedRepository[]>;
     scans: Map<string, AxisScan>;
+    since: string | null;
     topicRefs: Map<string, TopicRef>;
     visible: (topicId: string) => boolean;
   } {
+    const includeArchived = input.includeArchived;
+    const activitySinceDays = input.activitySinceDays ?? 14;
+    // Zero (or negative) means "no window": the same convention the overview already uses.
+    const since = activitySinceDays > 0 ? isoDaysAgo(activitySinceDays) : null;
+    const inWindow = (at: string | null | undefined): boolean =>
+      Boolean(at) && (since === null || String(at) >= since);
+    const nowMs = Date.now();
     const topicRefs = new Map<string, TopicRef>();
     for (const row of this.db
       .query("SELECT id, name, status FROM topics")
@@ -1840,7 +1997,16 @@ export class ResearchStore {
       }
     }
 
-    return { repositoriesByAxis, scans, topicRefs, visible };
+    return {
+      activitySinceDays,
+      inWindow,
+      nowMs,
+      repositoriesByAxis,
+      scans,
+      since,
+      topicRefs,
+      visible,
+    };
   }
 
   /** account id → the person it maps to. The one attribution map; the C6 rollups and C7 both read it. */
@@ -1882,7 +2048,7 @@ export class ResearchStore {
     includeArchived: boolean,
     limit: number
   ): TimelineGroup[] {
-    const { scans, topicRefs } = this.visibleContext(includeArchived);
+    const { scans, topicRefs } = this.visibleContext({ includeArchived });
     const personByAccount = this.personRefByAccount();
     const rows = this.db
       .query(
@@ -1974,7 +2140,7 @@ export class ResearchStore {
     repositoriesTruncated: boolean;
   } {
     const { repositoriesByAxis, scans, topicRefs, visible } =
-      this.visibleContext(includeArchived);
+      this.visibleContext({ includeArchived });
 
     // Every event inside the window, read once: the two rollups slice it differently.
     const events = (
@@ -3240,6 +3406,358 @@ export class ResearchStore {
           "INSERT OR IGNORE INTO problem_people (problem_id, person_id) VALUES (?, ?)"
         )
         .run(problemId, personId);
+    });
+  }
+
+  // ----------------------------------------------------- the v2 projections
+
+  /**
+   * The Overview's projection: every visible topic and every repository, each with the ONE timestamp that
+   * decides both its place in the order and whether it has gone quiet.
+   *
+   * `recencyAt` is the newest thing we know about the object — its last recorded activity, or when it
+   * appeared if nothing has ever happened. `stale` is derived from that same value, so sorting and marking
+   * cannot disagree.
+   */
+  overviewRecency(options?: {
+    activitySinceDays?: number;
+    includeArchived?: boolean;
+    limit?: number;
+  }): OverviewRecency {
+    return this.snapshot(() => {
+      const scope = this.visibleContext({
+        activitySinceDays: options?.activitySinceDays,
+        includeArchived: options?.includeArchived ?? false,
+      });
+      const limit = clampLimit(options?.limit, MAX_ROLLUP_LIMIT, MAX_ROLLUP_LIMIT);
+      const axisTopic = new Map<string, string>();
+      for (const row of this.db
+        .query("SELECT id, topic_id FROM development_axes")
+        .all() as Array<{ id: string; topic_id: string }>) {
+        axisTopic.set(row.id, row.topic_id);
+      }
+      const topicTimes = new Map<string, string[]>();
+      const repositoryTimes = new Map<string, string[]>();
+      const remember = (
+        map: Map<string, string[]>,
+        key: string | null,
+        at: string
+      ): void => {
+        if (!key) {
+          return;
+        }
+        const list = map.get(key);
+        if (list) {
+          list.push(at);
+        } else {
+          map.set(key, [at]);
+        }
+      };
+      for (const event of this.db
+        .query(
+          "SELECT topic_id, axis_id, repository_id, occurred_at FROM activities"
+        )
+        .all() as Array<{
+        topic_id: string | null;
+        axis_id: string | null;
+        repository_id: string | null;
+        occurred_at: string;
+      }>) {
+        // An event recorded on an axis still dates its topic: the axis is why it belongs to one.
+        remember(
+          topicTimes,
+          event.topic_id ??
+            (event.axis_id ? (axisTopic.get(event.axis_id) ?? null) : null),
+          event.occurred_at
+        );
+        remember(repositoryTimes, event.repository_id, event.occurred_at);
+      }
+
+      const axisRows = this.db
+        .query("SELECT id, topic_id, state FROM development_axes")
+        .all() as Array<{ id: string; topic_id: string; state: string }>;
+
+      // Live axes per repository, read once: a repository's "live work" is the axes that name it.
+      const liveAxesPerRepository = new Map<string, number>();
+      for (const row of this.db
+        .query(
+          `SELECT l.repository_id AS repository_id, a.state AS state
+             FROM axis_repositories l
+             JOIN development_axes a ON a.id = l.axis_id`
+        )
+        .all() as Array<{ repository_id: string; state: string }>) {
+        if (row.state === "active") {
+          liveAxesPerRepository.set(
+            row.repository_id,
+            (liveAxesPerRepository.get(row.repository_id) ?? 0) + 1
+          );
+        }
+      }
+
+      const card = (
+        id: string,
+        name: string,
+        kind: "topic" | "repository",
+        createdAt: string | null,
+        times: string[],
+        liveAxisCount: number
+      ): RecencyCard => {
+        const recencyAt = newestOf([...times, createdAt]);
+        return {
+          activityInWindow: times.filter((at) => scope.inWindow(at)).length,
+          id,
+          kind,
+          lastActivityAt: newestOf(times),
+          liveAxisCount,
+          name,
+          recencyAt,
+          stale: isStale(recencyAt, scope.nowMs),
+        };
+      };
+
+      const topics = (
+        this.db.query("SELECT * FROM topics").all() as Array<
+          TopicRow & { created_at?: string }
+        >
+      )
+        .filter((row) => scope.visible(row.id))
+        .map((row) =>
+          card(
+            row.id,
+            row.name,
+            "topic",
+            row.created_at ?? null,
+            topicTimes.get(row.id) ?? [],
+            axisRows.filter(
+              (axis) => axis.topic_id === row.id && axis.state === "active"
+            ).length
+          )
+        );
+
+      const repositories = (
+        this.db.query("SELECT * FROM repositories").all() as Array<{
+          id: string;
+          full_name: string;
+          created_at?: string;
+        }>
+      ).map((row) =>
+        card(
+          row.id,
+          row.full_name,
+          "repository",
+          row.created_at ?? null,
+          repositoryTimes.get(row.id) ?? [],
+          liveAxesPerRepository.get(row.id) ?? 0
+        )
+      );
+
+      return {
+        activitySinceDays: scope.activitySinceDays,
+        repositories: byRecencyDesc(repositories).slice(0, limit),
+        staleAfterDays: STALE_AFTER_DAYS,
+        topics: byRecencyDesc(topics).slice(0, limit),
+      };
+    });
+  }
+
+  /**
+   * The Progress view's axis side: each visible axis with its problems, its optional plan, its recorded
+   * state history and the same recency verdict the Overview uses.
+   *
+   * `state` and `stale` are independent facts here on purpose. An axis can be `usable` and stale at once —
+   * it works, its gaps are known, and nobody has touched it for a while — and a projection that collapsed
+   * the two into one status would lose whichever fact came second.
+   */
+  progressAxes(options?: {
+    activitySinceDays?: number;
+    includeArchived?: boolean;
+    limit?: number;
+  }): ProgressAxes {
+    return this.snapshot(() => {
+      const scope = this.visibleContext({
+        activitySinceDays: options?.activitySinceDays,
+        includeArchived: options?.includeArchived ?? false,
+      });
+      const limit = clampLimit(options?.limit, MAX_ROLLUP_LIMIT, MAX_ROLLUP_LIMIT);
+      const problems = this.db
+        .query("SELECT * FROM problems")
+        .all() as ProblemRow[];
+      const plans = this.db.query("SELECT * FROM plans").all() as PlanRow[];
+      const steps = this.db.query("SELECT * FROM plan_steps").all() as PlanStepRow[];
+      const axisTimes = new Map<string, string[]>();
+      for (const row of this.db
+        .query(
+          "SELECT axis_id, occurred_at FROM activities WHERE axis_id IS NOT NULL"
+        )
+        .all() as Array<{ axis_id: string; occurred_at: string }>) {
+        const list = axisTimes.get(row.axis_id);
+        if (list) {
+          list.push(row.occurred_at);
+        } else {
+          axisTimes.set(row.axis_id, [row.occurred_at]);
+        }
+      }
+
+      const rows: ProgressAxisRow[] = [...scope.scans.values()].map((scan) => {
+        const mine = problems.filter((row) => row.axis_id === scan.id);
+        const plan = plans.filter((row) => row.axis_id === scan.id).at(-1) ?? null;
+        const planSteps = plan
+          ? steps
+              .filter((row) => row.plan_id === plan.id)
+              .map(toPlanStep)
+              .sort(
+                (left, right) =>
+                  (left.position ?? Number.MAX_SAFE_INTEGER) -
+                    (right.position ?? Number.MAX_SAFE_INTEGER) ||
+                  left.createdAt.localeCompare(right.createdAt)
+              )
+          : [];
+        const times = axisTimes.get(scan.id) ?? [];
+        // `updated_at`, not a creation time: `AxisScan` carries what the record knows about an axis's
+        // history of attention, and an axis nobody has touched since it appeared has an old `updated_at`.
+        const recencyAt = newestOf([...times, scan.updatedAt]);
+        return {
+          activityInWindow: times.filter((at) => scope.inWindow(at)).length,
+          blocker: scan.blocker,
+          blockerConfidence: scan.blockerConfidence,
+          id: scan.id,
+          lastActivityAt: newestOf(times),
+          openProblems: mine.filter((row) => row.state === "open").length,
+          plan: plan
+            ? {
+                id: plan.id,
+                steps: planSteps,
+                stepsDone: planSteps.filter((step) => step.state === "done")
+                  .length,
+                summary: plan.summary,
+              }
+            : null,
+          problems: mine.length,
+          recencyAt,
+          stale: isStale(recencyAt, scope.nowMs),
+          state: scan.state,
+          stateConfidence: scan.stateConfidence,
+          stateHistory: this.axisStateHistory(scan.id),
+          title: scan.title,
+          topicId: scan.topicId,
+          topicName: scope.topicRefs.get(scan.topicId)?.name ?? "",
+        };
+      });
+
+      return {
+        activitySinceDays: scope.activitySinceDays,
+        axes: byRecencyDesc(rows.filter((row) => row.problems > 0 || true)).slice(
+          0,
+          limit
+        ),
+        staleAfterDays: STALE_AFTER_DAYS,
+      };
+    });
+  }
+
+  /**
+   * The Progress view's problem side: the same axes read from the problem outwards — its parent axis and
+   * topic, the repositories and people it touches, the plan step it blocks, its evidence and its
+   * resolution/reopen history.
+   */
+  progressProblems(options?: {
+    activitySinceDays?: number;
+    includeArchived?: boolean;
+    limit?: number;
+  }): ProgressProblems {
+    return this.snapshot(() => {
+      const scope = this.visibleContext({
+        activitySinceDays: options?.activitySinceDays,
+        includeArchived: options?.includeArchived ?? false,
+      });
+      const limit = clampLimit(options?.limit, MAX_ROLLUP_LIMIT, MAX_ROLLUP_LIMIT);
+      const stepRows = new Map<string, PlanStepRow>();
+      for (const row of this.db
+        .query("SELECT * FROM plan_steps")
+        .all() as PlanStepRow[]) {
+        stepRows.set(row.id, row);
+      }
+      const problemTimes = new Map<string, string[]>();
+      for (const row of this.db
+        .query(
+          "SELECT problem_id, occurred_at FROM activities WHERE problem_id IS NOT NULL"
+        )
+        .all() as Array<{ problem_id: string; occurred_at: string }>) {
+        const list = problemTimes.get(row.problem_id);
+        if (list) {
+          list.push(row.occurred_at);
+        } else {
+          problemTimes.set(row.problem_id, [row.occurred_at]);
+        }
+      }
+      const repositoriesOf = new Map<string, Array<{ fullName: string; id: string }>>();
+      for (const row of this.db
+        .query(
+          `SELECT l.problem_id AS problem_id, r.id AS id, r.full_name AS full_name
+             FROM problem_repositories l
+             JOIN repositories r ON r.id = l.repository_id`
+        )
+        .all() as Array<{ problem_id: string; id: string; full_name: string }>) {
+        const list = repositoriesOf.get(row.problem_id) ?? [];
+        list.push({ fullName: row.full_name, id: row.id });
+        repositoriesOf.set(row.problem_id, list);
+      }
+      const peopleOf = new Map<string, Array<{ displayName: string; id: string }>>();
+      for (const row of this.db
+        .query(
+          `SELECT l.problem_id AS problem_id, p.id AS id, p.display_name AS display_name
+             FROM problem_people l
+             JOIN people p ON p.id = l.person_id`
+        )
+        .all() as Array<{ problem_id: string; id: string; display_name: string }>) {
+        const list = peopleOf.get(row.problem_id) ?? [];
+        list.push({ displayName: row.display_name, id: row.id });
+        peopleOf.set(row.problem_id, list);
+      }
+
+      const rows: ProgressProblemRow[] = (
+        this.db.query("SELECT * FROM problems").all() as ProblemRow[]
+      )
+        .map((row) => ({ problem: toProblem(row), row }))
+        .filter(({ row }) => {
+          const axis = scope.scans.get(row.axis_id);
+          return Boolean(axis) && scope.visible(axis?.topicId ?? "");
+        })
+        .map(({ problem }) => {
+          const scan = scope.scans.get(problem.axisId);
+          const times = problemTimes.get(problem.id) ?? [];
+          const recencyAt = newestOf([...times, problem.createdAt]);
+          const stepRow = problem.planStepId
+            ? stepRows.get(problem.planStepId)
+            : null;
+          return {
+            activityCount: times.length,
+            authorId: problem.authorId,
+            authorType: problem.authorType,
+            axisId: problem.axisId,
+            axisTitle: scan?.title ?? "",
+            history: this.problemStateHistory(problem.id),
+            id: problem.id,
+            lastActivityAt: newestOf(times),
+            people: peopleOf.get(problem.id) ?? [],
+            planStepId: problem.planStepId,
+            planStepTitle: stepRow?.title ?? null,
+            recencyAt,
+            repositories: repositoriesOf.get(problem.id) ?? [],
+            stale: isStale(recencyAt, scope.nowMs),
+            state: problem.state,
+            stateConfidence: problem.stateConfidence,
+            statement: problem.statement,
+            topicId: scan?.topicId ?? "",
+            topicName: scope.topicRefs.get(scan?.topicId ?? "")?.name ?? "",
+          };
+        });
+
+      return {
+        activitySinceDays: scope.activitySinceDays,
+        problems: byRecencyDesc(rows).slice(0, limit),
+        staleAfterDays: STALE_AFTER_DAYS,
+      };
     });
   }
 

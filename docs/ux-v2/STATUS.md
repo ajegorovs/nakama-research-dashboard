@@ -12,7 +12,7 @@ any view reads them.
 |---|---|---|
 | **U0** Contract, baseline, runnable pass | **done** | `contract/` published verbatim · `BASELINE.md` · the pass moved in-repo and reproduces from a *fresh clone* on a *pristine checkout* (measured below) · PR #1 merged, tagged `pre-ux-v2` · three harness defects found by that run and fixed |
 | **U1** Migration 004 (`usable`, state log, Problems, Plans) | **done** | `migrations/004-ux-v2-model.sql` · design note + truth table in `U1-migration.md` (§3.2, §4, §1a, §1b) · `harness/test-004.mjs`: **79 checks, 0 failed**, including the crash-after-COMMIT re-run · applied to the dev instance by the host's own applier — new generation `g9e344…`, ledger 001–004 · both acceptance passes green afterwards, plus the `abandoned` fixture axis and a check that every state the payload carries renders as itself |
-| **U2** Store writers + read models | **in progress — the writers are done** | `U2-store.md` (semantics, reviewer-approved) · writers and the problem/plan/state-history read models landed · `bun run check` **104 pass · 0 fail · 552 expect() calls** (was 82 · 0 · 472; +22 tests in `store-ux-v2.test.ts`) · **owed**: the one stale derivation, the visible-set helper, the Overview recency projection, both Progress projections, and the §11 audit of every projection |
+| **U2** Store writers + read models | **the store layer is complete; not yet wired to anything** | `U2-store.md` (semantics, reviewer-approved) · writers, both Progress projections, the Overview recency projection, one scope builder, one recency/stale derivation and the §11 audit all landed · `bun run check` **111 pass · 0 fail · 596 expect() calls** (was 82 · 0 · 472) · 19 acceptance items covered by named tests · **owed by U3**: nothing here is reachable from an action or a page, and `usable` is still absent from `nakama.plugin.json`'s `axes[].state` enum |
 | U3 Action surface + skill | not started | — |
 | U4 Five tabs + canonical navigation | not started | — |
 | U5 Overview | not started | — |
@@ -64,7 +64,8 @@ instances the run started itself from empty data roots — one per dataset, neve
 | fixture (applied) | 1440×900 | 49 · 0 · 0 |
 | fixture | 1280×800 | 49 · 0 · 0 |
 
-`bun run check` unchanged: **82 pass · 0 fail · 472 expect()**.
+`bun run check` unchanged: **82 pass · 0 fail · 472 expect()** — the U1-era figure. U2's store work takes it
+to **111 · 0 · 596** (see the U2 row above); the 82 is kept here because it is what that run measured.
 
 **After 004, on the migrated dev instance** (generation `g9e344…`, plugin version `0.2.0+dev.d5b23ff08253`,
 same estate instance the baseline numbers came from, dashboard `http://100.122.4.42:3003`):
@@ -129,6 +130,14 @@ comparing the two tables would otherwise wonder which number to trust.
   run on an instance that also holds the corpus. The frozen protocol isolates the datasets, so it is not a
   migration failure — it is a page check that should assert the *selected* topic rather than assume there is
   exactly one. U10's, with this evidence.
+- **Nothing in this repo typechecks, and that is now recorded as a defect with a measurement**
+  (`U2-store.md` §7). `bun run check` is `bun build` + `bun test`: types are stripped, never verified, and
+  the repo has no `typescript` dependency and no `tsconfig.json`. It hid a real bug in U2 — a projection
+  dated every axis from a property `AxisScan` does not have, so `undefined` became `null` and no axis was
+  ever stale, with nothing failing. An ad-hoc `tsc --noEmit --strict` over the two U2 files reports 7
+  diagnostics, all missing type *declarations* (`bun:sqlite`, `node:fs`, `process`, …) and **zero real type
+  errors**: the code is essentially type-clean and the fix is small. It is left as a decision rather than
+  folded into U2 because it changes what a green `bun run check` means for the clean-clone reproduction.
 
 ## What a reviewer can usefully do at this point
 

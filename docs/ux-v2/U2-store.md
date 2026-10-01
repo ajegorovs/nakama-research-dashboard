@@ -10,16 +10,26 @@ each one invents its own answers to "what is stale?", "what is in scope?", "whos
 the same question gets two answers in two panels. So the semantics land here, once, with tests, and the
 views read them.
 
-Status: **the writer half is implemented and tested; the read-model half is not written yet.**
+Status: **both halves are implemented and tested.** The writers, the projections, one recency derivation, one
+scope builder, and the §11 audit run over every projection.
 
-Measured: `bun run check` — **104 pass · 0 fail · 552 expect() calls**, across 4 files. Before this chunk it
-was 82 · 0 · 472 across 3; the 22 new tests live in `src/store-ux-v2.test.ts`. Two bugs were found by those
-tests and fixed (a non-reentrant read snapshot, and a claim annotation that silently acquired a second
-target).
+Measured: `bun run check` — **111 pass · 0 fail · 596 expect() calls**, across 4 files. Before this chunk it
+was 82 · 0 · 472 across 3. All 29 new tests live in `src/store-ux-v2.test.ts`, and the suite is now built
+from migrations 001–**004** — the same schema the platform hands the plugin, where before it was built from a
+migration list that predated 004. That is why the count is not a simple "+29 assertions": the 82 tests that
+already existed now run against the real schema, which is a stronger claim than the count alone suggests.
 
-**Still owed by this chunk** — the read-model half: the one stale derivation, the visible-set helper, the
-Overview recency projection, both Progress projections, and the §11 audit of every projection. The acceptance
-list below marks what is covered and what is not, rather than implying the whole chunk is done.
+Three silent-wrongness bugs were found by these tests and fixed: a non-reentrant read snapshot; a claim
+annotation that acquired a second target on the way to the database; and a projection that dated every axis
+from a field `AxisScan` does not have (see §7, which is also the reason that one was invisible).
+
+**What landed** — the writer half (problems, plans, plan steps, recorded transitions with traceability and
+the human-text refusal) and the read half: two projections for the redesigned Progress view
+(`progressAxes`, `progressProblems`), the Overview's recency projection (`overviewRecency`), one scope
+builder (`visibleContext`, now owning the archived rule *and* the activity window), one age function
+(`ageInDays`) with `isStale` and the recency sort reading the same `recencyAt` value, and the §11 audit
+asserted over the projections. §5 marks what each acceptance item is covered by rather than implying the
+whole chunk is proven.
 
 ## 1. Transitions: one writer, one refusal
 
@@ -161,16 +171,40 @@ Alongside keeping every existing test green — **✅ covered by a test, ⏳ sti
 | 8 | a new `interpretation`/`steering` claim with two targets is refused; a legacy-shaped `note` with two targets still inserts | ✅ |
 | 9 | a problem with no repository, no plan step and no activity is still meaningful | ✅ |
 | 10 | a plan with unordered steps returns `position = null` rather than a synthesized order | ✅ |
-| 11 | stale ≠ blocked, **and the value that decides stale is the same value that sorts that object** | ⏳ needs the stale derivation |
-| 12 | an entity with no claim reports `null`, not `confirmed` (the §11 audit, run over every projection) | ⏳ needs the projections |
+| 11 | stale ≠ blocked, **and the value that decides stale is the same value that sorts that object** | ✅ |
+| 12 | an entity with no claim reports `null`, not `confirmed` (the §11 audit, run over every projection) | ✅ |
 | 13 | **the handoff case**: agent creates, human rewrites the statement, a later agent write is refused for the text and permitted for the links and state | ✅ |
 | 14 | **the concurrency case**: two writers holding the same `expectedVersion` — exactly one wins, the loser conflicts, `state_log` gains one row | ✅ |
 | 15 | **the atomicity case**: a failure mid-transition leaves the log and the subject unchanged | ✅ |
+| 16 | **the reviewer's case**: one axis `usable` *and* stale at once, with a second `usable` axis that is not stale — the two facts vary independently | ✅ |
+| 17 | the display window changes what is counted, never what is stale or how old anything is | ✅ |
+| 18 | an archived topic leaves the Overview and both Progress projections together, and `includeArchived` brings it back to all three | ✅ |
+| 19 | a `blocked` axis is quiet on its own clock: recently touched it is not stale, untouched for a month it is both blocked and stale | ✅ |
 
 Two of these found real bugs rather than confirming the design, which is the point of writing them: the read
 snapshot was not reentrant (a plan assembled from its steps issued a second `BEGIN`), and `addAnnotation`
 derived a topic from the axis for *every* kind, so a steering claim on an axis arrived at the database with
 two targets — precisely the row the schema refuses.
+
+A third was found by the projection tests, and it is the reason §7 exists: `progressAxes` dated each axis
+from `scan.createdAt`, a property `AxisScan` does not have. Nothing failed. The value was `undefined`, so
+`newestOf` returned `null`, so every axis was reported as never stale — a plausible, quiet, wrong answer.
+The tests caught it because they recompute the verdict from the value the row carries rather than asserting
+the verdict alone; a type check would have caught it in milliseconds.
+
+## 5a. The stale threshold is the contract's, not ours
+
+`STALE_AFTER_DAYS = 7`, from the contract's own fixture G — "No activity for >7 days, no blocker"
+(`contract/fixtures.md:98`) — and the contract's own definition of what stale *is*: "an observation about
+recency, not a diagnosis" (`contract/interaction-spec.md:63`). Two consequences are load-bearing:
+
+- **`stale` is not a state and is not derived from one.** Fixture G's "no blocker" describes that fixture's
+  setup; it is not a rule that blockers are exempt from recency. A blocked axis nobody has touched for a
+  month is both blocked and stale, and test 19 asserts both halves.
+- **`recencyAt`** is the newest timestamp the record holds for the object — its last activity, or when the
+  row itself was last written. `isStale` and the recency sort both read that one value, so a panel cannot
+  sort something as current while another marks it stale. Test 11 recomputes the verdict from the value the
+  row carries; test 17 asserts a narrow display window cannot re-date an object.
 
 **Seeding discipline.** These tests seed the *common* shape, not the convenient one: an activity that names
 its problem and lets its axis and repository be implied by the problem's links — because that is what the
@@ -192,3 +226,28 @@ the real one.
 - **Whether history must survive entity deletion** — the U1 retention boundary, unchanged: this chunk
   writes history, it does not make history outlive its subject.
 - **Ordering and layout** of anything rendered — U4 onward.
+
+## 7. A finding about the harness: nothing in this repo typechecks
+
+Not a U2 decision — a defect found while writing U2's tests, recorded here because the U2 numbers depend on
+it.
+
+`bun run check` is `bun run build && bun test src`. `build` is `bun build` (a bundler: it strips types rather
+than checking them) and `bun test` uses the same pipeline. **The repository has no `typescript` dependency
+and no `tsconfig.json`**, so no step in this repo has ever verified a type. A green `check` means "it bundles
+and the tests pass", which is a weaker claim than the same words would carry in a typed project.
+
+What that hid, concretely: `progressAxes` read `scan.createdAt`, which does not exist on `AxisScan`. The
+property was `undefined`, `newestOf` returned `null`, and every axis was projected as never stale. Nothing
+threw, nothing failed, and the number it produced was plausible.
+
+Measured, not guessed: an ad-hoc `tsc --noEmit --strict` over `src/store.ts` and `src/store-ux-v2.test.ts`
+reports **7 diagnostics, all of them missing type *declarations*** (`bun:sqlite`, `bun:test`, `node:fs`,
+`node:path`, `import.meta.dir`, `process`) — **zero real type errors**. So the code is essentially
+type-clean; the repo simply never installed the type packages. Adding `typescript` + `@types/bun`, a minimal
+`tsconfig.json`, and a `typecheck` step to `check` is a small, bounded change that would have caught the
+above for free.
+
+It is *not* folded into U2, because it changes what `bun run check` means for every future claim in this
+repo — including the reviewer's clean-clone reproduction — and that is a baseline decision to make
+explicitly, not to slip in alongside a store chunk. Recommend it for U3 or U10.

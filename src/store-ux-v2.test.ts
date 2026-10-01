@@ -623,3 +623,283 @@ describe("U2 claims and evidence links", () => {
     ]);
   });
 });
+
+/**
+ * Age a row so a test can hold an object that has gone quiet.
+ *
+ * The store's writers always stamp "now" — deliberately, since a writer that could backdate its own work
+ * would be a writer that could rewrite history — so a test that needs an old object has to go behind them.
+ * This is the only raw write in this file, and it only ever moves a row *backwards* in time.
+ */
+function ageRow(
+  path: string,
+  table: "development_axes" | "problems",
+  id: string,
+  iso: string
+): void {
+  const db = new Database(path);
+  try {
+    // Both stamps: an object that has sat untouched since it appeared is old by either measure, and a
+    // fixture that aged only one of them would be testing a row no writer could have produced.
+    db.query(
+      `UPDATE ${table} SET created_at = ?, updated_at = ? WHERE id = ?`
+    ).run(iso, iso, id);
+  } finally {
+    db.close();
+  }
+}
+
+function daysAgo(days: number): string {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+}
+
+describe("U2 projections: recency", () => {
+  test("one timestamp decides both the stale verdict and the recency order", () => {
+    const { path, store } = openStore();
+    const topic = store.createTopic({ name: "In use, going quiet" });
+    const busy = store.createAxis({
+      branch: "data/les",
+      kind: "experiment",
+      state: "active",
+      title: "LES baseline",
+      topicId: topic.id,
+    });
+    const quiet = store.createAxis({
+      branch: "data/rans",
+      kind: "experiment",
+      state: "active",
+      title: "RANS baseline",
+      topicId: topic.id,
+    });
+    ageRow(path, "development_axes", quiet.id, daysAgo(30));
+
+    const { axes, staleAfterDays } = store.progressAxes();
+
+    // The threshold is the contract's number (fixture G, "no activity for >7 days"), not one we invented.
+    expect(staleAfterDays).toBe(7);
+    for (const row of axes) {
+      // Recompute the verdict from the value the row itself carries: if a projection ever derived `stale`
+      // from anything else, this is where it shows.
+      const age =
+        row.recencyAt === null
+          ? null
+          : (Date.now() - Date.parse(row.recencyAt)) / (24 * 60 * 60 * 1000);
+      expect(row.stale).toBe(age !== null && age > staleAfterDays);
+    }
+    expect(axes.find((row) => row.id === quiet.id)?.stale).toBe(true);
+    expect(axes.find((row) => row.id === busy.id)?.stale).toBe(false);
+
+    // And the order is that same value's order — not a second, quietly different recency.
+    const times = axes.map((row) => Date.parse(row.recencyAt ?? ""));
+    expect(times).toEqual([...times].sort((left, right) => right - left));
+    expect(axes.at(-1)?.id).toBe(quiet.id);
+  });
+
+  test("an axis can be usable and stale at once, and neither fact is lost", () => {
+    const { path, store } = openStore();
+    const topic = store.createTopic({ name: "Two axes, same state" });
+    const quiet = store.createAxis({
+      branch: "data/rans",
+      kind: "experiment",
+      state: "active",
+      title: "RANS baseline",
+      topicId: topic.id,
+    });
+    const inUse = store.createAxis({
+      branch: "data/les",
+      kind: "experiment",
+      state: "active",
+      title: "LES baseline",
+      topicId: topic.id,
+    });
+    for (const axis of [quiet, inUse]) {
+      store.transitionAxis({
+        actorId: "person-1",
+        axisId: axis.id,
+        origin: "human",
+        toState: "usable",
+      });
+    }
+    ageRow(path, "development_axes", quiet.id, daysAgo(30));
+
+    const rows = store.progressAxes().axes;
+    const staleOne = rows.find((row) => row.id === quiet.id);
+    const currentOne = rows.find((row) => row.id === inUse.id);
+
+    // Both axes are in the same state; only one has gone quiet. That is the whole point: `stale` is an
+    // observation about recency, not a state, and a projection that folded the two together would have to
+    // lie about one of them.
+    expect(staleOne?.state).toBe("usable");
+    expect(staleOne?.stale).toBe(true);
+    expect(currentOne?.state).toBe("usable");
+    expect(currentOne?.stale).toBe(false);
+
+    // Stale did not consume the state's own claim, and the history still says how it got there.
+    expect(staleOne?.stateConfidence).toBe(quiet.stateConfidence);
+    expect(staleOne?.stateHistory.at(-1)?.toState).toBe("usable");
+  });
+
+  test("the display window changes what is counted, not what is stale", () => {
+    const { path, store } = openStore();
+    const axis = seedAxis(store);
+    const quiet = store.createAxis({
+      branch: "data/old",
+      kind: "experiment",
+      state: "active",
+      title: "Quiet axis",
+      topicId: axis.topicId,
+    });
+    ageRow(path, "development_axes", quiet.id, daysAgo(40));
+    store.addActivity({
+      axisId: quiet.id,
+      occurredAt: daysAgo(40),
+      summary: "Recorded before the window opens.",
+    });
+
+    const wide = store.progressAxes({ activitySinceDays: 0 });
+    const narrow = store.progressAxes({ activitySinceDays: 1 });
+
+    expect(wide.activitySinceDays).toBe(0);
+    for (const row of narrow.axes) {
+      const same = wide.axes.find((other) => other.id === row.id);
+      // A window is a question about the display ("what happened lately?"), never a re-dating of the
+      // object. Narrowing it must not change how old anything is.
+      expect(row.stale).toBe(same?.stale);
+      expect(row.recencyAt).toBe(same?.recencyAt);
+    }
+    expect(
+      narrow.axes.find((row) => row.id === quiet.id)?.activityInWindow
+    ).toBe(0);
+    expect(wide.axes.find((row) => row.id === quiet.id)?.activityInWindow).toBe(1);
+  });
+
+  test("an archived topic leaves every projection at once, and comes back when asked", () => {
+    const { store } = openStore();
+    const axis = seedAxis(store);
+    store.createProblem({
+      axisId: axis.id,
+      authorId: "person-1",
+      authorType: "human",
+      statement: "The near-wall profile is not resolved.",
+    });
+    const archived = store.createTopic({
+      name: "Retired programme",
+      status: "archived",
+    });
+    const archivedAxis = store.createAxis({
+      branch: "data/retired",
+      kind: "experiment",
+      state: "active",
+      title: "Retired axis",
+      topicId: archived.id,
+    });
+    store.createProblem({
+      axisId: archivedAxis.id,
+      authorId: "person-1",
+      authorType: "human",
+      statement: "Kept, but out of scope.",
+    });
+
+    const hidden = {
+      axes: store.progressAxes().axes.map((row) => row.topicId),
+      overview: store.overviewRecency().topics.map((row) => row.id),
+      problems: store.progressProblems().problems.map((row) => row.topicId),
+    };
+    expect(hidden.axes).not.toContain(archived.id);
+    expect(hidden.overview).not.toContain(archived.id);
+    expect(hidden.problems).not.toContain(archived.id);
+
+    // One archived rule for all three, so asking once brings the topic back everywhere.
+    const shown = {
+      axes: store.progressAxes({ includeArchived: true }).axes.map((row) => row.topicId),
+      overview: store
+        .overviewRecency({ includeArchived: true })
+        .topics.map((row) => row.id),
+      problems: store
+        .progressProblems({ includeArchived: true })
+        .problems.map((row) => row.topicId),
+    };
+    expect(shown.axes).toContain(archived.id);
+    expect(shown.overview).toContain(archived.id);
+    expect(shown.problems).toContain(archived.id);
+  });
+});
+
+describe("U2 projections: what a problem is worth without evidence", () => {
+  test("a problem with no repository, no plan step and no activity still appears", () => {
+    const { store } = openStore();
+    const axis = seedAxis(store);
+    const problem = store.createProblem({
+      axisId: axis.id,
+      authorId: "person-1",
+      authorType: "human",
+      statement: "Nobody has looked at this yet.",
+    });
+
+    const row = store
+      .progressProblems()
+      .problems.find((entry) => entry.id === problem.id);
+
+    expect(row).toBeTruthy();
+    expect(row?.repositories).toEqual([]);
+    expect(row?.planStepId).toBeNull();
+    expect(row?.planStepTitle).toBeNull();
+    expect(row?.activityCount).toBe(0);
+    // No activity is not the same as a stale verdict: recency falls back to when the problem appeared.
+    expect(row?.recencyAt).toBe(problem.createdAt);
+    expect(row?.stale).toBe(false);
+    expect(row?.history.at(-1)?.toState).toBe("open");
+  });
+
+  test("a blocked axis is quiet on its own clock, not by being blocked", () => {
+    const { path, store } = openStore();
+    const axis = seedAxis(store);
+    // Created blocked, still blocked: the state never moved, so this test is about recency alone.
+    const blocked = store.createAxis({
+      blocker: "Waiting on a cluster allocation.",
+      branch: "data/blocked",
+      kind: "experiment",
+      state: "blocked",
+      title: "Waiting on the cluster",
+      topicId: axis.topicId,
+    });
+
+    // Recently touched and blocked: the two facts are separate, and only one of them is true here.
+    let row = store.progressAxes().axes.find((entry) => entry.id === blocked.id);
+    expect(row?.state).toBe("blocked");
+    expect(row?.stale).toBe(false);
+
+    ageRow(path, "development_axes", blocked.id, daysAgo(30));
+    row = store.progressAxes().axes.find((entry) => entry.id === blocked.id);
+    expect(row?.state).toBe("blocked");
+    expect(row?.stale).toBe(true);
+  });
+
+  test("reports no claim as null, and never invents one from a default", () => {
+    const { store } = openStore();
+    const axis = seedAxis(store);
+    const problem = store.createProblem({
+      axisId: axis.id,
+      authorId: "person-1",
+      authorType: "human",
+      statement: "The re-fit drifts.",
+      stateConfidence: "inferred",
+    });
+
+    const axisRow = store.progressAxes().axes.find((row) => row.id === axis.id);
+    const problemRow = store
+      .progressProblems()
+      .problems.find((row) => row.id === problem.id);
+
+    // Nobody has claimed anything about *why* this axis is where it is: null, not the row's state
+    // confidence and not a carried-over default.
+    expect(axisRow?.blockerConfidence).toBeNull();
+    expect(axisRow?.blocker).toBe("");
+    expect(axisRow?.stateConfidence).toBe("confirmed");
+    // The problem's claim travels with the problem, and only as strongly as it was made.
+    expect(problemRow?.stateConfidence).toBe(problem.stateConfidence);
+    expect(problemRow?.stateConfidence).not.toBe("confirmed");
+    // A confidence is a property of a claim, never of recency.
+    expect(typeof problemRow?.stale).toBe("boolean");
+  });
+});

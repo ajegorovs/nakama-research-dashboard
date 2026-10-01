@@ -20,8 +20,13 @@ var AXIS_STATES = [
   "blocked",
   "parked",
   "completed",
-  "abandoned"
+  "abandoned",
+  "usable"
 ];
+var PROBLEM_STATES = ["open", "resolved"];
+var PLAN_STEP_STATES = ["pending", "active", "done", "blocked"];
+var ANNOTATION_KINDS = ["note", "interpretation", "steering"];
+var AUTHOR_TYPES = ["human", "agent"];
 var CONFIDENCES = ["confirmed", "inferred", "uncertain"];
 var SOURCE_TYPES = [
   "manual",
@@ -75,6 +80,46 @@ function optionalOneOf(value, allowed, field) {
 }
 function text(value) {
   return typeof value === "string" ? value : "";
+}
+function optionalPosition(value) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    throw new ResearchStoreError("position must be a non-negative integer, or omitted for an unordered plan.");
+  }
+  return value;
+}
+var STALE_AFTER_DAYS = 7;
+var MS_PER_DAY = 24 * 60 * 60 * 1000;
+function newestOf(values) {
+  let newest = null;
+  let newestMs = Number.NEGATIVE_INFINITY;
+  for (const value of values) {
+    if (!value) {
+      continue;
+    }
+    const parsed = Date.parse(value);
+    if (!Number.isNaN(parsed) && parsed > newestMs) {
+      newestMs = parsed;
+      newest = value;
+    }
+  }
+  return newest;
+}
+function ageInDays(recencyAt, nowMs) {
+  if (!recencyAt) {
+    return null;
+  }
+  const parsed = Date.parse(recencyAt);
+  return Number.isNaN(parsed) ? null : (nowMs - parsed) / MS_PER_DAY;
+}
+function isStale(recencyAt, nowMs) {
+  const age = ageInDays(recencyAt, nowMs);
+  return age !== null && age > STALE_AFTER_DAYS;
+}
+function byRecencyDesc(rows) {
+  return [...rows].sort((left, right) => Date.parse(right.recencyAt ?? "") - Date.parse(left.recencyAt ?? ""));
 }
 function clampLimit(value, fallback, max) {
   if (typeof value !== "number" || !Number.isFinite(value)) {
@@ -172,6 +217,7 @@ function toActivity(row) {
     axisId: row.axis_id,
     id: row.id,
     occurredAt: row.occurred_at,
+    problemId: row.problem_id,
     recordedAt: row.recorded_at,
     repositoryId: row.repository_id,
     sourceRef: row.source_ref,
@@ -186,10 +232,68 @@ function toAnnotation(row) {
     authorId: row.author_id,
     authorType: row.author_type === "agent" ? "agent" : "human",
     axisId: row.axis_id,
+    confidence: row.confidence ?? null,
     createdAt: row.created_at,
     id: row.id,
+    kind: asAnnotationKind(row.kind),
+    problemId: row.problem_id,
     text: row.text,
     topicId: row.topic_id
+  };
+}
+function asAnnotationKind(value) {
+  return value === "interpretation" || value === "steering" ? value : "note";
+}
+function toProblem(row) {
+  return {
+    authorId: row.author_id,
+    authorType: row.author_type === "human" ? "human" : "agent",
+    axisId: row.axis_id,
+    createdAt: row.created_at,
+    id: row.id,
+    planStepId: row.plan_step_id,
+    state: row.state === "resolved" ? "resolved" : "open",
+    stateConfidence: row.state_confidence ?? "confirmed",
+    statement: row.statement,
+    updatedAt: row.updated_at,
+    version: row.version
+  };
+}
+function toPlan(row) {
+  return {
+    authorId: row.author_id,
+    authorType: row.author_type === "human" ? "human" : "agent",
+    axisId: row.axis_id,
+    createdAt: row.created_at,
+    id: row.id,
+    summary: row.summary,
+    updatedAt: row.updated_at,
+    version: row.version
+  };
+}
+function toPlanStep(row) {
+  const state = row.state;
+  return {
+    createdAt: row.created_at,
+    id: row.id,
+    planId: row.plan_id,
+    position: row.position,
+    state: state === "active" || state === "done" || state === "blocked" ? state : "pending",
+    title: row.title,
+    updatedAt: row.updated_at
+  };
+}
+function toStateLogEntry(row) {
+  return {
+    actorId: row.actor_id,
+    axisId: row.axis_id,
+    fromState: row.from_state,
+    id: row.id,
+    observedAt: row.observed_at,
+    origin: row.origin === "migration" ? "migration" : row.origin === "agent" ? "agent" : "human",
+    problemId: row.problem_id,
+    recordedAt: row.recorded_at,
+    toState: row.to_state
   };
 }
 var SOURCE_EVIDENCE_LABELS = {
@@ -211,12 +315,13 @@ function evidenceLabel(sourceType, sourceRef) {
   return ref.toLowerCase().includes(base.toLowerCase()) ? ref : `${base} ${ref}`;
 }
 var AXIS_STATE_ATTENTION = {
-  abandoned: 5,
+  abandoned: 6,
   active: 1,
   blocked: 0,
-  completed: 4,
-  draft: 2,
-  parked: 3
+  completed: 5,
+  draft: 3,
+  parked: 4,
+  usable: 2
 };
 var TOPIC_STATUS_ATTENTION = {
   active: 0,
@@ -252,6 +357,7 @@ function assertedClaims(input) {
 class ResearchStore {
   db;
   depth = 0;
+  readDepth = 0;
   constructor(databasePath) {
     this.db = new Database(databasePath);
     this.db.exec("PRAGMA foreign_keys = ON");
@@ -292,10 +398,11 @@ class ResearchStore {
     }
   }
   snapshot(fn) {
-    if (this.depth > 0) {
+    if (this.depth > 0 || this.readDepth > 0) {
       return fn();
     }
     this.db.exec("BEGIN");
+    this.readDepth += 1;
     try {
       const result = fn();
       this.db.exec("COMMIT");
@@ -305,6 +412,8 @@ class ResearchStore {
         this.db.exec("ROLLBACK");
       } catch {}
       throw error;
+    } finally {
+      this.readDepth -= 1;
     }
   }
   listTopics(status) {
@@ -631,7 +740,12 @@ class ResearchStore {
     }
     return map;
   }
-  visibleContext(includeArchived) {
+  visibleContext(input) {
+    const includeArchived = input.includeArchived;
+    const activitySinceDays = input.activitySinceDays ?? 14;
+    const since = activitySinceDays > 0 ? isoDaysAgo(activitySinceDays) : null;
+    const inWindow = (at) => Boolean(at) && (since === null || String(at) >= since);
+    const nowMs = Date.now();
     const topicRefs = new Map;
     for (const row of this.db.query("SELECT id, name, status FROM topics").all()) {
       if (isTopicStatus(row.status)) {
@@ -653,7 +767,16 @@ class ResearchStore {
         scans.set(row.id, toAxisScan(toAxis(row), repositoriesByAxis.get(row.id) ?? []));
       }
     }
-    return { repositoriesByAxis, scans, topicRefs, visible };
+    return {
+      activitySinceDays,
+      inWindow,
+      nowMs,
+      repositoriesByAxis,
+      scans,
+      since,
+      topicRefs,
+      visible
+    };
   }
   personRefByAccount() {
     const map = new Map;
@@ -668,7 +791,7 @@ class ResearchStore {
     return map;
   }
   recentProgress(since, includeArchived, limit) {
-    const { scans, topicRefs } = this.visibleContext(includeArchived);
+    const { scans, topicRefs } = this.visibleContext({ includeArchived });
     const personByAccount = this.personRefByAccount();
     const rows = this.db.query(`SELECT * FROM activities
          WHERE (? IS NULL OR occurred_at >= ?)
@@ -716,7 +839,7 @@ class ResearchStore {
     return groups.sort((a, b) => (b.lastActivityAt ?? "").localeCompare(a.lastActivityAt ?? "") || a.topic.name.localeCompare(b.topic.name));
   }
   involvementRollups(includeArchived, since, limit) {
-    const { repositoriesByAxis, scans, topicRefs, visible } = this.visibleContext(includeArchived);
+    const { repositoriesByAxis, scans, topicRefs, visible } = this.visibleContext({ includeArchived });
     const events = this.db.query(`SELECT * FROM activities
            WHERE (? IS NULL OR occurred_at >= ?)
            ORDER BY occurred_at DESC, rowid DESC`).all(since, since).map(toActivity);
@@ -1055,10 +1178,15 @@ class ResearchStore {
   addActivity(input) {
     return this.atomic(() => {
       const summary = required(input.summary, "summary");
+      const problemId = input.problemId ? required(input.problemId, "problemId") : null;
+      const problem = problemId ? this.getProblem(problemId) : null;
+      if (problemId && !problem) {
+        throw new ResearchStoreError("Problem not found.");
+      }
       const topicId = input.topicId ? required(input.topicId, "topicId") : null;
-      const axisId = input.axisId ? required(input.axisId, "axisId") : null;
+      const axisId = input.axisId ? required(input.axisId, "axisId") : problem?.axisId ?? null;
       if (!(topicId || axisId)) {
-        throw new ResearchStoreError("topicId or axisId is required.");
+        throw new ResearchStoreError("topicId, axisId or problemId is required.");
       }
       if (topicId && !this.getTopic(topicId)) {
         throw new ResearchStoreError("Topic not found.");
@@ -1079,6 +1207,7 @@ class ResearchStore {
         actorType: optionalOneOf(input.actorType, ACTOR_TYPES, "actorType") ?? "unknown",
         axisId,
         occurredAt: input.occurredAt ?? nowIso(),
+        problemId,
         repositoryId: repositoryId ?? null,
         sourceRef: text(input.sourceRef),
         sourceType: optionalOneOf(input.sourceType, SOURCE_TYPES, "sourceType") ?? "manual",
@@ -1091,10 +1220,16 @@ class ResearchStore {
   addAnnotation(input) {
     return this.atomic(() => {
       const body = required(input.text, "text");
+      const kind = optionalOneOf(input.kind, ANNOTATION_KINDS, "kind") ?? "note";
       const topicId = input.topicId ? required(input.topicId, "topicId") : null;
       const axisId = input.axisId ? required(input.axisId, "axisId") : null;
-      if (!(topicId || axisId)) {
-        throw new ResearchStoreError("topicId or axisId is required.");
+      const problemId = input.problemId ? required(input.problemId, "problemId") : null;
+      if (!(topicId || axisId || problemId)) {
+        throw new ResearchStoreError("topicId, axisId or problemId is required.");
+      }
+      const targets = [topicId, axisId, problemId].filter((value) => value !== null).length;
+      if (kind !== "note" && targets !== 1) {
+        throw new ResearchStoreError(`A ${kind} claim must sit on exactly one of a topic, an axis or a problem \u2014 it names ${targets}.`);
       }
       if (topicId && !this.getTopic(topicId)) {
         throw new ResearchStoreError("Topic not found.");
@@ -1103,13 +1238,478 @@ class ResearchStore {
       if (axisId && !axis) {
         throw new ResearchStoreError("Axis not found.");
       }
+      if (problemId && !this.getProblem(problemId)) {
+        throw new ResearchStoreError("Problem not found.");
+      }
+      if (kind === "note" && input.confidence !== undefined && input.confidence !== null) {
+        throw new ResearchStoreError("A plain note carries no confidence \u2014 carrying one is what makes it an interpretation.");
+      }
       return this.insertAnnotation({
         authorId: input.authorId ?? "",
         authorType: input.authorType ?? "human",
         axisId,
+        confidence: optionalOneOf(input.confidence ?? undefined, CONFIDENCES, "confidence") ?? null,
+        kind,
+        problemId,
         text: body,
-        topicId: topicId ?? axis?.topicId ?? null
+        topicId: kind === "note" ? topicId ?? axis?.topicId ?? null : topicId
       });
+    });
+  }
+  listProblems(axisId) {
+    return this.snapshot(() => this.db.query("SELECT * FROM problems WHERE axis_id = ? ORDER BY created_at, id").all(required(axisId, "axisId")).map(toProblem));
+  }
+  getProblem(id) {
+    const row = this.db.query("SELECT * FROM problems WHERE id = ?").get(id);
+    return row ? toProblem(row) : null;
+  }
+  problemsForRepository(repositoryId) {
+    return this.snapshot(() => this.db.query(`SELECT p.* FROM problems p
+               JOIN problem_repositories l ON l.problem_id = p.id
+              WHERE l.repository_id = ?
+              ORDER BY p.created_at, p.id`).all(required(repositoryId, "repositoryId")).map(toProblem));
+  }
+  problemStateHistory(problemId) {
+    return this.stateHistory("problem_id", required(problemId, "problemId"));
+  }
+  axisStateHistory(axisId) {
+    return this.stateHistory("axis_id", required(axisId, "axisId"));
+  }
+  listPlans(axisId) {
+    return this.snapshot(() => this.db.query("SELECT * FROM plans WHERE axis_id = ? ORDER BY created_at, id").all(required(axisId, "axisId")).map(toPlan));
+  }
+  getPlan(id) {
+    const row = this.db.query("SELECT * FROM plans WHERE id = ?").get(id);
+    return row ? toPlan(row) : null;
+  }
+  planForAxis(axisId) {
+    return this.snapshot(() => {
+      const plans = this.listPlans(axisId);
+      const plan = plans.at(-1) ?? null;
+      return plan ? { plan, steps: this.listPlanSteps(plan.id) } : null;
+    });
+  }
+  listPlanSteps(planId) {
+    return this.db.query(`SELECT * FROM plan_steps WHERE plan_id = ?
+            ORDER BY position IS NULL, position, created_at, id`).all(required(planId, "planId")).map(toPlanStep);
+  }
+  createProblem(input) {
+    return this.atomic(() => {
+      const axis = this.getAxis(required(input.axisId, "axisId"));
+      if (!axis) {
+        throw new ResearchStoreError("Axis not found.");
+      }
+      const authorType = oneOf(input.authorType, AUTHOR_TYPES, "authorType");
+      const state = optionalOneOf(input.state, PROBLEM_STATES, "state") ?? "open";
+      const stateConfidence = optionalOneOf(input.stateConfidence, CONFIDENCES, "stateConfidence") ?? "confirmed";
+      const planStepId = input.planStepId ?? null;
+      if (planStepId) {
+        this.assertPlanStepBelongsToAxis(planStepId, axis.id);
+      }
+      const id = crypto.randomUUID();
+      const at = nowIso();
+      this.db.query(`INSERT INTO problems (
+             id, axis_id, statement, state, state_confidence, plan_step_id,
+             author_type, author_id, version, created_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`).run(id, axis.id, required(input.statement, "statement"), state, stateConfidence, planStepId, authorType, input.authorId ?? "", at, at);
+      this.insertStateLogEntry({
+        actorId: input.authorId ?? "",
+        axisId: null,
+        fromState: null,
+        observedAt: null,
+        origin: authorType,
+        problemId: id,
+        toState: state
+      });
+      for (const repositoryId of input.repositoryIds ?? []) {
+        this.linkProblemRepository(id, repositoryId);
+      }
+      for (const fullName of input.repositoryFullNames ?? []) {
+        this.linkProblemRepository(id, this.upsertRepository({ fullName }).repository.id);
+      }
+      for (const personId of input.personIds ?? []) {
+        this.linkProblemPerson(id, personId);
+      }
+      this.touch("development_axes", axis.id);
+      return this.getProblem(id);
+    });
+  }
+  updateProblem(input) {
+    return this.atomic(() => {
+      const problem = this.getProblem(required(input.id, "id"));
+      if (!problem) {
+        throw new ResearchStoreError("Problem not found.");
+      }
+      const authorType = oneOf(input.authorType, AUTHOR_TYPES, "authorType");
+      this.assertVersion("problem", problem.statement, problem.version, input.expectedVersion);
+      const sets = [];
+      const values = [];
+      if (input.statement !== undefined) {
+        this.assertTextIsReplaceable(problem.authorType, authorType, "the statement of this problem");
+        sets.push("statement = ?");
+        values.push(required(input.statement, "statement"));
+        sets.push("author_type = ?", "author_id = ?");
+        values.push(authorType, input.authorId ?? problem.authorId);
+      }
+      if (input.stateConfidence !== undefined) {
+        sets.push("state_confidence = ?");
+        values.push(oneOf(input.stateConfidence, CONFIDENCES, "stateConfidence"));
+      }
+      if (input.planStepId !== undefined) {
+        if (input.planStepId !== null) {
+          this.assertPlanStepBelongsToAxis(input.planStepId, problem.axisId);
+        }
+        sets.push("plan_step_id = ?");
+        values.push(input.planStepId);
+      }
+      if (sets.length > 0) {
+        sets.push("version = version + 1", "updated_at = ?");
+        values.push(nowIso(), problem.id);
+        this.db.query(`UPDATE problems SET ${sets.join(", ")} WHERE id = ?`).run(...values);
+      }
+      if (input.repositoryIds) {
+        this.replaceProblemRepositories(problem.id, input.repositoryIds);
+      }
+      if (input.personIds) {
+        this.replaceProblemPeople(problem.id, input.personIds);
+      }
+      this.touch("development_axes", problem.axisId);
+      return this.getProblem(problem.id);
+    });
+  }
+  transitionProblem(input) {
+    return this.atomic(() => {
+      const problem = this.getProblem(required(input.id, "id"));
+      if (!problem) {
+        throw new ResearchStoreError("Problem not found.");
+      }
+      const toState = oneOf(input.toState, PROBLEM_STATES, "toState");
+      const origin = oneOf(input.origin, AUTHOR_TYPES, "origin");
+      this.assertVersion("problem", problem.statement, problem.version, input.expectedVersion);
+      if (problem.state === toState) {
+        throw new ResearchStoreError(`no-op: the problem is already "${toState}" \u2014 nothing was written.`);
+      }
+      this.db.query("UPDATE problems SET state = ?, version = version + 1, updated_at = ? WHERE id = ?").run(toState, nowIso(), problem.id);
+      const transition = this.insertStateLogEntry({
+        actorId: input.actorId ?? "",
+        axisId: null,
+        fromState: problem.state,
+        observedAt: input.observedAt ?? null,
+        origin,
+        problemId: problem.id,
+        toState
+      });
+      this.touch("development_axes", problem.axisId);
+      return { problem: this.getProblem(problem.id), transition };
+    });
+  }
+  transitionAxis(input) {
+    return this.atomic(() => {
+      const axis = this.getAxis(required(input.axisId, "axisId"));
+      if (!axis) {
+        throw new ResearchStoreError("Axis not found.");
+      }
+      const toState = oneOf(input.toState, AXIS_STATES, "toState");
+      const origin = oneOf(input.origin, AUTHOR_TYPES, "origin");
+      this.assertVersion("axis", axis.title, axis.version, input.expectedVersion);
+      if (axis.state === toState) {
+        throw new ResearchStoreError(`no-op: the axis is already "${toState}" \u2014 nothing was written.`);
+      }
+      const blocker = input.blocker === undefined ? axis.blocker : text(input.blocker);
+      this.assertBlockerPresent(toState, blocker);
+      this.db.query("UPDATE development_axes SET state = ?, blocker = ?, version = version + 1, updated_at = ? WHERE id = ?").run(toState, blocker, nowIso(), axis.id);
+      const transition = this.insertStateLogEntry({
+        actorId: input.actorId ?? "",
+        axisId: axis.id,
+        fromState: axis.state,
+        observedAt: input.observedAt ?? null,
+        origin,
+        problemId: null,
+        toState
+      });
+      return { axis: this.getAxis(axis.id), transition };
+    });
+  }
+  createPlan(input) {
+    return this.atomic(() => {
+      const axis = this.getAxis(required(input.axisId, "axisId"));
+      if (!axis) {
+        throw new ResearchStoreError("Axis not found.");
+      }
+      const id = crypto.randomUUID();
+      const at = nowIso();
+      this.db.query(`INSERT INTO plans (id, axis_id, summary, author_type, author_id, version, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, 1, ?, ?)`).run(id, axis.id, required(input.summary, "summary"), oneOf(input.authorType, AUTHOR_TYPES, "authorType"), input.authorId ?? "", at, at);
+      this.touch("development_axes", axis.id);
+      return this.getPlan(id);
+    });
+  }
+  updatePlan(input) {
+    return this.atomic(() => {
+      const plan = this.getPlan(required(input.id, "id"));
+      if (!plan) {
+        throw new ResearchStoreError("Plan not found.");
+      }
+      const authorType = oneOf(input.authorType, AUTHOR_TYPES, "authorType");
+      this.assertVersion("plan", plan.summary, plan.version, input.expectedVersion);
+      if (input.summary !== undefined) {
+        this.assertTextIsReplaceable(plan.authorType, authorType, "this plan's summary");
+        this.db.query("UPDATE plans SET summary = ?, author_type = ?, author_id = ?, version = version + 1, updated_at = ? WHERE id = ?").run(required(input.summary, "summary"), authorType, input.authorId ?? plan.authorId, nowIso(), plan.id);
+      }
+      return this.getPlan(plan.id);
+    });
+  }
+  createPlanStep(input) {
+    return this.atomic(() => {
+      const plan = this.getPlan(required(input.planId, "planId"));
+      if (!plan) {
+        throw new ResearchStoreError("Plan not found.");
+      }
+      const id = crypto.randomUUID();
+      const at = nowIso();
+      this.db.query(`INSERT INTO plan_steps (id, plan_id, title, position, state, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`).run(id, plan.id, required(input.title, "title"), optionalPosition(input.position), optionalOneOf(input.state, PLAN_STEP_STATES, "state") ?? "pending", at, at);
+      return this.listPlanSteps(plan.id).find((step) => step.id === id);
+    });
+  }
+  updatePlanStep(input) {
+    return this.atomic(() => {
+      const existing = this.db.query("SELECT * FROM plan_steps WHERE id = ?").get(required(input.id, "id"));
+      if (!existing) {
+        throw new ResearchStoreError("Plan step not found.");
+      }
+      const sets = [];
+      const values = [];
+      if (input.title !== undefined) {
+        sets.push("title = ?");
+        values.push(required(input.title, "title"));
+      }
+      if (input.position !== undefined) {
+        sets.push("position = ?");
+        values.push(optionalPosition(input.position));
+      }
+      if (input.state !== undefined) {
+        sets.push("state = ?");
+        values.push(oneOf(input.state, PLAN_STEP_STATES, "state"));
+      }
+      if (sets.length > 0) {
+        sets.push("updated_at = ?");
+        values.push(nowIso(), existing.id);
+        this.db.query(`UPDATE plan_steps SET ${sets.join(", ")} WHERE id = ?`).run(...values);
+      }
+      const row = this.db.query("SELECT * FROM plan_steps WHERE id = ?").get(existing.id);
+      return toPlanStep(row);
+    });
+  }
+  linkProblemRepository(problemId, repositoryId) {
+    this.atomic(() => {
+      if (!this.getProblem(problemId)) {
+        throw new ResearchStoreError("Problem not found.");
+      }
+      if (!this.repositoryExists(repositoryId)) {
+        throw new ResearchStoreError("Repository not found.");
+      }
+      this.db.query("INSERT OR IGNORE INTO problem_repositories (problem_id, repository_id) VALUES (?, ?)").run(problemId, repositoryId);
+    });
+  }
+  linkProblemPerson(problemId, personId) {
+    this.atomic(() => {
+      if (!this.getProblem(problemId)) {
+        throw new ResearchStoreError("Problem not found.");
+      }
+      if (!this.getPerson(personId)) {
+        throw new ResearchStoreError("Person not found.");
+      }
+      this.db.query("INSERT OR IGNORE INTO problem_people (problem_id, person_id) VALUES (?, ?)").run(problemId, personId);
+    });
+  }
+  overviewRecency(options) {
+    return this.snapshot(() => {
+      const scope = this.visibleContext({
+        activitySinceDays: options?.activitySinceDays,
+        includeArchived: options?.includeArchived ?? false
+      });
+      const limit = clampLimit(options?.limit, MAX_ROLLUP_LIMIT, MAX_ROLLUP_LIMIT);
+      const axisTopic = new Map;
+      for (const row of this.db.query("SELECT id, topic_id FROM development_axes").all()) {
+        axisTopic.set(row.id, row.topic_id);
+      }
+      const topicTimes = new Map;
+      const repositoryTimes = new Map;
+      const remember = (map, key, at) => {
+        if (!key) {
+          return;
+        }
+        const list = map.get(key);
+        if (list) {
+          list.push(at);
+        } else {
+          map.set(key, [at]);
+        }
+      };
+      for (const event of this.db.query("SELECT topic_id, axis_id, repository_id, occurred_at FROM activities").all()) {
+        remember(topicTimes, event.topic_id ?? (event.axis_id ? axisTopic.get(event.axis_id) ?? null : null), event.occurred_at);
+        remember(repositoryTimes, event.repository_id, event.occurred_at);
+      }
+      const axisRows = this.db.query("SELECT id, topic_id, state FROM development_axes").all();
+      const liveAxesPerRepository = new Map;
+      for (const row of this.db.query(`SELECT l.repository_id AS repository_id, a.state AS state
+             FROM axis_repositories l
+             JOIN development_axes a ON a.id = l.axis_id`).all()) {
+        if (row.state === "active") {
+          liveAxesPerRepository.set(row.repository_id, (liveAxesPerRepository.get(row.repository_id) ?? 0) + 1);
+        }
+      }
+      const card = (id, name, kind, createdAt, times, liveAxisCount) => {
+        const recencyAt = newestOf([...times, createdAt]);
+        return {
+          activityInWindow: times.filter((at) => scope.inWindow(at)).length,
+          id,
+          kind,
+          lastActivityAt: newestOf(times),
+          liveAxisCount,
+          name,
+          recencyAt,
+          stale: isStale(recencyAt, scope.nowMs)
+        };
+      };
+      const topics = this.db.query("SELECT * FROM topics").all().filter((row) => scope.visible(row.id)).map((row) => card(row.id, row.name, "topic", row.created_at ?? null, topicTimes.get(row.id) ?? [], axisRows.filter((axis) => axis.topic_id === row.id && axis.state === "active").length));
+      const repositories = this.db.query("SELECT * FROM repositories").all().map((row) => card(row.id, row.full_name, "repository", row.created_at ?? null, repositoryTimes.get(row.id) ?? [], liveAxesPerRepository.get(row.id) ?? 0));
+      return {
+        activitySinceDays: scope.activitySinceDays,
+        repositories: byRecencyDesc(repositories).slice(0, limit),
+        staleAfterDays: STALE_AFTER_DAYS,
+        topics: byRecencyDesc(topics).slice(0, limit)
+      };
+    });
+  }
+  progressAxes(options) {
+    return this.snapshot(() => {
+      const scope = this.visibleContext({
+        activitySinceDays: options?.activitySinceDays,
+        includeArchived: options?.includeArchived ?? false
+      });
+      const limit = clampLimit(options?.limit, MAX_ROLLUP_LIMIT, MAX_ROLLUP_LIMIT);
+      const problems = this.db.query("SELECT * FROM problems").all();
+      const plans = this.db.query("SELECT * FROM plans").all();
+      const steps = this.db.query("SELECT * FROM plan_steps").all();
+      const axisTimes = new Map;
+      for (const row of this.db.query("SELECT axis_id, occurred_at FROM activities WHERE axis_id IS NOT NULL").all()) {
+        const list = axisTimes.get(row.axis_id);
+        if (list) {
+          list.push(row.occurred_at);
+        } else {
+          axisTimes.set(row.axis_id, [row.occurred_at]);
+        }
+      }
+      const rows = [...scope.scans.values()].map((scan) => {
+        const mine = problems.filter((row) => row.axis_id === scan.id);
+        const plan = plans.filter((row) => row.axis_id === scan.id).at(-1) ?? null;
+        const planSteps = plan ? steps.filter((row) => row.plan_id === plan.id).map(toPlanStep).sort((left, right) => (left.position ?? Number.MAX_SAFE_INTEGER) - (right.position ?? Number.MAX_SAFE_INTEGER) || left.createdAt.localeCompare(right.createdAt)) : [];
+        const times = axisTimes.get(scan.id) ?? [];
+        const recencyAt = newestOf([...times, scan.updatedAt]);
+        return {
+          activityInWindow: times.filter((at) => scope.inWindow(at)).length,
+          blocker: scan.blocker,
+          blockerConfidence: scan.blockerConfidence,
+          id: scan.id,
+          lastActivityAt: newestOf(times),
+          openProblems: mine.filter((row) => row.state === "open").length,
+          plan: plan ? {
+            id: plan.id,
+            steps: planSteps,
+            stepsDone: planSteps.filter((step) => step.state === "done").length,
+            summary: plan.summary
+          } : null,
+          problems: mine.length,
+          recencyAt,
+          stale: isStale(recencyAt, scope.nowMs),
+          state: scan.state,
+          stateConfidence: scan.stateConfidence,
+          stateHistory: this.axisStateHistory(scan.id),
+          title: scan.title,
+          topicId: scan.topicId,
+          topicName: scope.topicRefs.get(scan.topicId)?.name ?? ""
+        };
+      });
+      return {
+        activitySinceDays: scope.activitySinceDays,
+        axes: byRecencyDesc(rows.filter((row) => row.problems > 0 || true)).slice(0, limit),
+        staleAfterDays: STALE_AFTER_DAYS
+      };
+    });
+  }
+  progressProblems(options) {
+    return this.snapshot(() => {
+      const scope = this.visibleContext({
+        activitySinceDays: options?.activitySinceDays,
+        includeArchived: options?.includeArchived ?? false
+      });
+      const limit = clampLimit(options?.limit, MAX_ROLLUP_LIMIT, MAX_ROLLUP_LIMIT);
+      const stepRows = new Map;
+      for (const row of this.db.query("SELECT * FROM plan_steps").all()) {
+        stepRows.set(row.id, row);
+      }
+      const problemTimes = new Map;
+      for (const row of this.db.query("SELECT problem_id, occurred_at FROM activities WHERE problem_id IS NOT NULL").all()) {
+        const list = problemTimes.get(row.problem_id);
+        if (list) {
+          list.push(row.occurred_at);
+        } else {
+          problemTimes.set(row.problem_id, [row.occurred_at]);
+        }
+      }
+      const repositoriesOf = new Map;
+      for (const row of this.db.query(`SELECT l.problem_id AS problem_id, r.id AS id, r.full_name AS full_name
+             FROM problem_repositories l
+             JOIN repositories r ON r.id = l.repository_id`).all()) {
+        const list = repositoriesOf.get(row.problem_id) ?? [];
+        list.push({ fullName: row.full_name, id: row.id });
+        repositoriesOf.set(row.problem_id, list);
+      }
+      const peopleOf = new Map;
+      for (const row of this.db.query(`SELECT l.problem_id AS problem_id, p.id AS id, p.display_name AS display_name
+             FROM problem_people l
+             JOIN people p ON p.id = l.person_id`).all()) {
+        const list = peopleOf.get(row.problem_id) ?? [];
+        list.push({ displayName: row.display_name, id: row.id });
+        peopleOf.set(row.problem_id, list);
+      }
+      const rows = this.db.query("SELECT * FROM problems").all().map((row) => ({ problem: toProblem(row), row })).filter(({ row }) => {
+        const axis = scope.scans.get(row.axis_id);
+        return Boolean(axis) && scope.visible(axis?.topicId ?? "");
+      }).map(({ problem }) => {
+        const scan = scope.scans.get(problem.axisId);
+        const times = problemTimes.get(problem.id) ?? [];
+        const recencyAt = newestOf([...times, problem.createdAt]);
+        const stepRow = problem.planStepId ? stepRows.get(problem.planStepId) : null;
+        return {
+          activityCount: times.length,
+          authorId: problem.authorId,
+          authorType: problem.authorType,
+          axisId: problem.axisId,
+          axisTitle: scan?.title ?? "",
+          history: this.problemStateHistory(problem.id),
+          id: problem.id,
+          lastActivityAt: newestOf(times),
+          people: peopleOf.get(problem.id) ?? [],
+          planStepId: problem.planStepId,
+          planStepTitle: stepRow?.title ?? null,
+          recencyAt,
+          repositories: repositoriesOf.get(problem.id) ?? [],
+          stale: isStale(recencyAt, scope.nowMs),
+          state: problem.state,
+          stateConfidence: problem.stateConfidence,
+          statement: problem.statement,
+          topicId: scan?.topicId ?? "",
+          topicName: scope.topicRefs.get(scan?.topicId ?? "")?.name ?? ""
+        };
+      });
+      return {
+        activitySinceDays: scope.activitySinceDays,
+        problems: byRecencyDesc(rows).slice(0, limit),
+        staleAfterDays: STALE_AFTER_DAYS
+      };
     });
   }
   reconcileTopic(input) {
@@ -1217,7 +1817,8 @@ class ResearchStore {
           sourceType: optionalOneOf(activityInput.sourceType, SOURCE_TYPES, "sourceType") ?? "manual",
           sourceUrl: text(activityInput.sourceUrl),
           summary: required(activityInput.summary, "summary"),
-          topicId: topic.id
+          topicId: topic.id,
+          problemId: null
         });
         activities.push(activity.id);
       }
@@ -1227,6 +1828,9 @@ class ResearchStore {
           authorId: actor.id,
           authorType: annotationInput.authorType ?? (actor.type === "agent" ? "agent" : "human"),
           axisId,
+          confidence: null,
+          kind: "note",
+          problemId: null,
           text: required(annotationInput.text, "text"),
           topicId: topic.id
         });
@@ -1399,20 +2003,61 @@ class ResearchStore {
     this.db.query(`INSERT INTO ${table} (${column}, repository_id, relationship) VALUES (?, ?, ?)
          ON CONFLICT (${column}, repository_id) DO UPDATE SET relationship = excluded.relationship`).run(parentId, repositoryId, next);
   }
+  insertStateLogEntry(input) {
+    const id = crypto.randomUUID();
+    this.db.query(`INSERT INTO state_log (
+           id, axis_id, problem_id, from_state, to_state, origin, actor_id, observed_at, recorded_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(id, input.axisId, input.problemId, input.fromState, input.toState, input.origin, input.actorId, input.observedAt, nowIso());
+    return toStateLogEntry(this.db.query("SELECT * FROM state_log WHERE id = ?").get(id));
+  }
+  stateHistory(column, id) {
+    return this.db.query(`SELECT * FROM state_log WHERE ${column} = ? ORDER BY recorded_at, rowid`).all(id).map(toStateLogEntry);
+  }
+  assertTextIsReplaceable(existing, incoming, what) {
+    if (existing === "human" && incoming === "agent") {
+      throw new ResearchStoreError(`human-authored: ${what} was written by a human \u2014 an agent cannot rewrite it. Change the state, the links or a plan step instead, or have the human edit the text.`);
+    }
+  }
+  assertPlanStepBelongsToAxis(planStepId, axisId) {
+    const row = this.db.query(`SELECT p.axis_id AS axis_id
+           FROM plan_steps s
+           JOIN plans p ON p.id = s.plan_id
+          WHERE s.id = ?`).get(planStepId);
+    if (!row) {
+      throw new ResearchStoreError("Plan step not found.");
+    }
+    if (row.axis_id !== axisId) {
+      throw new ResearchStoreError("That plan step belongs to a plan on another axis.");
+    }
+  }
+  replaceProblemRepositories(problemId, repositoryIds) {
+    this.db.query("DELETE FROM problem_repositories WHERE problem_id = ?").run(problemId);
+    for (const repositoryId of repositoryIds) {
+      this.linkProblemRepository(problemId, repositoryId);
+    }
+  }
+  replaceProblemPeople(problemId, personIds) {
+    this.db.query("DELETE FROM problem_people WHERE problem_id = ?").run(problemId);
+    for (const personId of personIds) {
+      this.linkProblemPerson(problemId, personId);
+    }
+  }
   insertActivity(input) {
     const id = input.id ?? crypto.randomUUID();
     const recordedAt = nowIso();
     this.db.query(`INSERT INTO activities (
-           id, topic_id, axis_id, repository_id, summary, source_type, source_ref, source_url,
-           actor_type, actor_id, occurred_at, recorded_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(id, input.topicId, input.axisId, input.repositoryId, input.summary, input.sourceType, input.sourceRef, input.sourceUrl, input.actorType, input.actorId, input.occurredAt, recordedAt);
+           id, topic_id, axis_id, problem_id, repository_id, summary, source_type, source_ref,
+           source_url, actor_type, actor_id, occurred_at, recorded_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(id, input.topicId, input.axisId, input.problemId, input.repositoryId, input.summary, input.sourceType, input.sourceRef, input.sourceUrl, input.actorType, input.actorId, input.occurredAt, recordedAt);
     this.touch("topics", input.topicId);
     this.touch("development_axes", input.axisId);
     return toActivity(this.db.query("SELECT * FROM activities WHERE id = ?").get(id));
   }
   insertAnnotation(input) {
     const id = crypto.randomUUID();
-    this.db.query("INSERT INTO annotations (id, topic_id, axis_id, text, author_type, author_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(id, input.topicId, input.axisId, input.text, input.authorType, input.authorId, nowIso());
+    this.db.query(`INSERT INTO annotations (
+           id, topic_id, axis_id, problem_id, text, kind, confidence, author_type, author_id, created_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(id, input.topicId, input.axisId, input.problemId, input.text, input.kind, input.confidence, input.authorType, input.authorId, nowIso());
     this.touch("topics", input.topicId);
     this.touch("development_axes", input.axisId);
     return toAnnotation(this.db.query("SELECT * FROM annotations WHERE id = ?").get(id));
