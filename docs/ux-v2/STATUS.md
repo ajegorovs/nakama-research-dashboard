@@ -10,7 +10,7 @@ Last updated at the end of **U0**.
 | Chunk | State | Evidence |
 |---|---|---|
 | **U0** Contract, baseline, runnable pass | **done** | `contract/` published verbatim · `BASELINE.md` · the pass moved in-repo and reproduces from a *fresh clone* on a *pristine checkout* (measured below) · PR #1 merged, tagged `pre-ux-v2` (`9b48f99`) · three harness defects found by that run and fixed |
-| U1 Migration 004 (problems, plans, state log, `usable`) | not started | — |
+| U1 Migration 004 (problems, plans, state log, `usable`) | **in progress — design under review** | `docs/ux-v2/U1-migration.md`: the truth table, the rebuild, the failure model read off the host's applier, rollback, evidence bundle · pre-004 snapshot + full fingerprint taken (per-identity rows, FK definitions, `foreign_key_check` clean) · §6 (Problem/Plan) is the next review gate, deliberately unspecifed until then |
 | U2 Store read models | not started | — |
 | U3 Action surface + skill | not started | — |
 | U4 Five tabs + canonical navigation | not started | — |
