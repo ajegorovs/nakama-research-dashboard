@@ -364,6 +364,44 @@ var css = `
   margin: 4px 0 0;
   padding: 0;
 }
+/* The three supporting sections step 5 adds. Same quiet treatment as the plan and the inventory: a rule
+   above, a heading, the rows. */
+[data-plugin-id="research-dashboard"] .rd-progress-repositories,
+[data-plugin-id="research-dashboard"] .rd-progress-evidence,
+[data-plugin-id="research-dashboard"] .rd-progress-steering {
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 4px;
+  padding-top: 10px;
+}
+[data-plugin-id="research-dashboard"] .rd-tags { gap: 6px; }
+/* An entity tag: navigation, not a filter — it reads as a chip because it goes somewhere. */
+[data-plugin-id="research-dashboard"] .rd-tag {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85em;
+  padding: 1px 8px;
+}
+[data-plugin-id="research-dashboard"] .rd-tag:hover { border-color: inherit; opacity: 0.75; }
+[data-plugin-id="research-dashboard"] .rd-evidence,
+[data-plugin-id="research-dashboard"] .rd-steering {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+[data-plugin-id="research-dashboard"] .rd-source {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.85em;
+  padding: 0 6px;
+}
+[data-plugin-id="research-dashboard"] .rd-steering-text { margin: 2px 0 0; }
 [data-plugin-id="research-dashboard"] .rd-index-item[aria-pressed="true"] {
   border-color: var(--border);
   background: var(--muted, rgba(127, 127, 127, 0.1));
@@ -995,11 +1033,17 @@ function apply(ctx) {
     }) : null);
   }
   function RepositoriesView({
+    preselect,
     repositories,
     truncated,
     windowDays
   }) {
     const [selectedId, setSelectedId] = React.useState(null);
+    React.useEffect(() => {
+      if (preselect) {
+        setSelectedId(preselect.id);
+      }
+    }, [preselect?.id, preselect?.seq]);
     const selected = repositories.find((entry) => entry.repository.id === selectedId) ?? repositories[0] ?? null;
     if (repositories.length === 0) {
       return /* @__PURE__ */ React.createElement(Card, null, /* @__PURE__ */ React.createElement(CardContent, null, /* @__PURE__ */ React.createElement("p", {
@@ -1094,6 +1138,7 @@ function apply(ctx) {
     return row.openProblems === row.problems ? `${row.problems} problem${row.problems === 1 ? "" : "s"}` : `${row.openProblems} open of ${row.problems}`;
   }
   function ProgressView({
+    onOpenEntity,
     people,
     progress,
     repositories,
@@ -1124,6 +1169,8 @@ function apply(ctx) {
     const feed = (progress?.activity.byAxis ?? []).find((bucket) => bucket.axisId === activeAxis?.id) ?? null;
     const axisPlan = activeAxis?.plan ?? null;
     const planClaimsOrder = axisPlan?.steps.some((step) => step.position !== null) ?? false;
+    const problemSteering = shownProblem?.steering ?? [];
+    const axisSteering = activeAxis?.steering ?? [];
     function problemContext(problem) {
       const parts = [
         problem.repositories.length === 0 ? "no repository" : problem.repositories.map((repo) => repo.fullName).join(", ")
@@ -1303,7 +1350,75 @@ function apply(ctx) {
     }, problem.statement)), /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta",
       "data-rd-problem-context": "true"
-    }, problemContext(problem))))))) : null, /* @__PURE__ */ React.createElement("div", {
+    }, problemContext(problem))))))) : null, shownProblem && shownProblem.repositories.length > 0 ? /* @__PURE__ */ React.createElement("section", {
+      className: "rd-progress-repositories",
+      "data-rd-progress-repositories": shownProblem.repositories.length
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-section"
+    }, "Repository threads"), /* @__PURE__ */ React.createElement("div", {
+      className: "rd-cluster rd-tags"
+    }, shownProblem.repositories.map((repository) => /* @__PURE__ */ React.createElement("button", {
+      className: "rd-tag",
+      "data-rd-entity-id": repository.id,
+      "data-rd-entity-tag": "repository",
+      key: repository.id,
+      onClick: () => onOpenEntity("repository", repository.id),
+      type: "button"
+    }, repository.fullName)))) : null, shownProblem && shownProblem.evidence.length > 0 ? /* @__PURE__ */ React.createElement("section", {
+      className: "rd-progress-evidence",
+      "data-rd-progress-evidence": shownProblem.evidence.length
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-section"
+    }, "Evidence"), /* @__PURE__ */ React.createElement("ul", {
+      className: "rd-evidence"
+    }, shownProblem.evidence.map((item) => /* @__PURE__ */ React.createElement("li", {
+      "data-rd-evidence": item.id,
+      key: item.id
+    }, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-cluster"
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-source",
+      "data-rd-evidence-source": item.sourceType
+    }, describeSource(item.sourceType, item.sourceRef)), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-strong"
+    }, item.summary), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-muted"
+    }, item.label)), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, `${item.occurredAt.slice(0, 10)}${item.sourceUrl ? ` · ${item.sourceUrl}` : ""}`))))) : null, problemSteering.length > 0 || axisSteering.length > 0 ? /* @__PURE__ */ React.createElement("section", {
+      className: "rd-progress-steering",
+      "data-rd-progress-steering": "true"
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-section"
+    }, "Human steering"), problemSteering.length > 0 ? /* @__PURE__ */ React.createElement("ul", {
+      className: "rd-steering",
+      "data-rd-steering-scope": "problem"
+    }, problemSteering.map((claim) => /* @__PURE__ */ React.createElement("li", {
+      "data-rd-steering": claim.id,
+      key: claim.id
+    }, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-cluster"
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-source"
+    }, claim.kind), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, `${claim.authorType} · ${claim.recordedAt.slice(0, 10)}${claim.confidence ? ` · ${claim.confidence}` : ""}`)), /* @__PURE__ */ React.createElement("p", {
+      className: "rd-steering-text"
+    }, claim.text)))) : null, axisSteering.length > 0 ? /* @__PURE__ */ React.createElement("ul", {
+      className: "rd-steering",
+      "data-rd-steering-scope": "axis"
+    }, axisSteering.map((claim) => /* @__PURE__ */ React.createElement("li", {
+      "data-rd-steering": claim.id,
+      key: claim.id
+    }, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-cluster"
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-source"
+    }, claim.kind), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, `on the axis · ${claim.authorType} · ${claim.recordedAt.slice(0, 10)}${claim.confidence ? ` · ${claim.confidence}` : ""}`)), /* @__PURE__ */ React.createElement("p", {
+      className: "rd-steering-text"
+    }, claim.text)))) : null) : null, /* @__PURE__ */ React.createElement("div", {
       className: "rd-cluster rd-filters"
     }, /* @__PURE__ */ React.createElement(FilterSelect, {
       label: "Filter by topic",
@@ -1406,6 +1521,11 @@ function apply(ctx) {
   function ResearchPage() {
     const [overview, setOverview] = React.useState(null);
     const [view, setView] = React.useState("topics");
+    const [entityTarget, setEntityTarget] = React.useState(null);
+    function openEntity(type, id) {
+      setEntityTarget({ id, seq: (entityTarget?.seq ?? 0) + 1, type });
+      setView(type === "repository" ? "repositories" : "topics");
+    }
     const [windowDays, setWindowDays] = React.useState(14);
     const [includeArchived, setIncludeArchived] = React.useState(false);
     const [expandedId, setExpandedId] = React.useState(null);
@@ -1981,10 +2101,12 @@ function apply(ctx) {
       truncated: overview?.peopleTruncated === true,
       windowDays
     }) : null, view === "repositories" ? /* @__PURE__ */ React.createElement(RepositoriesView, {
+      preselect: entityTarget?.type === "repository" ? entityTarget : null,
       repositories: overview?.repositories ?? [],
       truncated: overview?.repositoriesTruncated === true,
       windowDays
     }) : null, view === "progress" ? /* @__PURE__ */ React.createElement(ProgressView, {
+      onOpenEntity: openEntity,
       people: overview?.people ?? [],
       progress,
       repositories: overview?.repositories ?? [],

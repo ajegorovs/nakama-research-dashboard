@@ -48,6 +48,7 @@ var MAX_ROLLUP_LIMIT = 50;
 var DEFAULT_ROLLUP_ACTIVITY_LIMIT = 5;
 var DEFAULT_TIMELINE_AXIS_LIMIT = 10;
 var EVIDENCE_ITEM_LIMIT = 5;
+var PROGRESS_SUPPORT_LIMIT = 10;
 var DEFAULT_AXIS_HISTORY_LIMIT = 25;
 var MAX_AXIS_HISTORY_LIMIT = 100;
 var BUSY_TIMEOUT_MS = 5000;
@@ -1630,6 +1631,55 @@ class ResearchStore {
       };
     });
   }
+  evidenceByProblem() {
+    const evidence = new Map;
+    for (const row of this.db.query(`SELECT * FROM activities WHERE problem_id IS NOT NULL
+          ORDER BY occurred_at DESC, rowid DESC`).all()) {
+      const problemId = row.problem_id ?? "";
+      const list = evidence.get(problemId) ?? [];
+      if (list.length >= PROGRESS_SUPPORT_LIMIT) {
+        continue;
+      }
+      list.push({
+        id: row.id,
+        label: evidenceLabel(row.source_type, row.source_ref),
+        occurredAt: row.occurred_at,
+        sourceRef: row.source_ref,
+        sourceType: row.source_type,
+        sourceUrl: row.source_url,
+        summary: row.summary
+      });
+      evidence.set(problemId, list);
+    }
+    return evidence;
+  }
+  humanSteeringBy(target) {
+    const column = target === "axis" ? "axis_id" : "problem_id";
+    const steering = new Map;
+    for (const row of this.db.query(`SELECT * FROM annotations
+          WHERE ${column} IS NOT NULL
+            AND kind IN ('interpretation', 'steering')
+            AND author_type = 'human'
+          ORDER BY created_at DESC, rowid DESC`).all()) {
+      const owner = (target === "axis" ? row.axis_id : row.problem_id) ?? "";
+      const list = steering.get(owner) ?? [];
+      if (list.length >= PROGRESS_SUPPORT_LIMIT) {
+        continue;
+      }
+      list.push({
+        authorId: row.author_id,
+        authorType: row.author_type === "agent" ? "agent" : "human",
+        confidence: row.confidence ?? null,
+        id: row.id,
+        kind: asAnnotationKind(row.kind),
+        recordedAt: row.created_at,
+        scope: target,
+        text: row.text
+      });
+      steering.set(owner, list);
+    }
+    return steering;
+  }
   progressAxes(options) {
     return this.snapshot(() => {
       const scope = this.visibleContext({
@@ -1649,6 +1699,7 @@ class ResearchStore {
           axisTimes.set(row.axis_id, [row.occurred_at]);
         }
       }
+      const axisSteering = this.humanSteeringBy("axis");
       const rows = [...scope.scans.values()].map((scan) => {
         const mine = problems.filter((row) => row.axis_id === scan.id);
         const plan = plans.filter((row) => row.axis_id === scan.id).at(-1) ?? null;
@@ -1674,6 +1725,7 @@ class ResearchStore {
           state: scan.state,
           stateConfidence: scan.stateConfidence,
           stateHistory: this.axisStateHistory(scan.id),
+          steering: axisSteering.get(scan.id) ?? [],
           title: scan.title,
           topicId: scan.topicId,
           topicName: scope.topicRefs.get(scan.topicId)?.name ?? ""
@@ -1709,7 +1761,8 @@ class ResearchStore {
       const repositoriesOf = new Map;
       for (const row of this.db.query(`SELECT l.problem_id AS problem_id, r.id AS id, r.full_name AS full_name
              FROM problem_repositories l
-             JOIN repositories r ON r.id = l.repository_id`).all()) {
+             JOIN repositories r ON r.id = l.repository_id
+            ORDER BY l.rowid, r.full_name`).all()) {
         const list = repositoriesOf.get(row.problem_id) ?? [];
         list.push({ fullName: row.full_name, id: row.id });
         repositoriesOf.set(row.problem_id, list);
@@ -1722,6 +1775,8 @@ class ResearchStore {
         list.push({ displayName: row.display_name, id: row.id });
         peopleOf.set(row.problem_id, list);
       }
+      const evidenceOf = this.evidenceByProblem();
+      const steeringOf = this.humanSteeringBy("problem");
       const rows = this.db.query("SELECT * FROM problems").all().map((row) => ({ problem: toProblem(row), row })).filter(({ row }) => {
         const axis = scope.scans.get(row.axis_id);
         return Boolean(axis) && scope.visible(axis?.topicId ?? "");
@@ -1736,6 +1791,7 @@ class ResearchStore {
           authorType: problem.authorType,
           axisId: problem.axisId,
           axisTitle: scan?.title ?? "",
+          evidence: evidenceOf.get(problem.id) ?? [],
           history: this.problemStateHistory(problem.id),
           id: problem.id,
           lastActivityAt: newestOf(times),
@@ -1748,6 +1804,7 @@ class ResearchStore {
           state: problem.state,
           stateConfidence: problem.stateConfidence,
           statement: problem.statement,
+          steering: steeringOf.get(problem.id) ?? [],
           topicId: scan?.topicId ?? "",
           topicName: scope.topicRefs.get(scan?.topicId ?? "")?.name ?? ""
         };

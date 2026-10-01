@@ -386,6 +386,12 @@ export const DEFAULT_ROLLUP_ACTIVITY_LIMIT = 5;
 export const DEFAULT_TIMELINE_AXIS_LIMIT = 10;
 /** How many recorded items of one kind count towards an axis's evidence line (activities, notes). */
 export const EVIDENCE_ITEM_LIMIT = 5;
+/**
+ * How many of a problem's supporting records and steering claims the Progress projection carries. Capped like
+ * the timeline is: the row list is a reading surface, and `activityCount` on the problem row stays the true
+ * total, so a page can say "showing 5 of 9" without counting the rows it was given.
+ */
+export const PROGRESS_SUPPORT_LIMIT = 10;
 /** Per-axis history on the detail view: enough to see the arc of the work without paging. */
 export const DEFAULT_AXIS_HISTORY_LIMIT = 25;
 export const MAX_AXIS_HISTORY_LIMIT = 100;
@@ -1275,6 +1281,8 @@ export type ProgressAxisRow = {
   state: AxisState;
   stateConfidence: Confidence;
   stateHistory: StateLogEntry[];
+  /** Human-authored claims aimed at **this axis** — the axis context, not a claim about any one problem. */
+  steering: ProgressSteering[];
   title: string;
   topicId: string;
   topicName: string;
@@ -1293,6 +1301,8 @@ export type ProgressProblemRow = {
   authorType: Author;
   axisId: string;
   axisTitle: string;
+  /** The records that substantiate this problem, newest first — see `ProgressEvidence`. */
+  evidence: ProgressEvidence[];
   history: StateLogEntry[];
   id: string;
   lastActivityAt: string | null;
@@ -1305,8 +1315,46 @@ export type ProgressProblemRow = {
   state: ProblemState;
   stateConfidence: Confidence;
   statement: string;
+  /** Human-authored `interpretation`/`steering` claims aimed at **this problem** — never an ordinary note. */
+  steering: ProgressSteering[];
   topicId: string;
   topicName: string;
+};
+
+/**
+ * One record that substantiates a problem's reading: an event that names the problem, kept **with its
+ * source**. The same row can appear in the Activity column, where it is chronological movement, and here,
+ * where it is support for the reading on screen — the difference is the role, not the record, so the
+ * provenance travels with it instead of being flattened into a generic link list.
+ */
+export type ProgressEvidence = {
+  id: string;
+  label: string;
+  occurredAt: string;
+  sourceRef: string;
+  sourceType: SourceType;
+  sourceUrl: string;
+  summary: string;
+};
+
+/**
+ * A claim a human made about an axis or a problem: `interpretation` or `steering`, never a plain note, and
+ * never agent-authored — this is the constraint on automated abstraction, so the rows that are not human
+ * claims are excluded by the store rather than filtered by whoever happens to render it.
+ *
+ * `scope` says which object the claim was aimed at. An axis-scoped claim belongs to the axis context and is
+ * **not** copied under every problem beneath it; a page that wants both on screen has to label them, which is
+ * what the field is for.
+ */
+export type ProgressSteering = {
+  authorId: string;
+  authorType: Author;
+  confidence: Confidence | null;
+  id: string;
+  kind: AnnotationKind;
+  recordedAt: string;
+  scope: "axis" | "problem";
+  text: string;
 };
 
 export type ProgressProblems = {
@@ -3798,6 +3846,78 @@ export class ResearchStore {
   }
 
   /**
+   * A problem's supporting records, newest first, capped — the Evidence section's rows. The record keeps its
+   * source type and reference, so the page can say *what kind of thing* substantiates the reading instead of
+   * showing an undifferentiated link list.
+   */
+  private evidenceByProblem(): Map<string, ProgressEvidence[]> {
+    const evidence = new Map<string, ProgressEvidence[]>();
+    for (const row of this.db
+      .query(
+        `SELECT * FROM activities WHERE problem_id IS NOT NULL
+          ORDER BY occurred_at DESC, rowid DESC`
+      )
+      .all() as ActivityRow[]) {
+      const problemId = row.problem_id ?? "";
+      const list = evidence.get(problemId) ?? [];
+      if (list.length >= PROGRESS_SUPPORT_LIMIT) {
+        continue;
+      }
+      list.push({
+        id: row.id,
+        label: evidenceLabel(row.source_type as SourceType, row.source_ref),
+        occurredAt: row.occurred_at,
+        sourceRef: row.source_ref,
+        sourceType: row.source_type as SourceType,
+        sourceUrl: row.source_url,
+        summary: row.summary,
+      });
+      evidence.set(problemId, list);
+    }
+    return evidence;
+  }
+
+  /**
+   * Human-authored `interpretation`/`steering` claims, newest first, grouped by their target.
+   *
+   * Two exclusions are the point of this read, and both happen here rather than in whoever renders it: an
+   * ordinary `note` is context rather than a claim, and an **agent-authored** interpretation is not a human
+   * constraint. An axis-targeted claim is grouped under the axis and is never copied under the problems
+   * beneath it.
+   */
+  private humanSteeringBy(target: "axis" | "problem"): Map<string, ProgressSteering[]> {
+    const column = target === "axis" ? "axis_id" : "problem_id";
+    const steering = new Map<string, ProgressSteering[]>();
+    for (const row of this.db
+      .query(
+        `SELECT * FROM annotations
+          WHERE ${column} IS NOT NULL
+            AND kind IN ('interpretation', 'steering')
+            AND author_type = 'human'
+          ORDER BY created_at DESC, rowid DESC`
+      )
+      .all() as AnnotationRow[]) {
+      const owner = (target === "axis" ? row.axis_id : row.problem_id) ?? "";
+      const list = steering.get(owner) ?? [];
+      if (list.length >= PROGRESS_SUPPORT_LIMIT) {
+        continue;
+      }
+      list.push({
+        authorId: row.author_id,
+        authorType: row.author_type === "agent" ? "agent" : "human",
+        confidence: (row.confidence as Confidence | null) ?? null,
+        id: row.id,
+        kind: asAnnotationKind(row.kind),
+        recordedAt: row.created_at,
+        scope: target,
+        text: row.text,
+      });
+      steering.set(owner, list);
+    }
+    return steering;
+  }
+
+  /**
    * The Progress view's axis side: each visible axis with its problems, its optional plan, its recorded
    * state history and the same recency verdict the Overview uses.
    *
@@ -3835,6 +3955,7 @@ export class ResearchStore {
         }
       }
 
+      const axisSteering = this.humanSteeringBy("axis");
       const rows: ProgressAxisRow[] = [...scope.scans.values()].map((scan) => {
         const mine = problems.filter((row) => row.axis_id === scan.id);
         const plan = plans.filter((row) => row.axis_id === scan.id).at(-1) ?? null;
@@ -3875,6 +3996,7 @@ export class ResearchStore {
           state: scan.state,
           stateConfidence: scan.stateConfidence,
           stateHistory: this.axisStateHistory(scan.id),
+          steering: axisSteering.get(scan.id) ?? [],
           title: scan.title,
           topicId: scan.topicId,
           topicName: scope.topicRefs.get(scan.topicId)?.name ?? "",
@@ -3932,7 +4054,8 @@ export class ResearchStore {
         .query(
           `SELECT l.problem_id AS problem_id, r.id AS id, r.full_name AS full_name
              FROM problem_repositories l
-             JOIN repositories r ON r.id = l.repository_id`
+             JOIN repositories r ON r.id = l.repository_id
+            ORDER BY l.rowid, r.full_name`
         )
         .all() as Array<{ problem_id: string; id: string; full_name: string }>) {
         const list = repositoriesOf.get(row.problem_id) ?? [];
@@ -3952,6 +4075,8 @@ export class ResearchStore {
         peopleOf.set(row.problem_id, list);
       }
 
+      const evidenceOf = this.evidenceByProblem();
+      const steeringOf = this.humanSteeringBy("problem");
       const rows: ProgressProblemRow[] = (
         this.db.query("SELECT * FROM problems").all() as ProblemRow[]
       )
@@ -3973,6 +4098,7 @@ export class ResearchStore {
             authorType: problem.authorType,
             axisId: problem.axisId,
             axisTitle: scan?.title ?? "",
+            evidence: evidenceOf.get(problem.id) ?? [],
             history: this.problemStateHistory(problem.id),
             id: problem.id,
             lastActivityAt: newestOf(times),
@@ -3985,6 +4111,7 @@ export class ResearchStore {
             state: problem.state,
             stateConfidence: problem.stateConfidence,
             statement: problem.statement,
+            steering: steeringOf.get(problem.id) ?? [],
             topicId: scan?.topicId ?? "",
             topicName: scope.topicRefs.get(scan?.topicId ?? "")?.name ?? "",
           };

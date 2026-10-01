@@ -110,6 +110,25 @@ if (detail.installed !== true) {
   console.log("install-plugin: already installed on this instance");
 }
 
+// Enabling is a separate call, and it is the step that actually creates the organization data store — an
+// installed-but-disabled plugin serves no page. Doing it here is what makes this script live up to its name
+// and to the clean-instance recipe: on a fresh instance, `install` alone leaves the plugin disabled.
+if (detail.lifecycleState !== "enabled") {
+  // The lifecycle endpoints are revision-guarded: enabling without naming the revision you read is refused
+  // with `stale_revision`, which is the same optimistic-concurrency rule the action surface uses.
+  const body = detail.revision === undefined ? {} : { expectedRevision: detail.revision };
+  const enable = await call(`/v1/plugins/${PLUGIN_ID}/enable`, body, headers);
+  const state = enable.body?.lifecycleState ?? enable.body?.enable?.lifecycleState;
+  if (enable.status !== 200 || !state) {
+    console.error(
+      `install-plugin: enable refused (HTTP ${enable.status}) ${JSON.stringify(enable.body).slice(0, 300)}`
+    );
+    process.exit(1);
+  }
+  console.log(`install-plugin: enabled — lifecycleState ${state}`);
+  detail = (await call(`/v1/plugins/${PLUGIN_ID}`, undefined, headers)).body ?? {};
+}
+
 console.log(
   `install-plugin: installed=${detail.installed} lifecycleState=${detail.lifecycleState} ` +
     `version=${detail.selectedVersion ?? "?"} revision=${detail.revision ?? "?"}`

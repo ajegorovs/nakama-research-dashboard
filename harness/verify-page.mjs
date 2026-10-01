@@ -30,6 +30,13 @@ const { chromium } = await import(playwrightCore);
 
 const DASHBOARD = process.env.NAKAMA_DASHBOARD ?? "http://127.0.0.1:3003";
 const PLUGIN_ID = process.env.NAKAMA_PLUGIN_ID ?? "research-dashboard";
+/**
+ * A string from the fixture that the page must **not** render as human steering: Fixture E puts an ordinary
+ * note on the same problem as its steering claim. Kept in step with `apply-layout-fixture.mjs`'s
+ * `FIXTURE_E_NOTE` by that comment — both are fixture data, and what is being checked is the page, not the
+ * sentence.
+ */
+const FIXTURE_NOTE_PREFIX = "Fixture E evidence link:";
 // A chromium must be present, but pinning one build number makes the pass fail on any machine that
 // installed a different one. PLAYWRIGHT_CHROMIUM wins; otherwise take the newest cached build.
 const cachedChromium = () => {
@@ -1201,7 +1208,25 @@ const allProgress = await apiProgress(windowDaysNow);
 const top = await readTop();
 const activeRow = top.indexRows.find((row) => row.active) ?? null;
 const first = allProgress?.axes?.axes?.[0] ?? null;
-const firstProblems = first ? projectionFor(allProgress, first.id) : null;
+
+const selectAxis = async (axisId) => {
+  await root.locator(`[data-rd-index-axis="${axisId}"]`).click();
+  await page
+    .waitForFunction(
+      (wanted) =>
+        document
+          .querySelector('div[data-plugin-id="research-dashboard"] .rd-progress-problem')
+          ?.getAttribute("data-rd-progress-problem-axis") === wanted,
+      axisId,
+      { timeout: 10000 }
+    )
+    .catch(() => {});
+  await page.waitForTimeout(200);
+};
+
+// The projection for the axis the page opens on, used by the Activity-feed check below (that check *is* about
+// the default selection, so it keys on `axes[0]` on purpose — unlike the Problem-column check).
+const firstProjection = first ? projectionFor(allProgress, first.id) : null;
 
 // The composition itself: three regions on one row, in the contract's order, each with a real box.
 {
@@ -1229,19 +1254,39 @@ check(
 
 // The Problem column: the projection's count in the heading, and the first *open* problem in the
 // projection's order on screen. No recency ranking, no activity-count ranking, no repository ranking.
-if (firstProblems && firstProblems.open.length > 0) {
+//
+// The axis is the one **with** open problems, chosen from the projection — not `axes[0]`. The projection orders
+// axes by recency and a fixture re-application writes them all inside one millisecond, so `axes[0]` can be an
+// axis with no problems at all; keying this check on it made the check skip on a dataset that does have
+// problems (see `U4-progress.md` §13). The check then puts the selection back where the page started.
+const problemAxis =
+  (allProgress?.axes?.axes ?? [])
+    .map((axis) => ({
+      axis,
+      rows: (allProgress.problems?.problems ?? []).filter(
+        (problem) => problem.axisId === axis.id && problem.state === "open"
+      ),
+    }))
+    .sort((a, b) => b.rows.length - a.rows.length)[0] ?? null;
+if (problemAxis && problemAxis.rows.length > 0) {
+  await selectAxis(problemAxis.axis.id);
+  const onAxis = await readTop();
   check(
     "the Problem column shows the projection's first open problem, under the projection's own count",
-    top.problem.heading === `Open problems (${firstProblems.axis.openProblems})` &&
-      top.problem.open === firstProblems.axis.openProblems &&
-      top.problem.shown === firstProblems.open[0]?.id &&
-      top.problem.statement === (firstProblems.open[0]?.statement ?? "").trim(),
-    `heading "${top.problem.heading}" (projection ${firstProblems.axis.openProblems}), shown ${top.problem.shown?.slice(0, 8) ?? "none"} vs first open ${firstProblems.open[0]?.id?.slice(0, 8) ?? "none"}`
+    onAxis.problem.heading === `Open problems (${problemAxis.axis.openProblems})` &&
+      onAxis.problem.open === problemAxis.axis.openProblems &&
+      onAxis.problem.shown === problemAxis.rows[0]?.id &&
+      onAxis.problem.statement === (problemAxis.rows[0]?.statement ?? "").trim(),
+    `axis "${problemAxis.axis.title.slice(0, 34)}": heading "${onAxis.problem.heading}" (projection ${problemAxis.axis.openProblems}), shown ${onAxis.problem.shown?.slice(0, 8) ?? "none"} vs first open ${problemAxis.rows[0]?.id?.slice(0, 8) ?? "none"}`
   );
+  if (first) {
+    await selectAxis(first.id);
+  }
 } else {
-  skip(
+  check(
     "the Problem column shows the projection's first open problem, under the projection's own count",
-    "this dataset's first axis has no open problem, so there is nothing to compare"
+    false,
+    "no axis in this dataset has an open problem, so this pass cannot exercise the Problem column"
   );
 }
 
@@ -1251,7 +1296,7 @@ if (firstProblems && firstProblems.open.length > 0) {
 
 // The Activity feed: the projection's bucket for this axis, same count, same rows, same order.
 {
-  const bucket = firstProblems?.bucket ?? null;
+  const bucket = firstProjection?.bucket ?? null;
   const rows = top.feed.rows;
   const expected = bucket?.events ?? [];
   const aligned =
@@ -1348,20 +1393,8 @@ const readPlan = () =>
       y: box ? Math.round(box.top) : null,
     };
   });
-const selectAxis = async (axisId) => {
-  await root.locator(`[data-rd-index-axis="${axisId}"]`).click();
-  await page
-    .waitForFunction(
-      (wanted) =>
-        document
-          .querySelector('div[data-plugin-id="research-dashboard"] .rd-progress-problem')
-          ?.getAttribute("data-rd-progress-problem-axis") === wanted,
-      axisId,
-      { timeout: 10000 }
-    )
-    .catch(() => {});
-  await page.waitForTimeout(200);
-};
+// The selectAxis helper is defined above the composition block, because the Problem-column check needs to
+// choose its own subject axis and that block comes first in the file.
 
 const planOf = (result, axisId) =>
   result.axes.axes.find((row) => row.id === axisId)?.plan ?? null;
@@ -1552,9 +1585,24 @@ const planOf = (result, axisId) =>
     );
 
   // (1) Every open problem of the axis is listed, in the projection's order, under the projection's count.
-  await selectAxis(first.id);
+  //
+  // The subject axis is **the one with open problems, chosen from the projection** — not `axes[0]`. The
+  // projection orders axes by recency, and a fixture that writes every axis within the same millisecond leaves
+  // that order tiebroken by title, so "the first axis" is not a stable subject: the pass once asserted about a
+  // plan-less, problem-less axis and reported the absence as a failure. That is the same same-millisecond
+  // property that made an ordering assertion flake in the action suite (see `U4-progress.md` §15).
+  const inventoryAxis = (allProgress.axes.axes ?? [])
+    .map((row) => ({ open: openProblemsOf(row.id).length, row }))
+    .sort((a, b) => b.open - a.open)[0] ?? null;
+  check(
+    "the fixture still carries an axis with open problems to inventory",
+    (inventoryAxis?.open ?? 0) > 0,
+    `${inventoryAxis?.open ?? 0} open problem(s) on "${inventoryAxis?.row?.title ?? "(no axis)"}"`
+  );
+  const inventoryAxisId = inventoryAxis?.row?.id ?? first.id;
+  await selectAxis(inventoryAxisId);
   const inventory = await readInventory();
-  const expectedOpen = openProblemsOf(first.id);
+  const expectedOpen = openProblemsOf(inventoryAxisId);
   const listed = inventory.rows.map((row) => row.id).join("|");
   const wanted = expectedOpen.map((problem) => problem.id).join("|");
   check(
@@ -1605,7 +1653,9 @@ const planOf = (result, axisId) =>
   // (3) The fixture carries a closed-out problem on this axis, and the inventory must not list it. Asserting
   // the fixture's own case first keeps "open problems only" from passing vacuously on a dataset that simply
   // had nothing to leak.
-  const onAxis = (allProgress.problems.problems ?? []).filter((problem) => problem.axisId === first.id);
+  const onAxis = (allProgress.problems.problems ?? []).filter(
+    (problem) => problem.axisId === inventoryAxisId
+  );
   const closedOut = onAxis.filter((problem) => problem.state !== "open");
   check(
     "the fixture still carries a closed-out problem on this axis, so 'open only' can actually fail",
@@ -1642,7 +1692,7 @@ const planOf = (result, axisId) =>
       scopeText.includes(bare.title) && column.problem.axis === bare.id,
       `title ${scopeText.includes(bare.title) ? "present" : "absent"}; column axis ${column.problem.axis?.slice(0, 8) ?? "none"} vs ${bare.id.slice(0, 8)}`
     );
-    await selectAxis(first.id);
+    await selectAxis(inventoryAxisId);
   } else {
     check(
       "the fixture still carries an axis with no open problem, so the empty case is exercised",
@@ -1651,6 +1701,261 @@ const planOf = (result, axisId) =>
     );
   }
 }
+  // ------------------------------- C7f: repository threads, evidence and human steering, and what each excludes
+// Step 5's three supporting sections, plus the EntityTag contract's first executable instance: a repository
+// tag in Progress must land in the Repositories view with that repository selected.
+{
+  const readSupport = () =>
+    page.evaluate(() => {
+      const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+      const repositorySection = scope?.querySelector(".rd-progress-repositories") ?? null;
+      const evidenceSection = scope?.querySelector(".rd-progress-evidence") ?? null;
+      const steeringSection = scope?.querySelector(".rd-progress-steering") ?? null;
+      const claims = (selector) =>
+        [...(steeringSection?.querySelectorAll(`${selector} [data-rd-steering]`) ?? [])].map(
+          (node) => ({
+            kind: (node.querySelector(".rd-source")?.textContent ?? "").trim(),
+            meta: (node.querySelector(".rd-meta")?.textContent ?? "").trim(),
+            text: (node.querySelector(".rd-steering-text")?.textContent ?? "").trim(),
+          })
+        );
+      return {
+        axisScope: claims('[data-rd-steering-scope="axis"]'),
+        evidence: [...(evidenceSection?.querySelectorAll("[data-rd-evidence]") ?? [])].map(
+          (node) => ({
+            date: (node.querySelector(".rd-meta")?.textContent ?? "").trim(),
+            id: node.getAttribute("data-rd-evidence"),
+            source:
+              node.querySelector("[data-rd-evidence-source]")?.getAttribute("data-rd-evidence-source") ??
+              "",
+            text: (node.innerText ?? "").replace(/\s+/g, " ").trim(),
+          })
+        ),
+        evidencePresent: evidenceSection !== null,
+        hasAxisScope: Boolean(steeringSection?.querySelector('[data-rd-steering-scope="axis"]')),
+        hasProblemScope: Boolean(
+          steeringSection?.querySelector('[data-rd-steering-scope="problem"]')
+        ),
+        problemScope: claims('[data-rd-steering-scope="problem"]'),
+        repositories: [...(repositorySection?.querySelectorAll("[data-rd-entity-tag]") ?? [])].map(
+          (node) => ({
+            fullName: (node.textContent ?? "").trim(),
+            id: node.getAttribute("data-rd-entity-id"),
+          })
+        ),
+        repositoriesPresent: repositorySection !== null,
+        steeringPresent: steeringSection !== null,
+        steeringText: (steeringSection?.innerText ?? "").replace(/\s+/g, " ").trim(),
+      };
+    });
+
+  // (1) Repository threads: the problem's own durable relations, in the projection's order, each one a tag —
+  // and nothing is picked out as primary, because the model has no such thing.
+  const withRelations = (allProgress.problems.problems ?? []).find(
+    (problem) => problem.repositories.length > 1
+  );
+  await selectAxis(String(withRelations.axisId));
+  await root.locator(`[data-rd-problem-choice="${withRelations.id}"]`).click();
+  await page.waitForTimeout(300);
+  const support = await readSupport();
+  const repositoryText = support.repositories.map((row) => row.fullName).join("|");
+  const wantedRepositories = withRelations.repositories.map((row) => row.fullName).join("|");
+  // The tag row renders the names and nothing else: no "primary", no rank, no extra label — a marker of that
+  // kind would show up as text the repository names do not account for. Read the tag row rather than the whole
+  // section: `innerText` of the section would include its heading, which is not what this is about.
+  const threadText = await page.evaluate(() =>
+    (
+      document
+        .querySelector('div[data-plugin-id="research-dashboard"] .rd-progress-repositories .rd-tags')
+        ?.innerText ?? ""
+    )
+      .replace(/\s+/g, " ")
+      .trim()
+  );
+  const threadOnlyNames =
+    threadText === withRelations.repositories.map((row) => row.fullName).join(" ");
+  check(
+    "the repository threads are the problem's own relations, in the projection's order, with nothing marked primary",
+    support.repositoriesPresent && repositoryText === wantedRepositories && threadOnlyNames,
+    `${support.repositories.length} tag(s) of ${withRelations.repositories.length}; order ${repositoryText === wantedRepositories ? "matches" : "differs"}; section text ${JSON.stringify(threadText)}`
+  );
+
+  // (2) Evidence: the projection's records, each keeping the source it came from — a source type rendered as
+  // itself, the reference and the summary intact, and the same date that orders the row.
+  const evidenceOrder = support.evidence.map((row) => row.id).join("|");
+  const wantedEvidence = withRelations.evidence.map((row) => row.id).join("|");
+  const sourcesMatch = support.evidence.every(
+    (row, position) => row.source === withRelations.evidence[position]?.sourceType
+  );
+  const provenanceKept = support.evidence.every((row, position) => {
+    const wanted = withRelations.evidence[position];
+    return (
+      row.text.includes(wanted?.sourceRef ?? "\u0000") &&
+      row.text.includes(wanted?.summary ?? "\u0000") &&
+      row.date.includes(wanted?.occurredAt?.slice(0, 10) ?? "\u0000")
+    );
+  });
+  check(
+    "evidence is the projection's records with their provenance: source type, reference, summary and date",
+    support.evidencePresent &&
+      evidenceOrder === wantedEvidence &&
+      sourcesMatch &&
+      provenanceKept,
+    `${support.evidence.length} row(s) of ${withRelations.evidence.length}; sources ${sourcesMatch ? "match" : "differ"}; provenance ${provenanceKept ? "kept" : "lost"}; first source ${support.evidence[0]?.source}`
+  );
+
+  // (3) Human steering: exactly the projection's claims, each under the scope it was aimed at, every one
+  // human-authored — and the axis claim is not copied under the problem that sits beneath it.
+  const wantedProblemClaims = withRelations.steering.map((claim) => claim.text);
+  const wantedAxisClaims = (
+    allProgress.axes.axes.find((row) => row.id === withRelations.axisId)?.steering ?? []
+  ).map((claim) => claim.text);
+  const shownProblemClaims = support.problemScope.map((claim) => claim.text);
+  const shownAxisClaims = support.axisScope.map((claim) => claim.text);
+  const allHuman = [...support.problemScope, ...support.axisScope].every((claim) =>
+    claim.meta.startsWith("human") || claim.meta.includes("human")
+  );
+  check(
+    "human steering is exactly the projection's claims, under the scope each was aimed at",
+    shownProblemClaims.join("|") === wantedProblemClaims.join("|") &&
+      shownAxisClaims.join("|") === wantedAxisClaims.join("|") &&
+      allHuman,
+    `problem scope ${shownProblemClaims.length}/${wantedProblemClaims.length}, axis scope ${shownAxisClaims.length}/${wantedAxisClaims.length}; every claim human-authored ${allHuman}`
+  );
+  check(
+    "an axis-scoped claim stays the axis context — it is not copied under the problem",
+    wantedAxisClaims.length > 0 && !shownProblemClaims.includes(wantedAxisClaims[0]),
+    `axis claims ${wantedAxisClaims.length}; leaked into the problem scope ${shownProblemClaims.includes(wantedAxisClaims[0])}`
+  );
+  check(
+    "an ordinary note on the same problem is context, not steering",
+    !support.steeringText.includes(FIXTURE_NOTE_PREFIX),
+    `steering section ${support.steeringText.includes(FIXTURE_NOTE_PREFIX) ? "shows" : "excludes"} the note`
+  );
+
+  // (4) The three negative cases, on one problem that has none of it — Fixture E's sparse problem is the
+  // subject on purpose: no repositories, no supporting record, no steering of its own. Absence must be silent,
+  // and the shell check is a heading with no rows, which is exactly what "an empty section" would be.
+  const sparse = (allProgress.problems.problems ?? []).find(
+    (problem) =>
+      problem.state === "open" &&
+      problem.repositories.length === 0 &&
+      problem.evidence.length === 0 &&
+      problem.steering.length === 0
+  );
+  if (sparse) {
+    await selectAxis(String(sparse.axisId));
+    // Fail rather than hang if the row is missing: the point of this block is that the section is silent, so a
+    // problem the inventory does not list at all would be a different defect, not a timeout.
+    const selectable = await root.locator(`[data-rd-problem-choice="${sparse.id}"]`).count();
+    check(
+      "the sparse problem is one the inventory can select",
+      selectable === 1,
+      `${selectable} row(s) for open problem ${sparse.id.slice(0, 8)}`
+    );
+    if (selectable === 1) {
+      await root.locator(`[data-rd-problem-choice="${sparse.id}"]`).click();
+      await page.waitForTimeout(300);
+    }
+    const bare = await readSupport();
+    const bareAxis = (allProgress.axes.axes.find((row) => row.id === sparse.axisId)?.steering ?? [])
+      .length;
+    const sectionStates = await page.evaluate(() => {
+      const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+      const read = (selector) => {
+        const section = scope?.querySelector(selector) ?? null;
+        return section
+          ? { rows: section.querySelectorAll("li").length, there: true }
+          : { rows: 0, there: false };
+      };
+      return {
+        evidence: read(".rd-progress-evidence"),
+        repositories: read(".rd-progress-repositories"),
+        steering: read(".rd-progress-steering"),
+      };
+    });
+    // A shell is a heading with nothing under it. Repositories and evidence must not even be present; the
+    // steering section may be — the axis carries a claim — but then it must have a row, and the problem's own
+    // group must be absent either way.
+    const noShells =
+      !sectionStates.repositories.there &&
+      !sectionStates.evidence.there &&
+      (!sectionStates.steering.there || sectionStates.steering.rows > 0);
+    check(
+      "a problem with no repositories, no evidence and no steering renders no shell for any of them",
+      !bare.repositoriesPresent && !bare.evidencePresent && !bare.hasProblemScope && noShells,
+      `repositories ${bare.repositoriesPresent}, evidence ${bare.evidencePresent}, problem scope ${bare.hasProblemScope}; sections ${JSON.stringify(sectionStates)}`
+    );
+    check(
+      "and the steering section follows the data: it is absent unless the axis itself carries a claim",
+      bare.steeringPresent === (bareAxis > 0),
+      `section ${bare.steeringPresent} with ${bareAxis} axis-scoped claim(s)`
+    );
+  } else {
+    check(
+      "the fixture still carries a problem with no repositories, no evidence and no steering",
+      false,
+      "no problem with nothing behind it"
+    );
+  }
+
+  // (5) The EntityTag contract, executable: both repository tags land in the Repositories view with that
+  // repository selected. Both, because one tag could pass by accident while the second never fires.
+  const readRepositorySelection = () =>
+    page.evaluate(() => {
+      const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+      const view = scope?.querySelector('[data-rd-view="repositories"]') ?? null;
+      const rows = [...(view?.querySelectorAll("[data-rd-repository]") ?? [])];
+      return {
+        count: rows.length,
+        present: view !== null,
+        selected: rows
+          .filter((node) => node.getAttribute("aria-pressed") === "true")
+          .map((node) => node.getAttribute("data-rd-repository")),
+      };
+    });
+  const landings = [];
+  for (const [index, repository] of withRelations.repositories.entries()) {
+    await selectAxis(String(withRelations.axisId));
+    await root.locator(`[data-rd-problem-choice="${withRelations.id}"]`).click();
+    await page.waitForTimeout(300);
+    await root
+      .locator(`[data-rd-entity-tag="repository"][data-rd-entity-id="${repository.id}"]`)
+      .click();
+    await page.waitForTimeout(400);
+    landings.push(await readRepositorySelection());
+    if (index < withRelations.repositories.length - 1) {
+      await root.locator('[data-rd-view-option="progress"]').click();
+      await page.waitForTimeout(300);
+    }
+  }
+  check(
+    "each repository tag lands in the Repositories view with that repository selected",
+    landings.length === withRelations.repositories.length &&
+      landings.every(
+        (landing, index) =>
+          landing.present &&
+          landing.selected.length === 1 &&
+          landing.selected[0] === withRelations.repositories[index].fullName
+      ),
+    landings
+      .map((landing, index) => `${landing.selected[0] ?? "none"} (wanted ${withRelations.repositories[index]?.fullName})`)
+      .join("; ")
+  );
+  check(
+    "and the tag wrote nothing: the repository set is the same after navigating",
+    landings.every((landing) => landing.count === landings[0]?.count) && landings[0]?.count > 0,
+    `${landings.map((landing) => landing.count).join(" then ")} repository row(s)`
+  );
+  // Back to Progress, so the checks after this one read the view they describe — and on the problem that
+  // carries all three sections, because the end of the pass is also what the screenshot captures.
+  await root.locator('[data-rd-view-option="progress"]').click();
+  await page.waitForTimeout(300);
+  await selectAxis(String(withRelations.axisId));
+  await root.locator(`[data-rd-problem-choice="${withRelations.id}"]`).click();
+  await page.waitForTimeout(300);
+}
+
   // ------------------------------------------------ C8: no bare state, one vocabulary for the evidence
 // A state is a claim, and the record often holds only an inference. Every rendered state must carry
 // its confidence, and one that is not confirmed must say so where it is read — otherwise the temporal

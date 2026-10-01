@@ -200,7 +200,9 @@ the manifest does not enumerate either.
   since added six (the composition and its selection against the projection) and step 3 five (the optional
   Plan section, its absence, the stored positions, the link both ways and the unordered discriminator), so the
   pass reported **62/0/0**; see `U4-progress.md` §10–§11. Step 4 has since added eight for the open-problem
-  inventory, so the pass reports **69/0/0**; see §12. U3's numbers are
+  inventory, so the pass reported **69/0/0** (see §12); step 5 has added eleven for repository threads, evidence
+  and human steering — including the tag navigation and the negative cases — so the pass now reports
+  **80/0/0**, see §13. U3's numbers are
   kept as U3 measured them.)
 - **Corpus: 43 PASS / 0 FAIL / 7 skip**, unchanged from its committed shape.
 

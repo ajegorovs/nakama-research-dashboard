@@ -23,7 +23,10 @@ with U4's step-2 composition (the three-column Progress layout and its selection
 positions, the plan ↔ problem link both ways, and the unordered-plan discriminator), then eight more with U4's
 step 4 (the open-problem inventory: its membership and order, the active row, selection driving the card, a
 closed-out problem staying out and an axis with none rendering no section) — one check from step 2 went with
-that step's inline list — so the same fixture pass now reports **69**, at both viewports, with nothing failing.
+that step's inline list — and then eleven with U4's step 5 (the three supporting sections: the problem's own
+repositories as tags that both navigate, evidence kept with its source, human steering under separate problem
+and axis scopes, and what none of the three may show — with one guard that the subject axis really has open
+problems), so the same fixture pass now reports **80**, at both viewports, with nothing failing.
 The transcripts in this directory are the record; read a run's own summary line rather than a number in a
 document.)
 

@@ -275,14 +275,16 @@ it is re-runnable without duplicating itself, and it **does not move the counts 
 internally (activities, annotations and plan-step links cannot name a problem created in the same transaction,
 and row ids are server-generated); the applier reads the ids back and does the referencing pass second.
 
-Expected as of U4's step 4: corpus **43 pass · 0 fail · 7 skip** and fixture **69 · 0 · 0**, at
+Expected as of U4's step 5: corpus **43 pass · 0 fail · 7 skip** and fixture **80 · 0 · 0**, at
 both viewports. (Before U1 it was 42 and 49 — U1 added one check, "every axis state the payload carries
 reaches the page as that state", and the `abandoned` fixture axis it needs. U4's step 1 added the Progress
 window check, taking the fixture pass to 51; step 2 added six that compare the three-column composition and
 its selection against `get_progress`'s own answer, taking it to 57; step 3 added five for the optional Plan
 section — its absence, the stored positions, the plan ↔ problem link both ways, and the unordered-plan
 discriminator — taking it to **62**; step 4 added eight for the open-problem inventory and removed the one that
-asserted step 2's inline list, which that column no longer holds — taking it to **69**.) The counts move
+asserted step 2's inline list, which that column no longer holds — taking it to **69**; step 5 added eleven for
+the three supporting sections, the two repository tags that must both navigate, and the cases each section must
+not show, plus one guard that the subject axis is real — taking it to **80**.) The counts move
 whenever a check is added, so read the run's own summary line rather than a number in a document. Each run
 writes its transcript to
 `docs/corpus/verify-read[-<viewport>].txt` or `docs/layout-fixtures/verify-fixture-read-<viewport>.txt`

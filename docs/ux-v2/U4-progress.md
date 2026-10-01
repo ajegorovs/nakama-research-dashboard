@@ -472,7 +472,135 @@ and 0 open. `bun run check` = **0 typecheck · 125 pass · 0 fail · 745 expect(
 the plan, each row carries a chip, its statement and its compact context, the first row is highlighted and the
 card above is the same problem — no clipping.
 
-## 13. What the shared dev instance measured, and the corpus record
+## 13. The three supporting sections (step 5)
+
+Step 5 renders what the reviewer called three different questions — **where implementation is happening**
+(repository threads), **what substantiates the reading** (evidence), and **how a person has constrained the
+automated abstraction** (human steering). They are three sections because they are three questions: merging
+them would produce a link list that answers none of them.
+
+### Repository threads
+
+The source is the selected problem's **durable relations** — the projection's `repositories` array, rendered
+in the projection's order, one `EntityTag` per repository. Nothing is picked out as primary, and that is
+checked by construction: the tag row's `innerText` must be exactly the repository names, so any "primary" or
+rank marker would be text the names do not account for.
+
+**The EntityTag contract is now executable rather than documented.** Clicking a tag navigates to the
+canonical Repository view and selects that repository — the tag names an entity, the app lands on it and
+writes nothing. The check clicks **both** of Fixture E's tags (one tag could pass by accident while the second
+never fires), asserts the landing view and the selected row each time, and asserts the repository set is the
+same afterwards. The parent holds the request as `{id, seq}` rather than a bare id, so a second click on the
+same tag re-applies instead of being swallowed by an unchanged prop.
+
+### Evidence
+
+A problem's supporting records are the events that name it, kept **with their source**: `sourceType`,
+`sourceRef`, `sourceUrl`, `summary`, `occurredAt`. The section shows the source type as a chip, the reference
+and the summary, so a reviewer/experiment/document/PR stays recognisable — the alternative, a link list,
+discards exactly the provenance that makes a record evidence. The same row can appear in the Activity column;
+there it is movement, here it is support, and the two sections are computed from the same store rows rather
+than duplicated in the model.
+
+### Human steering — and what it excludes
+
+`steering` and `interpretation` claims, **human-authored only**, scoped to the object they were aimed at:
+the problem's own claims under `scope="problem"`, the axis's under `scope="axis"`, each group labelled.
+The store filters (author type and kind are model semantics); the page does not re-filter, and it renders the
+author type it is given.
+
+Three exclusions are real, not assumed:
+
+- **An ordinary note is not a claim.** Fixture E puts a note on the same problem as its steering claim; the
+  check asserts the note's text is absent from the steering section.
+- **An agent-authored interpretation is not a human constraint.** Pinned in the action suite, where the case
+  can be created: the seed writes four annotations on one problem — a human steering claim, a human
+  axis-scoped interpretation, an agent-authored interpretation, and a note — and the test asserts the read
+  carries **one** row while the table carries **three** for that problem. The database is the counter-check,
+  so "human only" cannot pass on a dataset that has nothing else.
+- **A claim aimed at the axis is not a claim about each problem under it.** Target specificity is proven live:
+  the fixture's axis-scoped claim renders under `scope="axis"` and the check asserts it does not leak into the
+  problem's group.
+
+**A decision worth recording:** the action surface does **not** accept `authorType` for a new annotation —
+`add_annotation` documents "the author is taken from the session, never from input", and letting a caller
+assert `human` would let an agent launder its own text into the protected class. The agent-authored case is
+therefore testable in-process (where an agent actor is constructible) and not in the fixture, whose session is
+the human seed admin. That is an honest limit of the fixture, not an untested path.
+
+### The negative cases, and how "no shell" is defined
+
+Fixture E's problem with nothing behind it (no repository, no step, no record, no claim) is the subject, and
+the harness picks it from the projection rather than naming it. Two definitions matter:
+
+- **A shell is a heading with no rows.** Repositories and evidence must not be present at all for that
+  problem; the steering section *may* be — the axis carries a claim — but then it must have a row. That
+  distinction is what makes the axis claim a **control**: it shows the section is rendering correctly rather
+  than merely hidden, which is exactly the difference between "no data" and "the feature is broken".
+- **Absence is not reported.** Nothing matching `missing repository|no evidence|none recorded` is added.
+
+### Four checks that failed because the harness was wrong
+
+Recorded because the failures were informative: (1) the sparse-problem selector matched the **resolved**
+problem — which is correctly not selectable, so the click timed out; the predicate now requires
+`state === "open"` and the click is guarded, failing a check instead of hanging the pass. (2) The
+"nothing marked primary" check read the section's `innerText`, which **includes its heading**, so the
+comparison was against text plus heading; it now reads the tag row. (3) The first shell check treated any
+`Human steering` heading as a shell, including one holding the axis claim — which is the correct render; the
+check now asserts a heading must have rows. (4) The inventory block asserted about **`axes[0]`**, and the
+projection orders axes by recency — with every axis written inside the same millisecond by a fixture
+re-application, that order is **tie-broken by title**, so the check asserted about a plan- and problem-less
+axis and reported the absence as a failure (two FAILs, plus a skip). The subject axis is now chosen from the
+projection by "the one with open problems", with a guard check that such an axis exists. This is the *same*
+same-millisecond ordering property that root-caused the `117/1` flake in the action suite (§15) — worth
+noting because it is the second time it has produced a false failure, and the lesson is about **choosing a
+stable subject**, not about the code under test. In all four the page was right and the check was wrong, which
+is why the numbers were worth chasing rather than silencing.
+
+### What step 5 found outside the render
+
+**The fixture was not idempotent for its own events — twice over, and the second layer was the interesting
+one.**
+
+`reconcile_topic` appends; nothing makes an activity unique by text. Two distinct defects followed from that:
+
+1. **The layout pass re-sent its `activities` array on every application.** Repeated applies accumulated
+   duplicates, visible on the page as four identical rows for one event and inflating the V1 counts (the
+   Progress summary read **30 events** where the fixture declares 9). Fixed by filtering the array against
+   what the topic already carries, by the only durable handles the fixture has — an activity's `sourceRef` and
+   a claim's text.
+2. **Fixture E's own linking guards read lists that cannot see the rows they were guarding.** The guard for
+   the linked activity and its evidence record read an **axis-scoped** activity list capped per axis; the
+   guard for the claims read the **topic's** annotations. But these rows are **problem-targeted**: they do not
+   appear in a topic-targeted annotation list at all, and they fall out of a capped axis list once the axis
+   has more items than the cap. So the guard concluded "not there" and wrote them again on every application —
+   the dataset grew to two copies of the evidence, the activity and the claims, which is what showed up as
+   paired rows in the Activity column. The guard now reads **`get_progress`**, the projection the page reads,
+   which is the one read that exposes a problem's own `evidence` and `steering`.
+
+   Fixing that exposed a **read gap worth recording**: no projection exposes a problem's plain *notes* — the
+   projection carries claims, and the topic detail lists notes aimed at the topic or an axis. The fixture's
+   note therefore cannot guard itself by text; it rides on the evidence guard, and the comment in the applier
+   says so. Adding a note field to the projection purely so the fixture can check itself would be the wrong
+   trade, and this is the honest alternative.
+
+**Proven, not asserted.** The fixture is applied **three** times in a row against the same dataset: every
+element reports "already there", and the tables are then read directly — **8 fixture activity rows with 8
+distinct `sourceRef`s** (one each, not sixteen) and the linked problem carrying exactly **2** supporting
+records. The previous, doubled rows on this instance were removed by keeping one row per `sourceRef`/text
+before that run, so the dataset the numbers describe is the one a single application produces.
+
+**`install-plugin.mjs` did not enable the plugin.** Its docstring promises "install and enable", but on a
+fresh instance `install` alone leaves the plugin `disabled`, and the enable call is revision-guarded
+(`{expectedRevision}`; an unnamed or stale revision is refused `409 stale_revision`). The script now enables
+when needed and fails loudly if it cannot. Without it the clean-instance recipe's next step is a page that
+does not load, with a one-line warning as the only clue.
+
+The step-5 numbers were measured on a **rebuilt instance** — fresh data root, plugin installed and enabled,
+the fixture applied once — so the recorded figures describe a dataset a reviewer can reproduce rather than one
+this session accumulated.
+
+## 14. What the shared dev instance measured, and the corpus record
 
 
 Run on the shared dev instance (corpus + fixture + Fixture E), the same pass reports **50 pass · 1 fail · 0
@@ -486,7 +614,7 @@ filter and the expectation describe different origins, so they disagree — the 
 and the **committed corpus record was not overwritten** with a mixed-instance result. A corpus number that a
 reviewer can reproduce needs a corpus-only instance, which is U10's work.
 
-## 14. A pre-existing flake, root-caused
+## 15. A pre-existing flake, root-caused
 
 While running `bun run check` after the render, the U3 action test *"a refusal keeps its kind across the action
 boundary"* failed — and then failed 3 runs in 6. It is not timing in the store: a topic's axes come back

@@ -270,6 +270,8 @@ type ProgressAxisRow = {
   stale: boolean;
   state: AxisState;
   stateConfidence: Confidence;
+  /** Human claims aimed at this axis — the axis context, kept apart from any problem's own steering. */
+  steering: ProgressSteering[];
   title: string;
   topicId: string;
   topicName: string;
@@ -336,6 +338,7 @@ type ProgressProblemRow = {
   activityCount: number;
   authorType: "agent" | "human";
   axisId: string;
+  evidence: ProgressEvidence[];
   id: string;
   people: Array<{ displayName: string; id: string }>;
   /** The step this problem sits on, where it sits on one — the other half of the plan ↔ problem link. */
@@ -346,6 +349,37 @@ type ProgressProblemRow = {
   state: string;
   stateConfidence: Confidence;
   statement: string;
+  steering: ProgressSteering[];
+};
+
+/**
+ * One record that supports the reading on screen, with its source intact: a PR, a document, an experiment
+ * record or a manual note can all be evidence, and the page says which it is rather than turning every one
+ * into the same generic link.
+ */
+type ProgressEvidence = {
+  id: string;
+  label: string;
+  occurredAt: string;
+  sourceRef: string;
+  sourceType: string;
+  sourceUrl: string;
+  summary: string;
+};
+
+/**
+ * A human claim about an axis or a problem — `interpretation` or `steering`, never an ordinary note and never
+ * agent-authored: the store excludes both, and `scope` is what keeps an axis claim out of the problems
+ * beneath it instead of silently attaching it to each.
+ */
+type ProgressSteering = {
+  authorType: string;
+  confidence: Confidence | null;
+  id: string;
+  kind: string;
+  recordedAt: string;
+  scope: "axis" | "problem";
+  text: string;
 };
 
 type Activity = {
@@ -808,6 +842,44 @@ const css = `
   margin: 4px 0 0;
   padding: 0;
 }
+/* The three supporting sections step 5 adds. Same quiet treatment as the plan and the inventory: a rule
+   above, a heading, the rows. */
+[data-plugin-id="research-dashboard"] .rd-progress-repositories,
+[data-plugin-id="research-dashboard"] .rd-progress-evidence,
+[data-plugin-id="research-dashboard"] .rd-progress-steering {
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 4px;
+  padding-top: 10px;
+}
+[data-plugin-id="research-dashboard"] .rd-tags { gap: 6px; }
+/* An entity tag: navigation, not a filter — it reads as a chip because it goes somewhere. */
+[data-plugin-id="research-dashboard"] .rd-tag {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85em;
+  padding: 1px 8px;
+}
+[data-plugin-id="research-dashboard"] .rd-tag:hover { border-color: inherit; opacity: 0.75; }
+[data-plugin-id="research-dashboard"] .rd-evidence,
+[data-plugin-id="research-dashboard"] .rd-steering {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+[data-plugin-id="research-dashboard"] .rd-source {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.85em;
+  padding: 0 6px;
+}
+[data-plugin-id="research-dashboard"] .rd-steering-text { margin: 2px 0 0; }
 [data-plugin-id="research-dashboard"] .rd-index-item[aria-pressed="true"] {
   border-color: var(--border);
   background: var(--muted, rgba(127, 127, 127, 0.1));
@@ -1818,15 +1890,27 @@ export function apply(ctx: Context) {
    * against it or against one of those axes. The same rules as the person view — factual, never scored.
    */
   function RepositoriesView({
+    preselect,
     repositories,
     truncated,
     windowDays,
   }: {
+    preselect: { id: string; seq: number } | null;
     repositories: RepositoryRollup[];
     truncated: boolean;
     windowDays: number;
   }) {
     const [selectedId, setSelectedId] = React.useState<string | null>(null);
+    /**
+     * The EntityTag contract's other half: a tag elsewhere in the app navigates here and *selects*, so the
+     * view has to honour the request rather than only opening. Keyed on `seq` so the same repository asked for
+     * twice still lands, and applied only when a tag asked — a reader's own click is never overridden.
+     */
+    React.useEffect(() => {
+      if (preselect) {
+        setSelectedId(preselect.id);
+      }
+    }, [preselect?.id, preselect?.seq]);
     const selected =
       repositories.find((entry) => entry.repository.id === selectedId) ??
       repositories[0] ??
@@ -1991,12 +2075,14 @@ export function apply(ctx: Context) {
   }
 
   function ProgressView({
+    onOpenEntity,
     people,
     progress,
     repositories,
     timeline,
     windowDays,
   }: {
+    onOpenEntity: (type: "repository", id: string) => void;
     people: PersonRollup[];
     progress: ProgressIndex | null;
     repositories: RepositoryRollup[];
@@ -2089,6 +2175,14 @@ export function apply(ctx: Context) {
     // than letting the list's order read as a sequence the model never asserted.
     const planClaimsOrder =
       axisPlan?.steps.some((step) => step.position !== null) ?? false;
+
+    /**
+     * The steering the sections show: the problem's own claims and the axis's, kept as two lists because they
+     * answer different questions and are rendered under separate labels. The store has already excluded
+     * ordinary notes and agent-authored readings, so nothing is filtered here.
+     */
+    const problemSteering = shownProblem?.steering ?? [];
+    const axisSteering = activeAxis?.steering ?? [];
 
     /** The inventory's compact context for one problem: its repositories, its step, and how alive it is. */
     function problemContext(problem: ProgressProblemRow): string {
@@ -2383,6 +2477,115 @@ export function apply(ctx: Context) {
           </section>
         ) : null}
 
+        {/*
+         * Repository threads — where this problem's implementation is happening. The durable relations the
+         * projection carries, in the projection's order, each an `EntityTag`: it navigates to the canonical
+         * Repository view and selects that repository, and it never filters or mutates anything. Nothing here
+         * picks a "primary" repository, because the model does not have one — an implementation link is not a
+         * parentage.
+         */}
+        {shownProblem && shownProblem.repositories.length > 0 ? (
+          <section
+            className="rd-progress-repositories"
+            data-rd-progress-repositories={shownProblem.repositories.length}
+          >
+            <span className="rd-section">Repository threads</span>
+            <div className="rd-cluster rd-tags">
+              {shownProblem.repositories.map((repository) => (
+                <button
+                  className="rd-tag"
+                  data-rd-entity-id={repository.id}
+                  data-rd-entity-tag="repository"
+                  key={repository.id}
+                  onClick={() => onOpenEntity("repository", repository.id)}
+                  type="button"
+                >
+                  {repository.fullName}
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
+        {/*
+         * Evidence — what substantiates the reading, kept with its source. These are the same rows the
+         * Activity column shows when they fall in the window, and they are here for a different reason: the
+         * feed is chronological movement, this is support for the problem on screen. The source type is
+         * rendered, never flattened into a generic link.
+         */}
+        {shownProblem && shownProblem.evidence.length > 0 ? (
+          <section
+            className="rd-progress-evidence"
+            data-rd-progress-evidence={shownProblem.evidence.length}
+          >
+            <span className="rd-section">Evidence</span>
+            <ul className="rd-evidence">
+              {shownProblem.evidence.map((item) => (
+                <li data-rd-evidence={item.id} key={item.id}>
+                  <div className="rd-cluster">
+                    <span className="rd-source" data-rd-evidence-source={item.sourceType}>
+                      {describeSource(item.sourceType, item.sourceRef)}
+                    </span>
+                    <span className="rd-strong">{item.summary}</span>
+                    <span className="rd-muted">{item.label}</span>
+                  </div>
+                  <span className="rd-meta">
+                    {`${item.occurredAt.slice(0, 10)}${
+                      item.sourceUrl ? ` · ${item.sourceUrl}` : ""
+                    }`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
+        {/*
+         * Human steering — the constraint a person put on the librarian's reading, and nothing else: not an
+         * ordinary note, not an agent's interpretation (the store excludes both before the page sees them).
+         * The two scopes stay apart and each is labelled: a claim aimed at the axis is the axis context, not a
+         * claim about every problem beneath it.
+         */}
+        {problemSteering.length > 0 || axisSteering.length > 0 ? (
+          <section className="rd-progress-steering" data-rd-progress-steering="true">
+            <span className="rd-section">Human steering</span>
+            {problemSteering.length > 0 ? (
+              <ul className="rd-steering" data-rd-steering-scope="problem">
+                {problemSteering.map((claim) => (
+                  <li data-rd-steering={claim.id} key={claim.id}>
+                    <div className="rd-cluster">
+                      <span className="rd-source">{claim.kind}</span>
+                      <span className="rd-meta">
+                        {`${claim.authorType} · ${claim.recordedAt.slice(0, 10)}${
+                          claim.confidence ? ` · ${claim.confidence}` : ""
+                        }`}
+                      </span>
+                    </div>
+                    <p className="rd-steering-text">{claim.text}</p>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {axisSteering.length > 0 ? (
+              <ul className="rd-steering" data-rd-steering-scope="axis">
+                {axisSteering.map((claim) => (
+                  <li data-rd-steering={claim.id} key={claim.id}>
+                    <div className="rd-cluster">
+                      <span className="rd-source">{claim.kind}</span>
+                      <span className="rd-meta">
+                        {`on the axis · ${claim.authorType} · ${claim.recordedAt.slice(0, 10)}${
+                          claim.confidence ? ` · ${claim.confidence}` : ""
+                        }`}
+                      </span>
+                    </div>
+                    <p className="rd-steering-text">{claim.text}</p>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </section>
+        ) : null}
+
         <div className="rd-cluster rd-filters">
           <FilterSelect
             label="Filter by topic"
@@ -2543,6 +2746,26 @@ export function apply(ctx: Context) {
   function ResearchPage() {
     const [overview, setOverview] = React.useState<Overview | null>(null);
     const [view, setView] = React.useState<ViewName>("topics");
+    /**
+     * The entity a cross-view tag asked for, and how many times it has asked. `seq` is what makes a second
+     * click on the same tag land again after the reader selected something else by hand — without it the
+     * request would look unchanged and the effect that applies it would not run.
+     */
+    const [entityTarget, setEntityTarget] = React.useState<{
+      id: string;
+      seq: number;
+      type: "repository";
+    } | null>(null);
+    /**
+     * The EntityTag contract, in one place: a tag names an entity, the app navigates to that entity's canonical
+     * view and selects it. It is not a filter and it writes nothing — the repository view's own selection is
+     * the only state it touches.
+     */
+    function openEntity(type: "repository", id: string): void {
+      setEntityTarget({ id, seq: (entityTarget?.seq ?? 0) + 1, type });
+      setView(type === "repository" ? "repositories" : "topics");
+    }
+
     const [windowDays, setWindowDays] = React.useState(14);
     const [includeArchived, setIncludeArchived] = React.useState(false);
     const [expandedId, setExpandedId] = React.useState<string | null>(null);
@@ -3397,6 +3620,7 @@ export function apply(ctx: Context) {
 
         {view === "repositories" ? (
           <RepositoriesView
+            preselect={entityTarget?.type === "repository" ? entityTarget : null}
             repositories={overview?.repositories ?? []}
             truncated={overview?.repositoriesTruncated === true}
             windowDays={windowDays}
@@ -3405,6 +3629,7 @@ export function apply(ctx: Context) {
 
         {view === "progress" ? (
           <ProgressView
+            onOpenEntity={openEntity}
             people={overview?.people ?? []}
             progress={progress}
             repositories={overview?.repositories ?? []}

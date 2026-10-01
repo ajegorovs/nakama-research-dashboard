@@ -1407,8 +1407,27 @@ describe("U4 — a mis-targeted claim is a refusal, not a server error", () => {
  * set is pinned so a display-only addition has to be declared here rather than appearing in a component.
  */
 describe("U4 — Progress reads the model as the store computes it", () => {
-  /** One axis carrying every element the Progress view has to render, created through the action route. */
-  async function seedProgress(path: string): Promise<{ problemId: string; stepId: string }> {
+  /**
+   * The four annotation cases the steering read has to separate. The first two must reach the page; the last
+   * two must not, and they exist in the seed so that the exclusion can fail.
+   */
+  const STEERING_PROBLEM_TEXT =
+    "Do not reconcile the two floors by widening the reported spread.";
+  const STEERING_AXIS_TEXT =
+    "Whatever the problem rows say, this axis is only usable with the gap written down.";
+  const AGENT_INTERPRETATION_TEXT =
+    "A reading the librarian inferred: the disagreement is likely a calibration artefact.";
+  const NOTE_TEXT = "A note is context, not a claim.";
+  /**
+   * One axis carrying every element the Progress view has to render, created through the action route.
+   *
+   * `STEERING_PROBLEM_TEXT` / `STEERING_AXIS_TEXT` are the claims the read must produce;
+   * `AGENT_INTERPRETATION_TEXT` and `NOTE_TEXT` are the two it must **not** — an agent's reading is not a
+   * human constraint, and a note is context rather than a claim.
+   */
+  async function seedProgress(
+    path: string
+  ): Promise<{ axisId: string; problemId: string; stepId: string }> {
     const seeded = await call(
       "reconcile_topic",
       {
@@ -1507,8 +1526,85 @@ describe("U4 — Progress reads the model as the store computes it", () => {
       },
       { path }
     );
-    return { problemId, stepId };
+    // The steering read's four cases, in one call: a human claim on the problem and a human claim on the
+    // **axis** (both must appear, each under its own scope), plus an agent-authored interpretation and an
+    // ordinary note (neither may). The last two exist so the exclusions can fail rather than pass vacuously.
+    const annotated = await call(
+      "reconcile_topic",
+      {
+        annotations: [
+          { kind: "steering", problemId, text: STEERING_PROBLEM_TEXT },
+          { axisId, kind: "interpretation", text: STEERING_AXIS_TEXT },
+          {
+            authorType: "agent",
+            kind: "interpretation",
+            problemId,
+            text: AGENT_INTERPRETATION_TEXT,
+          },
+          { kind: "note", problemId, text: NOTE_TEXT },
+        ],
+        topicName: "Progress seed",
+      },
+      { path }
+    );
+    expect(annotated.ok).toBe(true);
+
+    return { axisId, problemId, stepId };
   }
+
+  test("steering is human claims only, each under the scope it was aimed at", async () => {
+    const path = freshDatabase();
+    const { axisId, problemId } = await seedProgress(path);
+
+    const result = await call("get_progress", { activitySinceDays: 7 }, { path });
+    const axes = result.axes as { axes: Array<Record<string, unknown>> };
+    const problems = result.problems as { problems: Array<Record<string, unknown>> };
+    const problemRow = problems.problems.find((row) => row.id === problemId) as {
+      steering: Array<{
+        authorType: string;
+        kind: string;
+        scope: string;
+        text: string;
+      }>;
+    };
+    const axisRow = axes.axes.find((row) => row.id === axisId) as {
+      steering: Array<{ kind: string; scope: string; text: string }>;
+    };
+
+    // What the projections carry: the human claim on the problem, and the human claim on the axis — each
+    // under its own scope, and the axis claim is **not** copied under the problem beneath it.
+    expect(problemRow.steering.map((row) => [row.scope, row.kind, row.authorType])).toEqual([
+      ["problem", "steering", "human"],
+    ]);
+    expect(problemRow.steering[0]?.text).toBe(STEERING_PROBLEM_TEXT);
+    expect(axisRow.steering.map((row) => [row.scope, row.kind])).toEqual([
+      ["axis", "interpretation"],
+    ]);
+    expect(axisRow.steering[0]?.text).toBe(STEERING_AXIS_TEXT);
+    expect(problemRow.steering.some((row) => row.text === STEERING_AXIS_TEXT)).toBe(false);
+
+    // And the counter-check, straight from the database: three annotations name that problem and only one
+    // reaches the read. Without this the exclusions could pass on a seed that never had anything to exclude.
+    const stored = (() => {
+      const db = new Database(path);
+      try {
+        return db
+          .query(
+            "SELECT kind, author_type FROM annotations WHERE problem_id = ? ORDER BY created_at"
+          )
+          .all(problemId) as Array<{ author_type: string; kind: string }>;
+      } finally {
+        db.close();
+      }
+    })();
+    expect(stored.length).toBe(3);
+    expect(stored.map((row) => [row.kind, row.author_type]).sort()).toEqual([
+      ["interpretation", "agent"],
+      ["note", "human"],
+      ["steering", "human"],
+    ]);
+    expect(problemRow.steering.length).toBe(1);
+  });
 
   test("hands over both projections exactly as the store computes them", async () => {
     const path = freshDatabase();
@@ -1648,6 +1744,7 @@ describe("U4 — Progress reads the model as the store computes it", () => {
       "state",
       "stateConfidence",
       "stateHistory",
+      "steering",
       "title",
       "topicId",
       "topicName",
@@ -1667,6 +1764,7 @@ describe("U4 — Progress reads the model as the store computes it", () => {
       "authorType",
       "axisId",
       "axisTitle",
+      "evidence",
       "history",
       "id",
       "lastActivityAt",
@@ -1679,8 +1777,37 @@ describe("U4 — Progress reads the model as the store computes it", () => {
       "state",
       "stateConfidence",
       "statement",
+      "steering",
       "topicId",
       "topicName",
+    ]);
+
+    // The two supporting reads step 5 renders are pinned too: a record keeps its provenance, and a steering
+    // claim keeps the scope it was aimed at.
+    const withEvidence = (
+      problems.problems as unknown as Array<{ evidence: Array<Record<string, unknown>> }>
+    ).find((row) => row.evidence.length > 0);
+    expect(Object.keys(withEvidence?.evidence[0] ?? {}).sort()).toEqual([
+      "id",
+      "label",
+      "occurredAt",
+      "sourceRef",
+      "sourceType",
+      "sourceUrl",
+      "summary",
+    ]);
+    const withSteering = (
+      problems.problems as unknown as Array<{ steering: Array<Record<string, unknown>> }>
+    ).find((row) => row.steering.length > 0);
+    expect(Object.keys(withSteering?.steering[0] ?? {}).sort()).toEqual([
+      "authorId",
+      "authorType",
+      "confidence",
+      "id",
+      "kind",
+      "recordedAt",
+      "scope",
+      "text",
     ]);
 
     // No V1 display vocabulary survives in the payload: the view cannot fall back to the fixed

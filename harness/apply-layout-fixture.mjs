@@ -257,6 +257,11 @@ const FIXTURE_E_UNORDERED_SUMMARY =
 // simply had no resolved problem to leak.
 const FIXTURE_E_RESOLVED =
   "Fixture E: closed out — the second rig's floor was traced to a stale calibration file.";
+// And the axis-scope case: a human claim aimed at the axis, which must appear as the axis context and must
+// **not** be copied under the problems beneath it. (`FIXTURE_E_NOTE` above is the other discriminator: the
+// same problem carries an ordinary note, which the steering section may not show.)
+const FIXTURE_E_AXIS_STEERING =
+  "Fixture E (axis steering): treat this axis as usable, not complete, until both rigs agree.";
 
 /**
  * Fixture E, idempotently. Re-applying the fixture must not pile up duplicates, and problems have no
@@ -435,6 +440,30 @@ async function applyFixtureE(headers) {
     );
   }
 
+  // ---- Fixture E's axis-scoped steering claim -----------------------------------------------------------
+  // The other half of target specificity: a human claim aimed at the **axis**. It must render as the axis
+  // context and must not appear under the problems beneath it, which is only checkable if one exists.
+  const haveAxisSteering = await act("get_topic", { topicName: FIXTURE_E_TOPIC }).then((read) => {
+    const axisRows = read.result.axes ?? [];
+    return axisRows.some((axis) =>
+      (axis.notes ?? []).some((note) => note.text === FIXTURE_E_AXIS_STEERING)
+    );
+  });
+  if (haveAxisSteering) {
+    console.log("fixture E: the axis-scoped steering claim is already there — nothing to create");
+  } else {
+    const claimed = await act("reconcile_topic", {
+      annotations: [{ axisTitle: FIXTURE_E_AXIS, kind: "steering", text: FIXTURE_E_AXIS_STEERING }],
+      topicName: FIXTURE_E_TOPIC,
+    });
+    if (!claimed.ok) {
+      return fail("creating the axis-scoped steering claim", claimed.raw);
+    }
+    console.log(
+      `fixture E: created one axis-scoped human steering claim — ${JSON.stringify(FIXTURE_E_AXIS_STEERING.slice(0, 40))}…`
+    );
+  }
+
   // Re-read, so the ids are the store's own rather than anything assumed from the write.
   const after = await act("get_progress", { activitySinceDays: 0 });
   if (!after.ok) {
@@ -490,13 +519,26 @@ async function applyFixtureE(headers) {
   }
 
   // Call 2 — everything that references a problem by id. Each piece is written only if it is not there.
+  //
+  // The "is it there" reads come from `get_progress`, not from the topic detail or the activity feed, and
+  // that is a correctness point rather than a preference: this problem's own evidence and claims are
+  // **problem-targeted**, so they do not appear in the topic's annotations (targeted at the topic) nor in an
+  // axis-scoped activity list that is capped per axis. Reading those lists made the guard blind to rows the
+  // fixture itself had written — so every application added another copy of its activity, its evidence record
+  // and its claims. The projection the page reads is the one read that shows them.
   const alreadyLinked = (onStep.people ?? []).some((linked) => linked.id === personId);
+  const projection = await act("get_progress", {});
+  if (!projection.ok) {
+    return fail("reading the Progress projections back", projection.raw);
+  }
+  const linkedRow = (projection.result.problems?.problems ?? []).find((row) => row.id === onStep.id) ?? {};
   const annotationTexts = new Set(
-    (topic.result?.annotations ?? []).map((annotation) => annotation.text)
+    (linkedRow.steering ?? []).map((claim) => claim.text).concat(
+      (topic.result?.annotations ?? []).map((annotation) => annotation.text)
+    )
   );
-  const activity = await act("list_activity", { axisId: onStep.axisId, limit: 100, sinceDays: 365 });
   const sourceRefs = new Set(
-    (activity.result?.activities ?? []).map((entry) => entry.sourceRef ?? "")
+    (linkedRow.evidence ?? []).map((item) => item.sourceRef).filter(Boolean)
   );
 
   const link = { topicName: FIXTURE_E_TOPIC };
@@ -529,7 +571,13 @@ async function applyFixtureE(headers) {
     ];
   }
   const missingAnnotations = [
-    { axisTitle: FIXTURE_E_AXIS, kind: "note", problemId: onStep.id, text: FIXTURE_E_NOTE },
+    // The note is problem-targeted, and **no read exposes a problem's plain notes** — the projection carries
+    // claims, not notes, and the topic detail only lists notes aimed at the topic or an axis. So unlike the
+    // others it cannot guard itself by text; it rides on the evidence guard, which the projection does expose.
+    // Without that, a re-apply would silently add a second copy of it.
+    ...(sourceRefs.has(FIXTURE_E_EVIDENCE_REF)
+      ? []
+      : [{ axisTitle: FIXTURE_E_AXIS, kind: "note", problemId: onStep.id, text: FIXTURE_E_NOTE }]),
     // The steering claim names the **problem alone**: a claim kind must sit on exactly one target, and an
     // axis link alongside the problem link is the two-target row the schema refuses. (The note above may
     // carry both, which is how the corpus's own notes are shaped.)
@@ -645,13 +693,70 @@ async function main() {
   console.log(`target: ${BASE}  org: ${orgId}`);
 
   let failures = 0;
+  /**
+   * What a topic already carries, so applying the fixture twice does not double its events.
+   *
+   * `reconcile_topic` appends: nothing in the model makes an activity or an annotation unique by text. The
+   * fixture pack is therefore the layer that has to be idempotent, and it is idempotent by the only durable
+   * handle it has — the `sourceRef` of an activity and the text of a claim. Without this, the fixture's event
+   * counts drift with the number of applies, and a reviewer's numbers differ from ours on the same dataset.
+   */
+  const recorded = new Map();
+  const alreadyRecorded = async (topicName, headers) => {
+    const cached = recorded.get(topicName);
+    if (cached) {
+      return cached;
+    }
+    const { body } = await call(
+      `/v1/plugins/${PLUGIN_ID}/actions/get_topic`,
+      { input: { topicName } },
+      headers
+    );
+    const detail = body?.result ?? {};
+    const refs = new Set();
+    const texts = new Set();
+    for (const axis of detail.axes ?? []) {
+      for (const item of axis.items ?? []) {
+        if (item.sourceRef) {
+          refs.add(item.sourceRef);
+        }
+      }
+      for (const note of axis.notes ?? []) {
+        if (note.text) {
+          texts.add(note.text);
+        }
+      }
+    }
+    // The topic's own log is a different shape from an axis's items — full activities, notes beside it.
+    for (const activity of detail.activity ?? []) {
+      if (activity.sourceRef) {
+        refs.add(activity.sourceRef);
+      }
+    }
+    for (const note of detail.notes ?? []) {
+      if (note.text) {
+        texts.add(note.text);
+      }
+    }
+    const entry = { refs, texts };
+    recorded.set(topicName, entry);
+    return entry;
+  };
   for (const entry of FIXTURE) {
+    const headers = { "x-csrf-token": csrf, "x-org-id": orgId };
+    const seen = await alreadyRecorded(entry.topicName, headers);
+    const activities = (entry.activities ?? []).filter(
+      (row) => !row.sourceRef || !seen.refs.has(row.sourceRef)
+    );
+    const annotations = (entry.annotations ?? []).filter(
+      (row) => !row.text || !seen.texts.has(row.text)
+    );
     const { status, body } = await call(
       `/v1/plugins/${PLUGIN_ID}/actions/reconcile_topic`,
       {
         input: {
-          activities: entry.activities,
-          annotations: entry.annotations,
+          activities,
+          annotations,
           axes: entry.axes,
           people: entry.people,
           repositories: entry.repositories,
