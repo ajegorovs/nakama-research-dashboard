@@ -12,8 +12,8 @@ any view reads them.
 |---|---|---|
 | **U0** Contract, baseline, runnable pass | **done** | `contract/` published verbatim · `BASELINE.md` · the pass moved in-repo and reproduces from a *fresh clone* on a *pristine checkout* (measured below) · PR #1 merged, tagged `pre-ux-v2` · three harness defects found by that run and fixed |
 | **U1** Migration 004 (`usable`, state log, Problems, Plans) | **done** | `migrations/004-ux-v2-model.sql` · design note + truth table in `U1-migration.md` (§3.2, §4, §1a, §1b) · `harness/test-004.mjs`: **79 checks, 0 failed**, including the crash-after-COMMIT re-run · applied to the dev instance by the host's own applier — new generation `g9e344…`, ledger 001–004 · both acceptance passes green afterwards, plus the `abandoned` fixture axis and a check that every state the payload carries renders as itself |
-| **U2** Store writers + read models | **the store layer is complete; not yet wired to anything** | `U2-store.md` (semantics, reviewer-approved) · writers, both Progress projections, the Overview recency projection, one scope builder, one recency/stale derivation and the §11 audit all landed · `bun run check` **111 pass · 0 fail · 596 expect() calls** (was 82 · 0 · 472) · 19 acceptance items covered by named tests · **owed by U3**: nothing here is reachable from an action or a page, and `usable` is still absent from `nakama.plugin.json`'s `axes[].state` enum |
-| **U3** Action surface + skill | **steps 1–9 done; step 10 half-done (corpus re-verified, fixture blocked on a harness defect)** | Steps 1–8 landed: real typechecking (0 diagnostics, both modes), `usable` in the exposed enum, `transitions[]`/`problems[]`/`plans[]` on `reconcile_topic`, a machine-readable `kind` on every refusal, `get_topic` carrying problems/plan/state history, and the skill stating the new semantics + the retention rule. `bun run check` = **0 typecheck · 117 pass · 0 fail · 654 expect()**. Live: release re-minted (`dev.cc3e078d2bb6`, generation unchanged — U3 adds no migration), the transition chain proven through the host's action route, and corpus re-verified at **43 PASS / 0 FAIL / 7 skip**. See `U3-surface.md` |
+| **U2** Store writers + read models | **the store layer is complete; not yet wired to anything** | `U2-store.md` (semantics, reviewer-approved) · writers, both Progress projections, the Overview recency projection, one scope builder, one recency/stale derivation and the §11 audit all landed · `bun run check` **111 pass · 0 fail · 596 expect() calls** (was 82 · 0 · 472) · 19 acceptance items covered by named tests · **owed by U3**: nothing here is reachable from an action or a page, and `usable` is still absent from `nakama.plugin.json`'s `axes[].state` enum → **the action half is delivered in U3** (`transitions[]`/`problems[]`/`plans[]`, `usable` in the enum); the page half is U4+ |
+| **U3** Action surface + skill | **done — steps 1–10** | Steps 1–8: real typechecking (0 diagnostics, both modes), `usable` in the exposed enum, `transitions[]`/`problems[]`/`plans[]` on `reconcile_topic`, a machine-readable `kind` on every refusal, `get_topic` carrying problems/plan/state history, and the skill stating the new semantics + the retention rule. `bun run check` = **0 typecheck · 117 pass · 0 fail · 654 expect()**. Live: release re-minted (`dev.cc3e078d2bb6`, generation unchanged — U3 adds no migration), the **Axis and Problem** lifecycles proven through the host's action route, corpus **43/0/7** and fixture **50/0/0 at both viewports** on an isolated fixture-only instance. See `U3-surface.md` |
 | U4 Five tabs + canonical navigation | not started | — |
 | U5 Overview | not started | — |
 | U6 Topics | not started | — |
@@ -143,9 +143,16 @@ comparing the two tables would otherwise wonder which number to trust.
 
   **The baseline moved on purpose, and the counts are not comparable across it.** Before U3's first commit,
   `bun run check` green meant *bundles + tests pass*. It now means **typechecks + bundles + tests pass**. The
-  test counts (111 · 0 · 596) are unchanged by this: only the meaning of the command grew. Anyone re-running
-  an older number against this tree is running a different check, so `harness/clean-clone-verify.sh` should be
-  read with that in mind until U3 reruns the acceptance passes.
+  counts are only comparable *after* that commit: 111 · 0 · 596 (U2-era, two-part command) → 117 · 0 · 654
+  (U3, three-part command). Anyone re-running an older number against this tree is running a different check.
+
+  U3 also **reran the acceptance passes** (its step 10), so the closing statement above is re-verified:
+  corpus **43 · 0 · 7**, fixture **50 · 0 · 0** at both viewports — the fixture run on an **isolated
+  fixture-only instance**, which is what the two-dataset rule in the README requires. One earlier fixture run
+  on a mixed instance returned 49 · 1 · 0 for the repository-filter check; the cause was the harness deriving
+  its baseline from whatever dataset the instance held (`verify-page.mjs:1104`), not a regression, and the
+  same check passes with fixture values when the fixture has an instance to itself. The harness coupling is
+  still filed for U10 (mixed-instance robustness) but it does **not** block the frozen baseline.
 
   **Reviewer rulings on step 1** (approved): `harness/*.mjs` stays **outside** the strict program — out of
   scope by decision, recorded as a future hardening item naming the four scripts that decide acceptance
@@ -156,6 +163,14 @@ comparing the two tables would otherwise wonder which number to trust.
   `typecheck:host` first and name the host revision it checked against. `@types/react@18` stays pinned, with
   the reason (classic JSX runtime + the global `JSX` namespace the host injects) recorded next to the
   dependency policy in the README so nobody upgrades it casually.
+
+  **One unreproduced test flake, recorded rather than smoothed.** A single `bun run check` during U3's step 10
+  reported 117 pass / 1 fail; the failing name was not captured (only the tail was). It did not reproduce:
+  `bun test src` and `bun run check` were then green twice, and the 50-test concurrency-heavy file that holds
+  the timing-sensitive cases (two-writer lock waits, `SQLITE_BUSY` behaviour) passed three times
+  consecutively. The observed run was competing with an isolated Nakama server, a vite dev server and two
+  Chromium sessions on the same machine, so contention is the likeliest cause. Left as an open observation,
+  not a claim that the suite is stable: if it recurs, capture the check name before assuming the same cause.
 
 ## What a reviewer can usefully do at this point
 

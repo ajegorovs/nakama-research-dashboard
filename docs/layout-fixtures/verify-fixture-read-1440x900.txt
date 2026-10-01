@@ -1,6 +1,6 @@
 # harness/read-pass.sh — read pass · dataset fixture · viewport 1440x900
-# dashboard: http://100.122.4.42:3003
-# generated: 2026-10-01T14:59:52+03:00
+# dashboard: http://127.0.0.1:3005
+# generated: 2026-10-01T16:38:40+03:00
 
 PASS  login — status 200
 corpus: {"axes":6,"blocked":1,"people":2,"repositories":2,"topic":"Layout fixture — crowded card","windowEvents":6}
@@ -22,7 +22,7 @@ PASS  the page still renders after the window change
 PASS  the topic card offers one disclosure control, not two — card buttons ["Read topic","Edit fields"]
 PASS  a card that hides axes states it rather than offering a second way in — note "3 of 6 axes shown · 3 more" (data-rd-hidden-axes=3), 3 rows for 6 axes, 3 hidden
 PASS  reading a card shows every axis it holds — 6 axis rows for 6 axes
-PASS  opening a topic reads it once, in one get_topic call — saw 1: [{"topicId":"7b0a4f37-a39a-4944-8400-fd1ad36c7c3a"}]
+PASS  opening a topic reads it once, in one get_topic call — saw 1: [{"topicId":"1c61255c-e1da-419b-85b1-e3a8f08326eb"}]
 PASS  reading a topic does not open the editor — mode read, editor rendered false
 PASS  the form appears only from Edit fields — mode edit, editor rendered true
 PASS  finishing an edit returns to reading, with the card still open — mode read, editor rendered false
@@ -58,7 +58,7 @@ PASS  a person filter that matches nothing attributable says so, and shows no un
 PASS  leaving the Progress view restores the topic view with no residue — cards 2, progress views 0
 PASS  command palette lists the plugin page
 palette screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/layout-fixtures/screenshots/1440x900/research-dashboard-read-palette.png
-PASS  palette entry navigates to the page — http://100.122.4.42:3003/plugins/research-dashboard
+PASS  palette entry navigates to the page — http://127.0.0.1:3005/plugins/research-dashboard
 screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/layout-fixtures/screenshots/1440x900/research-dashboard-read.png
 console issues after login: []
 

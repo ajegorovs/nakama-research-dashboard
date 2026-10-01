@@ -16,8 +16,8 @@ Status of the reviewer's ten steps:
 | 6 | the human-authored refusal preserved across the boundary | ✅ (and refined — see below) |
 | 7 | structured conflict / no-op / invalid-state / refusal behaviour | ✅ `kind` on every refusal |
 | 8 | the librarian skill, including history retention | ✅ |
-| 9 | re-vendor + live action-level proofs | ✅ release minted; fixture applied live through the action route |
-| 10 | rerun corpus + fixture acceptance | ⏳ corpus re-verified 43/0/7; fixture blocked on the harness's dataset coupling (see below) |
+| 9 | re-vendor + live action-level proofs | ✅ release minted; live Axis *and* Problem lifecycle proofs through the action route |
+| 10 | rerun corpus + fixture acceptance | ✅ corpus 43/0/7; fixture **50/0/0 at both viewports** on an isolated fixture-only instance |
 
 ## What the action surface now accepts
 
@@ -158,26 +158,59 @@ because it logs in as the user without a `profileId` — the same rule the page 
 The fixture axis now carries two extra history rows (out and back); a fixture re-capture needs the fixture
 re-applied first.
 
-**Acceptance passes** — the corpus pass is re-verified at exactly its committed shape: **43 PASS / 0 FAIL /
-7 skip**, byte-identical assertion output, one line per check (`docs/corpus/verify-read.txt`, refreshed).
-That is the "old UI still renders the old dataset with the new code underneath it" check, and it holds.
+**The live Problem lifecycle, action → store → log → read-back** (same route, on the isolated fixture
+instance, after the acceptance run so the capture could not be affected). The output, not a paraphrase:
 
-The **fixture** pass was re-run and came back **49 PASS / 1 FAIL** — and the failure is the harness's own
-known defect, not U3. `verify-page.mjs:1104` asserts `topics[0] === CORPUS.topic`, where `CORPUS` is derived
-from *whatever dataset the instance holds* (line 164 reads it off the page) while the filtered view is
-compared against the real corpus. The two runs produced **character-identical** rendered output — same
-topics, same rails, same `stray []`, same summary — and opposite verdicts, because the fixture run's derived
-baseline was a fixture topic. It only shows up on a **mixed** dataset: applying the layout fixture is
-additive, and the instance was holding the corpus, so the run had both. That is the mixed-dataset coupling
-already docketed for U10 (`verify-page.mjs:1088` was the note); this run locates it precisely.
+```
+create problem: ok=true state=open authorType=human
+  read back: state=open history=[[null,"open","human"]]
 
-Consequently the fixture artifacts from that run were **reverted, not recorded**: a capture from a mixed
-dataset with a failing check must not become the fixture baseline. The committed fixture record
-(**50 PASS / 0 skip**) and its screenshots are untouched. Reproducing it needs a fixture-only instance.
+resolve: ok=true    reopen: ok=true
 
-**Dataset state**: the corpus pass above ran against the corpus dataset *before* the fixture was applied.
-The instance now holds corpus + fixture (the fixture's two topics and three repositories are additive).
-This is the cost of the same coupling, and it is why U10 must fix it rather than work around it.
+read back after both transitions:
+  state:    open
+  history:  [[null,"open","human"],["open","resolved","human"],["resolved","open","human"]]
+  statement unchanged: true
+  authorType still:    human (the text was never rewritten by a transition)
+
+refusals through the same route (each writes nothing):
+  repeat the reopen      kind=no-op          "no-op: the problem is already \"ope…"
+  axis word on a problem kind=invalid-state  "invalid-state: toState must be one of: o…"
+  stale expectedVersion  kind=conflict       "conflict: problem \"Live proof:…"
+  state on an update     kind=invalid-input  "problems[].state applies when crea…"
+
+unchanged by the refusals: state=open history=3 rows, statement unchanged=true
+```
+
+Three things this proves that a store test cannot. The problem lifecycle is reachable **through the host's
+action route**; the bootstrap row, both transitions and the reopen are one append-only sequence with the
+current state — `open` — readable back through `get_topic`; and the refusals arrive at a real HTTP caller
+with their kinds intact while changing nothing. The `invalid-state` line is the vocabulary authority doing
+its job: `usable` is a perfectly valid **axis** state and an invalid **problem** one, which is exactly why
+the manifest does not enumerate either.
+
+**Acceptance passes** — both datasets re-verified, from the isolated-instance recipe the README documents
+("the two datasets must not be mixed. Give each its own instance"):
+
+- **Fixture: 50 PASS / 0 FAIL / 0 skip at both viewports** (1440×900 and 1280×800), on a **fixture-only**
+  instance — a fresh server on `:4400` with its own config dir and its own web dev server, the plugin
+  installed and enabled there, then the fixture applied. The committed transcript *and* screenshots were
+  refreshed from these runs, which is the documented way the record is kept.
+- **Corpus: 43 PASS / 0 FAIL / 7 skip**, unchanged from its committed shape.
+
+The earlier fixture run's 49 PASS / 1 FAIL is now fully explained, and it was the harness's dataset
+coupling rather than anything in U3: `verify-page.mjs:1104` asserts `topics[0] === CORPUS.topic`, where
+`CORPUS` is read off the live page. On a mixed dataset the derived baseline is a fixture topic, so two runs
+with character-identical rendered output got opposite verdicts. On the isolated instance that same check
+passes with fixture values (`topics ["Layout fixture — crowded card"]`, the fixture's own rails) — the proof
+that the failure was composition, not code. **No U10 fix was needed to reproduce the frozen baseline**, only
+the isolation the protocol always required; the U10 item stands on its own merits for making mixed-instance
+verification robust.
+
+Isolation was also worth more than the numbers: on the isolated instance the fixture's people are
+`Fixture Alpha` / `Fixture Zeta` as the fixture intends, whereas on the mixed instance the fixture's
+activity was attributed to the corpus's `ajegorovs` — the same coupling showing up as data, not just as a
+verdict.
 
 ## Not done here
 
