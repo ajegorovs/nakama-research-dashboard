@@ -258,6 +258,24 @@ async function dispatch(
       };
     }
 
+    case "get_progress": {
+      // Both Progress projections from **one scope**. The Axes subview renders the axis index *and* the
+      // open problems behind it, so a single call keeps both halves describing the same window; asking
+      // twice would let them disagree. `activitySinceDays` is a query parameter, never stored state.
+      const options = {
+        activitySinceDays: optionalInt(input.activitySinceDays, "activitySinceDays", 0, 365),
+        includeArchived: input.includeArchived === true,
+        limit: optionalInt(input.limit, "limit", 1, 50),
+      };
+      return {
+        ok: true,
+        // Handed over exactly as the store computes them. Every field the Progress view renders is one of
+        // these projection fields, so the view derives nothing and holds no display-only state of its own.
+        axes: store.progressAxes(options),
+        problems: store.progressProblems(options),
+      };
+    }
+
     case "get_topic": {
       const topic = requireTopic(store, input);
       const includeAnnotations = input.includeAnnotations !== false;

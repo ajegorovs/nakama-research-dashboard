@@ -1288,3 +1288,264 @@ describe("U3 action surface", () => {
     expect(String(unrecorded.error)).toMatch(/send it in `transitions`/);
   });
 });
+
+/**
+ * U4 step 1 — the Progress view's data boundary.
+ *
+ * U4's acceptance criterion is that every visible Progress element traces to a projection/store field or
+ * an explicit contract-derived computation, with no display-only semantics invented in JSX. The action
+ * layer's half of that is this: what the page receives *is* the projection, field for field, and the field
+ * set is pinned so a display-only addition has to be declared here rather than appearing in a component.
+ */
+describe("U4 — Progress reads the model as the store computes it", () => {
+  /** One axis carrying every element the Progress view has to render, created through the action route. */
+  async function seedProgress(path: string): Promise<{ problemId: string; stepId: string }> {
+    const seeded = await call(
+      "reconcile_topic",
+      {
+        axes: [{ title: "Parameter automation" }],
+        plans: [
+          {
+            axisTitle: "Parameter automation",
+            steps: [
+              { position: 0, title: "Reproduce the sweep on a second seed" },
+              { state: "active", title: "Compare against the published floor" },
+            ],
+            summary: "Close the reproducibility gap before the next report.",
+          },
+        ],
+        problems: [
+          {
+            axisTitle: "Parameter automation",
+            repositoryFullNames: ["group/pipeline"],
+            statement: "The loss floor is not reproducible across seeds.",
+          },
+        ],
+        topic: { summary: "Progress reads this axis." },
+        topicName: "Progress seed",
+      },
+      { path }
+    );
+    expect(seeded.ok).toBe(true);
+
+    const axisId = (seeded.axes as Array<{ id: string }>)[0]?.id ?? "";
+    // Record one axis transition. An axis whose state is merely *inferred* has no history row — history
+    // records what was written, and nothing was — so the append-only history only exists from a real
+    // transition, which is also what makes `usable` and the history visible to the Progress view.
+    const transitioned = await call(
+      "reconcile_topic",
+      {
+        topicName: "Progress seed",
+        transitions: [{ axisId, subject: "axis", toState: "usable" }],
+      },
+      { path }
+    );
+    expect(transitioned.ok).toBe(true);
+
+    const problemId = (seeded.problems as Array<{ id: string }>)[0]?.id ?? "";
+    const stepId =
+      (seeded.plans as Array<{ steps: Array<{ id: string }> }>)[0]?.steps[1]?.id ?? "";
+    // Resolve and reopen, so the problem row's history is longer than its creation row.
+    await call(
+      "reconcile_topic",
+      {
+        topicName: "Progress seed",
+        transitions: [{ problemId, subject: "problem", toState: "resolved" }],
+      },
+      { path }
+    );
+    await call(
+      "reconcile_topic",
+      {
+        topicName: "Progress seed",
+        transitions: [{ problemId, subject: "problem", toState: "open" }],
+      },
+      { path }
+    );
+    await call(
+      "record_activity",
+      {
+        axisTitle: "Parameter automation",
+        sourceRef: "PR #7",
+        sourceType: "github_pr",
+        summary: "second-seed sweep reproduced the floor",
+        topicName: "Progress seed",
+      },
+      { path }
+    );
+    return { problemId, stepId };
+  }
+
+  test("hands over both projections exactly as the store computes them", async () => {
+    const path = freshDatabase();
+    await seedProgress(path);
+
+    const options = { activitySinceDays: 0, includeArchived: false, limit: 50 };
+    const result = await call("get_progress", { activitySinceDays: 0 }, { path });
+    const store = new ResearchStore(path);
+
+    expect(result.ok).toBe(true);
+    // Deep equality, not a spot check: if the action added, renamed or reshaped anything, this fails.
+    expect(result.axes).toEqual(store.progressAxes(options));
+    expect(result.problems).toEqual(store.progressProblems(options));
+  });
+
+  test("pins the field set the Progress view may render", async () => {
+    const path = freshDatabase();
+    await seedProgress(path);
+
+    const result = await call("get_progress", {}, { path });
+    const axes = result.axes as { axes: Array<Record<string, unknown>> };
+    const problems = result.problems as { problems: Array<Record<string, unknown>> };
+
+    expect(Object.keys(result).sort()).toEqual(["axes", "ok", "problems"]);
+    expect(Object.keys(axes).sort()).toEqual(["activitySinceDays", "axes", "staleAfterDays"]);
+    expect(Object.keys(problems).sort()).toEqual([
+      "activitySinceDays",
+      "problems",
+      "staleAfterDays",
+    ]);
+
+    // The axis row, as the Progress index renders it: state and its confidence, the stale flag with its
+    // recency, the optional plan with its steps, problem counts, the window count and the append-only history.
+    expect(Object.keys(axes.axes[0] ?? {}).sort()).toEqual([
+      "activityInWindow",
+      "blocker",
+      "blockerConfidence",
+      "id",
+      "lastActivityAt",
+      "openProblems",
+      "plan",
+      "problems",
+      "recencyAt",
+      "stale",
+      "state",
+      "stateConfidence",
+      "stateHistory",
+      "title",
+      "topicId",
+      "topicName",
+    ]);
+    expect(Object.keys((axes.axes[0]?.plan ?? {}) as object).sort()).toEqual([
+      "id",
+      "steps",
+      "stepsDone",
+      "summary",
+    ]);
+
+    // The problem row, read from the problem outwards: parent axis and topic, affected repositories, the
+    // plan step it belongs to, evidence and people, recency, and its own resolution/reopen history.
+    expect(Object.keys(problems.problems[0] ?? {}).sort()).toEqual([
+      "activityCount",
+      "authorId",
+      "authorType",
+      "axisId",
+      "axisTitle",
+      "history",
+      "id",
+      "lastActivityAt",
+      "people",
+      "planStepId",
+      "planStepTitle",
+      "recencyAt",
+      "repositories",
+      "stale",
+      "state",
+      "stateConfidence",
+      "statement",
+      "topicId",
+      "topicName",
+    ]);
+
+    // No V1 display vocabulary survives in the payload: the view cannot fall back to the fixed
+    // scope/approach/progress/nextStep cards the contract retired.
+    for (const forbidden of ["scope", "approach", "progress", "nextStep"]) {
+      expect(Object.keys(axes.axes[0] ?? {})).not.toContain(forbidden);
+    }
+  });
+
+  test("one call, one window — both halves describe the same scope", async () => {
+    const path = freshDatabase();
+    await seedProgress(path);
+
+    const result = await call("get_progress", { activitySinceDays: 7 }, { path });
+    const axes = result.axes as { activitySinceDays: number; staleAfterDays: number };
+    const problems = result.problems as { activitySinceDays: number; staleAfterDays: number };
+
+    expect(axes.activitySinceDays).toBe(7);
+    expect(problems.activitySinceDays).toBe(7);
+    // One stale derivation, shared: the two halves cannot disagree about what "stale" means.
+    expect(axes.staleAfterDays).toBe(problems.staleAfterDays);
+
+    // 0 means all time, and it is a query parameter rather than stored state.
+    const allTime = await call("get_progress", { activitySinceDays: 0 }, { path });
+    expect((allTime.axes as { activitySinceDays: number }).activitySinceDays).toBe(0);
+  });
+
+  test("carries the new model the slice renders, not a derived V1 shape", async () => {
+    const path = freshDatabase();
+    const { problemId, stepId } = await seedProgress(path);
+
+    const result = await call("get_progress", {}, { path });
+    const axes = (result.axes as { axes: Array<Record<string, any>> }).axes;
+    const problems = (result.problems as { problems: Array<Record<string, any>> }).problems;
+
+    const axis = axes[0] ?? {};
+    expect(axis.title).toBe("Parameter automation");
+    expect(axis.state).toBe("usable");
+    expect(axis.problems).toBe(1);
+    expect(axis.openProblems).toBe(1);
+    // One reviewable transition, one row: no bootstrap row was invented, and `usable` is what the axis
+    // now holds. This is the append-only history the Progress view renders.
+    expect(axis.stateHistory.map((entry: { toState: string }) => entry.toState)).toEqual(["usable"]);
+    expect(axis.plan.steps).toHaveLength(2);
+    expect(axis.plan.stepsDone).toBe(0);
+    expect(axis.activityInWindow).toBe(1);
+
+    const problem = problems.find((row) => row.id === problemId) ?? {};
+    expect(problem.state).toBe("open");
+    expect(problem.statement).toBe("The loss floor is not reproducible across seeds.");
+    expect(problem.axisTitle).toBe("Parameter automation");
+    expect(problem.topicName).toBe("Progress seed");
+    expect(problem.planStepTitle).toBeNull();
+    expect(problem.repositories.map((repo: { fullName: string }) => repo.fullName)).toEqual([
+      "group/pipeline",
+    ]);
+    // The history the Problems subview shows: creation, resolution, reopen — in order, append-only.
+    expect(problem.history.map((entry: { toState: string }) => entry.toState)).toEqual([
+      "open",
+      "resolved",
+      "open",
+    ]);
+
+    // The populated half of the same field: a problem *may* sit on a plan step, and the projection carries
+    // the step's title. The null case above is the one the contract requires — a problem stays meaningful
+    // with no plan, no repository and no artifact — so both are pinned rather than assuming the richer one.
+    const linked = await call(
+      "reconcile_topic",
+      {
+        problems: [
+          {
+            axisTitle: "Parameter automation",
+            planStepId: stepId,
+            statement: "The comparison against the published floor has no fixed tolerance.",
+          },
+        ],
+        topicName: "Progress seed",
+      },
+      { path }
+    );
+    expect(linked.ok).toBe(true);
+
+    const after = await call("get_progress", {}, { path });
+    const rows = (after.problems as { problems: Array<Record<string, any>> }).problems;
+    const onStep = rows.find(
+      (row) => row.statement === "The comparison against the published floor has no fixed tolerance."
+    );
+    expect(onStep?.planStepTitle).toBe("Compare against the published floor");
+    expect(onStep?.planStepId).toBe(stepId);
+    expect(onStep?.history.map((entry: { toState: string }) => entry.toState)).toEqual(["open"]);
+    // The axis index counts it without the view counting anything itself.
+    expect((after.axes as { axes: Array<Record<string, any>> }).axes[0]?.openProblems).toBe(2);
+  });
+});

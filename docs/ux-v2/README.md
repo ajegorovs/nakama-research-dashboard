@@ -42,7 +42,7 @@ Each chunk is named by what it delivers, not by a file. `STATUS.md` carries the 
 | **U1** | Migration 004: problems, plans + steps, axis state log, `usable` | `information-architecture.md` §2–3, §6; `interaction-spec.md` §11 |
 | **U2** | Store writers + read models: problem/plan CRUD, the state-transition writer (a no-op refused, human-authored text protected, every write traceable), problem/plan/state-history projections, one stale derivation, overview recency, both Progress subviews — semantics pinned in `U2-store.md` | all of `information-architecture.md`; `interaction-spec.md` §9 |
 | **U3** | Action surface + bundled skill for the new vocabulary (still five agent tools) — what landed, and the two findings from the boundary, in `U3-surface.md` | `information-architecture.md` §3, §6, §9 |
-| **U4** | Five tabs, one route, canonical navigation for all five tag types | `interaction-spec.md` §1–2; `component-contract.md` EntityTag |
+| **U4** | Five tabs, one route, canonical navigation for all five tag types — **as directed, started as a Progress-first vertical slice** (`U4-progress.md`): the axis index, then the Problem + Activity columns, the optional Plan/steps, open problems, repository threads/evidence/steering, the `Axes \| Problems` subview, and only then the shared primitives into the other four tabs | `interaction-spec.md` §1–2; `component-contract.md` EntityTag |
 | **U5** | Overview | `interaction-spec.md` §5 |
 | **U6** | Topics (index + detail) | `interaction-spec.md` §6 |
 | **U7** | Progress (Axes \| Problems; Problem + Activity columns; optional Plan) | `interaction-spec.md` §9–11 |

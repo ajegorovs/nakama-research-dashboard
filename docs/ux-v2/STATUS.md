@@ -13,11 +13,11 @@ any view reads them.
 | **U0** Contract, baseline, runnable pass | **done** | `contract/` published verbatim · `BASELINE.md` · the pass moved in-repo and reproduces from a *fresh clone* on a *pristine checkout* (measured below) · PR #1 merged, tagged `pre-ux-v2` · three harness defects found by that run and fixed |
 | **U1** Migration 004 (`usable`, state log, Problems, Plans) | **done** | `migrations/004-ux-v2-model.sql` · design note + truth table in `U1-migration.md` (§3.2, §4, §1a, §1b) · `harness/test-004.mjs`: **79 checks, 0 failed**, including the crash-after-COMMIT re-run · applied to the dev instance by the host's own applier — new generation `g9e344…`, ledger 001–004 · both acceptance passes green afterwards, plus the `abandoned` fixture axis and a check that every state the payload carries renders as itself |
 | **U2** Store writers + read models | **the store layer is complete; not yet wired to anything** | `U2-store.md` (semantics, reviewer-approved) · writers, both Progress projections, the Overview recency projection, one scope builder, one recency/stale derivation and the §11 audit all landed · `bun run check` **111 pass · 0 fail · 596 expect() calls** (was 82 · 0 · 472) · 19 acceptance items covered by named tests · **owed by U3**: nothing here is reachable from an action or a page, and `usable` is still absent from `nakama.plugin.json`'s `axes[].state` enum → **the action half is delivered in U3** (`transitions[]`/`problems[]`/`plans[]`, `usable` in the enum); the page half is U4+ |
+| **U4** Progress-first vertical slice | **in progress — the data boundary is done; the render is next** | `U4-progress.md`. Finding: `progressAxes`/`progressProblems`/`overviewRecency` existed in the store and **no action exposed them**, so the slice's first half was a read action. `get_progress` returns both Progress projections from one window (read-only, `exposeAsTool: false` — still five tools; host schema validation accepted it on reinstall). Traceability: the payload is deep-equal to the store's own projections, and the field set is pinned (3 · 3 · 16 · 4 · 19 keys + no V1 `scope/approach/progress/nextStep`) so a display-only field must be declared in the test before a component can rely on it. `bun run check` = **0 typecheck · 121 pass · 0 fail · 705 expect()**. Live (`dev.e39055d638ba`, revision 289, generation unchanged): both halves on one window, and the live JSON key set is **byte-for-byte the pinned inventory** — the page can rely on every key. Gap the live read exposed: the dataset has **0 problem rows**, so the Problems subview has nothing to render against until the fixture carries problems |
 | **U3** Action surface + skill | **done — steps 1–10** | Steps 1–8: real typechecking (0 diagnostics, both modes), `usable` in the exposed enum, `transitions[]`/`problems[]`/`plans[]` on `reconcile_topic`, a machine-readable `kind` on every refusal, `get_topic` carrying problems/plan/state history, and the skill stating the new semantics + the retention rule. `bun run check` = **0 typecheck · 117 pass · 0 fail · 654 expect()**. Live: release re-minted (`dev.cc3e078d2bb6`, generation unchanged — U3 adds no migration), the **Axis and Problem** lifecycles proven through the host's action route, corpus **43/0/7** and fixture **50/0/0 at both viewports** on an isolated fixture-only instance. See `U3-surface.md` |
-| U4 Five tabs + canonical navigation | not started | — |
 | U5 Overview | not started | — |
 | U6 Topics | not started | — |
-| U7 Progress | not started | — |
+| U7 Progress | **pulled forward into U4's first vertical slice** (reviewer's reorder: Progress is the only view whose contract depends on the new semantics) | — |
 | U8 People + Repositories | not started | — |
 | U9 Primitives + density | not started | — |
 | U10 Fixtures A–J + new checks | not started | — |
@@ -144,7 +144,8 @@ comparing the two tables would otherwise wonder which number to trust.
   **The baseline moved on purpose, and the counts are not comparable across it.** Before U3's first commit,
   `bun run check` green meant *bundles + tests pass*. It now means **typechecks + bundles + tests pass**. The
   counts are only comparable *after* that commit: 111 · 0 · 596 (U2-era, two-part command) → 117 · 0 · 654
-  (U3, three-part command). Anyone re-running an older number against this tree is running a different check.
+  (U3, three-part command) → **121 · 0 · 705** (U4's Progress data boundary). Anyone re-running an older
+  number against this tree is running a different check.
 
   U3 also **reran the acceptance passes** (its step 10), so the closing statement above is re-verified:
   corpus **43 · 0 · 7**, fixture **50 · 0 · 0** at both viewports — the fixture run on an **isolated

@@ -728,6 +728,34 @@
       }
     },
     {
+      "key": "get_progress",
+      "access": "member",
+      "effect": "read",
+      "entry": "actions/actions.js",
+      "exposeAsTool": false,
+      "description": "The Progress view in one call: the axis index (each axis in attention order with its topic, state, stale flag, plan, problem counts, latest activity and append-only state history) and the problem index (open and resolved problems with their parent axis and topic, affected repositories, evidence, plan step and resolution/reopen history). Both come from one window — `activitySinceDays` — so the two halves cannot disagree. Powers the page's Progress view; not exposed as an agent tool.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "activitySinceDays": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 365
+          },
+          "includeArchived": {
+            "type": "boolean"
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 50
+          }
+        },
+        "required": []
+      }
+    },
+    {
       "key": "list_activity",
       "access": "member",
       "effect": "read",

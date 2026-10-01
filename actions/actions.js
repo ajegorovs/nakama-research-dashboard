@@ -2425,6 +2425,18 @@ async function dispatch(input, context, store) {
         })
       };
     }
+    case "get_progress": {
+      const options = {
+        activitySinceDays: optionalInt(input.activitySinceDays, "activitySinceDays", 0, 365),
+        includeArchived: input.includeArchived === true,
+        limit: optionalInt(input.limit, "limit", 1, 50)
+      };
+      return {
+        ok: true,
+        axes: store.progressAxes(options),
+        problems: store.progressProblems(options)
+      };
+    }
     case "get_topic": {
       const topic = requireTopic(store, input);
       const includeAnnotations = input.includeAnnotations !== false;
