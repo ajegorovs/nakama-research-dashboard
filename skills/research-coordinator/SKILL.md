@@ -5,8 +5,9 @@ include-body-on-match: true
 ---
 
 The dashboard is the shared record: **topics** are the organizational unit, a topic's **development
-axes** are the workstreams running inside it, and activity, annotations, branches and pull requests
-are the *evidence* attached to them. Read it before reconstructing state from chat history.
+axes** are the workstreams running inside it, **problems** are what is in the way of an axis and
+**plans** are what would clear it. Activity, annotations, branches and pull requests are the
+*evidence* attached to them. Read it before reconstructing state from chat history.
 
 Tools (assign them to the profile alongside this skill) — the whole agent surface, five tools:
 
@@ -30,13 +31,50 @@ model call.
 
 How to work:
 
-- Every call returns `{ok: true, ...}`, or `{ok: false, error}` when the input cannot be applied
-  (unknown id, a blank required field, an axis that belongs to another topic). Check `ok` before
-  reading anything else and report the `error` text rather than retrying blindly.
-- `reconcile_topic` applies topic fields, axes, repository and person links, activity and annotations
-  in **one transaction**: either all of it lands or none of it does. Pass everything one conversation
-  established in a single call — do not split a change into several calls, and do not sequence writes
-  yourself.
+- Every call returns `{ok: true, ...}`, or `{ok: false, error, kind}` when the input cannot be applied.
+  Check `ok` before reading anything else. Read `kind` before deciding what to do, and report the `error`
+  text rather than retrying blindly:
+
+  | `kind` | what it means | what to do |
+  |---|---|---|
+  | `conflict` | someone else wrote to the row since you read it | re-read, then decide again with the fresh state |
+  | `no-op` | the record is already in that state | nothing — do **not** retry; say it is already so |
+  | `invalid-state` | that state name does not exist | fix the name; the axis and problem vocabularies differ |
+  | `human-authored` | an agent may not replace words a person wrote | stop and ask the person to edit the text |
+  | `invalid-input` | every other fixable rule (unknown id, blank field, a claim with no evidence) | fix the input and retry |
+
+  A refusal writes nothing at all — no partial update, no history row.
+- `reconcile_topic` applies topic fields, axes, repository and person links, `problems`, `plans` (with
+  their steps) and `transitions` in **one transaction**: either all of it lands or none of it does. Pass
+  everything one conversation established in a single call — do not split a change into several calls,
+  and do not sequence writes yourself.
+- **States are recorded, not typed in.** An axis has one of `active`, `usable`, `draft`, `blocked`,
+  `parked`, `completed`, `abandoned`; a problem is `open` or `resolved`. `usable` is not a softer
+  `completed`: it means the work is operationally relevant and still has acknowledged gaps. To change a
+  state that already exists, send a `transitions` entry (`{subject, toState, …}`) — never a `state` field
+  on the update, which is refused because it would leave the change unrecorded. Every change between two
+  different states is allowed and appended to the history, reopening included; a change that would not
+  change anything is refused as `no-op`. The problem's history keeps what it was, so reopening
+  `open → resolved → open` still shows it was once resolved.
+- **A problem is a real record, not a status note.** Raise one when something is in the way:
+  `problems: [{axisTitle, statement, …}]`. It is meaningful without a repository, a plan step or a single
+  activity — do not attach evidence that does not exist in order to make it look supported, and do not
+  invent a plan for it. Problems are distinct from annotations: an annotation is context or a claim about
+  the record, a problem is work that is in the way. Mark a problem's state with `stateConfidence`, and
+  link the repository it concerns with `repositoryFullNames` when there is one.
+- **A plan is optional.** Send `plans: [{axisTitle, summary, steps: [{title, state}]}]` only when the
+  conversation established one; an axis without a plan is normal. A step's state is `pending`, `active`,
+  `done` or `blocked`.
+- **A state change is not a rewrite.** `statement` (a problem) and `summary` (a plan) are the authored
+  text. If a person wrote or edited it, an agent may not replace it: change the state, the links or a plan
+  step instead, or ask the person. Repeating the text back unchanged while updating the fields around it
+  is allowed — that is how the links get updated, and it does not make the words yours.
+- **History is permanent while its subject exists.** Every recorded state change is kept, and nothing
+  removes a history row: correcting a mistaken transition means recording the next one, not erasing the
+  last. Deleting an axis or a problem takes its history with it, so deletion is destructive cleanup for
+  records that should never have existed — never a way to tidy up a state you did not mean. Nothing in
+  this surface deletes: if a record is wrong, say so, record the corrected state, and let a person decide
+  about deletion.
 - **Read before you infer.** A topic's annotations and corrections are human notes, and they are part of
   the record: read them together with the activity before deciding that an axis is stale, finished or
   blocked. A human annotation outranks your inference — if your reading of the work disagrees with one,

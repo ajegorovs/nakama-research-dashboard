@@ -125,7 +125,26 @@ does not have reported every axis as never stale without a single failure. `tsco
 
 `harness/*.mjs` is deliberately outside the typechecked program: it is operator tooling (replays, page
 verification, install), not shipped plugin code. That is a scope decision, not a suppression — it is stated in
-`tsconfig.json` where the scope is set.
+`tsconfig.json` where the scope is set, and recorded below as a future hardening item rather than left as an
+unexplained gap.
+
+**`@types/react` is pinned to `18` on purpose, and upgrading it is not a drop-in.** `src/ui.tsx` uses the
+classic JSX runtime with the host's `React` as a global (`jsx: "react"` in `tsconfig.json`), and it relies on
+the global `JSX` namespace that `@types/react@18` still declares. Newer versions move JSX into `React.JSX` and
+drop the global, which would turn every element in a 2,800-line page into a `TS7026`. Changing the pin means
+changing the JSX model and the host's injection contract together — a reviewed change, not a version bump.
+
+### Future hardening item: the harness is not typechecked
+
+Recorded by reviewer ruling (U3 step 1) as **out of scope now, not silently excluded**:
+
+> Evaluate `checkJs`, or migrating the critical harness scripts to TypeScript, prioritizing the scripts that
+> determine acceptance evidence — `replay-corpus.mjs` (the dataset), `install-plugin.mjs` (what gets deployed),
+> `verify-page.mjs` (the page assertions), and `test-004.mjs` (the migration proof).
+
+Those four decide what the acceptance numbers mean, so they are the ones where a silent type error would cost
+the most. Pulling them into the same strict contract broadens what a green `bun run check` means, so it should
+be its own reviewed change on its own baseline.
 
 `actions/` and `ui/` are **committed on purpose**: the manifest points at them and a reviewer should be
 able to read what the server actually executes. To confirm they match `src/`, run `bun run build` and

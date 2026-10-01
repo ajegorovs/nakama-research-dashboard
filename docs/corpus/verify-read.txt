@@ -1,6 +1,6 @@
 # harness/read-pass.sh — read pass · dataset corpus · viewport 1440x900
 # dashboard: http://100.122.4.42:3003
-# generated: 2026-10-01T15:01:47+03:00
+# generated: 2026-10-01T16:24:35+03:00
 
 PASS  login — status 200
 corpus: {"axes":3,"blocked":0,"people":1,"repositories":1,"topic":"UDV Echo Process","windowEvents":30}
@@ -16,7 +16,7 @@ PASS  every topic in the payload has one card, carrying its own axes and none of
 PASS  a topic card leads with people and its state counts — ajegorovs on UDV Echo Process; payload states ["2 active","1 completed"]; card counts ["2 active","1 completed"]
 SKIP  the blocked axis shows its blocker text — no axis in this corpus is blocked
 SKIP  a topic with a blocked axis is visually distinct — no axis in this corpus is blocked, so the attention styling has no subject here
-PASS  each topic card reports its recent-activity summary — Recent: 607 events · last activity 2 days ago 
+PASS  each topic card reports its recent-activity summary — Recent: 606 events · last activity 2 days ago 
 PASS  the window control re-issues get_overview with the new window only — {"activitySinceDays":7}
 PASS  the page still renders after the window change
 PASS  the topic card offers one disclosure control, not two — card buttons ["Read topic","Edit fields"]

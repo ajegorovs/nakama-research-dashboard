@@ -13,7 +13,7 @@ any view reads them.
 | **U0** Contract, baseline, runnable pass | **done** | `contract/` published verbatim · `BASELINE.md` · the pass moved in-repo and reproduces from a *fresh clone* on a *pristine checkout* (measured below) · PR #1 merged, tagged `pre-ux-v2` · three harness defects found by that run and fixed |
 | **U1** Migration 004 (`usable`, state log, Problems, Plans) | **done** | `migrations/004-ux-v2-model.sql` · design note + truth table in `U1-migration.md` (§3.2, §4, §1a, §1b) · `harness/test-004.mjs`: **79 checks, 0 failed**, including the crash-after-COMMIT re-run · applied to the dev instance by the host's own applier — new generation `g9e344…`, ledger 001–004 · both acceptance passes green afterwards, plus the `abandoned` fixture axis and a check that every state the payload carries renders as itself |
 | **U2** Store writers + read models | **the store layer is complete; not yet wired to anything** | `U2-store.md` (semantics, reviewer-approved) · writers, both Progress projections, the Overview recency projection, one scope builder, one recency/stale derivation and the §11 audit all landed · `bun run check` **111 pass · 0 fail · 596 expect() calls** (was 82 · 0 · 472) · 19 acceptance items covered by named tests · **owed by U3**: nothing here is reachable from an action or a page, and `usable` is still absent from `nakama.plugin.json`'s `axes[].state` enum |
-| **U3** Action surface + skill | **started — step 1 of 10 (typecheck) is done** | `bun run check` is now `typecheck && build && test`: 3 dev dependencies, a committed `tsconfig.json`, `types/host.d.ts`, and `bun run typecheck:host` for the authoritative run against the real host types. 0 diagnostics over 6 files / ~11,900 lines under `strict`, both modes agreeing. **The meaning of green changed** — see the note on the new baseline below. Steps 2–10 (expose `usable`, the transition writer, Problem/Plan operations, the refusal and conflict semantics through the action boundary, the skill, re-vendor, acceptance reruns) are not started |
+| **U3** Action surface + skill | **steps 1–9 done; step 10 half-done (corpus re-verified, fixture blocked on a harness defect)** | Steps 1–8 landed: real typechecking (0 diagnostics, both modes), `usable` in the exposed enum, `transitions[]`/`problems[]`/`plans[]` on `reconcile_topic`, a machine-readable `kind` on every refusal, `get_topic` carrying problems/plan/state history, and the skill stating the new semantics + the retention rule. `bun run check` = **0 typecheck · 117 pass · 0 fail · 654 expect()**. Live: release re-minted (`dev.cc3e078d2bb6`, generation unchanged — U3 adds no migration), the transition chain proven through the host's action route, and corpus re-verified at **43 PASS / 0 FAIL / 7 skip**. See `U3-surface.md` |
 | U4 Five tabs + canonical navigation | not started | — |
 | U5 Overview | not started | — |
 | U6 Topics | not started | — |
@@ -146,6 +146,16 @@ comparing the two tables would otherwise wonder which number to trust.
   test counts (111 · 0 · 596) are unchanged by this: only the meaning of the command grew. Anyone re-running
   an older number against this tree is running a different check, so `harness/clean-clone-verify.sh` should be
   read with that in mind until U3 reruns the acceptance passes.
+
+  **Reviewer rulings on step 1** (approved): `harness/*.mjs` stays **outside** the strict program — out of
+  scope by decision, recorded as a future hardening item naming the four scripts that decide acceptance
+  evidence (replay, install, page verification, migration proof), and *not* `checkJs` in this step, because
+  it would broaden the baseline again immediately after stabilizing it. `types/host.d.ts` is a **compatibility
+  shim, not the authoritative host API**: `typecheck:host` is the authority, and a disagreement is fixed in the
+  shim, never by bending plugin code to a stale local declaration. Any commit touching that file must run
+  `typecheck:host` first and name the host revision it checked against. `@types/react@18` stays pinned, with
+  the reason (classic JSX runtime + the global `JSX` namespace the host injects) recorded next to the
+  dependency policy in the README so nobody upgrades it casually.
 
 ## What a reviewer can usefully do at this point
 

@@ -17,6 +17,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { run } from "./actions";
+import { ResearchStore } from "./store";
 
 const repoRoot = join(import.meta.dir, "..");
 const manifest = JSON.parse(
@@ -78,6 +79,21 @@ const ALLOWED_SCHEMA_KEYS = new Set([
   "type",
 ]);
 
+/**
+ * ...and the type names it accepts (`ALLOWED_SCHEMA_TYPES`). A `type` outside this set is the same
+ * `unsupported_schema` refusal as an unknown keyword, and it is the easier mistake to make: `"string[]"`
+ * and `"anyOf"` both look reasonable and both make the manifest invalid on install.
+ */
+const ALLOWED_SCHEMA_TYPES = new Set([
+  "array",
+  "boolean",
+  "integer",
+  "null",
+  "number",
+  "object",
+  "string",
+]);
+
 type RunContext = Parameters<typeof run>[1];
 
 function contextFor(
@@ -91,6 +107,8 @@ function contextFor(
     databasePath,
     host: () => Promise.resolve({}),
     orgId: "org-test",
+    // `profileId` is what makes a call a machine's: the host sends it on agent tool calls and not on the
+    // page's own. Omitting it is therefore "a person is doing this", which is what these tests default to.
     ...(options?.profileId ? { profileId: options.profileId } : {}),
   } as unknown as RunContext;
 }
@@ -195,6 +213,14 @@ describe("manifest contract", () => {
       )) {
         if (!ALLOWED_SCHEMA_KEYS.has(key)) {
           offenders.push(`${path}.${key}`);
+        }
+        if (key === "type") {
+          const types = Array.isArray(value) ? value : [value];
+          for (const type of types) {
+            if (typeof type !== "string" || !ALLOWED_SCHEMA_TYPES.has(type)) {
+              offenders.push(`${path}.type=${JSON.stringify(type)}`);
+            }
+          }
         }
         if (key === "properties") {
           for (const [name, child] of Object.entries(
@@ -813,10 +839,452 @@ describe("the shipped skill matches the surface it promises (C9a)", () => {
     }
   });
 
+  test("states the U3 semantics: recorded states, the refusal kinds, and history retention", () => {
+    // What the skill owes an agent that can now move state through the action surface. A skill that
+    // teaches the tool but not the four ways a call can be refused makes the agent guess at retries.
+    for (const phrase of [
+      /States are recorded, not typed in/i,
+      /is not a softer/i, // `usable` is not a softer `completed`
+      /A problem is a real record, not a status note/i,
+      /A plan is optional/i,
+      /A state change is not a rewrite/i,
+      /History is permanent while its subject exists/i,
+      /Deleting an axis or a problem takes its history with it/i,
+    ]) {
+      expect(skill).toMatch(phrase);
+    }
+    // The refusal vocabulary, each kind with what to do about it — the table is the contract.
+    for (const kind of [
+      "conflict",
+      "no-op",
+      "invalid-state",
+      "human-authored",
+      "invalid-input",
+    ]) {
+      expect(skill).toContain(`\`${kind}\``);
+    }
+    // A refusal is not a partial write, and the skill has to say so: otherwise an agent reports a
+    // half-applied update that never happened.
+    expect(skill).toMatch(/A refusal writes nothing at all/i);
+  });
+
   test("promises no GitHub inspection — that is C9b/C11", () => {
     expect(skill).not.toMatch(
       /inspect (the )?(repository|repositories|branch|PR)/i
     );
     expect(skill).not.toMatch(/fetch (the )?(commits|PRs|pull requests)/i);
+  });
+});
+
+/**
+ * U3 — the new semantics through the action boundary, not the store API.
+ *
+ * The store proves its own rules; these prove that the *exposed* path reaches them: a state change made by
+ * an agent lands in the history once and shows up in the projection the page reads, and the four refusals a
+ * caller has to tell apart stay distinct on the way out instead of collapsing into "business error".
+ */
+describe("U3 action surface", () => {
+  function stateLogRows(
+    path: string,
+    column: "axis_id" | "problem_id",
+    id: string
+  ): Array<{ from_state: string | null; to_state: string; origin: string }> {
+    const db = new Database(path);
+    try {
+      return db
+        .query(
+          `SELECT from_state, to_state, origin FROM state_log WHERE ${column} = ? ORDER BY recorded_at, id`
+        )
+        .all(id) as Array<{
+        from_state: string | null;
+        to_state: string;
+        origin: string;
+      }>;
+    } finally {
+      db.close();
+    }
+  }
+
+  async function axisIdOf(path: string, title: string): Promise<string> {
+    const readBack = await call("get_topic", { topicName: "Acquisition Automation" }, { path });
+    const axis = ((readBack.axes ?? []) as Array<{ id: string; title: string }>).find(
+      (candidate) => candidate.title === title
+    );
+    if (!axis) {
+      throw new Error(`axis ${title} is missing from the read-back`);
+    }
+    return axis.id;
+  }
+
+  test("active -> usable via the action: one history row, and the Progress projection reports usable", async () => {
+    const path = freshDatabase();
+    const created = await call(
+      "reconcile_topic",
+      {
+        axes: [
+          {
+            branch: "feat/sweep",
+            state: "active",
+            stateConfidence: "inferred",
+            title: "Parameter automation",
+          },
+        ],
+        topicName: "Acquisition Automation",
+      },
+      { path }
+    );
+    expect(created.ok).toBe(true);
+    const axisId = await axisIdOf(path, "Parameter automation");
+    // An axis created before the log existed carries no bootstrap row — nothing was replaced.
+    expect(stateLogRows(path, "axis_id", axisId)).toEqual([]);
+
+    const transitioned = await call(
+      "reconcile_topic",
+      {
+        topicName: "Acquisition Automation",
+        transitions: [
+          { subject: "axis", axisTitle: "Parameter automation", toState: "usable" },
+        ],
+      },
+      { path }
+    );
+    expect(transitioned.ok).toBe(true);
+    expect(transitioned.transitions as unknown[]).toHaveLength(1);
+
+    const rows = stateLogRows(path, "axis_id", axisId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ from_state: "active", to_state: "usable" });
+
+    const store = new ResearchStore(path);
+    try {
+      const progress = store.progressAxes();
+      const row = progress.axes.find((candidate) => candidate.id === axisId);
+      expect(row?.state).toBe("usable");
+      // One entry, and it records what was replaced. An axis that existed before the log does not get a
+      // fabricated bootstrap row: nothing was replaced, so there is nothing to record.
+      expect(
+        row?.stateHistory.map((entry) => [entry.fromState, entry.toState])
+      ).toEqual([["active", "usable"]]);
+
+      // Recency is independent of state. Backdate the axis's own activity and the same row reports both
+      // facts at once — usable and stale — because stale is a statement about the clock, not a state.
+      const db = new Database(path);
+      try {
+        db.query(
+          "UPDATE development_axes SET updated_at = ? WHERE id = ?"
+        ).run(
+          new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+          axisId
+        );
+      } finally {
+        db.close();
+      }
+      const aged = store.progressAxes().axes.find((candidate) => candidate.id === axisId);
+      expect(aged?.state).toBe("usable");
+      expect(aged?.stale).toBe(true);
+    } finally {
+      store.close();
+    }
+  });
+
+  test("open -> resolved -> open via the action, both transitions preserved", async () => {
+    const path = freshDatabase();
+    const created = await call(
+      "reconcile_topic",
+      {
+        axes: [{ state: "active", stateConfidence: "inferred", title: "Parameter automation" }],
+        problems: [
+          {
+            axisTitle: "Parameter automation",
+            repositoryFullNames: ["group/pipeline"],
+            statement: "The loss floor is not reproducible across seeds.",
+          },
+        ],
+        topicName: "Acquisition Automation",
+      },
+      { path }
+    );
+    expect(created.ok).toBe(true);
+    const problems = created.problems as Array<{ id: string; statement: string; state: string }>;
+    expect(problems).toHaveLength(1);
+    expect(problems[0]?.state).toBe("open");
+
+    const problemId = problems[0]?.id ?? "";
+    const resolved = await call(
+      "reconcile_topic",
+      {
+        topicName: "Acquisition Automation",
+        transitions: [{ problemId, subject: "problem", toState: "resolved" }],
+      },
+      { path }
+    );
+    expect(resolved.ok).toBe(true);
+
+    const reopened = await call(
+      "reconcile_topic",
+      {
+        topicName: "Acquisition Automation",
+        transitions: [{ problemId, subject: "problem", toState: "open" }],
+      },
+      { path }
+    );
+    expect(reopened.ok).toBe(true);
+
+    // Append-only: the bootstrap row that states what it was created as, then both transitions, in order.
+    expect(
+      stateLogRows(path, "problem_id", problemId).map((row) => [
+        row.from_state,
+        row.to_state,
+      ])
+    ).toEqual([
+      [null, "open"],
+      ["open", "resolved"],
+      ["resolved", "open"],
+    ]);
+
+    const store = new ResearchStore(path);
+    try {
+      const row = store.progressProblems().problems.find(
+        (candidate) => candidate.id === problemId
+      );
+      // Reopened is open again, and the history that says it was once resolved is still there.
+      expect(row?.state).toBe("open");
+      expect(row?.history.map((entry) => entry.toState)).toEqual([
+        "open",
+        "resolved",
+        "open",
+      ]);
+    } finally {
+      store.close();
+    }
+
+    // ...and the detail view carries the same facts, so an agent that raised a problem can read it back:
+    // the record, its state, and how its state got there.
+    const detail = await call(
+      "get_topic",
+      { topicName: "Acquisition Automation" },
+      { path }
+    );
+    const axisDetail = (
+      detail.axes as Array<{
+        problems: Array<{
+          history: Array<{ toState: string }>;
+          repositories: Array<{ fullName: string }>;
+          state: string;
+          statement: string;
+        }>;
+      }>
+    )[0];
+    expect(axisDetail?.problems).toHaveLength(1);
+    expect(axisDetail?.problems[0]).toMatchObject({
+      repositories: [{ fullName: "group/pipeline" }],
+      state: "open",
+      statement: "The loss floor is not reproducible across seeds.",
+    });
+    expect(axisDetail?.problems[0]?.history.map((entry) => entry.toState)).toEqual([
+      "open",
+      "resolved",
+      "open",
+    ]);
+  });
+
+  test("a refusal keeps its kind across the action boundary", async () => {
+    const path = freshDatabase();
+    await call(
+      "reconcile_topic",
+      {
+        axes: [
+          { state: "active", stateConfidence: "inferred", title: "Parameter automation" },
+          { state: "draft", stateConfidence: "inferred", title: "Signal explorer" },
+        ],
+        topicName: "Acquisition Automation",
+      },
+      { path }
+    );
+
+    // no-op: the axis is already there. Distinct from a conflict, because retrying changes nothing.
+    const noOp = await call(
+      "reconcile_topic",
+      {
+        topicName: "Acquisition Automation",
+        transitions: [
+          { subject: "axis", axisTitle: "Parameter automation", toState: "active" },
+        ],
+      },
+      { path }
+    );
+    expect(noOp.ok).toBe(false);
+    expect(noOp.kind).toBe("no-op");
+    expect(String(noOp.error)).toStartWith("no-op: ");
+
+    // invalid-state: a name that does not exist. The caller sent the wrong word, not the wrong moment.
+    const invalid = await call(
+      "reconcile_topic",
+      {
+        topicName: "Acquisition Automation",
+        transitions: [
+          { subject: "axis", axisTitle: "Parameter automation", toState: "finished" },
+        ],
+      },
+      { path }
+    );
+    expect(invalid.ok).toBe(false);
+    expect(invalid.kind).toBe("invalid-state");
+    expect(String(invalid.error)).toStartWith("invalid-state:");
+    // ...and the same word is invalid for a problem, whose vocabulary is different. One authority: the
+    // writer, which is why the manifest does not enumerate states for a transition.
+    expect(invalid.kind).not.toBe("no-op");
+
+    // conflict: an expected version that no longer matches. Re-read and retry is meaningful here.
+    const conflicted = await call(
+      "reconcile_topic",
+      {
+        topicName: "Acquisition Automation",
+        transitions: [
+          {
+            expectedVersion: 99,
+            subject: "axis",
+            axisTitle: "Signal explorer",
+            toState: "usable",
+          },
+        ],
+      },
+      { path }
+    );
+    expect(conflicted.ok).toBe(false);
+    expect(conflicted.kind).toBe("conflict");
+    expect(String(conflicted.error)).toStartWith("conflict: ");
+
+    // A refusal writes nothing: the two axes are exactly as they were left.
+    const readBack = await call("get_topic", { topicName: "Acquisition Automation" }, { path });
+    const states = ((readBack.axes ?? []) as Array<{ state: string; title: string }>).map(
+      (axis) => [axis.title, axis.state]
+    );
+    expect(states).toEqual([
+      ["Parameter automation", "active"],
+      ["Signal explorer", "draft"],
+    ]);
+  });
+
+  test("human-authored text is refused through the action, but an unchanged echo is not a rewrite", async () => {
+    const path = freshDatabase();
+    const created = await call(
+      "reconcile_topic",
+      {
+        axes: [{ state: "active", stateConfidence: "inferred", title: "Parameter automation" }],
+        problems: [
+          {
+            axisTitle: "Parameter automation",
+            statement: "The loss floor is not reproducible across seeds.",
+          },
+        ],
+        topicName: "Acquisition Automation",
+      },
+      { path }
+    );
+    const problemId = (created.problems as Array<{ id: string }>)[0]?.id ?? "";
+
+    // A person edits the text. Authorship follows the words.
+    const humanEdit = await call(
+      "reconcile_topic",
+      {
+        problems: [
+          {
+            problemId,
+            statement: "The loss floor moves with the seed, so the reported value is not reproducible.",
+          },
+        ],
+        topicName: "Acquisition Automation",
+      },
+      { path }
+    );
+    expect(humanEdit.ok).toBe(true);
+    expect((humanEdit.problems as Array<{ authorType: string }>)[0]?.authorType).toBe(
+      "human"
+    );
+
+    // An agent may not replace those words.
+    const refused = await call(
+      "reconcile_topic",
+      {
+        problems: [
+          { problemId, statement: "A tidier phrasing of the same finding." },
+        ],
+        topicName: "Acquisition Automation",
+      },
+      { path, profileId: "agent-7" }
+    );
+    expect(refused.ok).toBe(false);
+    expect(refused.kind).toBe("human-authored");
+    expect(String(refused.error)).toStartWith("human-authored:");
+
+    // ...but it may work with them: an echo plus a new link is ordinary work, and the words stay the
+    // person's (an agent repeating them does not acquire them).
+    const linked = await call(
+      "reconcile_topic",
+      {
+        problems: [
+          {
+            problemId,
+            repositoryFullNames: ["group/pipeline"],
+            stateConfidence: "inferred",
+            statement: "The loss floor moves with the seed, so the reported value is not reproducible.",
+          },
+        ],
+        topicName: "Acquisition Automation",
+      },
+      { path, profileId: "agent-7" }
+    );
+    expect(linked.ok).toBe(true);
+    expect((linked.problems as Array<{ authorType: string; statement: string }>)[0]).toMatchObject({
+      authorType: "human",
+      statement:
+        "The loss floor moves with the seed, so the reported value is not reproducible.",
+    });
+  });
+
+  test("plans and steps land through the action, and a state on an update is refused as unrecorded", async () => {
+    const path = freshDatabase();
+    const created = await call(
+      "reconcile_topic",
+      {
+        axes: [{ state: "active", stateConfidence: "inferred", title: "Parameter automation" }],
+        plans: [
+          {
+            axisTitle: "Parameter automation",
+            steps: [
+              { position: 0, title: "Reproduce the sweep on a second seed" },
+              { state: "active", title: "Compare against the published floor" },
+            ],
+            summary: "Close the reproducibility gap before the next report.",
+          },
+        ],
+        problems: [
+          {
+            axisTitle: "Parameter automation",
+            statement: "The loss floor is not reproducible across seeds.",
+          },
+        ],
+        topicName: "Acquisition Automation",
+      },
+      { path }
+    );
+    expect(created.ok).toBe(true);
+    const plans = created.plans as Array<{ id: string; steps: Array<{ state: string }> }>;
+    expect(plans).toHaveLength(1);
+    expect(plans[0]?.steps).toHaveLength(2);
+
+    const problemId = (created.problems as Array<{ id: string }>)[0]?.id ?? "";
+    const unrecorded = await call(
+      "reconcile_topic",
+      {
+        problems: [{ problemId, state: "resolved", statement: "The loss floor is not reproducible across seeds." }],
+        topicName: "Acquisition Automation",
+      },
+      { path, profileId: "agent-7" }
+    );
+    expect(unrecorded.ok).toBe(false);
+    expect(unrecorded.kind).toBe("invalid-input");
+    expect(String(unrecorded.error)).toMatch(/send it in `transitions`/);
   });
 });

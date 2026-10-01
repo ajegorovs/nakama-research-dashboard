@@ -51,11 +51,18 @@ var EVIDENCE_ITEM_LIMIT = 5;
 var DEFAULT_AXIS_HISTORY_LIMIT = 25;
 var MAX_AXIS_HISTORY_LIMIT = 100;
 var BUSY_TIMEOUT_MS = 5000;
-
 class ResearchStoreError extends Error {
+  code;
+  constructor(message, code) {
+    super(message);
+    this.code = code;
+  }
 }
 
 class ResearchStoreConflictError extends ResearchStoreError {
+  constructor(message) {
+    super(message, "conflict");
+  }
 }
 function nowIso() {
   return new Date().toISOString();
@@ -68,6 +75,12 @@ function required(value, field) {
     throw new ResearchStoreError(`${field} is required.`);
   }
   return value.trim();
+}
+function oneOfState(value, allowed, field) {
+  if (typeof value !== "string" || !allowed.includes(value)) {
+    throw new ResearchStoreError(`invalid-state: ${field} must be one of: ${allowed.join(", ")}.`, "invalid-state");
+  }
+  return value;
 }
 function oneOf(value, allowed, field) {
   if (typeof value !== "string" || !allowed.includes(value)) {
@@ -503,6 +516,12 @@ class ResearchStore {
          ORDER BY p.display_name COLLATE NOCASE ASC`).all(axisId);
     return rows.map((row) => ({ ...toPerson(row), role: row.role }));
   }
+  listProblemPeople(problemId) {
+    return this.db.query(`SELECT p.*
+           FROM problem_people l JOIN people p ON p.id = l.person_id
+           WHERE l.problem_id = ?
+           ORDER BY p.display_name COLLATE NOCASE ASC`).all(problemId).map(toPerson);
+  }
   listTopicPeople(topicId) {
     const rows = this.db.query(`SELECT p.*, l.role AS role
          FROM topic_people l JOIN people p ON p.id = l.person_id
@@ -586,7 +605,16 @@ class ResearchStore {
         history: this.listActivity({ axisId: axis.id, limit: historyLimit }),
         notes: this.listAnnotations({ axisId: axis.id, limit: notesLimit }),
         people: this.listAxisPeople(axis.id),
-        repositories: this.listAxisRepositories(axis.id)
+        plan: this.planForAxis(axis.id),
+        problems: this.listProblems(axis.id).map((problem) => ({
+          ...problem,
+          history: this.stateHistory("problem_id", problem.id),
+          people: this.listProblemPeople(problem.id),
+          planStepTitle: problem.planStepId ? this.getPlanStep(problem.planStepId)?.title ?? null : null,
+          repositories: this.listProblemRepositories(problem.id)
+        })),
+        repositories: this.listAxisRepositories(axis.id),
+        stateHistory: this.stateHistory("axis_id", axis.id)
       }));
       const axisCounts = Object.fromEntries(AXIS_STATES.map((state) => [
         state,
@@ -1282,6 +1310,16 @@ class ResearchStore {
     const row = this.db.query("SELECT * FROM plans WHERE id = ?").get(id);
     return row ? toPlan(row) : null;
   }
+  getPlanStep(id) {
+    const row = this.db.query("SELECT * FROM plan_steps WHERE id = ?").get(id);
+    return row ? toPlanStep(row) : null;
+  }
+  listProblemRepositories(problemId) {
+    return this.db.query(`SELECT r.*
+           FROM problem_repositories l JOIN repositories r ON r.id = l.repository_id
+           WHERE l.problem_id = ?
+           ORDER BY r.full_name COLLATE NOCASE ASC`).all(problemId).map(toRepository);
+  }
   planForAxis(axisId) {
     return this.snapshot(() => {
       const plans = this.listPlans(axisId);
@@ -1345,11 +1383,14 @@ class ResearchStore {
       const sets = [];
       const values = [];
       if (input.statement !== undefined) {
-        this.assertTextIsReplaceable(problem.authorType, authorType, "the statement of this problem");
-        sets.push("statement = ?");
-        values.push(required(input.statement, "statement"));
-        sets.push("author_type = ?", "author_id = ?");
-        values.push(authorType, input.authorId ?? problem.authorId);
+        const statement = required(input.statement, "statement");
+        this.assertTextIsReplaceable(problem.authorType, authorType, problem.statement, statement, "the statement of this problem");
+        if (statement !== problem.statement) {
+          sets.push("statement = ?");
+          values.push(statement);
+          sets.push("author_type = ?", "author_id = ?");
+          values.push(authorType, input.authorId ?? problem.authorId);
+        }
       }
       if (input.stateConfidence !== undefined) {
         sets.push("state_confidence = ?");
@@ -1370,6 +1411,9 @@ class ResearchStore {
       if (input.repositoryIds) {
         this.replaceProblemRepositories(problem.id, input.repositoryIds);
       }
+      if (input.repositoryFullNames) {
+        this.replaceProblemRepositories(problem.id, input.repositoryFullNames.map((fullName) => this.upsertRepository({ fullName }).repository.id));
+      }
       if (input.personIds) {
         this.replaceProblemPeople(problem.id, input.personIds);
       }
@@ -1383,11 +1427,11 @@ class ResearchStore {
       if (!problem) {
         throw new ResearchStoreError("Problem not found.");
       }
-      const toState = oneOf(input.toState, PROBLEM_STATES, "toState");
+      const toState = oneOfState(input.toState, PROBLEM_STATES, "toState");
       const origin = oneOf(input.origin, AUTHOR_TYPES, "origin");
       this.assertVersion("problem", problem.statement, problem.version, input.expectedVersion);
       if (problem.state === toState) {
-        throw new ResearchStoreError(`no-op: the problem is already "${toState}" \u2014 nothing was written.`);
+        throw new ResearchStoreError(`no-op: the problem is already "${toState}" \u2014 nothing was written.`, "no-op");
       }
       this.db.query("UPDATE problems SET state = ?, version = version + 1, updated_at = ? WHERE id = ?").run(toState, nowIso(), problem.id);
       const transition = this.insertStateLogEntry({
@@ -1409,11 +1453,11 @@ class ResearchStore {
       if (!axis) {
         throw new ResearchStoreError("Axis not found.");
       }
-      const toState = oneOf(input.toState, AXIS_STATES, "toState");
+      const toState = oneOfState(input.toState, AXIS_STATES, "toState");
       const origin = oneOf(input.origin, AUTHOR_TYPES, "origin");
       this.assertVersion("axis", axis.title, axis.version, input.expectedVersion);
       if (axis.state === toState) {
-        throw new ResearchStoreError(`no-op: the axis is already "${toState}" \u2014 nothing was written.`);
+        throw new ResearchStoreError(`no-op: the axis is already "${toState}" \u2014 nothing was written.`, "no-op");
       }
       const blocker = input.blocker === undefined ? axis.blocker : text(input.blocker);
       this.assertBlockerPresent(toState, blocker);
@@ -1453,8 +1497,11 @@ class ResearchStore {
       const authorType = oneOf(input.authorType, AUTHOR_TYPES, "authorType");
       this.assertVersion("plan", plan.summary, plan.version, input.expectedVersion);
       if (input.summary !== undefined) {
-        this.assertTextIsReplaceable(plan.authorType, authorType, "this plan's summary");
-        this.db.query("UPDATE plans SET summary = ?, author_type = ?, author_id = ?, version = version + 1, updated_at = ? WHERE id = ?").run(required(input.summary, "summary"), authorType, input.authorId ?? plan.authorId, nowIso(), plan.id);
+        const summary = required(input.summary, "summary");
+        this.assertTextIsReplaceable(plan.authorType, authorType, plan.summary, summary, "this plan's summary");
+        if (summary !== plan.summary) {
+          this.db.query("UPDATE plans SET summary = ?, author_type = ?, author_id = ?, version = version + 1, updated_at = ? WHERE id = ?").run(summary, authorType, input.authorId ?? plan.authorId, nowIso(), plan.id);
+        }
       }
       return this.getPlan(plan.id);
     });
@@ -1745,6 +1792,9 @@ class ResearchStore {
         topic: resolved.created
       };
       const touchedAxes = [];
+      const touchedPlans = [];
+      const touchedProblems = [];
+      const recordedTransitions = [];
       const assertedByAxis = new Map;
       const activities = [];
       const annotations = [];
@@ -1818,23 +1868,128 @@ class ResearchStore {
           sourceUrl: text(activityInput.sourceUrl),
           summary: required(activityInput.summary, "summary"),
           topicId: topic.id,
-          problemId: null
+          problemId: activityInput.problemId ?? null
         });
         activities.push(activity.id);
       }
       for (const annotationInput of input.annotations ?? []) {
         const axisId = this.resolveAxisId(topic.id, annotationInput.axisId, annotationInput.axisTitle);
+        const kind = optionalOneOf(annotationInput.kind, ANNOTATION_KINDS, "kind") ?? "note";
         const annotation = this.insertAnnotation({
           authorId: actor.id,
           authorType: annotationInput.authorType ?? (actor.type === "agent" ? "agent" : "human"),
           axisId,
-          confidence: null,
-          kind: "note",
-          problemId: null,
+          confidence: kind === "note" ? null : optionalOneOf(annotationInput.confidence, CONFIDENCES, "confidence") ?? null,
+          kind,
+          problemId: annotationInput.problemId ?? null,
           text: required(annotationInput.text, "text"),
-          topicId: topic.id
+          topicId: kind === "note" ? topic.id : null
         });
         annotations.push(annotation.id);
+      }
+      const authorType = actor.type === "agent" ? "agent" : "human";
+      for (const planInput of input.plans ?? []) {
+        const axisId = this.resolveAxisId(topic.id, planInput.axisId, planInput.axisTitle);
+        if (!axisId) {
+          throw new ResearchStoreError("plans[] need an axisId or axisTitle: a plan belongs to an axis.");
+        }
+        const plan = planInput.planId ? this.updatePlan({
+          authorId: actor.id,
+          authorType,
+          id: planInput.planId,
+          summary: required(planInput.summary, "summary")
+        }) : this.createPlan({
+          authorId: actor.id,
+          authorType,
+          axisId,
+          summary: required(planInput.summary, "summary")
+        });
+        for (const step of planInput.steps ?? []) {
+          if (step.stepId) {
+            this.updatePlanStep({
+              id: step.stepId,
+              position: step.position,
+              state: optionalOneOf(step.state, PLAN_STEP_STATES, "state"),
+              title: required(step.title, "title")
+            });
+          } else {
+            this.createPlanStep({
+              planId: plan.id,
+              position: step.position,
+              state: optionalOneOf(step.state, PLAN_STEP_STATES, "state"),
+              title: required(step.title, "title")
+            });
+          }
+        }
+        touchedPlans.push({
+          ...plan,
+          steps: this.listPlanSteps(plan.id)
+        });
+      }
+      for (const problemInput of input.problems ?? []) {
+        const statement = required(problemInput.statement, "statement");
+        if (problemInput.problemId) {
+          if (problemInput.state !== undefined) {
+            throw new ResearchStoreError("problems[].state applies when creating. To change an existing problem's state, send it in `transitions` so the change is recorded.");
+          }
+          touchedProblems.push(this.updateProblem({
+            authorId: actor.id,
+            authorType,
+            id: problemInput.problemId,
+            personIds: problemInput.personIds,
+            planStepId: problemInput.planStepId,
+            repositoryFullNames: problemInput.repositoryFullNames,
+            statement,
+            stateConfidence: optionalOneOf(problemInput.stateConfidence, CONFIDENCES, "stateConfidence")
+          }));
+          continue;
+        }
+        const axisId = this.resolveAxisId(topic.id, problemInput.axisId, problemInput.axisTitle);
+        if (!axisId) {
+          throw new ResearchStoreError("problems[] need an axisId or axisTitle: a problem is raised against an axis.");
+        }
+        touchedProblems.push(this.createProblem({
+          authorId: actor.id,
+          authorType,
+          axisId,
+          personIds: problemInput.personIds,
+          planStepId: problemInput.planStepId ?? null,
+          repositoryFullNames: problemInput.repositoryFullNames,
+          state: optionalOneOf(problemInput.state, PROBLEM_STATES, "state"),
+          stateConfidence: optionalOneOf(problemInput.stateConfidence, CONFIDENCES, "stateConfidence"),
+          statement
+        }));
+      }
+      for (const transitionInput of input.transitions ?? []) {
+        const observedAt = text(transitionInput.observedAt);
+        if (transitionInput.subject === "problem") {
+          const result = this.transitionProblem({
+            actorId: actor.id,
+            expectedVersion: transitionInput.expectedVersion,
+            id: required(transitionInput.problemId, "problemId"),
+            observedAt,
+            origin: authorType,
+            toState: transitionInput.toState
+          });
+          recordedTransitions.push(result.transition);
+          touchedProblems.push(result.problem);
+          continue;
+        }
+        const axisId = this.resolveAxisId(topic.id, transitionInput.axisId, transitionInput.axisTitle);
+        if (!axisId) {
+          throw new ResearchStoreError("transitions[] with subject 'axis' need an axisId or axisTitle.");
+        }
+        const result = this.transitionAxis({
+          actorId: actor.id,
+          axisId,
+          blocker: text(transitionInput.blocker),
+          expectedVersion: transitionInput.expectedVersion,
+          observedAt,
+          origin: authorType,
+          toState: transitionInput.toState
+        });
+        recordedTransitions.push(result.transition);
+        touchedAxes.push(result.axis);
       }
       for (const axis of touchedAxes) {
         this.assertClaimsAreBacked(axis, assertedByAxis.get(axis.id) ?? NO_CLAIMS);
@@ -1842,8 +1997,11 @@ class ResearchStore {
       return {
         axes: touchedAxes.map((axis) => this.getAxis(axis.id) ?? axis),
         created,
+        plans: touchedPlans,
+        problems: touchedProblems,
         recorded: { activities, annotations },
-        topic: this.getTopic(topic.id)
+        topic: this.getTopic(topic.id),
+        transitions: recordedTransitions
       };
     });
   }
@@ -2013,9 +2171,12 @@ class ResearchStore {
   stateHistory(column, id) {
     return this.db.query(`SELECT * FROM state_log WHERE ${column} = ? ORDER BY recorded_at, rowid`).all(id).map(toStateLogEntry);
   }
-  assertTextIsReplaceable(existing, incoming, what) {
+  assertTextIsReplaceable(existing, incoming, current, next, what) {
+    if (next === current) {
+      return;
+    }
     if (existing === "human" && incoming === "agent") {
-      throw new ResearchStoreError(`human-authored: ${what} was written by a human \u2014 an agent cannot rewrite it. Change the state, the links or a plan step instead, or have the human edit the text.`);
+      throw new ResearchStoreError(`human-authored: ${what} was written by a human \u2014 an agent cannot rewrite it. Change the state, the links or a plan step instead, or have the human edit the text.`, "human-authored");
     }
   }
   assertPlanStepBelongsToAxis(planStepId, axisId) {
@@ -2223,6 +2384,15 @@ function resolveAxis(store, topic, input) {
   }
   return null;
 }
+function refusalKind(error) {
+  if (error instanceof ResearchStoreConflictError) {
+    return "conflict";
+  }
+  if (error instanceof ResearchStoreError && error.code) {
+    return error.code;
+  }
+  return "invalid-input";
+}
 async function run(input, context) {
   if (!context.databasePath) {
     throw new Error("Research dashboard database is unavailable.");
@@ -2232,7 +2402,11 @@ async function run(input, context) {
     return await dispatch(input, context, store);
   } catch (error) {
     if (error instanceof BusinessRuleError || error instanceof ResearchStoreError) {
-      return { error: error.message, ok: false };
+      return {
+        error: error.message,
+        kind: refusalKind(error),
+        ok: false
+      };
     }
     throw error;
   } finally {

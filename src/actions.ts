@@ -40,6 +40,7 @@ import {
   type Axis,
   type ReconcileTopicInput,
   ResearchStore,
+  ResearchStoreConflictError,
   ResearchStoreError,
   SOURCE_TYPES,
   type SourceType,
@@ -189,6 +190,26 @@ function resolveAxis(
   return null;
 }
 
+/**
+ * The refusal vocabulary, carried across the action boundary.
+ *
+ * A caller that gets one generic "business error" back cannot tell a conflict it should re-read from a no-op
+ * it should not retry, or an agent rewriting a human's sentence from a state name that simply does not exist.
+ * The message keeps its prefix for humans; `kind` is the same fact in a form a program can act on.
+ *
+ * `invalid-input` is the honest default for every other caller-fixable rule: it says "your input, not the
+ * world" without inventing a category the store did not name.
+ */
+function refusalKind(error: Error): string {
+  if (error instanceof ResearchStoreConflictError) {
+    return "conflict";
+  }
+  if (error instanceof ResearchStoreError && error.code) {
+    return error.code;
+  }
+  return "invalid-input";
+}
+
 export async function run(input: Input, context: Context): Promise<unknown> {
   if (!context.databasePath) {
     throw new Error("Research dashboard database is unavailable.");
@@ -202,7 +223,11 @@ export async function run(input: Input, context: Context): Promise<unknown> {
       error instanceof BusinessRuleError ||
       error instanceof ResearchStoreError
     ) {
-      return { error: error.message, ok: false };
+      return {
+        error: error.message,
+        kind: refusalKind(error),
+        ok: false,
+      };
     }
     throw error;
   } finally {

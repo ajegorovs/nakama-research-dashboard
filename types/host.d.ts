@@ -9,6 +9,15 @@
  *
  * ## What this is
  *
+ * **A compatibility shim, not the authoritative host API definition.** `bun run typecheck:host` is the
+ * authority whenever a real Nakama checkout is available. If the two ever disagree, this file is wrong: fix
+ * the shim from the host's sources — never bend plugin code to satisfy a stale local declaration, because
+ * that would convert a real incompatibility into a passing check.
+ *
+ * **Acceptance condition for changes to this file:** any commit that modifies `types/host.d.ts` must run
+ * `bun run typecheck:host` against the supported checkout before merge, and say in the commit message which
+ * host revision it was checked against.
+ *
  * The slice of the host API *this plugin actually uses*, derived from the host's own sources
  * (`packages/ui/src/*.tsx`, `packages/core/src/plugins.ts`) rather than invented. Where the host's props are
  * plain React/DOM shapes they are reproduced exactly, by reference to the same helper the host uses

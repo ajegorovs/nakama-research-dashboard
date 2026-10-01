@@ -391,11 +391,42 @@ export const DEFAULT_AXIS_HISTORY_LIMIT = 25;
 export const MAX_AXIS_HISTORY_LIMIT = 100;
 export const BUSY_TIMEOUT_MS = 5000;
 
+/**
+ * Why a write was refused, in a form a program can act on.
+ *
+ * The message is for a human and keeps its prefix; this is the same fact for a caller — an agent that gets
+ * "no-op" should not retry, one that gets "conflict" should re-read and retry, one that gets
+ * "human-authored" must stop and ask a person, and one that gets "invalid-state" sent a state name that does
+ * not exist. Collapsing those into a single "business error" is exactly what makes an agent guess.
+ *
+ * Set only where the distinction matters to a caller; a rule with no useful code reports `invalid-input` at
+ * the action boundary by default.
+ */
+export const STORE_ERROR_CODES = [
+  "conflict",
+  "human-authored",
+  "invalid-state",
+  "no-op",
+] as const;
+
+export type StoreErrorCode = (typeof STORE_ERROR_CODES)[number];
+
 /** A rule the caller can fix by sending different input. */
-export class ResearchStoreError extends Error {}
+export class ResearchStoreError extends Error {
+  readonly code?: StoreErrorCode;
+
+  constructor(message: string, code?: StoreErrorCode) {
+    super(message);
+    this.code = code;
+  }
+}
 
 /** Optimistic-version failure: someone else wrote to the row since the caller read it. */
-export class ResearchStoreConflictError extends ResearchStoreError {}
+export class ResearchStoreConflictError extends ResearchStoreError {
+  constructor(message: string) {
+    super(message, "conflict");
+  }
+}
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -410,6 +441,27 @@ function required(value: unknown, field: string): string {
     throw new ResearchStoreError(`${field} is required.`);
   }
   return value.trim();
+}
+
+/**
+ * The same rule `oneOf` enforces, but for a *state* name — the one vocabulary where the difference between
+ * "that is not a state" and "nothing would change" has to survive to the caller as two different answers.
+ */
+function oneOfState<T extends string>(
+  value: unknown,
+  allowed: readonly T[],
+  field: string
+): T {
+  if (
+    typeof value !== "string" ||
+    !(allowed as readonly string[]).includes(value)
+  ) {
+    throw new ResearchStoreError(
+      `invalid-state: ${field} must be one of: ${allowed.join(", ")}.`,
+      "invalid-state"
+    );
+  }
+  return value as T;
 }
 
 function oneOf<T extends string>(
@@ -780,6 +832,8 @@ export type ReconcileTopicInput = {
     occurredAt?: string;
     axisId?: string;
     axisTitle?: string;
+    /** The problem this event is evidence for. Naming it is enough: the axis and topic are implied. */
+    problemId?: string;
     repositoryFullName?: string;
   }>;
   annotations?: Array<{
@@ -787,6 +841,63 @@ export type ReconcileTopicInput = {
     axisId?: string;
     axisTitle?: string;
     authorType?: "human" | "agent";
+    /**
+     * `note` keeps the historical multi-target shape; `interpretation` and `steering` are claims about the
+     * record and must name exactly one target.
+     */
+    kind?: AnnotationKind;
+    confidence?: Confidence;
+    problemId?: string;
+  }>;
+  /**
+   * Problems raised against an axis — first-class, and meaningful without a repository, a plan step or a
+   * single activity. `problemId` targets an existing problem; without it, `statement` creates one.
+   *
+   * `state` is accepted only when creating. A change to an existing problem's state is a *recorded
+   * transition* (see `transitions`), because the history is the point: the writer refuses a silent overwrite.
+   */
+  problems?: Array<{
+    problemId?: string;
+    statement: string;
+    axisId?: string;
+    axisTitle?: string;
+    state?: ProblemState;
+    stateConfidence?: Confidence;
+    planStepId?: string | null;
+    repositoryFullNames?: string[];
+    personIds?: string[];
+  }>;
+  /**
+   * An axis's plan, optional by design: a problem never invents one, and an axis without a plan is a normal
+   * state of affairs rather than a gap to be filled.
+   */
+  plans?: Array<{
+    planId?: string;
+    axisId?: string;
+    axisTitle?: string;
+    summary: string;
+    steps?: Array<{
+      stepId?: string;
+      title: string;
+      position?: number | null;
+      state?: PlanStepState;
+    }>;
+  }>;
+  /**
+   * Recorded state changes. These are descriptive lifecycle states, not a workflow: every change between two
+   * *different* valid states is allowed and logged, including `abandoned → usable`. A request that would not
+   * change anything is refused rather than written, so the history never carries an event that says nothing.
+   */
+  transitions?: Array<{
+    subject: "axis" | "problem";
+    axisId?: string;
+    axisTitle?: string;
+    problemId?: string;
+    toState: string;
+    observedAt?: string;
+    expectedVersion?: number;
+    /** Required when entering `blocked`, the rule the axis writers already enforce. */
+    blocker?: string;
   }>;
   people?: Array<{
     displayName: string;
@@ -803,9 +914,18 @@ export type ReconcileTopicInput = {
   }>;
 };
 
+/** A plan as a write returns it: the row, plus the steps attached to it now. */
+export type PlanWithSteps = Plan & { steps: PlanStep[] };
+
 export type ReconcileResult = {
   topic: Topic;
   axes: Axis[];
+  /** Problems this call created or updated, with their links and history as the store now holds them. */
+  problems: Problem[];
+  /** Plans this call created or updated, with their steps. */
+  plans: PlanWithSteps[];
+  /** The state-log rows this call wrote, in the order it wrote them. */
+  transitions: StateLogEntry[];
   created: {
     topic: boolean;
     axes: number;
@@ -962,6 +1082,21 @@ export type AxisDetail = Axis & {
   history: Activity[];
   /** Notes on this axis, kept out of `history` on purpose: a correction is not an event. */
   notes: Annotation[];
+  /** The axis's plan and steps, or null — a plan is optional by contract, so absence is ordinary. */
+  plan: { plan: Plan; steps: PlanStep[] } | null;
+  /** What is in the way. Each problem carries its own state history, appended to and never rewritten. */
+  problems: ProblemDetail[];
+  /** The axis's own state history: what it is now, and every state it has been. */
+  stateHistory: StateLogEntry[];
+};
+
+/** A problem as the detail view needs it: the record, its links, and how its state got here. */
+export type ProblemDetail = Problem & {
+  history: StateLogEntry[];
+  planStepTitle: string | null;
+  /** Evidence links, in no hierarchy: a problem concerns these codebases, it does not own them. */
+  repositories: Repository[];
+  people: Person[];
 };
 
 /** One topic in depth, in a single call. */
@@ -1522,6 +1657,20 @@ export class ResearchStore {
     return rows.map((row) => ({ ...toPerson(row), role: row.role }));
   }
 
+  /** The people a problem is linked to. No role: a problem has an owner of its text, not a hierarchy. */
+  listProblemPeople(problemId: string): Person[] {
+    return (
+      this.db
+        .query(
+          `SELECT p.*
+           FROM problem_people l JOIN people p ON p.id = l.person_id
+           WHERE l.problem_id = ?
+           ORDER BY p.display_name COLLATE NOCASE ASC`
+        )
+        .all(problemId) as PersonRow[]
+    ).map(toPerson);
+  }
+
   listTopicPeople(topicId: string): LinkedPerson[] {
     const rows = this.db
       .query(
@@ -1664,7 +1813,18 @@ export class ResearchStore {
         history: this.listActivity({ axisId: axis.id, limit: historyLimit }),
         notes: this.listAnnotations({ axisId: axis.id, limit: notesLimit }),
         people: this.listAxisPeople(axis.id),
+        plan: this.planForAxis(axis.id),
+        problems: this.listProblems(axis.id).map((problem) => ({
+          ...problem,
+          history: this.stateHistory("problem_id", problem.id),
+          people: this.listProblemPeople(problem.id),
+          planStepTitle: problem.planStepId
+            ? (this.getPlanStep(problem.planStepId)?.title ?? null)
+            : null,
+          repositories: this.listProblemRepositories(problem.id),
+        })),
         repositories: this.listAxisRepositories(axis.id),
+        stateHistory: this.stateHistory("axis_id", axis.id),
       }));
       const axisCounts = Object.fromEntries(
         AXIS_STATES.map((state) => [
@@ -2944,6 +3104,30 @@ export class ResearchStore {
     return row ? toPlan(row) : null;
   }
 
+  getPlanStep(id: string): PlanStep | null {
+    const row = this.db
+      .query("SELECT * FROM plan_steps WHERE id = ?")
+      .get(id) as PlanStepRow | null;
+    return row ? toPlanStep(row) : null;
+  }
+
+  /**
+   * The repositories a problem is linked to — evidence links, not parentage, which is why there is no
+   * relationship to report: a problem names the codebase it concerns, it does not own one.
+   */
+  listProblemRepositories(problemId: string): Repository[] {
+    return (
+      this.db
+        .query(
+          `SELECT r.*
+           FROM problem_repositories l JOIN repositories r ON r.id = l.repository_id
+           WHERE l.problem_id = ?
+           ORDER BY r.full_name COLLATE NOCASE ASC`
+        )
+        .all(problemId) as RepositoryRow[]
+    ).map(toRepository);
+  }
+
   /**
    * The plan a view should show: the most recent one for the axis, with its steps.
    *
@@ -3063,6 +3247,8 @@ export class ResearchStore {
     authorId?: string;
     expectedVersion?: number;
     repositoryIds?: string[];
+    /** Registered inside this transaction, so an agent can name a repository without a second call. */
+    repositoryFullNames?: string[];
     personIds?: string[];
   }): Problem {
     return this.atomic(() => {
@@ -3080,17 +3266,23 @@ export class ResearchStore {
       const sets: string[] = [];
       const values: (string | null)[] = [];
       if (input.statement !== undefined) {
+        const statement = required(input.statement, "statement");
         this.assertTextIsReplaceable(
           problem.authorType,
           authorType,
+          problem.statement,
+          statement,
           "the statement of this problem"
         );
-        sets.push("statement = ?");
-        values.push(required(input.statement, "statement"));
-        // Authorship follows the words: the text this row now holds was written by this caller, so the
-        // next agent to come along must not be able to replace it.
-        sets.push("author_type = ?", "author_id = ?");
-        values.push(authorType, input.authorId ?? problem.authorId);
+        if (statement !== problem.statement) {
+          sets.push("statement = ?");
+          values.push(statement);
+          // Authorship follows the words: the text this row now holds was written by this caller, so the
+          // next agent along must not be able to replace it. An unchanged echo transfers nothing — the
+          // words are still the human's, and the protection has to stay with them.
+          sets.push("author_type = ?", "author_id = ?");
+          values.push(authorType, input.authorId ?? problem.authorId);
+        }
       }
       if (input.stateConfidence !== undefined) {
         sets.push("state_confidence = ?");
@@ -3114,6 +3306,14 @@ export class ResearchStore {
       }
       if (input.repositoryIds) {
         this.replaceProblemRepositories(problem.id, input.repositoryIds);
+      }
+      if (input.repositoryFullNames) {
+        this.replaceProblemRepositories(
+          problem.id,
+          input.repositoryFullNames.map(
+            (fullName) => this.upsertRepository({ fullName }).repository.id
+          )
+        );
       }
       if (input.personIds) {
         this.replaceProblemPeople(problem.id, input.personIds);
@@ -3144,7 +3344,7 @@ export class ResearchStore {
       if (!problem) {
         throw new ResearchStoreError("Problem not found.");
       }
-      const toState = oneOf(input.toState, PROBLEM_STATES, "toState");
+      const toState = oneOfState(input.toState, PROBLEM_STATES, "toState");
       const origin = oneOf(input.origin, AUTHOR_TYPES, "origin");
       // Version before state: a writer that lost the race should hear "someone else wrote", not
       // "nothing to do" — otherwise a caller retries a stale request believing it was a no-op.
@@ -3156,7 +3356,8 @@ export class ResearchStore {
       );
       if (problem.state === toState) {
         throw new ResearchStoreError(
-          `no-op: the problem is already "${toState}" — nothing was written.`
+          `no-op: the problem is already "${toState}" — nothing was written.`,
+            "no-op"
         );
       }
       this.db
@@ -3202,12 +3403,13 @@ export class ResearchStore {
       if (!axis) {
         throw new ResearchStoreError("Axis not found.");
       }
-      const toState = oneOf(input.toState, AXIS_STATES, "toState");
+      const toState = oneOfState(input.toState, AXIS_STATES, "toState");
       const origin = oneOf(input.origin, AUTHOR_TYPES, "origin");
       this.assertVersion("axis", axis.title, axis.version, input.expectedVersion);
       if (axis.state === toState) {
         throw new ResearchStoreError(
-          `no-op: the axis is already "${toState}" — nothing was written.`
+          `no-op: the axis is already "${toState}" — nothing was written.`,
+            "no-op"
         );
       }
       const blocker =
@@ -3278,22 +3480,29 @@ export class ResearchStore {
       const authorType = oneOf(input.authorType, AUTHOR_TYPES, "authorType");
       this.assertVersion("plan", plan.summary, plan.version, input.expectedVersion);
       if (input.summary !== undefined) {
+        const summary = required(input.summary, "summary");
         this.assertTextIsReplaceable(
           plan.authorType,
           authorType,
+          plan.summary,
+          summary,
           "this plan's summary"
         );
-        this.db
-          .query(
-            "UPDATE plans SET summary = ?, author_type = ?, author_id = ?, version = version + 1, updated_at = ? WHERE id = ?"
-          )
-          .run(
-            required(input.summary, "summary"),
-            authorType,
-            input.authorId ?? plan.authorId,
-            nowIso(),
-            plan.id
-          );
+        // As on a problem's statement: an unchanged echo keeps the plan's authorship where it is, so an
+        // agent cannot launder a human's summary into its own by repeating it back.
+        if (summary !== plan.summary) {
+          this.db
+            .query(
+              "UPDATE plans SET summary = ?, author_type = ?, author_id = ?, version = version + 1, updated_at = ? WHERE id = ?"
+            )
+            .run(
+              summary,
+              authorType,
+              input.authorId ?? plan.authorId,
+              nowIso(),
+              plan.id
+            );
+        }
       }
       return this.getPlan(plan.id) as Plan;
     });
@@ -3816,6 +4025,9 @@ export class ResearchStore {
         topic: resolved.created,
       };
       const touchedAxes: Axis[] = [];
+      const touchedPlans: PlanWithSteps[] = [];
+      const touchedProblems: Problem[] = [];
+      const recordedTransitions: StateLogEntry[] = [];
       const assertedByAxis = new Map<string, ReadonlySet<ClaimField>>();
       const activities: string[] = [];
       const annotations: string[] = [];
@@ -3932,8 +4144,8 @@ export class ResearchStore {
           sourceUrl: text(activityInput.sourceUrl),
           summary: required(activityInput.summary, "summary"),
           topicId: topic.id,
-          // Reconcile's own recordings are not evidence for a problem yet — U3 extends the input for that.
-          problemId: null,
+          // Naming a problem is evidence for it: the axis and topic follow from the problem's own links.
+          problemId: activityInput.problemId ?? null,
         });
         activities.push(activity.id);
       }
@@ -3944,21 +4156,183 @@ export class ResearchStore {
           annotationInput.axisId,
           annotationInput.axisTitle
         );
+        const kind =
+          optionalOneOf(annotationInput.kind, ANNOTATION_KINDS, "kind") ?? "note";
         const annotation = this.insertAnnotation({
           authorId: actor.id,
           authorType:
             annotationInput.authorType ??
             (actor.type === "agent" ? "agent" : "human"),
           axisId,
-          // Reconcile still writes plain notes, including the historical shape that names a topic and an
-          // axis at once. Claim kinds and problem targets arrive with U3, where the action input grows.
-          confidence: null,
-          kind: "note",
-          problemId: null,
+          // A note carries no confidence — it is context, not a claim. A claim carries one, including an
+          // explicit null when the caller is asserting something they cannot grade.
+          confidence:
+            kind === "note"
+              ? null
+              : (optionalOneOf(
+                  annotationInput.confidence,
+                  CONFIDENCES,
+                  "confidence"
+                ) ?? null),
+          kind,
+          problemId: annotationInput.problemId ?? null,
           text: required(annotationInput.text, "text"),
-          topicId: topic.id,
+          // A note keeps the historical topic+axis shape the corpus uses. A claim must name exactly one
+          // target, so the topic must not be attached on its behalf — that would manufacture the second
+          // target the schema refuses.
+          topicId: kind === "note" ? topic.id : null,
         });
         annotations.push(annotation.id);
+      }
+
+      // The author type of everything this call writes: a tool call is the machine, anything else is the
+      // person using the page. Never taken from input, so a caller cannot claim the other's authorship.
+      const authorType: Author = actor.type === "agent" ? "agent" : "human";
+
+      // Plans before problems: a problem may name the plan step it blocks, and that step has to exist first.
+      for (const planInput of input.plans ?? []) {
+        const axisId = this.resolveAxisId(
+          topic.id,
+          planInput.axisId,
+          planInput.axisTitle
+        );
+        if (!axisId) {
+          throw new ResearchStoreError(
+            "plans[] need an axisId or axisTitle: a plan belongs to an axis."
+          );
+        }
+        const plan = planInput.planId
+          ? this.updatePlan({
+              authorId: actor.id,
+              authorType,
+              id: planInput.planId,
+              summary: required(planInput.summary, "summary"),
+            })
+          : this.createPlan({
+              authorId: actor.id,
+              authorType,
+              axisId,
+              summary: required(planInput.summary, "summary"),
+            });
+        for (const step of planInput.steps ?? []) {
+          if (step.stepId) {
+            this.updatePlanStep({
+              id: step.stepId,
+              position: step.position,
+              state: optionalOneOf(step.state, PLAN_STEP_STATES, "state"),
+              title: required(step.title, "title"),
+            });
+          } else {
+            this.createPlanStep({
+              planId: plan.id,
+              position: step.position,
+              state: optionalOneOf(step.state, PLAN_STEP_STATES, "state"),
+              title: required(step.title, "title"),
+            });
+          }
+        }
+        touchedPlans.push({
+          ...plan,
+          steps: this.listPlanSteps(plan.id),
+        });
+      }
+
+      for (const problemInput of input.problems ?? []) {
+        const statement = required(problemInput.statement, "statement");
+        if (problemInput.problemId) {
+          if (problemInput.state !== undefined) {
+            // Not an oversight: a state change goes through `transitions` so that it is recorded. Accepting
+            // it here would let a caller overwrite the state with no history row, which is the one thing the
+            // state log exists to prevent.
+            throw new ResearchStoreError(
+              "problems[].state applies when creating. To change an existing problem's state, send it in `transitions` so the change is recorded."
+            );
+          }
+          touchedProblems.push(
+            this.updateProblem({
+              authorId: actor.id,
+              authorType,
+              id: problemInput.problemId,
+              personIds: problemInput.personIds,
+              planStepId: problemInput.planStepId,
+              repositoryFullNames: problemInput.repositoryFullNames,
+              statement,
+              stateConfidence: optionalOneOf(
+                problemInput.stateConfidence,
+                CONFIDENCES,
+                "stateConfidence"
+              ),
+            })
+          );
+          continue;
+        }
+        const axisId = this.resolveAxisId(
+          topic.id,
+          problemInput.axisId,
+          problemInput.axisTitle
+        );
+        if (!axisId) {
+          throw new ResearchStoreError(
+            "problems[] need an axisId or axisTitle: a problem is raised against an axis."
+          );
+        }
+        touchedProblems.push(
+          this.createProblem({
+            authorId: actor.id,
+            authorType,
+            axisId,
+            personIds: problemInput.personIds,
+            planStepId: problemInput.planStepId ?? null,
+            repositoryFullNames: problemInput.repositoryFullNames,
+            state: optionalOneOf(problemInput.state, PROBLEM_STATES, "state"),
+            stateConfidence: optionalOneOf(
+              problemInput.stateConfidence,
+              CONFIDENCES,
+              "stateConfidence"
+            ),
+            statement,
+          })
+        );
+      }
+
+      for (const transitionInput of input.transitions ?? []) {
+        const observedAt = text(transitionInput.observedAt);
+        if (transitionInput.subject === "problem") {
+          const result = this.transitionProblem({
+            actorId: actor.id,
+            expectedVersion: transitionInput.expectedVersion,
+            id: required(transitionInput.problemId, "problemId"),
+            observedAt,
+            origin: authorType,
+            // The state is validated by the writer against the problem vocabulary, not here: one authority
+            // on what a valid problem state is, and it is the writer.
+            toState: transitionInput.toState as ProblemState,
+          });
+          recordedTransitions.push(result.transition);
+          touchedProblems.push(result.problem);
+          continue;
+        }
+        const axisId = this.resolveAxisId(
+          topic.id,
+          transitionInput.axisId,
+          transitionInput.axisTitle
+        );
+        if (!axisId) {
+          throw new ResearchStoreError(
+            "transitions[] with subject 'axis' need an axisId or axisTitle."
+          );
+        }
+        const result = this.transitionAxis({
+          actorId: actor.id,
+          axisId,
+          blocker: text(transitionInput.blocker),
+          expectedVersion: transitionInput.expectedVersion,
+          observedAt,
+          origin: authorType,
+          toState: transitionInput.toState as AxisState,
+        });
+        recordedTransitions.push(result.transition);
+        touchedAxes.push(result.axis);
       }
 
       // Only now can "this claim is confirmed" be judged: the evidence may have arrived in this very
@@ -3974,8 +4348,11 @@ export class ResearchStore {
       return {
         axes: touchedAxes.map((axis) => this.getAxis(axis.id) ?? axis),
         created,
+        plans: touchedPlans,
+        problems: touchedProblems,
         recorded: { activities, annotations },
         topic: this.getTopic(topic.id) as Topic,
+        transitions: recordedTransitions,
       };
     });
   }
@@ -4443,15 +4820,26 @@ export class ResearchStore {
    * A human's words are not an agent's to replace. `existing` is the authorship of the text **currently
    * stored**, not of whoever created the row: a human rewrite makes the text human-authored, so the
    * protection follows the words rather than the row's origin.
+   *
+   * Restating is not rewriting. An unchanged echo says "keep these words" while the caller changes the
+   * links, the confidence or the plan step — which is ordinary work, and is the *only* way to update a
+   * problem through the action surface, where the statement is required. Refusing the echo would make a
+   * human-authored problem impossible for an agent to update at all, which protects nothing.
    */
   private assertTextIsReplaceable(
     existing: Author,
     incoming: Author,
+    current: string,
+    next: string,
     what: string
   ): void {
+    if (next === current) {
+      return;
+    }
     if (existing === "human" && incoming === "agent") {
       throw new ResearchStoreError(
-        `human-authored: ${what} was written by a human — an agent cannot rewrite it. Change the state, the links or a plan step instead, or have the human edit the text.`
+        `human-authored: ${what} was written by a human — an agent cannot rewrite it. Change the state, the links or a plan step instead, or have the human edit the text.`,
+        "human-authored"
       );
     }
   }

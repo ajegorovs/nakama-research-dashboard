@@ -14,7 +14,7 @@
       "effect": "read",
       "entry": "actions/actions.js",
       "exposeAsTool": true,
-      "description": "Dashboard summary — all three views in one call. Counts by state, then one entry per topic with its people, the state counts of its development axes, the axes themselves in attention order (blocked → active → draft → parked → completed → abandoned) with their repository/branch/PR line, current state and blocker, and how much activity each topic saw in the window. Also every blocked axis with its topic and blocker text, the most recently touched topics and recent activity. `people` is the person-first view (one row per person — never one per link — with the topics and axes they are on grouped underneath, plus the activity attributable to their own account and when their work was last recorded and last reviewed); `repositories` is the repository-first view (the topics each codebase supports, the axes that name it, the events recorded against it or its axes). Attribution is narrow on purpose: an event belongs to a person only when its actor maps to their account, and a person with no account mapped reports attributable=false — say that rather than reporting them as idle. Nothing here is scored, ranked or turned into a workload percentage. Start here for 'what is going on' questions, then call get_topic for the one topic that matters.",
+      "description": "Dashboard summary — all three views in one call. Counts by state, then one entry per topic with its people, the state counts of its development axes, the axes themselves in attention order (blocked → active → usable → draft → parked → completed → abandoned) with their repository/branch/PR line, current state and blocker, and how much activity each topic saw in the window. Also every blocked axis with its topic and blocker text, the most recently touched topics and recent activity. `people` is the person-first view (one row per person — never one per link — with the topics and axes they are on grouped underneath, plus the activity attributable to their own account and when their work was last recorded and last reviewed); `repositories` is the repository-first view (the topics each codebase supports, the axes that name it, the events recorded against it or its axes). Attribution is narrow on purpose: an event belongs to a person only when its actor maps to their account, and a person with no account mapped reports attributable=false — say that rather than reporting them as idle. Nothing here is scored, ranked or turned into a workload percentage. Start here for 'what is going on' questions, then call get_topic for the one topic that matters.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -118,7 +118,7 @@
       "effect": "write",
       "entry": "actions/actions.js",
       "exposeAsTool": true,
-      "description": "The single write path for a topic update. Applies topic fields, axes (created or updated by id or title), repository and person links, activity and annotations in ONE transaction: either all of it lands or none of it does. Send only what the conversation established. Pass expectedVersion (from get_topic) to fail with a conflict instead of overwriting a change someone else made. Any claim you mark 'confirmed' must be backed by evidence in the same call — an activity, an annotation, a branch or a PR; without evidence, label it 'inferred'.",
+      "description": "The single write path for a topic update. Applies topic fields, axes (created or updated by id or title), repository and person links, activity and annotations in ONE transaction: either all of it lands or none of it does. Send only what the conversation established. Pass expectedVersion (from get_topic) to fail with a conflict instead of overwriting a change someone else made. Any claim you mark 'confirmed' must be backed by evidence in the same call — an activity, an annotation, a branch or a PR; without evidence, label it 'inferred'. Axis state names are active, usable, draft, blocked, parked, completed and abandoned; usable (not completed) is the state for work that is operationally relevant and still has acknowledged gaps. Problems are raised and updated through problems[], plans and their steps through plans[], and state changes through transitions[]; a problem's state is accepted only when creating it, because changing an existing state is a recorded transition, not a field update. A refusal returns {ok:false, kind}: conflict means re-read and retry, no-op means it is already in that state so do not retry, invalid-state means that state name does not exist, human-authored means an agent may not rewrite text a human wrote (ask the person instead), and invalid-input is every other fixable-rule refusal.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -257,6 +257,7 @@
                   "type": "string",
                   "enum": [
                     "active",
+                    "usable",
                     "draft",
                     "blocked",
                     "parked",
@@ -416,6 +417,11 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 200
+                },
+                "problemId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
                 }
               },
               "required": ["summary"]
@@ -442,9 +448,190 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 160
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": ["note", "interpretation", "steering"]
+                },
+                "confidence": {
+                  "type": "string",
+                  "enum": ["confirmed", "inferred", "uncertain"]
+                },
+                "problemId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
                 }
               },
               "required": ["text"]
+            }
+          },
+          "problems": {
+            "type": "array",
+            "maxItems": 25,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "problemId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "statement": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                },
+                "axisId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "axisTitle": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                },
+                "state": {
+                  "type": "string",
+                  "enum": ["open", "resolved"]
+                },
+                "stateConfidence": {
+                  "type": "string",
+                  "enum": ["confirmed", "inferred", "uncertain"]
+                },
+                "planStepId": {
+                  "type": ["string", "null"],
+                  "maxLength": 100
+                },
+                "repositoryFullNames": {
+                  "type": "array",
+                  "maxItems": 20,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                },
+                "personIds": {
+                  "type": "array",
+                  "maxItems": 50,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  }
+                }
+              },
+              "required": ["statement"]
+            }
+          },
+          "plans": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "planId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "axisId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "axisTitle": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                },
+                "summary": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                },
+                "steps": {
+                  "type": "array",
+                  "maxItems": 50,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "stepId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 100
+                      },
+                      "title": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 300
+                      },
+                      "position": {
+                        "type": ["integer", "null"],
+                        "minimum": 0
+                      },
+                      "state": {
+                        "type": "string",
+                        "enum": ["pending", "active", "done", "blocked"]
+                      }
+                    },
+                    "required": ["title"]
+                  }
+                }
+              },
+              "required": ["summary"]
+            }
+          },
+          "transitions": {
+            "type": "array",
+            "maxItems": 25,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "subject": {
+                  "type": "string",
+                  "enum": ["axis", "problem"]
+                },
+                "axisId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "axisTitle": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                },
+                "problemId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "toState": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 40
+                },
+                "observedAt": {
+                  "type": "string",
+                  "maxLength": 40
+                },
+                "expectedVersion": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "blocker": {
+                  "type": "string",
+                  "maxLength": 500
+                }
+              },
+              "required": ["subject", "toState"]
             }
           }
         },
@@ -457,7 +644,7 @@
       "effect": "write",
       "entry": "actions/actions.js",
       "exposeAsTool": true,
-      "description": "Record one objective event that already happened against a topic (and optionally an axis): a merged pull request, a finished run, a commit, a document update. Put the identifier in sourceRef (PR #72, commit hash, run id, path) and pick the matching sourceType. Facts only — for a milestone claim a human stated, use reconcile_topic's summary instead. A repository named here is registered automatically.",
+      "description": "Record one objective event that already happened against a topic (and optionally an axis): a merged pull request, a finished run, a commit, a document update. Put the identifier in sourceRef (PR #72, commit hash, run id, path) and pick the matching sourceType. Facts only — for a milestone claim a human stated, use reconcile_topic's summary instead. A repository named here is registered automatically. Naming a problemId records the event as evidence for that problem, which is what lets a problem show why it was raised.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -581,7 +768,7 @@
       "effect": "write",
       "entry": "actions/actions.js",
       "exposeAsTool": false,
-      "description": "Attach a note to a topic or an axis: conversation-derived context that is not an event. The author is taken from the session, never from input. Not an agent tool: the librarian supplies annotations through reconcile_topic, where they can back a claim in the same transaction.",
+      "description": "Attach a note to a topic or an axis: conversation-derived context that is not an event. The author is taken from the session, never from input. Not an agent tool: the librarian supplies annotations through reconcile_topic, where they can back a claim in the same transaction. kind defaults to note, which is context and may sit on a topic and an axis at once; interpretation and steering are claims about the record and must name exactly one target (axisId, problemId or topicId). confidence is optional and never assumed: omitting it records no claim rather than a confirmed one.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
