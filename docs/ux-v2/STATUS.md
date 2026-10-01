@@ -3,7 +3,8 @@
 **Live page.** Updated as each chunk lands; every number is a run's own summary line, and every claim
 here should be checkable with `README.md` § "Run the acceptance pass".
 
-Last updated at the end of **U1**.
+Last updated at the end of **U1**; **U2** is under way, with its semantics pinned in `U2-store.md` before
+any view reads them.
 
 ## Where things stand
 
@@ -11,7 +12,7 @@ Last updated at the end of **U1**.
 |---|---|---|
 | **U0** Contract, baseline, runnable pass | **done** | `contract/` published verbatim · `BASELINE.md` · the pass moved in-repo and reproduces from a *fresh clone* on a *pristine checkout* (measured below) · PR #1 merged, tagged `pre-ux-v2` · three harness defects found by that run and fixed |
 | **U1** Migration 004 (`usable`, state log, Problems, Plans) | **done** | `migrations/004-ux-v2-model.sql` · design note + truth table in `U1-migration.md` (§3.2, §4, §1a, §1b) · `harness/test-004.mjs`: **79 checks, 0 failed**, including the crash-after-COMMIT re-run · applied to the dev instance by the host's own applier — new generation `g9e344…`, ledger 001–004 · both acceptance passes green afterwards, plus the `abandoned` fixture axis and a check that every state the payload carries renders as itself |
-| U2 Store read models | not started | — |
+| **U2** Store writers + read models | **in progress** | design pinned in `U2-store.md` — the transition table, the refusal vocabulary, the human-authored-text rule, traceability, one stale derivation, one visible-set helper; implementation and tests in flight (numbers added when they run) |
 | U3 Action surface + skill | not started | — |
 | U4 Five tabs + canonical navigation | not started | — |
 | U5 Overview | not started | — |

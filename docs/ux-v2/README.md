@@ -40,7 +40,7 @@ Each chunk is named by what it delivers, not by a file. `STATUS.md` carries the 
 |---|---|---|
 | **U0** | Contract + baseline + a pass anyone can re-run from a clone | — (groundwork) |
 | **U1** | Migration 004: problems, plans + steps, axis state log, `usable` | `information-architecture.md` §2–3, §6; `interaction-spec.md` §11 |
-| **U2** | Store read models: problem/plan/state-history projections, one stale derivation, overview recency, both Progress subviews | all of `information-architecture.md`; `interaction-spec.md` §9 |
+| **U2** | Store writers + read models: problem/plan CRUD, the state-transition writer (a no-op refused, human-authored text protected, every write traceable), problem/plan/state-history projections, one stale derivation, overview recency, both Progress subviews — semantics pinned in `U2-store.md` | all of `information-architecture.md`; `interaction-spec.md` §9 |
 | **U3** | Action surface + bundled skill for the new vocabulary (still five agent tools) | `information-architecture.md` §3, §6, §9 |
 | **U4** | Five tabs, one route, canonical navigation for all five tag types | `interaction-spec.md` §1–2; `component-contract.md` EntityTag |
 | **U5** | Overview | `interaction-spec.md` §5 |
