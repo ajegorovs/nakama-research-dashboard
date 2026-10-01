@@ -275,8 +275,14 @@ it is re-runnable without duplicating itself, and it **does not move the counts 
 internally (activities, annotations and plan-step links cannot name a problem created in the same transaction,
 and row ids are server-generated); the applier reads the ids back and does the referencing pass second.
 
-Expected as of U4's step 5: corpus **43 pass · 0 fail · 7 skip** and fixture **80 · 0 · 0**, at
-both viewports. (Before U1 it was 42 and 49 — U1 added one check, "every axis state the payload carries
+Expected as of U4's step 5, on **separate instances** — a corpus-only one and an isolated fixture-only one:
+corpus **52 pass · 0 fail · 26 skip** and fixture **80 · 0 · 0**, at both viewports. The corpus figure is new.
+The record before it (**43 · 0 · 7** out of 50 checks) was taken against the **shared dev instance**, which is
+not corpus-only — a corpus pass there reads the fixture's topic next to the corpus one (6 axes / 2 people / 3
+repositories) — and it predates steps 3–5's checks, so it is superseded rather than re-derived. The 26 skips
+are the checks a corpus with **no problem rows and no plan** cannot exercise; each prints its reason, and
+"0 failed" never hides "26 never exercised".
+(Before U1 it was 42 and 49 — U1 added one check, "every axis state the payload carries
 reaches the page as that state", and the `abandoned` fixture axis it needs. U4's step 1 added the Progress
 window check, taking the fixture pass to 51; step 2 added six that compare the three-column composition and
 its selection against `get_progress`'s own answer, taking it to 57; step 3 added five for the optional Plan
@@ -284,7 +290,10 @@ section — its absence, the stored positions, the plan ↔ problem link both wa
 discriminator — taking it to **62**; step 4 added eight for the open-problem inventory and removed the one that
 asserted step 2's inline list, which that column no longer holds — taking it to **69**; step 5 added eleven for
 the three supporting sections, the two repository tags that must both navigate, and the cases each section must
-not show, plus one guard that the subject axis is real — taking it to **80**.) The counts move
+not show, plus one guard that the subject axis is real — taking it to **80**. The pass then swapped one check
+for another (the closed-out precondition folded into the conditional that replaced it; a new precondition that
+the `get_progress` payload carries all three halves the page reads), so the total stays **80**, not 81.) The
+counts move
 whenever a check is added, so read the run's own summary line rather than a number in a document. Each run
 writes its transcript to
 `docs/corpus/verify-read[-<viewport>].txt` or `docs/layout-fixtures/verify-fixture-read-<viewport>.txt`

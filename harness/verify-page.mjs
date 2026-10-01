@@ -1191,13 +1191,17 @@ const readTop = () =>
     };
   });
 
-/** What the projection says the page should be showing, for one axis. */
+/** What the projection says the page should be showing, for one axis.
+ *
+ * Deliberately defensive: a payload missing a half must make the checks that read it **fail with a reason**,
+ * never throw. A release older than the activity half did exactly that — the corpus pass died inside this
+ * function with a `TypeError`, reporting nothing about the page across 40-odd checks. */
 const projectionFor = (result, axisId) => {
-  const axis = result.axes.axes.find((row) => row.id === axisId) ?? null;
-  const problems = result.problems.problems.filter((row) => row.axisId === axisId);
+  const axis = (result?.axes?.axes ?? []).find((row) => row.id === axisId) ?? null;
+  const problems = (result?.problems?.problems ?? []).filter((row) => row.axisId === axisId);
   return {
     axis,
-    bucket: result.activity.byAxis.find((entry) => entry.axisId === axisId) ?? null,
+    bucket: (result?.activity?.byAxis ?? []).find((entry) => entry.axisId === axisId) ?? null,
     open: problems.filter((row) => row.state === "open"),
     problems,
   };
@@ -1208,6 +1212,26 @@ const allProgress = await apiProgress(windowDaysNow);
 const top = await readTop();
 const activeRow = top.indexRows.find((row) => row.active) ?? null;
 const first = allProgress?.axes?.axes?.[0] ?? null;
+
+// One payload, three halves — checked before anything compares against them, because a missing half is a
+// plugin/instance fact (an older release, a refused action), not a rendering defect, and the pass should say
+// so instead of failing a page check for a reason the page cannot control.
+{
+  const halves = [
+    ["axes", allProgress?.axes?.axes],
+    ["problems", allProgress?.problems?.problems],
+    ["activity", allProgress?.activity?.byAxis],
+  ];
+  const missing = halves.filter(([, value]) => !Array.isArray(value)).map(([half]) => half);
+  check(
+    "the get_progress payload carries all three halves the page reads (axes, problems, activity)",
+    missing.length === 0,
+    missing.length === 0
+      ? `3 halves · ${halves.map(([half, value]) => `${half} ${value.length}`).join(" · ")}`
+      : `MISSING ${missing.join(", ")} — the instance serves a release older than this page expects; ` +
+        `every check below that reads a missing half will fail`
+  );
+}
 
 const selectAxis = async (axisId) => {
   await root.locator(`[data-rd-index-axis="${axisId}"]`).click();
@@ -1283,9 +1307,8 @@ if (problemAxis && problemAxis.rows.length > 0) {
     await selectAxis(first.id);
   }
 } else {
-  check(
+  skip(
     "the Problem column shows the projection's first open problem, under the projection's own count",
-    false,
     "no axis in this dataset has an open problem, so this pass cannot exercise the Problem column"
   );
 }
@@ -1594,46 +1617,85 @@ const planOf = (result, axisId) =>
   const inventoryAxis = (allProgress.axes.axes ?? [])
     .map((row) => ({ open: openProblemsOf(row.id).length, row }))
     .sort((a, b) => b.open - a.open)[0] ?? null;
-  check(
-    "the fixture still carries an axis with open problems to inventory",
-    (inventoryAxis?.open ?? 0) > 0,
-    `${inventoryAxis?.open ?? 0} open problem(s) on "${inventoryAxis?.row?.title ?? "(no axis)"}"`
-  );
+  const inventorySubject = (inventoryAxis?.open ?? 0) > 0;
+  if (inventorySubject) {
+    check(
+      "the fixture still carries an axis with open problems to inventory",
+      true,
+      `${inventoryAxis.open} open problem(s) on "${inventoryAxis.row.title}"`
+    );
+  } else {
+    skip(
+      "the fixture still carries an axis with open problems to inventory",
+      "no axis in this dataset carries an open problem — the fixture's axis carries four, so that run " +
+        "discriminates; here the inventory has no subject"
+    );
+  }
   const inventoryAxisId = inventoryAxis?.row?.id ?? first.id;
   await selectAxis(inventoryAxisId);
   const inventory = await readInventory();
   const expectedOpen = openProblemsOf(inventoryAxisId);
   const listed = inventory.rows.map((row) => row.id).join("|");
   const wanted = expectedOpen.map((problem) => problem.id).join("|");
-  check(
-    "the inventory lists every open problem of the axis, in the projection's order",
-    inventory.count === expectedOpen.length && inventory.stated === expectedOpen.length && listed === wanted,
-    `${inventory.rows.length} row(s) of ${expectedOpen.length} open; count ${inventory.count}, list ${inventory.stated}; order ${listed === wanted ? "matches" : "differs"}`
-  );
-  const statesMatch = inventory.rows.every((row, position) => row.state === expectedOpen[position]?.state);
-  const contextsMatch = inventory.rows.every((row, position) => {
-    const problem = expectedOpen[position];
-    const repos = problem.repositories.map((repo) => repo.fullName).join(", ");
-    return (
-      row.context.includes(repos || "no repository") &&
-      row.context.includes("last activity") &&
-      Boolean(problem.planStepTitle) === row.context.includes("step: ")
+  // Nothing to list is not the same as listing nothing: with no open problem on the axis the section is
+  // (correctly) absent, so these three checks have no subject and say so instead of going red or, worse,
+  // going green on an empty list. The fixture's axis carries four, three of them open.
+  if (expectedOpen.length === 0) {
+    skip(
+      "the inventory lists every open problem of the axis, in the projection's order",
+      "this dataset has no open problem on any axis, so there is no inventory to read"
     );
-  });
-  check(
-    "each row carries its own state, repositories, step link and recency — compact context, nothing re-derived",
-    statesMatch && contextsMatch,
-    `states ${statesMatch ? "match" : "differ"}; contexts ${contextsMatch ? "match" : "differ"}; first ${JSON.stringify(inventory.rows[0]?.context ?? "")}`
-  );
+  } else {
+    check(
+      "the inventory lists every open problem of the axis, in the projection's order",
+      inventory.count === expectedOpen.length &&
+        inventory.stated === expectedOpen.length &&
+        listed === wanted,
+      `${inventory.rows.length} row(s) of ${expectedOpen.length} open; count ${inventory.count}, list ${inventory.stated}; order ${listed === wanted ? "matches" : "differs"}`
+    );
+  }
+  const statesMatch =
+    expectedOpen.length === 0 ||
+    inventory.rows.every((row, position) => row.state === expectedOpen[position]?.state);
+  const contextsMatch =
+    expectedOpen.length === 0 ||
+    inventory.rows.every((row, position) => {
+      const problem = expectedOpen[position];
+      const repos = problem.repositories.map((repo) => repo.fullName).join(", ");
+      return (
+        row.context.includes(repos || "no repository") &&
+        row.context.includes("last activity") &&
+        Boolean(problem.planStepTitle) === row.context.includes("step: ")
+      );
+    });
+  if (expectedOpen.length === 0) {
+    skip(
+      "each row carries its own state, repositories, step link and recency — compact context, nothing re-derived",
+      "this dataset has no open problem on any axis, so there is no row to read the context off"
+    );
+  } else {
+    check(
+      "each row carries its own state, repositories, step link and recency — compact context, nothing re-derived",
+      statesMatch && contextsMatch,
+      `states ${statesMatch ? "match" : "differ"}; contexts ${contextsMatch ? "match" : "differ"}; first ${JSON.stringify(inventory.rows[0]?.context ?? "")}`
+    );
+  }
 
   // (2) Exactly one row is active — the one the card is showing — and picking another moves the card.
   const shownBefore = (await readTop()).problem.shown;
   const activeRows = inventory.rows.filter((row) => row.active);
-  check(
-    "exactly the problem on screen is the active row",
-    expectedOpen.length === 0 || (activeRows.length === 1 && activeRows[0]?.id === shownBefore),
-    `active ${activeRows.length} (${activeRows[0]?.id?.slice(0, 8) ?? "none"}), card ${shownBefore?.slice(0, 8) ?? "none"}`
-  );
+  if (expectedOpen.length === 0) {
+    skip(
+      "exactly the problem on screen is the active row",
+      "this dataset has no open problem on any axis, so no row can be the active one"
+    );
+  } else {
+    check(
+      "exactly the problem on screen is the active row",
+      activeRows.length === 1 && activeRows[0]?.id === shownBefore,
+      `active ${activeRows.length} (${activeRows[0]?.id?.slice(0, 8) ?? "none"}), card ${shownBefore?.slice(0, 8) ?? "none"}`
+    );
+  }
   if (expectedOpen.length > 1) {
     const other = expectedOpen.find((problem) => problem.id !== shownBefore);
     await root.locator(`[data-rd-problem-choice="${other.id}"]`).click();
@@ -1650,24 +1712,28 @@ const planOf = (result, axisId) =>
     await page.waitForTimeout(200);
   }
 
-  // (3) The fixture carries a closed-out problem on this axis, and the inventory must not list it. Asserting
-  // the fixture's own case first keeps "open problems only" from passing vacuously on a dataset that simply
-  // had nothing to leak.
+  // (3) A closed-out problem on this axis must not be listed. On the **fixture** the case exists, so the
+  // check is discriminating; on a dataset that has no resolved problem it cannot be, and saying so is better
+  // than a green tick on a dataset with nothing to leak — or a red one for a case the dataset never had.
   const onAxis = (allProgress.problems.problems ?? []).filter(
     (problem) => problem.axisId === inventoryAxisId
   );
   const closedOut = onAxis.filter((problem) => problem.state !== "open");
-  check(
-    "the fixture still carries a closed-out problem on this axis, so 'open only' can actually fail",
-    closedOut.length > 0,
-    `${closedOut.length} closed-out of ${onAxis.length} problem(s) on the axis`
-  );
-  const leaked = closedOut.filter((problem) => inventory.text.includes(problem.statement.slice(0, 30)));
-  check(
-    "a closed-out problem is not listed in the inventory",
-    leaked.length === 0 && inventory.rows.length === expectedOpen.length,
-    `${inventory.rows.length} row(s) for ${expectedOpen.length} open of ${onAxis.length} on the axis; closed-out ${leaked.length ? "leaked" : "absent"}`
-  );
+  if (closedOut.length > 0) {
+    check(
+      "a closed-out problem is not listed in the inventory",
+      inventory.text.includes(closedOut[0].statement.slice(0, 30)) === false &&
+        inventory.rows.length === expectedOpen.length,
+      `${closedOut.length} closed-out of ${onAxis.length} problem(s) on the axis; ` +
+        `${inventory.rows.length} row(s) for ${expectedOpen.length} open`
+    );
+  } else {
+    skip(
+      "a closed-out problem is not listed in the inventory",
+      `this dataset has no resolved problem on the axis (${onAxis.length} problem(s), all open) — ` +
+        `the fixture's axis carries one, so that run discriminates`
+    );
+  }
 
   // (4) An axis with no open problem: no section, and nothing alarming said about the absence — the axis
   // itself stays meaningful, which is what the reviewer's rule protects.
@@ -1694,10 +1760,9 @@ const planOf = (result, axisId) =>
     );
     await selectAxis(inventoryAxisId);
   } else {
-    check(
+    skip(
       "the fixture still carries an axis with no open problem, so the empty case is exercised",
-      false,
-      "no axis with openProblems === 0"
+      "every axis in this dataset carries an open problem, so the empty case has no subject here"
     );
   }
 }
@@ -1751,209 +1816,242 @@ const planOf = (result, axisId) =>
 
   // (1) Repository threads: the problem's own durable relations, in the projection's order, each one a tag —
   // and nothing is picked out as primary, because the model has no such thing.
+  // The subject every check below needs: a problem carrying the fixture's relations. A dataset with no such
+  // problem (the corpus has no problem rows at all) cannot exercise these, and the lookup that reads the
+  // subject must never abort the pass — it once did exactly that, dying on `withRelations.axisId` with a
+  // `TypeError` after 40-odd checks and reporting nothing about the page.
   const withRelations = (allProgress.problems.problems ?? []).find(
     (problem) => problem.repositories.length > 1
-  );
-  await selectAxis(String(withRelations.axisId));
-  await root.locator(`[data-rd-problem-choice="${withRelations.id}"]`).click();
-  await page.waitForTimeout(300);
-  const support = await readSupport();
-  const repositoryText = support.repositories.map((row) => row.fullName).join("|");
-  const wantedRepositories = withRelations.repositories.map((row) => row.fullName).join("|");
-  // The tag row renders the names and nothing else: no "primary", no rank, no extra label — a marker of that
-  // kind would show up as text the repository names do not account for. Read the tag row rather than the whole
-  // section: `innerText` of the section would include its heading, which is not what this is about.
-  const threadText = await page.evaluate(() =>
-    (
-      document
-        .querySelector('div[data-plugin-id="research-dashboard"] .rd-progress-repositories .rd-tags')
-        ?.innerText ?? ""
-    )
-      .replace(/\s+/g, " ")
-      .trim()
-  );
-  const threadOnlyNames =
-    threadText === withRelations.repositories.map((row) => row.fullName).join(" ");
-  check(
-    "the repository threads are the problem's own relations, in the projection's order, with nothing marked primary",
-    support.repositoriesPresent && repositoryText === wantedRepositories && threadOnlyNames,
-    `${support.repositories.length} tag(s) of ${withRelations.repositories.length}; order ${repositoryText === wantedRepositories ? "matches" : "differs"}; section text ${JSON.stringify(threadText)}`
-  );
-
-  // (2) Evidence: the projection's records, each keeping the source it came from — a source type rendered as
-  // itself, the reference and the summary intact, and the same date that orders the row.
-  const evidenceOrder = support.evidence.map((row) => row.id).join("|");
-  const wantedEvidence = withRelations.evidence.map((row) => row.id).join("|");
-  const sourcesMatch = support.evidence.every(
-    (row, position) => row.source === withRelations.evidence[position]?.sourceType
-  );
-  const provenanceKept = support.evidence.every((row, position) => {
-    const wanted = withRelations.evidence[position];
-    return (
-      row.text.includes(wanted?.sourceRef ?? "\u0000") &&
-      row.text.includes(wanted?.summary ?? "\u0000") &&
-      row.date.includes(wanted?.occurredAt?.slice(0, 10) ?? "\u0000")
-    );
-  });
-  check(
-    "evidence is the projection's records with their provenance: source type, reference, summary and date",
-    support.evidencePresent &&
-      evidenceOrder === wantedEvidence &&
-      sourcesMatch &&
-      provenanceKept,
-    `${support.evidence.length} row(s) of ${withRelations.evidence.length}; sources ${sourcesMatch ? "match" : "differ"}; provenance ${provenanceKept ? "kept" : "lost"}; first source ${support.evidence[0]?.source}`
-  );
-
-  // (3) Human steering: exactly the projection's claims, each under the scope it was aimed at, every one
-  // human-authored — and the axis claim is not copied under the problem that sits beneath it.
-  const wantedProblemClaims = withRelations.steering.map((claim) => claim.text);
-  const wantedAxisClaims = (
-    allProgress.axes.axes.find((row) => row.id === withRelations.axisId)?.steering ?? []
-  ).map((claim) => claim.text);
-  const shownProblemClaims = support.problemScope.map((claim) => claim.text);
-  const shownAxisClaims = support.axisScope.map((claim) => claim.text);
-  const allHuman = [...support.problemScope, ...support.axisScope].every((claim) =>
-    claim.meta.startsWith("human") || claim.meta.includes("human")
-  );
-  check(
-    "human steering is exactly the projection's claims, under the scope each was aimed at",
-    shownProblemClaims.join("|") === wantedProblemClaims.join("|") &&
-      shownAxisClaims.join("|") === wantedAxisClaims.join("|") &&
-      allHuman,
-    `problem scope ${shownProblemClaims.length}/${wantedProblemClaims.length}, axis scope ${shownAxisClaims.length}/${wantedAxisClaims.length}; every claim human-authored ${allHuman}`
-  );
-  check(
-    "an axis-scoped claim stays the axis context — it is not copied under the problem",
-    wantedAxisClaims.length > 0 && !shownProblemClaims.includes(wantedAxisClaims[0]),
-    `axis claims ${wantedAxisClaims.length}; leaked into the problem scope ${shownProblemClaims.includes(wantedAxisClaims[0])}`
-  );
-  check(
-    "an ordinary note on the same problem is context, not steering",
-    !support.steeringText.includes(FIXTURE_NOTE_PREFIX),
-    `steering section ${support.steeringText.includes(FIXTURE_NOTE_PREFIX) ? "shows" : "excludes"} the note`
-  );
-
-  // (4) The three negative cases, on one problem that has none of it — Fixture E's sparse problem is the
-  // subject on purpose: no repositories, no supporting record, no steering of its own. Absence must be silent,
-  // and the shell check is a heading with no rows, which is exactly what "an empty section" would be.
-  const sparse = (allProgress.problems.problems ?? []).find(
-    (problem) =>
-      problem.state === "open" &&
-      problem.repositories.length === 0 &&
-      problem.evidence.length === 0 &&
-      problem.steering.length === 0
-  );
-  if (sparse) {
-    await selectAxis(String(sparse.axisId));
-    // Fail rather than hang if the row is missing: the point of this block is that the section is silent, so a
-    // problem the inventory does not list at all would be a different defect, not a timeout.
-    const selectable = await root.locator(`[data-rd-problem-choice="${sparse.id}"]`).count();
-    check(
-      "the sparse problem is one the inventory can select",
-      selectable === 1,
-      `${selectable} row(s) for open problem ${sparse.id.slice(0, 8)}`
-    );
-    if (selectable === 1) {
-      await root.locator(`[data-rd-problem-choice="${sparse.id}"]`).click();
-      await page.waitForTimeout(300);
-    }
-    const bare = await readSupport();
-    const bareAxis = (allProgress.axes.axes.find((row) => row.id === sparse.axisId)?.steering ?? [])
-      .length;
-    const sectionStates = await page.evaluate(() => {
-      const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
-      const read = (selector) => {
-        const section = scope?.querySelector(selector) ?? null;
-        return section
-          ? { rows: section.querySelectorAll("li").length, there: true }
-          : { rows: 0, there: false };
-      };
-      return {
-        evidence: read(".rd-progress-evidence"),
-        repositories: read(".rd-progress-repositories"),
-        steering: read(".rd-progress-steering"),
-      };
-    });
-    // A shell is a heading with nothing under it. Repositories and evidence must not even be present; the
-    // steering section may be — the axis carries a claim — but then it must have a row, and the problem's own
-    // group must be absent either way.
-    const noShells =
-      !sectionStates.repositories.there &&
-      !sectionStates.evidence.there &&
-      (!sectionStates.steering.there || sectionStates.steering.rows > 0);
-    check(
-      "a problem with no repositories, no evidence and no steering renders no shell for any of them",
-      !bare.repositoriesPresent && !bare.evidencePresent && !bare.hasProblemScope && noShells,
-      `repositories ${bare.repositoriesPresent}, evidence ${bare.evidencePresent}, problem scope ${bare.hasProblemScope}; sections ${JSON.stringify(sectionStates)}`
-    );
-    check(
-      "and the steering section follows the data: it is absent unless the axis itself carries a claim",
-      bare.steeringPresent === (bareAxis > 0),
-      `section ${bare.steeringPresent} with ${bareAxis} axis-scoped claim(s)`
-    );
-  } else {
-    check(
-      "the fixture still carries a problem with no repositories, no evidence and no steering",
-      false,
-      "no problem with nothing behind it"
-    );
-  }
-
-  // (5) The EntityTag contract, executable: both repository tags land in the Repositories view with that
-  // repository selected. Both, because one tag could pass by accident while the second never fires.
-  const readRepositorySelection = () =>
-    page.evaluate(() => {
-      const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
-      const view = scope?.querySelector('[data-rd-view="repositories"]') ?? null;
-      const rows = [...(view?.querySelectorAll("[data-rd-repository]") ?? [])];
-      return {
-        count: rows.length,
-        present: view !== null,
-        selected: rows
-          .filter((node) => node.getAttribute("aria-pressed") === "true")
-          .map((node) => node.getAttribute("data-rd-repository")),
-      };
-    });
-  const landings = [];
-  for (const [index, repository] of withRelations.repositories.entries()) {
+  ) ?? null;
+  if (withRelations) {
     await selectAxis(String(withRelations.axisId));
     await root.locator(`[data-rd-problem-choice="${withRelations.id}"]`).click();
     await page.waitForTimeout(300);
-    await root
-      .locator(`[data-rd-entity-tag="repository"][data-rd-entity-id="${repository.id}"]`)
-      .click();
-    await page.waitForTimeout(400);
-    landings.push(await readRepositorySelection());
-    if (index < withRelations.repositories.length - 1) {
-      await root.locator('[data-rd-view-option="progress"]').click();
+    const support = await readSupport();
+    const repositoryText = support.repositories.map((row) => row.fullName).join("|");
+    const wantedRepositories = withRelations.repositories.map((row) => row.fullName).join("|");
+    // The tag row renders the names and nothing else: no "primary", no rank, no extra label — a marker of that
+    // kind would show up as text the repository names do not account for. Read the tag row rather than the whole
+    // section: `innerText` of the section would include its heading, which is not what this is about.
+    const threadText = await page.evaluate(() =>
+      (
+        document
+          .querySelector('div[data-plugin-id="research-dashboard"] .rd-progress-repositories .rd-tags')
+          ?.innerText ?? ""
+      )
+        .replace(/\s+/g, " ")
+        .trim()
+    );
+    const threadOnlyNames =
+      threadText === withRelations.repositories.map((row) => row.fullName).join(" ");
+    check(
+      "the repository threads are the problem's own relations, in the projection's order, with nothing marked primary",
+      support.repositoriesPresent && repositoryText === wantedRepositories && threadOnlyNames,
+      `${support.repositories.length} tag(s) of ${withRelations.repositories.length}; order ${repositoryText === wantedRepositories ? "matches" : "differs"}; section text ${JSON.stringify(threadText)}`
+    );
+
+    // (2) Evidence: the projection's records, each keeping the source it came from — a source type rendered as
+    // itself, the reference and the summary intact, and the same date that orders the row.
+    const evidenceOrder = support.evidence.map((row) => row.id).join("|");
+    const wantedEvidence = withRelations.evidence.map((row) => row.id).join("|");
+    const sourcesMatch = support.evidence.every(
+      (row, position) => row.source === withRelations.evidence[position]?.sourceType
+    );
+    const provenanceKept = support.evidence.every((row, position) => {
+      const wanted = withRelations.evidence[position];
+      return (
+        row.text.includes(wanted?.sourceRef ?? "\u0000") &&
+        row.text.includes(wanted?.summary ?? "\u0000") &&
+        row.date.includes(wanted?.occurredAt?.slice(0, 10) ?? "\u0000")
+      );
+    });
+    check(
+      "evidence is the projection's records with their provenance: source type, reference, summary and date",
+      support.evidencePresent &&
+        evidenceOrder === wantedEvidence &&
+        sourcesMatch &&
+        provenanceKept,
+      `${support.evidence.length} row(s) of ${withRelations.evidence.length}; sources ${sourcesMatch ? "match" : "differ"}; provenance ${provenanceKept ? "kept" : "lost"}; first source ${support.evidence[0]?.source}`
+    );
+
+    // (3) Human steering: exactly the projection's claims, each under the scope it was aimed at, every one
+    // human-authored — and the axis claim is not copied under the problem that sits beneath it.
+    const wantedProblemClaims = withRelations.steering.map((claim) => claim.text);
+    const wantedAxisClaims = (
+      allProgress.axes.axes.find((row) => row.id === withRelations.axisId)?.steering ?? []
+    ).map((claim) => claim.text);
+    const shownProblemClaims = support.problemScope.map((claim) => claim.text);
+    const shownAxisClaims = support.axisScope.map((claim) => claim.text);
+    const allHuman = [...support.problemScope, ...support.axisScope].every((claim) =>
+      claim.meta.startsWith("human") || claim.meta.includes("human")
+    );
+    check(
+      "human steering is exactly the projection's claims, under the scope each was aimed at",
+      shownProblemClaims.join("|") === wantedProblemClaims.join("|") &&
+        shownAxisClaims.join("|") === wantedAxisClaims.join("|") &&
+        allHuman,
+      `problem scope ${shownProblemClaims.length}/${wantedProblemClaims.length}, axis scope ${shownAxisClaims.length}/${wantedAxisClaims.length}; every claim human-authored ${allHuman}`
+    );
+    check(
+      "an axis-scoped claim stays the axis context — it is not copied under the problem",
+      wantedAxisClaims.length > 0 && !shownProblemClaims.includes(wantedAxisClaims[0]),
+      `axis claims ${wantedAxisClaims.length}; leaked into the problem scope ${shownProblemClaims.includes(wantedAxisClaims[0])}`
+    );
+    check(
+      "an ordinary note on the same problem is context, not steering",
+      !support.steeringText.includes(FIXTURE_NOTE_PREFIX),
+      `steering section ${support.steeringText.includes(FIXTURE_NOTE_PREFIX) ? "shows" : "excludes"} the note`
+    );
+
+    // (4) The three negative cases, on one problem that has none of it — Fixture E's sparse problem is the
+    // subject on purpose: no repositories, no supporting record, no steering of its own. Absence must be silent,
+    // and the shell check is a heading with no rows, which is exactly what "an empty section" would be.
+    const sparse = (allProgress.problems.problems ?? []).find(
+      (problem) =>
+        problem.state === "open" &&
+        problem.repositories.length === 0 &&
+        problem.evidence.length === 0 &&
+        problem.steering.length === 0
+    );
+    if (sparse) {
+      await selectAxis(String(sparse.axisId));
+      // Fail rather than hang if the row is missing: the point of this block is that the section is silent, so a
+      // problem the inventory does not list at all would be a different defect, not a timeout.
+      const selectable = await root.locator(`[data-rd-problem-choice="${sparse.id}"]`).count();
+      check(
+        "the sparse problem is one the inventory can select",
+        selectable === 1,
+        `${selectable} row(s) for open problem ${sparse.id.slice(0, 8)}`
+      );
+      if (selectable === 1) {
+        await root.locator(`[data-rd-problem-choice="${sparse.id}"]`).click();
+        await page.waitForTimeout(300);
+      }
+      const bare = await readSupport();
+      const bareAxis = (allProgress.axes.axes.find((row) => row.id === sparse.axisId)?.steering ?? [])
+        .length;
+      const sectionStates = await page.evaluate(() => {
+        const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+        const read = (selector) => {
+          const section = scope?.querySelector(selector) ?? null;
+          return section
+            ? { rows: section.querySelectorAll("li").length, there: true }
+            : { rows: 0, there: false };
+        };
+        return {
+          evidence: read(".rd-progress-evidence"),
+          repositories: read(".rd-progress-repositories"),
+          steering: read(".rd-progress-steering"),
+        };
+      });
+      // A shell is a heading with nothing under it. Repositories and evidence must not even be present; the
+      // steering section may be — the axis carries a claim — but then it must have a row, and the problem's own
+      // group must be absent either way.
+      const noShells =
+        !sectionStates.repositories.there &&
+        !sectionStates.evidence.there &&
+        (!sectionStates.steering.there || sectionStates.steering.rows > 0);
+      check(
+        "a problem with no repositories, no evidence and no steering renders no shell for any of them",
+        !bare.repositoriesPresent && !bare.evidencePresent && !bare.hasProblemScope && noShells,
+        `repositories ${bare.repositoriesPresent}, evidence ${bare.evidencePresent}, problem scope ${bare.hasProblemScope}; sections ${JSON.stringify(sectionStates)}`
+      );
+      check(
+        "and the steering section follows the data: it is absent unless the axis itself carries a claim",
+        bare.steeringPresent === (bareAxis > 0),
+        `section ${bare.steeringPresent} with ${bareAxis} axis-scoped claim(s)`
+      );
+    } else {
+      check(
+        "the fixture still carries a problem with no repositories, no evidence and no steering",
+        false,
+        "no problem with nothing behind it"
+      );
+    }
+
+    // (5) The EntityTag contract, executable: both repository tags land in the Repositories view with that
+    // repository selected. Both, because one tag could pass by accident while the second never fires.
+    const readRepositorySelection = () =>
+      page.evaluate(() => {
+        const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+        const view = scope?.querySelector('[data-rd-view="repositories"]') ?? null;
+        const rows = [...(view?.querySelectorAll("[data-rd-repository]") ?? [])];
+        return {
+          count: rows.length,
+          present: view !== null,
+          selected: rows
+            .filter((node) => node.getAttribute("aria-pressed") === "true")
+            .map((node) => node.getAttribute("data-rd-repository")),
+        };
+      });
+    const landings = [];
+    for (const [index, repository] of withRelations.repositories.entries()) {
+      await selectAxis(String(withRelations.axisId));
+      await root.locator(`[data-rd-problem-choice="${withRelations.id}"]`).click();
       await page.waitForTimeout(300);
+      await root
+        .locator(`[data-rd-entity-tag="repository"][data-rd-entity-id="${repository.id}"]`)
+        .click();
+      await page.waitForTimeout(400);
+      landings.push(await readRepositorySelection());
+      if (index < withRelations.repositories.length - 1) {
+        await root.locator('[data-rd-view-option="progress"]').click();
+        await page.waitForTimeout(300);
+      }
+    }
+    check(
+      "each repository tag lands in the Repositories view with that repository selected",
+      landings.length === withRelations.repositories.length &&
+        landings.every(
+          (landing, index) =>
+            landing.present &&
+            landing.selected.length === 1 &&
+            landing.selected[0] === withRelations.repositories[index].fullName
+        ),
+      landings
+        .map((landing, index) => `${landing.selected[0] ?? "none"} (wanted ${withRelations.repositories[index]?.fullName})`)
+        .join("; ")
+    );
+    check(
+      "and the tag wrote nothing: the repository set is the same after navigating",
+      landings.every((landing) => landing.count === landings[0]?.count) && landings[0]?.count > 0,
+      `${landings.map((landing) => landing.count).join(" then ")} repository row(s)`
+    );
+    // Back to Progress, so the checks after this one read the view they describe — and on the problem that
+    // carries all three sections, because the end of the pass is also what the screenshot captures.
+    await root.locator('[data-rd-view-option="progress"]').click();
+    await page.waitForTimeout(300);
+    await selectAxis(String(withRelations.axisId));
+    await root.locator(`[data-rd-problem-choice="${withRelations.id}"]`).click();
+    await page.waitForTimeout(300);
+  } else {
+    const reason =
+      "this dataset carries no problem with more than one repository, so the step-5 sections have no " +
+      `subject here (${(allProgress.problems.problems ?? []).length} problem row(s) in the payload) — the ` +
+      "fixture's axis carries one, so that run discriminates";
+    const sparseReason =
+      "this dataset carries no problem with nothing behind it (no repositories, no evidence, no " +
+      "steering), so the negative cases have no subject — the fixture's sparse problem does, so that " +
+      "run discriminates";
+    for (const description of [
+      "the repository threads are the problem's own relations, in the projection's order, with nothing marked primary",
+      "evidence is the projection's records with their provenance: source type, reference, summary and date",
+      "human steering is exactly the projection's claims, under the scope each was aimed at",
+      "an axis-scoped claim stays the axis context — it is not copied under the problem",
+      "an ordinary note on the same problem is context, not steering",
+      "each repository tag lands in the Repositories view with that repository selected",
+      "and the tag wrote nothing: the repository set is the same after navigating",
+    ]) {
+      skip(description, reason);
+    }
+    for (const description of [
+      "the sparse problem is one the inventory can select",
+      "a problem with no repositories, no evidence and no steering renders no shell for any of them",
+      "and the steering section follows the data: it is absent unless the axis itself carries a claim",
+    ]) {
+      skip(description, sparseReason);
     }
   }
-  check(
-    "each repository tag lands in the Repositories view with that repository selected",
-    landings.length === withRelations.repositories.length &&
-      landings.every(
-        (landing, index) =>
-          landing.present &&
-          landing.selected.length === 1 &&
-          landing.selected[0] === withRelations.repositories[index].fullName
-      ),
-    landings
-      .map((landing, index) => `${landing.selected[0] ?? "none"} (wanted ${withRelations.repositories[index]?.fullName})`)
-      .join("; ")
-  );
-  check(
-    "and the tag wrote nothing: the repository set is the same after navigating",
-    landings.every((landing) => landing.count === landings[0]?.count) && landings[0]?.count > 0,
-    `${landings.map((landing) => landing.count).join(" then ")} repository row(s)`
-  );
-  // Back to Progress, so the checks after this one read the view they describe — and on the problem that
-  // carries all three sections, because the end of the pass is also what the screenshot captures.
-  await root.locator('[data-rd-view-option="progress"]').click();
-  await page.waitForTimeout(300);
-  await selectAxis(String(withRelations.axisId));
-  await root.locator(`[data-rd-problem-choice="${withRelations.id}"]`).click();
-  await page.waitForTimeout(300);
 }
 
   // ------------------------------------------------ C8: no bare state, one vocabulary for the evidence
@@ -2052,15 +2150,30 @@ if (filterRepo === "") {
   });
   // How many rails survive depends on which axes have events in the window; that any rail survives,
   // that every rail names this repository, and that the summary admits it is filtered, do not.
+  //
+  // The topics are derived from the projection, not from the page's default selection (`CORPUS.topic`) —
+  // that is a *default selection*, and on an instance whose first card is another dataset's topic it is the
+  // wrong expectation, which is how this check failed while the filter itself worked. Deriving is also
+  // strictly stronger: it asserts the rendered topics are exactly the topics the surviving rails belong to.
+  //
+  // The axis row's topic field is `topicName` (the projection has no `topic` on a row), and a field name the
+  // row does not have yields `null` for every rail rather than an error — the expectation collapses to an
+  // empty list and the check goes red on *every* dataset, which is how it read until the corpus re-run.
+  const topicOfAxis = (title) =>
+    allProgress.axes.axes.find((row) => row.title === title)?.topicName ?? null;
+  const expectedTopics = [...new Set(byRepository.rails.map(topicOfAxis).filter(Boolean))];
+  const strayTopics = byRepository.topics.filter((topic) => !expectedTopics.includes(topic));
   const strayRails = byRepository.rails.filter((rail) => !repoAxes.includes(rail));
   check(
     "filtering by a repository keeps only the axes that name it, and says it is filtered",
-    byRepository.topics.length === 1 &&
-      byRepository.topics[0] === CORPUS.topic &&
-      byRepository.rails.length >= 1 &&
+    byRepository.rails.length >= 1 &&
       strayRails.length === 0 &&
+      byRepository.topics.length === expectedTopics.length &&
+      strayTopics.length === 0 &&
       byRepository.summary.includes("(filtered)"),
-    `topics ${JSON.stringify(byRepository.topics)}; rails ${JSON.stringify(byRepository.rails)} (stray ${JSON.stringify(strayRails)} of ${JSON.stringify(repoAxes)}); summary "${byRepository.summary}"`
+    `topics ${JSON.stringify(byRepository.topics)} (expected ${JSON.stringify(expectedTopics)}); ` +
+      `rails ${JSON.stringify(byRepository.rails)} (stray ${JSON.stringify(strayRails)} of ${JSON.stringify(repoAxes)}); ` +
+      `summary "${byRepository.summary}"`
   );
 }
 

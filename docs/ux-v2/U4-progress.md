@@ -220,7 +220,8 @@ fixture E: problem with nothing behind it — repositories 0, step null, history
 **One disclosure:** the shared dev instance carries diagnosis leftovers — probe activities on the fixture
 problem (6 activity records there rather than 2) and one duplicated plan from the first failed attempt. The
 numbers above are from the isolated instance, which is where the fixture is meant to be read; the dev
-instance is mixed by design and its corpus record stands as U3's step 10 left it.
+instance is mixed by design, and its corpus record no longer stands as U3's step 10 left it — §16 re-measures
+it on a corpus-only instance.
 
 ## 8. The axis-index render (step 1, second half)
 
@@ -603,16 +604,16 @@ this session accumulated.
 ## 14. What the shared dev instance measured, and the corpus record
 
 
-Run on the shared dev instance (corpus + fixture + Fixture E), the same pass reports **50 pass · 1 fail · 0
-skip**: the 7 skips of the corpus-only record became real checks once fixture data was present, and one of them
-fails. It is not the render. The check
+Run on the shared dev instance (corpus + fixture + Fixture E), the same pass reported **50 pass · 1 fail · 0
+skip** (as of step 1): the corpus record's 7 skips became real checks once fixture data was present, and one of
+them failed. It was not the render. The check
 *"filtering by a repository keeps only the axes that name it, and says it is filtered"* derives two things
 from two different places: `CORPUS.repositories[0]` (the corpus repository, and therefore its topic) and
 `CORPUS.topic` (the topic of the **first timeline group**, which on a mixed instance is a fixture topic). The
 filter and the expectation describe different origins, so they disagree — the rails themselves were clean
 (`stray []`). This is the mixed-dataset coupling U10 already owns; it is recorded here rather than papered over,
 and the **committed corpus record was not overwritten** with a mixed-instance result. A corpus number that a
-reviewer can reproduce needs a corpus-only instance, which is U10's work.
+reviewer can reproduce needs a corpus-only instance — which now exists, and §16 is its record.
 
 ## 15. A pre-existing flake, root-caused
 
@@ -625,3 +626,52 @@ very likely the same class as the single unexplained `117/1` run recorded at U3'
 it is no longer an unexplained observation, though whether that run *was* this test cannot be proven after the
 fact. The same pattern (order assertions over `updated_at DESC` lists) still exists at five sites in
 `store.test.ts`; they passed 5 consecutive full runs, but they carry the same latent sensitivity.
+
+## 16. The corpus record, re-measured on a corpus-only instance
+
+§14 left the corpus figure where U3's step 10 had put it: taken against the shared dev instance, which is not
+corpus-only. It has an instance of its own now — a fresh `NAKAMA_CONFIG_DIR`, the plugin installed **and
+enabled** (the enable is what creates the org's data store), then the committed 695-call replay seeded into it
+(all 695 calls accepted, 65.5 s). The served bytes are byte-identical to this repository's build; the release
+label is `0.2.0` (a fresh install publishes the packaged version — a *reinstall* is what mints a
+`+dev.<digest>`), revision **4**, generation `g724c4ea…`.
+
+| dataset | instance | record (both 1440×900 and 1280×800) |
+|---|---|---|
+| corpus (695-call replay) | `:4500`, web `:3007`, corpus only | **52 pass · 0 fail · 26 skip** |
+| fixture (applied once) | `:4400`, web `:3005`, fixture only | **80 · 0 · 0** |
+
+**The 26 skips are a finding, not noise.** The corpus carries **no problem row and no plan**, so every check
+whose subject is a problem — the Problem column, the open-problem inventory, repository threads, evidence,
+human steering, the sparse negative cases — has nothing to read on it. Each prints `SKIP` with its reason and
+is counted in the summary line, because `0 failed` must never be read as `everything exercised`.
+
+**Three harness defects, one class: a check whose subject the dataset lacks killed the run instead of saying
+so.**
+
+1. The step-5 block read its subject unguarded — `withRelations.axisId` on `undefined` — so the pass died with
+   a `TypeError` **after 40-odd checks**, reporting nothing about the page. It is guarded now: with no problem
+   carrying more than one repository, the block's seven checks print `SKIP` and their reason.
+2. Five step-2/step-4 checks needed a problem row. Four (the Problem column, the inventory listing, the row
+   context, the active row) reported **FAIL** on a dataset whose subject they need, and a fifth passed
+   **vacuously** — `expectedOpen.length === 0 || …` is a green tick on a dataset with nothing to tick. All five
+   now `SKIP` with a reason.
+3. The repository-filter check derived its expected topics from `row.topic` — a field the projection's axis row
+   does not have; the row carries **`topicName`** (`store.ts:4002`). A field name a row lacks yields `null` per
+   rail rather than an error, so the expectation collapsed to `[]` and the check was **red on every dataset**,
+   corpus or fixture. It was the derivation step 3's rework had just introduced, so §14's "the filter worked
+   while the check failed" was only half the story: the *other* half is that the replacement expectation could
+   never have matched. It passes on both datasets now.
+
+**The fixture total did not move to 81 — it is 80, with one check swapped.** The uncommitted step-5 edits add
+the three-halves precondition (+1) and fold the fixture's closed-out-problem precondition into the conditional
+that replaced it (−1). Verified by diffing the two runs' check lists: exactly one description left, exactly one
+arrived. The expectation of 81 counted the addition and missed the removal; the run's own summary line is the
+authority.
+
+**The mixed-instance claim is measured now, not remembered.** A corpus pass pointed at the shared dev dashboard
+(`:3003` → `:4399`) reads a payload of **6 axes / 2 people / 3 repositories** whose selected topic is `Layout
+fixture — crowded card` — the corpus pass is reading the fixture dataset next to the corpus one. That is U10's
+mixed-instance problem demonstrated in the corpus evidence path. The transcript is kept outside this repository
+(the operator's scratch tree) on purpose: what this repository commits under `docs/corpus/` is the corpus-only
+record.

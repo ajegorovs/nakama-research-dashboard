@@ -5,7 +5,8 @@ through the plugin's own action surface. Its value is that nobody chose its stat
 real repository does not contain every state a layout has to survive — and the ones it lacks are the
 layout-critical ones.
 
-Measured, on the same 43-check read pass:
+First measured, on the same 43-check read pass (the current record, which is longer, is at the end of this
+section):
 
 | dataset | result |
 |---|---|
@@ -27,6 +28,13 @@ that step's inline list — and then eleven with U4's step 5 (the three supporti
 repositories as tags that both navigate, evidence kept with its source, human steering under separate problem
 and axis scopes, and what none of the three may show — with one guard that the subject axis really has open
 problems), so the same fixture pass now reports **80**, at both viewports, with nothing failing.
+**Measured against each other at U4's step 5, on separate instances:** this directory **80 · 0 · 0** and the
+corpus **52 · 0 · 26** — the corpus record is new, taken on a corpus-only instance, and its 26 skips are the
+checks a corpus with no problem row and no plan cannot exercise, each printed with its reason. So the pair
+that once read 36/43 reads **52/80**. The pass also *swapped* one check for another at step 5 — the closed-out
+precondition folded into the conditional that replaced it, and a new precondition that `get_progress`
+carries all three halves the page reads — which is why the fixture total stays **80** rather than moving to 81.
+
 The transcripts in this directory are the record; read a run's own summary line rather than a number in a
 document.)
 
