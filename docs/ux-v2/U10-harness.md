@@ -66,3 +66,51 @@ vacuously. Closing them means seeding the *corpus* (U10's remaining items), not 
 **What did not change:** no `src/ui.tsx` change and no rebuild — the served release and its hash are the ones
 U4 closed on (`0.2.0+dev.caa231a415f0`, `ui/app.js` `aa3a478c39ca045d7e96`), which is the strongest available
 evidence that this pass is harness and data only.
+
+
+## 3. The dataset identity guard, and a record that cannot lie about being partial (2026-10-02)
+
+Two evidence-integrity mechanisms, both at the harness layer. The reviewer's framing: *"a verifier should
+refuse to produce an acceptance verdict if the instance does not match the requested dataset identity … this
+is now an evidence-integrity requirement, not convenience."*
+
+**Identity comes from durable markers, never from whatever renders first.** The fixture's identity is its own
+naming — topics `Layout fixture …`, repositories under `fixture/`; the corpus's identity is the *absence* of
+that naming. `read-pass.sh` exports `NAKAMA_EXPECT_DATASET` from `--dataset`, and the pass decides before any
+check runs:
+
+| requested | instance shows | verdict |
+|---|---|---|
+| fixture | fixture markers only | proceeds, and the identity line is recorded in the transcript |
+| fixture | corpus markers | **REFUSED** — exit 3 |
+| fixture | both fixture and corpus markers | **REFUSED** — exit 3 (the mixed instance) |
+| corpus | any fixture marker | **REFUSED** — exit 3 |
+
+Measured in both confusing directions, which are exactly the pairings that produced the contaminated records:
+
+```
+--dataset fixture  -> corpus instance
+identity: expected fixture · 1 topic(s) (0 fixture-named) · 0 of 1 repository(ies) under fixture/ · observed corpus markers (no fixture-named topic or repository)
+REFUSED  no verdict: the pass will not measure fixture against an instance that is corpus markers ...
+read pass: REFUSED — no verdict, no record            [exit 3]
+
+--dataset corpus   -> fixture instance
+identity: expected corpus · 2 topic(s) (2 fixture-named) · 3 of 3 repository(ies) under fixture/ · observed fixture markers only
+read pass: REFUSED — no verdict, no record            [exit 3]
+```
+
+**A partial record can no longer masquerade as a short one.** Two layers, because the trap has two halves:
+
+- the pass itself prints `ABORTED  the pass stopped after N check(s) — this transcript is PARTIAL and is not an
+  acceptance verdict`, the first frames of the error, and `read pass: ABORTED — partial record, ...`, then exits
+  **2** — a code distinct from 1, which is a real verdict with failures in it;
+- the wrapper captures the run to a scratch file and copies it into the committed transcript path **only for a
+  verdict** (exit 0 or 1). On exit 2 or 3 it prints `read-pass: NOT RECORDED — the committed record at <path>
+  is untouched; this run is at <scratch>` and leaves the repository alone.
+
+Tested by injection rather than by inspection: a `throw` placed after the login check produced
+`inline exit=2`, `wrapper exit=2`, the three ABORTED lines, and the committed fixture transcript still ending
+in its own legitimate summary — `grep -c ABORTED` on it: **0**.
+
+**Measured after the guard** (both viewports, each dataset on its own instance): fixture **107 · 0 · 0**,
+corpus **73 · 0 · 33** — unchanged by this pass, which is the point: the guard adds a refusal, not a measurement.

@@ -83,9 +83,12 @@ const WRITE = process.argv.includes("--write");
 
 const problems = [];
 const skipped = [];
+let passed = 0;
 const check = (description, condition, detail = "") => {
   console.log(`${condition ? "PASS" : "FAIL"}  ${description}${detail ? ` — ${detail}` : ""}`);
-  if (!condition) {
+  if (condition) {
+    passed += 1;
+  } else {
     problems.push(description);
   }
 };
@@ -96,6 +99,23 @@ const skip = (description, reason) => {
   console.log(`SKIP  ${description} — ${reason}`);
   skipped.push(`${description} — ${reason}`);
 };
+const checksSoFar = () => passed + problems.length + skipped.length;
+// A pass that dies mid-file must not leave a record that reads like a short successful run. The transcript
+// file is written by the wrapper as this process prints, so the summary has to come from here: name the
+// abort, say the record is partial, and exit with a code the wrapper refuses to record (2 — distinct from
+// 1, which is a real verdict with failures in it).
+const abortRecord = (error) => {
+  console.log("");
+  console.log(
+    `ABORTED  the pass stopped after ${checksSoFar()} check(s) — this transcript is PARTIAL and is not an ` +
+      "acceptance verdict. The last check printed is the last one that ran."
+  );
+  console.log(`ABORTED  ${String(error?.stack ?? error).split("\n").slice(0, 4).join("\n         ")}`);
+  console.log("read pass: ABORTED — partial record, do not read it as a result");
+  process.exit(2);
+};
+process.on("uncaughtException", abortRecord);
+process.on("unhandledRejection", abortRecord);
 
 const browser = await chromium.launch({
   executablePath: EXECUTABLE,
@@ -247,6 +267,52 @@ const CORPUS = await page.evaluate(
   },
   [PLUGIN_ID, 14]
 );
+// ------------------------------------------------------------------ dataset identity: refuse, do not guess
+// A verifier must not emit an acceptance verdict for a dataset it was not pointed at, and a *mixed* instance
+// (the fixture applied on top of the corpus) is what has already corrupted attribution and verdicts. The
+// identity is read from durable markers, never from whatever renders first: the fixture's own naming (topics
+// "Layout fixture …", repositories under "fixture/"), and the corpus's, which is the *absence* of it. With
+// `--dataset` the wrapper exports NAKAMA_EXPECT_DATASET, so a mismatch is refused here, before any check
+// runs, and the run exits 3 — a code the wrapper refuses to record, so the committed transcript survives.
+const EXPECTED_DATASET = process.env.NAKAMA_EXPECT_DATASET ?? "";
+if (["corpus", "fixture"].includes(EXPECTED_DATASET)) {
+  const isFixtureTopic = (name) => /^layout fixture/i.test(name ?? "");
+  const isFixtureRepo = (name) => /^fixture\//i.test(name ?? "");
+  const topicNames = CORPUS.topicNames ?? [];
+  const repoNames = (CORPUS.repositories ?? []).map((row) => row.fullName);
+  const fixtureTopics = topicNames.filter(isFixtureTopic);
+  const fixtureRepos = repoNames.filter(isFixtureRepo);
+  const showsFixture = fixtureTopics.length > 0 || fixtureRepos.length > 0;
+  const pureFixture =
+    topicNames.length > 0 && fixtureTopics.length === topicNames.length && fixtureRepos.length > 0;
+  const observed = !showsFixture
+    ? "corpus markers (no fixture-named topic or repository)"
+    : pureFixture
+      ? "fixture markers only"
+      : "BOTH fixture and corpus markers — a mixed instance";
+  const identityOk = EXPECTED_DATASET === "fixture" ? pureFixture : !showsFixture;
+  console.log(
+    `identity: expected ${EXPECTED_DATASET} · ${topicNames.length} topic(s) ` +
+      `(${fixtureTopics.length} fixture-named) · ${fixtureRepos.length} of ${repoNames.length} ` +
+      `repository(ies) under fixture/ · observed ${observed}`
+  );
+  if (!identityOk) {
+    console.log(
+      `FAIL  the instance holds the dataset this run asked for — requested ${EXPECTED_DATASET}, instance ` +
+        `shows ${observed}`
+    );
+    console.log(
+      `REFUSED  no verdict: the pass will not measure ${EXPECTED_DATASET} against an instance that is ${observed}`
+    );
+    console.log(
+      "REFUSED  apply the dataset you mean to measure to an instance of its own " +
+        "(harness/apply-layout-fixture.mjs, or the corpus seed), then re-run"
+    );
+    console.log("read pass: REFUSED — no verdict, no record");
+    await browser.close();
+    process.exit(3);
+  }
+}
 console.log(
   "corpus:",
   JSON.stringify({

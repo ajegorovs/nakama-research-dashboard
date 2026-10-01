@@ -1,8 +1,9 @@
 # harness/read-pass.sh — read pass · dataset corpus · viewport 1280x800
 # dashboard: http://127.0.0.1:3007
-# generated: 2026-10-02T01:43:58+03:00
+# generated: 2026-10-02T01:52:18+03:00
 
 PASS  login — status 200
+identity: expected corpus · 1 topic(s) (0 fixture-named) · 0 of 1 repository(ies) under fixture/ · observed corpus markers (no fixture-named topic or repository)
 corpus: {"axes":3,"blocked":0,"people":1,"repositories":1,"topic":"UDV Echo Process","windowEvents":30}
 PASS  plugin page mounted
 PASS  overview renders as the default screen
@@ -16,7 +17,7 @@ PASS  every topic in the payload has one card, carrying its own axes and none of
 PASS  a topic card leads with people and its state counts — ajegorovs on UDV Echo Process; payload states ["2 active","1 completed"]; card counts ["2 active","1 completed"]
 SKIP  the blocked axis shows its blocker text — no axis in this corpus is blocked
 SKIP  a topic with a blocked axis is visually distinct — no axis in this corpus is blocked, so the attention styling has no subject here
-PASS  each topic card reports its recent-activity summary — Recent: 590 events · last activity 3 days ago 
+PASS  each topic card reports its recent-activity summary — Recent: 589 events · last activity 3 days ago 
 PASS  the window control re-issues get_overview with the new window only — {"activitySinceDays":7}
 PASS  the page still renders after the window change
 PASS  the topic card offers one disclosure control, not two — card buttons ["ajegorovs/udv-echo-process","ajegorovs","Docs & agent skills — `docs/`, `.agents/skills`","ajegorovs/udv-echo-process","Signal analysis — `analysis/`, SA1–SA5, sparse","ajegorovs/udv-echo-process","Acquisition — `acquire/`, DOP3010 rig","ajegorovs/udv-echo-process","Read topic","Edit fields"]

@@ -103,6 +103,9 @@ fi
 export NAKAMA_SHOT_DIR="${SHOTS:-${PUBLISH_SHOT_DIR:-${NAKAMA_SHOT_DIR:-$DEFAULT_SHOTS}}}"
 TRANSCRIPT="${TRANSCRIPT:-${TRANSCRIPT_OUT:-$DEFAULT_TRANSCRIPT}}"
 export NAKAMA_VIEWPORT="$VIEWPORT"
+# The dataset the caller asked for, so the pass can REFUSE (rather than record) a verdict for an instance
+# that is not that dataset — a mixed instance has already corrupted attribution once.
+export NAKAMA_EXPECT_DATASET="$DATASET"
 export NAKAMA_DASHBOARD="${NAKAMA_DASHBOARD:-http://127.0.0.1:3003}"
 export NAKAMA_PLUGIN_ID="${NAKAMA_PLUGIN_ID:-research-dashboard}"
 export NAKAMA_PAGE_LABEL="${NAKAMA_PAGE_LABEL:-Research}"
@@ -141,14 +144,29 @@ mkdir -p "$(dirname "$TRANSCRIPT")"
 ARGS=()
 if [[ "$PASS" == "write" ]]; then ARGS+=(--write); fi
 
+# The run's output is captured to a scratch file first, so that a pass which REFUSED (3) or ABORTED (2)
+# cannot overwrite the committed record with a partial one. Only a verdict — 0 (all checks passed) or 1
+# (checks failed, which is itself a record) — is copied into the transcript path.
+SCRATCH_TRANSCRIPT="$(mktemp "${TMPDIR:-/tmp}/nakama-read-pass-XXXXXX.txt")"
 {
   echo "# harness/read-pass.sh — $PASS pass · dataset $DATASET · viewport $VIEWPORT"
   echo "# dashboard: $NAKAMA_DASHBOARD"
   echo "# generated: $(date -Is)"
   echo
   "$RUNNER" "$HERE/verify-page.mjs" "${ARGS[@]+"${ARGS[@]}"}"
-} 2>&1 | tee "$TRANSCRIPT"
+} 2>&1 | tee "$SCRATCH_TRANSCRIPT"
 status="${PIPESTATUS[0]}"
+
+if [[ "$status" -eq 2 || "$status" -eq 3 ]]; then
+  why="ABORTED (the pass died mid-run)"
+  [[ "$status" -eq 3 ]] && why="REFUSED (the instance is not the dataset this run asked for)"
+  echo "" >&2
+  echo "read-pass: NOT RECORDED — the pass exited $status: $why" >&2
+  echo "read-pass: the committed record at $TRANSCRIPT is untouched; this run is at $SCRATCH_TRANSCRIPT" >&2
+  exit "$status"
+fi
+
+cp -f "$SCRATCH_TRANSCRIPT" "$TRANSCRIPT"
 
 # The published set uses stable names, so the README and the plan documents keep pointing at the right
 # image after a re-capture. Only a read pass publishes; a write pass leaves its raw shots alone.

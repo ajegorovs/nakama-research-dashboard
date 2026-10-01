@@ -1,8 +1,9 @@
 # harness/read-pass.sh — read pass · dataset fixture · viewport 1280x800
 # dashboard: http://127.0.0.1:3005
-# generated: 2026-10-02T01:42:38+03:00
+# generated: 2026-10-02T01:50:57+03:00
 
 PASS  login — status 200
+identity: expected fixture · 2 topic(s) (2 fixture-named) · 3 of 3 repository(ies) under fixture/ · observed fixture markers only
 corpus: {"axes":6,"blocked":1,"people":2,"repositories":3,"topic":"Layout fixture — crowded card","windowEvents":9}
 PASS  plugin page mounted
 PASS  overview renders as the default screen
