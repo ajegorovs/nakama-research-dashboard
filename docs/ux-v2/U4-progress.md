@@ -685,6 +685,71 @@ record.
 
 ---
 
+## 18. The EntityTag contract, exercised (step 7)
+
+Step 7 was the Progress consolidation/finalization pass: make the shared components, the tag primitive, the status
+treatment and the cross-view navigation match the UX contract, then freeze the acceptance record — with the first
+**real** EntityTag navigation proof, so the tag contract stops being a styling convention and becomes an exercised
+primitive.
+
+**One tag, five types, one entry point.** `EntityTag` (`component-contract.md` § EntityTag) is now a single
+component with a single pair of attributes (`data-rd-entity-tag` / `data-rd-entity-id`) plus `data-rd-tag-label`,
+and the page has one navigation entry point (`openEntity(type, id)`) that maps an entity type to its canonical view
+(`ENTITY_VIEW`). The repository tags that step 5 wrote by hand now render through it, unchanged on screen and in
+the DOM, so the step-5 checks kept passing without edit — which is what "consolidation" has to mean.
+
+**Where Progress emits tags.** The reading surface's context line names its topic and its axis — the contract's
+DetailHeader "compact context line, navigation tags" — and the Activity column emits a tag for every entity its
+event carries (topic, repository, person, and the problem the event is evidence for). Two rules came out of the
+projection rather than the markup: a tag's label is the **entity's own name** (`topicName`, `title`, `fullName`,
+`displayName`, the problem's `statement`), and a tag only renders when the entity is actually named — an event with
+no mapped account says "no account attributed" in words rather than showing a tag that would name nobody, and a
+reference the page's rollup does not carry renders no tag. No lookup, no call: every tag resolves from the payload
+that view already read.
+
+**The two entities whose home is Progress** needed the other half of the contract: a `preselect` on the view (the
+same `{id, seq}` shape `RepositoriesView` already used, now on `PeopleView` and `ProgressView`), where an axis
+target switches the subview to `Axes` and a problem target to `Problems`. `seq` is what makes the same tag land
+twice after a hand-made selection. For a topic target the destination is the topic index and "selected" is the
+expanded card — the detail is what makes a topic the subject of the page — applied in the page, since the index and
+its detail are one screen.
+
+**Three drift findings, all in the page's mirrors of the server's payloads.** (1) `ProgressProblemRow` in the page
+omitted `topicId` (the store has it) — a topic tag cannot be built without an id, so this would have silently
+dropped the topic half of the context line. (2) `ProgressEventRow` omitted `topicId` and `repositoryId`; the store's
+`TimelineEvent` carries them. (3) The People and Repositories index rows carried display names but no ids, so a
+"is this the entity I asked for?" assertion had to compare by name; they now carry `data-rd-person-id` /
+`data-rd-repository-id`. This is step 6's lesson recurring at a third site: the page's own view types are
+type-correct against themselves, so nothing but a DOM-vs-projection comparison catches a field the projection
+sends and the mirror never declares.
+
+**Two datasets, honestly.** The pass exercises each tag where the entity exists and `SKIP`s with a reason where it
+does not. **Neither dataset's recorded events name a repository** (`repositoryId` is `null` on all 150 corpus events
+and all 8 fixture events — the replay records commits with a source URL and links repositories through the
+topic/axis relations, not per event), so the Activity column's repository tag renders nowhere yet and both runs
+skip it; the repository *navigation* is still exercised, from the threads section, on the fixture. The corpus
+carries no problem, so its problem tag skips too. The fixture exercises all the rest.
+
+**Measured.** Release `0.2.0+dev.e026dbe92b22` on both instances (revision 28 corpus / 41 fixture); the served
+`ui/app.js` hashes to **`77643db412aaf226`** on both instances, in the vendored checkout, and in this repository's
+build. **Fixture acceptance 96 pass · 0 fail · 1 skip** at both 1440×900 and 1280×800 (was 87 · 0 · 0); **corpus
+64 pass · 0 fail · 32 skip** at both (was 56 · 0 · 30). The ten added checks: the context tags carry the
+projection's ids and labels; every Activity tag names an entity its own event carries and no more (row by row
+against the live answer); an attributed event's person is a tag; topic, person, repository, problem and axis tags
+each land in their canonical view **with the entity actually selected there** (the expanded card, the panel, the
+active row) and with the label matching what the destination calls it; no status badge is a tag; and the whole
+traversal wrote nothing — no write action called, projection byte-identical.
+
+**One harness defect of my own, fixed and worth remembering.** Clicking a tag captured in one view, after the page
+had navigated away, is a 30-second locator timeout that kills the pass — and an unmounted view loses its selection
+(re-mounting Progress resets the subview and the axis to the projection's first row), so "what the last landing
+left on screen" is not a fact. The checks now navigate, re-read, derive the subject **from the projection** (which
+bucket can show a tag at all), click, assert — and skip rather than go red when the subject is absent. The pass
+script's `--dataset` default also bit once: a fixture run without the flag writes the fixture's transcript into
+`docs/corpus/`, contaminating a committed record; both runs were re-taken with the dataset named explicitly.
+
+---
+
 ## 17. The index's two subjects (step 6)
 
 Step 6 was specified as an **inversion, not a sibling**: with `Problems` selected the navigation object becomes

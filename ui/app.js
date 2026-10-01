@@ -53,6 +53,13 @@ var VIEW_OPTIONS = [
   { label: "Repositories", value: "repositories" },
   { label: "Progress", value: "progress" }
 ];
+var ENTITY_VIEW = {
+  axis: "progress",
+  person: "people",
+  problem: "progress",
+  repository: "repositories",
+  topic: "topics"
+};
 var PROGRESS_INDEX_OPTIONS = [
   { label: "Axes", value: "axes" },
   { label: "Problems", value: "problems" }
@@ -654,6 +661,21 @@ function apply(ctx) {
     }
     return ref.toLowerCase().includes(base.toLowerCase()) ? ref : `${base} · ${ref}`;
   }
+  function EntityTag({
+    id,
+    label,
+    onOpen,
+    type
+  }) {
+    return /* @__PURE__ */ React.createElement("button", {
+      className: "rd-tag",
+      "data-rd-entity-id": id,
+      "data-rd-entity-tag": type,
+      "data-rd-tag-label": label,
+      onClick: () => onOpen(type, id),
+      type: "button"
+    }, label);
+  }
   function StateBadge({
     confidence,
     kind = "claim",
@@ -1006,10 +1028,16 @@ function apply(ctx) {
   }
   function PeopleView({
     people,
+    preselect,
     truncated,
     windowDays
   }) {
     const [selectedId, setSelectedId] = React.useState(null);
+    React.useEffect(() => {
+      if (preselect) {
+        setSelectedId(preselect.id);
+      }
+    }, [preselect?.id, preselect?.seq]);
     const selected = people.find((entry) => entry.person.id === selectedId) ?? people[0] ?? null;
     if (people.length === 0) {
       return /* @__PURE__ */ React.createElement(Card, null, /* @__PURE__ */ React.createElement(CardContent, null, /* @__PURE__ */ React.createElement("p", {
@@ -1029,6 +1057,7 @@ function apply(ctx) {
       "aria-pressed": selected?.person.id === entry.person.id,
       className: "rd-index-item",
       "data-rd-person": entry.person.displayName,
+      "data-rd-person-id": entry.person.id,
       onClick: () => setSelectedId(entry.person.id),
       type: "button"
     }, /* @__PURE__ */ React.createElement("span", {
@@ -1071,6 +1100,7 @@ function apply(ctx) {
       "aria-pressed": selected?.repository.id === entry.repository.id,
       className: "rd-index-item",
       "data-rd-repository": entry.repository.fullName,
+      "data-rd-repository-id": entry.repository.id,
       onClick: () => setSelectedId(entry.repository.id),
       type: "button"
     }, /* @__PURE__ */ React.createElement("span", {
@@ -1148,6 +1178,7 @@ function apply(ctx) {
   function ProgressView({
     onOpenEntity,
     people,
+    preselect,
     progress,
     repositories,
     timeline,
@@ -1156,6 +1187,18 @@ function apply(ctx) {
     const [selectedAxisId, setSelectedAxisId] = React.useState(null);
     const [selectedProblemId, setSelectedProblemId] = React.useState(null);
     const [indexMode, setIndexMode] = React.useState("axes");
+    React.useEffect(() => {
+      if (!preselect) {
+        return;
+      }
+      if (preselect.type === "axis") {
+        setIndexMode("axes");
+        setSelectedAxisId(preselect.id);
+      } else if (preselect.type === "problem") {
+        setIndexMode("problems");
+        setSelectedProblemId(preselect.id);
+      }
+    }, [preselect?.id, preselect?.seq, preselect?.type]);
     const [topicFilter, setTopicFilter] = React.useState("all");
     const [personFilter, setPersonFilter] = React.useState("all");
     const [repositoryFilter, setRepositoryFilter] = React.useState("all");
@@ -1210,6 +1253,15 @@ function apply(ctx) {
       parts.push(countLabel(problem.activityCount, "event", "events"));
       parts.push(`last activity ${describeAge(problem.recencyAt)}`);
       return parts.join(" · ");
+    }
+    function repositoryOf(id) {
+      if (id === null) {
+        return null;
+      }
+      return repositories.find((entry) => entry.repository.id === id)?.repository ?? null;
+    }
+    function problemOf(id) {
+      return id === null ? null : problemRows.find((row) => row.id === id) ?? null;
     }
     function indexProblemContext(problem) {
       return `${problem.axisTitle} · ${problem.topicName} · ${problemContext(problem)}`;
@@ -1315,10 +1367,22 @@ function apply(ctx) {
       "data-rd-progress-problem-shown": shownProblem?.id ?? ""
     }, /* @__PURE__ */ React.createElement("h3", {
       className: "rd-strong"
-    }, problemsMode ? "Problem" : `Open problems (${activeAxis?.openProblems ?? 0})`), problemsMode && shownProblem ? /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta",
-      "data-rd-problem-parent": "true"
-    }, indexProblemContext(shownProblem)) : null, activeAxis === null && !problemsMode ? /* @__PURE__ */ React.createElement("p", {
+    }, problemsMode ? "Problem" : `Open problems (${activeAxis?.openProblems ?? 0})`), activeAxis ? /* @__PURE__ */ React.createElement("div", {
+      className: "rd-cluster rd-tags",
+      "data-rd-progress-context": "true"
+    }, /* @__PURE__ */ React.createElement(EntityTag, {
+      id: activeAxis.topicId,
+      label: activeAxis.topicName,
+      onOpen: onOpenEntity,
+      type: "topic"
+    }), /* @__PURE__ */ React.createElement(EntityTag, {
+      id: activeAxis.id,
+      label: activeAxis.title,
+      onOpen: onOpenEntity,
+      type: "axis"
+    }), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, problemsMode && shownProblem ? problemContext(shownProblem) : `last activity ${describeAge(activeAxis.recencyAt)}${activeAxis.stale ? " · stale" : ""}`)) : null, activeAxis === null && !problemsMode ? /* @__PURE__ */ React.createElement("p", {
       className: "rd-muted",
       "data-rd-progress-problem-empty": "true"
     }, "No axis is selected.") : shownProblem === null ? /* @__PURE__ */ React.createElement("p", {
@@ -1368,7 +1432,34 @@ function apply(ctx) {
       className: "rd-strong"
     }, event.summary)), /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta"
-    }, describeSource(event.sourceType, event.sourceRef ?? ""), " · ", event.person ? event.person.displayName : "no account attributed", event.problemId && event.problemId === shownProblem?.id ? " · evidence for the problem shown" : "")))))), axisPlan ? /* @__PURE__ */ React.createElement("section", {
+    }, describeSource(event.sourceType, event.sourceRef ?? "")), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-cluster rd-tags",
+      "data-rd-feed-tags": "true"
+    }, event.topicId !== null && event.topicId === activeAxis?.topicId ? /* @__PURE__ */ React.createElement(EntityTag, {
+      id: event.topicId,
+      label: activeAxis?.topicName ?? event.topicId,
+      onOpen: onOpenEntity,
+      type: "topic"
+    }) : null, repositoryOf(event.repositoryId) ? /* @__PURE__ */ React.createElement(EntityTag, {
+      id: repositoryOf(event.repositoryId).id,
+      label: repositoryOf(event.repositoryId).fullName,
+      onOpen: onOpenEntity,
+      type: "repository"
+    }) : null, event.person ? /* @__PURE__ */ React.createElement(EntityTag, {
+      id: event.person.id,
+      label: event.person.displayName,
+      onOpen: onOpenEntity,
+      type: "person"
+    }) : /* @__PURE__ */ React.createElement("span", {
+      className: "rd-muted"
+    }, "no account attributed"), problemOf(event.problemId) ? /* @__PURE__ */ React.createElement(EntityTag, {
+      id: problemOf(event.problemId).id,
+      label: problemOf(event.problemId).statement,
+      onOpen: onOpenEntity,
+      type: "problem"
+    }) : null, event.problemId !== null && event.problemId === shownProblem?.id ? /* @__PURE__ */ React.createElement("span", {
+      className: "rd-muted"
+    }, "evidence for the problem shown") : null)))))), axisPlan ? /* @__PURE__ */ React.createElement("section", {
       className: "rd-progress-plan",
       "data-rd-progress-plan": axisPlan.id,
       "data-rd-progress-plan-claims-order": planClaimsOrder,
@@ -1438,14 +1529,13 @@ function apply(ctx) {
       className: "rd-section"
     }, "Repository threads"), /* @__PURE__ */ React.createElement("div", {
       className: "rd-cluster rd-tags"
-    }, shownProblem.repositories.map((repository) => /* @__PURE__ */ React.createElement("button", {
-      className: "rd-tag",
-      "data-rd-entity-id": repository.id,
-      "data-rd-entity-tag": "repository",
+    }, shownProblem.repositories.map((repository) => /* @__PURE__ */ React.createElement(EntityTag, {
+      id: repository.id,
       key: repository.id,
-      onClick: () => onOpenEntity("repository", repository.id),
-      type: "button"
-    }, repository.fullName)))) : null, shownProblem && shownProblem.evidence.length > 0 ? /* @__PURE__ */ React.createElement("section", {
+      label: repository.fullName,
+      onOpen: onOpenEntity,
+      type: "repository"
+    })))) : null, shownProblem && shownProblem.evidence.length > 0 ? /* @__PURE__ */ React.createElement("section", {
       className: "rd-progress-evidence",
       "data-rd-progress-evidence": shownProblem.evidence.length
     }, /* @__PURE__ */ React.createElement("span", {
@@ -1605,11 +1695,16 @@ function apply(ctx) {
     const [entityTarget, setEntityTarget] = React.useState(null);
     function openEntity(type, id) {
       setEntityTarget({ id, seq: (entityTarget?.seq ?? 0) + 1, type });
-      setView(type === "repository" ? "repositories" : "topics");
+      setView(ENTITY_VIEW[type]);
     }
     const [windowDays, setWindowDays] = React.useState(14);
     const [includeArchived, setIncludeArchived] = React.useState(false);
     const [expandedId, setExpandedId] = React.useState(null);
+    React.useEffect(() => {
+      if (entityTarget?.type === "topic") {
+        setExpandedId(entityTarget.id);
+      }
+    }, [entityTarget?.id, entityTarget?.seq, entityTarget?.type]);
     const [editing, setEditing] = React.useState(null);
     const [newName, setNewName] = React.useState("");
     const [detail, setDetail] = React.useState(null);
@@ -1924,7 +2019,10 @@ function apply(ctx) {
       countLabel(counts.axes, "axis", "axes"),
       countLabel(counts.people, "person", "people"),
       countLabel(counts.repositories, "repository", "repositories")
-    ].join(" · ") : "loading…")), view === "topics" ? topics.map((entry) => {
+    ].join(" · ") : "loading…")), view === "topics" ? /* @__PURE__ */ React.createElement("div", {
+      className: "rd-stack",
+      "data-rd-view": "topics"
+    }, topics.map((entry) => {
       const hasBlocked = entry.axisCounts.blocked > 0;
       const expanded = entry.topic.id === expandedId;
       const shown = expanded ? entry.axes : entry.axes.slice(0, LEAD_AXES);
@@ -2177,8 +2275,9 @@ function apply(ctx) {
       }, "Save"), /* @__PURE__ */ React.createElement("span", {
         className: "rd-muted"
       }, "The status change and its note land in one call."))) : null)));
-    }) : null, view === "people" ? /* @__PURE__ */ React.createElement(PeopleView, {
+    })) : null, view === "people" ? /* @__PURE__ */ React.createElement(PeopleView, {
       people: overview?.people ?? [],
+      preselect: entityTarget?.type === "person" ? entityTarget : null,
       truncated: overview?.peopleTruncated === true,
       windowDays
     }) : null, view === "repositories" ? /* @__PURE__ */ React.createElement(RepositoriesView, {
@@ -2189,6 +2288,7 @@ function apply(ctx) {
     }) : null, view === "progress" ? /* @__PURE__ */ React.createElement(ProgressView, {
       onOpenEntity: openEntity,
       people: overview?.people ?? [],
+      preselect: entityTarget && (entityTarget.type === "axis" || entityTarget.type === "problem") ? entityTarget : null,
       progress,
       repositories: overview?.repositories ?? [],
       timeline: overview?.timeline ?? [],

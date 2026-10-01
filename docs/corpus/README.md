@@ -116,10 +116,12 @@ would mix fixture data into a real-corpus pack.
 They are produced by the page harness (in the services tree, `services/nakama/scripts/verify-read.sh`,
 which wraps `verify-page.mjs`), and the pass that produced them is kept here verbatim as
 [`verify-read.txt`](verify-read.txt) — with `verify-read-1280x800.txt` for the narrow viewport:
-**56 checks passed, 0 failed, 30 skipped** at both viewports, re-measured at U4's step 6 on a
+**64 checks passed, 0 failed, 32 skipped** at both viewports, re-measured at U4's step 7 on a
 **corpus-only instance** (its own empty data root, this corpus seeded into it by the committed 695-call
-replay); the step-5 record was **52 · 0 · 26**. The 30 skips are the states a corpus with no problem row
-and no plan cannot exercise, each printed with its reason. The harness reads the corpus from the same
+replay); the step-6 record was **56 · 0 · 30** and the step-5 record **52 · 0 · 26**. The 32 skips are the
+states a corpus with no problem row and no plan cannot exercise, each printed with its reason — including the
+step-7 Activity-column repository tag, which no dataset can exercise yet because **no recorded event carries a
+`repositoryId`** (repositories are linked through topics and axes, not per event). The harness reads the corpus from the same
 payload the page reads, so it holds for any dataset rather than being a snapshot of this one.
 
 **One caveat on `dashboard-detail.png`, and it is a finding rather than an artifact choice:** the
@@ -165,7 +167,8 @@ Observations, not verdicts — the layout judgement is the review's to make:
   against this corpus as well: **49 checks passed · 0 failed · 7 skipped** (the same skips), on the
   43-check pass of that time. Its screenshots are not published and the store was wiped and re-seeded
   from this bundle afterwards, so what the published images rest on is the **read** pass above —
-  **56 · 0 · 30** as re-measured at U4's step 6 on a corpus-only instance (the step-5 record was 52 · 0 · 26).
+  **64 · 0 · 32** as re-measured at U4's step 7 on a corpus-only instance (the step-6 record was 56 · 0 · 30,
+  the step-5 record 52 · 0 · 26).
   The 36 · 0 · 7 and 43 figures
   still readable elsewhere in this document belong to that earlier 43-check pass, taken against the
   shared dev instance (the one that also carries the layout fixture), and are superseded.
@@ -173,7 +176,7 @@ Observations, not verdicts — the layout judgement is the review's to make:
   six views; the harness's `NAKAMA_VIEWPORT` selects one). Nothing is claimed for narrower widths — there
   is no mobile target.
 - **The states this corpus does not have are covered by a second, synthetic dataset** —
-  [`docs/layout-fixtures/`](../layout-fixtures/README.md): its pass reports **87 · 0 · 0** at both
-  viewports against **56 · 0 · 30** here, with each skip becoming an exercised case. The requirements for
+  [`docs/layout-fixtures/`](../layout-fixtures/README.md): its pass reports **96 · 0 · 1** at both
+  viewports against **64 · 0 · 32** here, with each skip becoming an exercised case. The requirements for
   the rework are in
   [`docs/layout-rework-brief.md`](../layout-rework-brief.md).

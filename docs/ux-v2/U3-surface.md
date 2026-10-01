@@ -202,12 +202,14 @@ the manifest does not enumerate either.
   pass reported **62/0/0**; see `U4-progress.md` §10–§11. Step 4 has since added eight for the open-problem
   inventory, so the pass reported **69/0/0** (see §12); step 5 has added eleven for repository threads, evidence
   and human steering — including the tag navigation and the negative cases — so the pass reported **80/0/0**
-  (see §13); and step 6 has added seven for the `Axes | Problems` index switch, so it now reports **87/0/0**
-  (see §17). U3's numbers are
+  (see §13); step 6 added seven for the `Axes | Problems` index switch, taking it to **87/0/0** (see §17); and
+  step 7 has added ten for the EntityTag contract, so it now reports **96/0/1** — the one skip being the
+  Activity column's repository tag, which no dataset can exercise yet, since no recorded event names a
+  repository (see §18). U3's numbers are
   kept as U3 measured them.)
 - **Corpus: 43 PASS / 0 FAIL / 7 skip** as U3 measured it, and **superseded** at U4's step 5 by a
   corpus-only measurement — **52 PASS / 0 FAIL / 26 skip**, re-measured at step 6 as **56 PASS / 0 FAIL /
-  30 skip** at both viewports (`U4-progress.md` §16, §17). The
+  30 skip** and at step 7 as **64 PASS / 0 FAIL / 32 skip**, at both viewports (`U4-progress.md` §16–§18). The
   43 · 0 · 7 was taken against the shared dev instance and predates steps 3–5's checks.
 
 The earlier fixture run's 49 PASS / 1 FAIL is now fully explained, and it was the harness's dataset

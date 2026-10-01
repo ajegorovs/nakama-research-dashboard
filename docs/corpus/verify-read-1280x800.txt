@@ -1,6 +1,6 @@
 # harness/read-pass.sh — read pass · dataset corpus · viewport 1280x800
 # dashboard: http://127.0.0.1:3007
-# generated: 2026-10-02T00:30:56+03:00
+# generated: 2026-10-02T00:48:30+03:00
 
 PASS  login — status 200
 corpus: {"axes":3,"blocked":0,"people":1,"repositories":1,"topic":"UDV Echo Process","windowEvents":30}
@@ -52,7 +52,7 @@ PASS  an event recorded against an axis alone still lands under the right topic 
 progress screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/screenshots/1280x800/research-dashboard-read-progress.png
 PASS  the Progress index is the projection for the current window — replaced on change, not extended — matched the projection at 30 and 7 days (7d restored)
 PASS  the get_progress payload carries all three halves the page reads (axes, problems, activity) — 3 halves · axes 3 · problems 0 · activity 3
-PASS  the Progress top area shows the index, the Problem column and the Activity feed side by side — index {"h":310,"w":256,"x":320,"y":194}, problem {"h":42,"w":363,"x":588,"y":194}, feed {"h":1752,"w":293,"x":963,"y":194}
+PASS  the Progress top area shows the index, the Problem column and the Activity feed side by side — index {"h":310,"w":256,"x":320,"y":194}, problem {"h":123,"w":363,"x":588,"y":194}, feed {"h":2148,"w":293,"x":963,"y":194}
 PASS  the axis index opens on the projection's first row, and the detail columns follow it — active ccd11229, projection first ccd11229, problem column ccd11229, feed ccd11229
 SKIP  the Problem column shows the projection's first open problem, under the projection's own count — no axis in this dataset has an open problem, so this pass cannot exercise the Problem column
 PASS  the Activity feed is the projection's bucket for the selected axis, in the projection's order — feed axis ccd11229, count 15 (projection 15), heading "Activity (15)" (index row 15), 15 rows vs 15 in the projection
@@ -86,6 +86,16 @@ SKIP  the repository threads, evidence and steering sections render from that sa
 SKIP  switching back to Axes marks the parent axis of the problem that was on screen — this dataset carries no problem row at all, so the problem index has no subject here — the fixture does, so that run discriminates
 PASS  switching the index's subject issues no action call — 0 extra get_progress call(s) across the switches
 PASS  and the projection is unchanged: switching a subview writes nothing — the live answer is identical before and after
+PASS  the reading surface names its topic and its axis as tags, with the projection's own ids and labels — context: topic=UDV Echo Process, axis=Docs & agent skills — `docs/`, `.agents/skills`
+PASS  every tag in the Activity column names an entity its own event carries, and no more — 15 event row(s) checked
+PASS  an event with a mapped account carries that person's tag, so attribution is navigable and not only text — 15 attributed event(s) checked
+PASS  a topic tag lands in Topics with that topic selected, and the label matches the card it opened — view topics, card UDV Echo Process (wanted UDV Echo Process)
+PASS  a person tag lands in People with that person selected, and the label matches the panel it opened — view people, panel ajegorovs (wanted ajegorovs)
+SKIP  a repository tag in the Activity column lands in Repositories with that repository selected — no event in this dataset's window names a repository, so no feed row renders a repository tag
+SKIP  a problem tag lands in Progress/Problems with that problem selected — no event in this dataset's window is evidence for a problem, so no feed row renders a problem tag
+PASS  an axis tag lands in Progress/Axes with that axis selected, whichever subview it was clicked from — from axes: subview axes, active Docs & agent skills — `docs/`, `.agents/skills` (wanted Docs & agent skills — `docs/`, `.agents/skills`)
+PASS  no status badge is a tag — reading a state never navigates — 0 tag(s) inside a badge
+PASS  the tag traversal wrote nothing: no write action was called and the projection is unchanged — writes 0 -> 0; payload identical
 PASS  every rendered state carries its claim, and one that is not confirmed says so (C8) — states 6, carrying a claim 6, not confirmed 2 but unqualified 0; sample ["ACTIVE · INFERRED","ACTIVE · INFERRED"]
 PASS  the corpus's inferred states reach the view as unconfirmed, not laundered into facts (C8) — 1 of 3 axes are unconfirmed in the payload (Docs & agent skills — `docs/`, `.agents/skills`=inferred); the view rendered 2 unconfirmed states
 PASS  a recorded event names its source the way it is reported, not the way the menu offers it (C8) — sample ["commit · 410b3d7c2 · ajegorovs","commit · a79cc727b · ajegorovs"]
@@ -98,7 +108,7 @@ PASS  palette entry navigates to the page — http://127.0.0.1:3007/plugins/rese
 screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/screenshots/1280x800/research-dashboard-read.png
 console issues after login: []
 
-read pass: all checks passed; 30 skipped for want of a subject in this corpus
+read pass: all checks passed; 32 skipped for want of a subject in this corpus
 skipped (each with its reason):
   - the blocked axis shows its blocker text — no axis in this corpus is blocked
   - a topic with a blocked axis is visually distinct — no axis in this corpus is blocked, so the attention styling has no subject here
@@ -129,4 +139,6 @@ skipped (each with its reason):
   - picking a problem shows it in the same reading surface, with the axis columns following its parent — this dataset carries no problem row at all, so the problem index has no subject here — the fixture does, so that run discriminates
   - the repository threads, evidence and steering sections render from that same problem object — this dataset carries no problem row at all, so the problem index has no subject here — the fixture does, so that run discriminates
   - switching back to Axes marks the parent axis of the problem that was on screen — this dataset carries no problem row at all, so the problem index has no subject here — the fixture does, so that run discriminates
+  - a repository tag in the Activity column lands in Repositories with that repository selected — no event in this dataset's window names a repository, so no feed row renders a repository tag
+  - a problem tag lands in Progress/Problems with that problem selected — no event in this dataset's window is evidence for a problem, so no feed row renders a problem tag
   - a person filter that matches nothing attributable says so, and shows no unrelated events — every person in this corpus maps to a platform account, so the unattributable case has no subject

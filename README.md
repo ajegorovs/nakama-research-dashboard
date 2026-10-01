@@ -286,19 +286,28 @@ it is re-runnable without duplicating itself, and it **does not move the counts 
 internally (activities, annotations and plan-step links cannot name a problem created in the same transaction,
 and row ids are server-generated); the applier reads the ids back and does the referencing pass second.
 
-Expected as of U4's step 6, on **separate instances** — a corpus-only one and an isolated fixture-only one:
-corpus **56 pass · 0 fail · 30 skip** and fixture **87 · 0 · 0**, at both viewports. Step 6 added seven checks
+Expected as of U4's step 7, on **separate instances** — a corpus-only one and an isolated fixture-only one:
+corpus **64 pass · 0 fail · 32 skip** and fixture **96 · 0 · 1**, at both viewports. Step 7 added ten checks
+(the EntityTag contract exercised from Progress: the reading surface's topic and axis tags carry the
+projection's own ids and labels, every tag in the Activity column names an entity its own event carries, an
+attributed event's person is a tag, and the topic, person, repository, problem and axis tags each land in their
+canonical view **with the entity actually selected there** — the expanded card, the detail panel, the active
+row — plus that no status badge is a tag and that the whole traversal issues no write call and leaves the
+payload identical). The fixture exercises nine of those; the corpus eight. Step 6 had added seven checks
 (the `Axes | Problems` switch: the control and its default, the problem index against the projection's own list
 and order, the same reading surface and parent-axis follow-through when one is picked, the sections rendering
 from that same problem object, the parent-axis bridge back to `Axes`, and — on both datasets — that switching
 issues **no** action call and leaves the live payload identical, which is what makes it a switch over one model
 rather than a second view). The corpus exercises four of those and skips the three that need a problem row.
-The record before it, at U4's step 5: corpus **52 · 0 · 26** and fixture **80 · 0 · 0**. The corpus record
+The record before that, at U4's step 6: corpus **56 · 0 · 30** and fixture **87 · 0 · 0**;
+before *that*, at U4's step 5: corpus **52 · 0 · 26** and fixture **80 · 0 · 0**. The corpus record
 before *that* (**43 · 0 · 7** out of 50 checks) was taken against the **shared dev instance**, which is
 not corpus-only — a corpus pass there reads the fixture's topic next to the corpus one (6 axes / 2 people / 3
-repositories) — and it predates steps 3–5's checks, so it is superseded rather than re-derived. The 30 skips
-are the checks a corpus with **no problem rows and no plan** cannot exercise; each prints its reason, and
-"0 failed" never hides "30 never exercised".
+repositories) — and it predates steps 3–5's checks, so it is superseded rather than re-derived. The 32 skips
+are the checks a corpus with **no problem rows and no plan** cannot exercise — plus the two step-7 checks whose
+subject no dataset has yet (**no recorded event names a repository**, so the Activity column's repository tag
+renders nowhere; and the corpus has no problem to name) — and each prints its reason, so "0 failed" never hides
+"32 never exercised".
 (Before U1 it was 42 and 49 — U1 added one check, "every axis state the payload carries
 reaches the page as that state", and the `abandoned` fixture axis it needs. U4's step 1 added the Progress
 window check, taking the fixture pass to 51; step 2 added six that compare the three-column composition and

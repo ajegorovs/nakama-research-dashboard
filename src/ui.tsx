@@ -317,9 +317,12 @@ type ProgressEventRow = {
   occurredAt: string;
   person: { displayName: string; id: string } | null;
   problemId: string | null;
+  /** The topic and repository this event names — the feed's tags navigate from these, not from a lookup. */
+  repositoryId: string | null;
   sourceRef: string | null;
   sourceType: string;
   summary: string;
+  topicId: string | null;
 };
 
 /** One axis's events in the window, as the server grouped them. The page picks a bucket; it never filters. */
@@ -352,6 +355,8 @@ type ProgressProblemRow = {
   stateConfidence: Confidence;
   statement: string;
   steering: ProgressSteering[];
+  /** The problem's topic — the third entity a Progress context line can name, and a tag's destination. */
+  topicId: string;
   topicName: string;
 };
 
@@ -531,6 +536,20 @@ const VIEW_OPTIONS = [
 ] as const;
 
 type ViewName = (typeof VIEW_OPTIONS)[number]["value"];
+
+/**
+ * The entity types a tag can name (component-contract.md § EntityTag), and the view each one's canonical home
+ * is. Two of them live in Progress — an axis in its `Axes` subview, a problem in its `Problems` subview — which
+ * is why the destination is a view *plus* the destination view's own selection, and never a query parameter.
+ */
+type EntityType = "axis" | "person" | "problem" | "repository" | "topic";
+const ENTITY_VIEW: Record<EntityType, ViewName> = {
+  axis: "progress",
+  person: "people",
+  problem: "progress",
+  repository: "repositories",
+  topic: "topics",
+};
 
 /**
  * The Progress index's two subjects. `Axes` is the slice's original index; `Problems` inverts the
@@ -1310,6 +1329,39 @@ export function apply(ctx: Context) {
   }
 
   /**
+   * The EntityTag contract, in one place (component-contract.md § EntityTag): a tag names an entity, the app
+   * navigates to that entity's canonical view and **selects** it, and a tag writes nothing — never a filter,
+   * never a mutation. One component for every type, so the same entity reads and behaves the same wherever it
+   * appears: the label is always the entity's own name, and the attributes are always the same pair
+   * (`data-rd-entity-tag` / `data-rd-entity-id`), which is what lets the pass prove the contract by clicking
+   * rather than by reading this file. `onOpen` is the page's single navigation entry point.
+   */
+  function EntityTag({
+    id,
+    label,
+    onOpen,
+    type,
+  }: {
+    id: string;
+    label: string;
+    onOpen: (type: EntityType, id: string) => void;
+    type: EntityType;
+  }) {
+    return (
+      <button
+        className="rd-tag"
+        data-rd-entity-id={id}
+        data-rd-entity-tag={type}
+        data-rd-tag-label={label}
+        onClick={() => onOpen(type, id)}
+        type="button"
+      >
+        {label}
+      </button>
+    );
+  }
+
+  /**
    * An axis state with the claim attached (C8). A bare "blocked" reads as a fact, and the temporal view
    * would launder an inference into one — so a state that is not confirmed always says so, in the view
    * and in the detail alike: "BLOCKED · inferred". A confirmed state stays bare on screen but still
@@ -1848,14 +1900,26 @@ export function apply(ctx: Context) {
 
   function PeopleView({
     people,
+    preselect,
     truncated,
     windowDays,
   }: {
     people: PersonRollup[];
+    preselect: { id: string; seq: number } | null;
     truncated: boolean;
     windowDays: number;
   }) {
     const [selectedId, setSelectedId] = React.useState<string | null>(null);
+    /**
+     * The EntityTag contract's other half: a person tag elsewhere in the app navigates here and *selects*, so
+     * the view honours the request rather than only opening. Keyed on `seq`, so asking for the same person
+     * twice still lands; applied only when a tag asked, so a reader's own click is never overridden.
+     */
+    React.useEffect(() => {
+      if (preselect) {
+        setSelectedId(preselect.id);
+      }
+    }, [preselect?.id, preselect?.seq]);
     // One person is always in view: the first until another is picked. The selection is an id, so it
     // survives a refresh that renames or re-orders the rows.
     const selected =
@@ -1889,6 +1953,7 @@ export function apply(ctx: Context) {
                 aria-pressed={selected?.person.id === entry.person.id}
                 className="rd-index-item"
                 data-rd-person={entry.person.displayName}
+                data-rd-person-id={entry.person.id}
                 onClick={() => setSelectedId(entry.person.id)}
                 type="button"
               >
@@ -1962,6 +2027,7 @@ export function apply(ctx: Context) {
                 aria-pressed={selected?.repository.id === entry.repository.id}
                 className="rd-index-item"
                 data-rd-repository={entry.repository.fullName}
+                data-rd-repository-id={entry.repository.id}
                 onClick={() => setSelectedId(entry.repository.id)}
                 type="button"
               >
@@ -2097,13 +2163,21 @@ export function apply(ctx: Context) {
   function ProgressView({
     onOpenEntity,
     people,
+    preselect,
     progress,
     repositories,
     timeline,
     windowDays,
   }: {
-    onOpenEntity: (type: "repository", id: string) => void;
+    onOpenEntity: (type: EntityType, id: string) => void;
     people: PersonRollup[];
+    /**
+     * The EntityTag contract's other half for the two entities whose home is Progress: an axis tag lands in
+     * `Axes` with that axis selected, a problem tag lands in `Problems` with that problem selected — and the
+     * axis follows the problem, exactly as it does for a hand-made pick, because that rule is already the
+     * view's. A tag naming anything else never arrives here.
+     */
+    preselect: { id: string; seq: number; type: EntityType } | null;
     progress: ProgressIndex | null;
     repositories: RepositoryRollup[];
     timeline: TimelineGroup[];
@@ -2121,6 +2195,23 @@ export function apply(ctx: Context) {
      * over one model — never a second view with its own query.
      */
     const [indexMode, setIndexMode] = React.useState<ProgressIndexMode>("axes");
+    /**
+     * Apply an arriving tag once, keyed on `seq` so the same tag asked for twice lands twice. It sets the
+     * subview and the selection — nothing else; a tag is navigation, so a reader's own click is never
+     * overridden and no request follows from it.
+     */
+    React.useEffect(() => {
+      if (!preselect) {
+        return;
+      }
+      if (preselect.type === "axis") {
+        setIndexMode("axes");
+        setSelectedAxisId(preselect.id);
+      } else if (preselect.type === "problem") {
+        setIndexMode("problems");
+        setSelectedProblemId(preselect.id);
+      }
+    }, [preselect?.id, preselect?.seq, preselect?.type]);
     const [topicFilter, setTopicFilter] = React.useState("all");
     const [personFilter, setPersonFilter] = React.useState("all");
     const [repositoryFilter, setRepositoryFilter] = React.useState("all");
@@ -2262,6 +2353,28 @@ export function apply(ctx: Context) {
       parts.push(countLabel(problem.activityCount, "event", "events"));
       parts.push(`last activity ${describeAge(problem.recencyAt)}`);
       return parts.join(" · ");
+    }
+
+    /**
+     * The repository an event names, resolved from the rollups already in this payload — a tag must never cost a
+     * call, and the repository's own name is the label the contract asks for. `null` when the id is absent or the
+     * rollup does not carry it: then no tag renders, rather than a tag that names nothing.
+     */
+    function repositoryOf(id: string | null): { fullName: string; id: string } | null {
+      if (id === null) {
+        return null;
+      }
+      return (
+        repositories.find((entry) => entry.repository.id === id)?.repository ?? null
+      );
+    }
+
+    /**
+     * The problem an event is evidence for, when the projection carries it — the tag's label is the problem's
+     * own statement, so the same problem reads the same here and in the index.
+     */
+    function problemOf(id: string | null): ProgressProblemRow | null {
+      return id === null ? null : (problemRows.find((row) => row.id === id) ?? null);
     }
 
     /**
@@ -2459,10 +2572,35 @@ export function apply(ctx: Context) {
           <h3 className="rd-strong">
             {problemsMode ? "Problem" : `Open problems (${activeAxis?.openProblems ?? 0})`}
           </h3>
-          {problemsMode && shownProblem ? (
-            <span className="rd-meta" data-rd-problem-parent="true">
-              {indexProblemContext(shownProblem)}
-            </span>
+          {/*
+           * The DetailHeader's "compact context line, navigation tags" (component-contract.md § DetailHeader):
+           * the topic and the axis this reading surface belongs to, as EntityTags, with the recency the rest of
+           * the view sorts by. Rendered in both subviews from the axis on screen — in `Problems` the axis is
+           * derived from the problem, so these are the problem's own parent context, read off the projection
+           * rather than looked up again. A tag navigates and selects; it never filters and writes nothing.
+           */}
+          {activeAxis ? (
+            <div className="rd-cluster rd-tags" data-rd-progress-context="true">
+              <EntityTag
+                id={activeAxis.topicId}
+                label={activeAxis.topicName}
+                onOpen={onOpenEntity}
+                type="topic"
+              />
+              <EntityTag
+                id={activeAxis.id}
+                label={activeAxis.title}
+                onOpen={onOpenEntity}
+                type="axis"
+              />
+              <span className="rd-meta">
+                {problemsMode && shownProblem
+                  ? problemContext(shownProblem)
+                  : `last activity ${describeAge(activeAxis.recencyAt)}${
+                      activeAxis.stale ? " · stale" : ""
+                    }`}
+              </span>
+            </div>
           ) : null}
           {activeAxis === null && !problemsMode ? (
             <p className="rd-muted" data-rd-progress-problem-empty="true">
@@ -2535,13 +2673,55 @@ export function apply(ctx: Context) {
                   </div>
                   <span className="rd-meta">
                     {describeSource(event.sourceType, event.sourceRef ?? "")}
-                    {" · "}
-                    {event.person
-                      ? event.person.displayName
-                      : "no account attributed"}
-                    {event.problemId && event.problemId === shownProblem?.id
-                      ? " · evidence for the problem shown"
-                      : ""}
+                  </span>
+                  {/*
+                   * The ActivityFeed's half of the EntityTag contract (component-contract.md § ActivityFeed:
+                   * "entity tags for relevant topic/repo/person/axis"): the entities this event names, as tags
+                   * that navigate and select. The repository and problem are resolved from the rollups and the
+                   * problem list already in this payload, so a tag costs no call; an event with no mapped account
+                   * says so in words instead of showing a tag that would name nobody, and an event naming a
+                   * problem the projection does not carry gets no tag rather than an unnamed one.
+                   */}
+                  <span className="rd-cluster rd-tags" data-rd-feed-tags="true">
+                    {event.topicId !== null && event.topicId === activeAxis?.topicId ? (
+                      <EntityTag
+                        id={event.topicId}
+                        label={activeAxis?.topicName ?? event.topicId}
+                        onOpen={onOpenEntity}
+                        type="topic"
+                      />
+                    ) : null}
+                    {repositoryOf(event.repositoryId) ? (
+                      <EntityTag
+                        id={repositoryOf(event.repositoryId)!.id}
+                        label={repositoryOf(event.repositoryId)!.fullName}
+                        onOpen={onOpenEntity}
+                        type="repository"
+                      />
+                    ) : null}
+                    {event.person ? (
+                      <EntityTag
+                        id={event.person.id}
+                        label={event.person.displayName}
+                        onOpen={onOpenEntity}
+                        type="person"
+                      />
+                    ) : (
+                      <span className="rd-muted">no account attributed</span>
+                    )}
+                    {problemOf(event.problemId) ? (
+                      <EntityTag
+                        id={problemOf(event.problemId)!.id}
+                        label={problemOf(event.problemId)!.statement}
+                        onOpen={onOpenEntity}
+                        type="problem"
+                      />
+                    ) : null}
+                    {event.problemId !== null && event.problemId === shownProblem?.id ? (
+                      <span className="rd-muted">
+                        evidence for the problem shown
+                      </span>
+                    ) : null}
                   </span>
                 </li>
               ))}
@@ -2668,16 +2848,13 @@ export function apply(ctx: Context) {
             <span className="rd-section">Repository threads</span>
             <div className="rd-cluster rd-tags">
               {shownProblem.repositories.map((repository) => (
-                <button
-                  className="rd-tag"
-                  data-rd-entity-id={repository.id}
-                  data-rd-entity-tag="repository"
+                <EntityTag
+                  id={repository.id}
                   key={repository.id}
-                  onClick={() => onOpenEntity("repository", repository.id)}
-                  type="button"
-                >
-                  {repository.fullName}
-                </button>
+                  label={repository.fullName}
+                  onOpen={onOpenEntity}
+                  type="repository"
+                />
               ))}
             </div>
           </section>
@@ -2930,21 +3107,32 @@ export function apply(ctx: Context) {
     const [entityTarget, setEntityTarget] = React.useState<{
       id: string;
       seq: number;
-      type: "repository";
+      type: EntityType;
     } | null>(null);
     /**
-     * The EntityTag contract, in one place: a tag names an entity, the app navigates to that entity's canonical
-     * view and selects it. It is not a filter and it writes nothing — the repository view's own selection is
-     * the only state it touches.
+     * The EntityTag contract's page half, in one place: a tag names an entity, the app navigates to that
+     * entity's canonical view and selects it. It is never a filter and it writes nothing — the destination's own
+     * selection (a row, or Progress's axis/problem and its subview) is the only state it touches, and `seq`
+     * makes a second click on the same tag land again after a hand-made selection.
      */
-    function openEntity(type: "repository", id: string): void {
+    function openEntity(type: EntityType, id: string): void {
       setEntityTarget({ id, seq: (entityTarget?.seq ?? 0) + 1, type });
-      setView(type === "repository" ? "repositories" : "topics");
+      setView(ENTITY_VIEW[type]);
     }
 
     const [windowDays, setWindowDays] = React.useState(14);
     const [includeArchived, setIncludeArchived] = React.useState(false);
     const [expandedId, setExpandedId] = React.useState<string | null>(null);
+    /**
+     * A topic tag's destination is the topic index, where "selected" means the card is expanded — the detail is
+     * what makes a topic the subject of the page. Applied here rather than inside a view because the topic index
+     * and its detail are one screen. Keyed on `seq` for the second-click case, like every other destination.
+     */
+    React.useEffect(() => {
+      if (entityTarget?.type === "topic") {
+        setExpandedId(entityTarget.id);
+      }
+    }, [entityTarget?.id, entityTarget?.seq, entityTarget?.type]);
     const [editing, setEditing] = React.useState<
       (Draft & { topicId: string }) | null
     >(null);
@@ -3357,8 +3545,9 @@ export function apply(ctx: Context) {
           </span>
         </div>
 
-        {view === "topics"
-          ? topics.map((entry) => {
+        {view === "topics" ? (
+          <div className="rd-stack" data-rd-view="topics">
+            {topics.map((entry) => {
               const hasBlocked = entry.axisCounts.blocked > 0;
               const expanded = entry.topic.id === expandedId;
               const shown = expanded
@@ -3783,12 +3972,14 @@ export function apply(ctx: Context) {
                   </CardContent>
                 </Card>
               );
-            })
-          : null}
+            })}
+          </div>
+        ) : null}
 
         {view === "people" ? (
           <PeopleView
             people={overview?.people ?? []}
+            preselect={entityTarget?.type === "person" ? entityTarget : null}
             truncated={overview?.peopleTruncated === true}
             windowDays={windowDays}
           />
@@ -3807,6 +3998,12 @@ export function apply(ctx: Context) {
           <ProgressView
             onOpenEntity={openEntity}
             people={overview?.people ?? []}
+            preselect={
+              entityTarget &&
+              (entityTarget.type === "axis" || entityTarget.type === "problem")
+                ? entityTarget
+                : null
+            }
             progress={progress}
             repositories={overview?.repositories ?? []}
             timeline={overview?.timeline ?? []}

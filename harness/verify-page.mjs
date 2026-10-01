@@ -2290,6 +2290,356 @@ const planOf = (result, axisId) =>
   );
 }
 
+  // --------------------------------- C7h: the EntityTag contract, exercised from Progress (U4 step 7)
+// Step 7's consolidation turns the tag contract from a styling convention into an exercised navigation
+// primitive: every entity type Progress can name is clicked **where Progress shows it**, and the destination is
+// asserted — the canonical view *and* the entity actually selected there (the detail panel, the expanded card,
+// the active row), never merely that a view opened. Labels are compared across the two views, because "the same
+// entity reads the same" is part of the contract, and the round trip is bracketed by two claims: no write action
+// was called, and the projection is identical afterwards.
+//
+// Every click is preceded by a return to Progress and a fresh read, so the traversal never assumes what the
+// previous landing left on screen — a harness that clicks a tag it read three views ago proves nothing about
+// the tag, and one that throws proves nothing at all.
+//
+// The two datasets can exercise different halves, and each check says which: the corpus carries topics, axes,
+// repositories and people but no problem row, so the problem tag and its destination SKIP there with a reason.
+{
+  /**
+   * Reads only. A tag is navigation, so the page may legitimately re-read (`get_topic` when a topic card
+   * expands); what a tag must never do is **write**, and that is the distinction this set draws.
+   */
+  const READ_ACTIONS = new Set([
+    "get_overview",
+    "get_progress",
+    "get_topic",
+    "list_activity",
+    "list_topics",
+  ]);
+  const writesSoFar = () =>
+    actionCalls.filter((call) => !READ_ACTIONS.has(call.key)).length;
+
+  const readTags = () =>
+    page.evaluate(() => {
+      const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+      const tagsIn = (root) =>
+        [...(root?.querySelectorAll("[data-rd-entity-tag]") ?? [])].map((node) => ({
+          id: node.getAttribute("data-rd-entity-id"),
+          label: node.getAttribute("data-rd-tag-label"),
+          type: node.getAttribute("data-rd-entity-tag"),
+        }));
+      const card = scope?.querySelector(".rd-progress-problem") ?? null;
+      const index = scope?.querySelector('[data-rd-progress-index="true"]') ?? null;
+      const switchGroup = scope?.querySelector("[data-rd-progress-switch]") ?? null;
+      const activeAxisRow = index?.querySelector('[data-rd-index-axis][aria-pressed="true"]') ?? null;
+      const topicCard =
+        scope?.querySelector('[data-rd-view="topics"] .rd-topic-card[data-rd-mode="read"]') ??
+        null;
+      return {
+        /**
+         * A status badge is a claim, not a control: nothing inside a badge may be a tag, or a reader would
+         * navigate where they meant to read a state.
+         */
+        badgesThatNavigate: scope
+          ? scope.querySelectorAll(
+              "[data-rd-state-confidence] [data-rd-entity-tag], [data-rd-step-state] [data-rd-entity-tag]"
+            ).length
+          : -1,
+        context: tagsIn(scope?.querySelector("[data-rd-progress-context]")),
+        feed: [...(scope?.querySelectorAll("[data-rd-feed-event]") ?? [])].map((row) => ({
+          tags: tagsIn(row),
+          text: (row.innerText ?? "").replace(/\s+/g, " ").trim(),
+        })),
+        progress: {
+          activeAxis: activeAxisRow?.getAttribute("data-rd-index-axis") ?? null,
+          activeAxisTitle: (activeAxisRow?.querySelector(".rd-strong")?.textContent ?? "").trim(),
+          indexMode: index?.getAttribute("data-rd-progress-index-mode") ?? null,
+          problemRowActive:
+            index
+              ?.querySelector('[data-rd-problem-index][aria-pressed="true"]')
+              ?.getAttribute("data-rd-problem-index") ?? null,
+          shown: card?.getAttribute("data-rd-progress-problem-shown") ?? "",
+          subview: switchGroup?.getAttribute("data-rd-progress-subview") ?? null,
+        },
+        person: scope?.querySelector("[data-rd-person-panel]")?.getAttribute("data-rd-person-panel") ?? null,
+        personId:
+          scope
+            ?.querySelector('[data-rd-person][aria-pressed="true"]')
+            ?.getAttribute("data-rd-person-id") ?? null,
+        repository:
+          scope?.querySelector("[data-rd-repository-panel]")?.getAttribute("data-rd-repository-panel") ?? null,
+        repositoryId:
+          scope
+            ?.querySelector('[data-rd-repository][aria-pressed="true"]')
+            ?.getAttribute("data-rd-repository-id") ?? null,
+        threads: tagsIn(scope?.querySelector(".rd-progress-repositories")),
+        topic: topicCard
+          ? { mode: topicCard.getAttribute("data-rd-mode"), name: topicCard.getAttribute("data-rd-topic") }
+          : null,
+        view:
+          scope
+            ?.querySelector('[data-rd-view-option][aria-pressed="true"]')
+            ?.getAttribute("data-rd-view-option") ?? null,
+      };
+    });
+
+  const showView = async (view) => {
+    await root.locator(`[data-rd-view-option="${view}"]`).click();
+    await page.waitForTimeout(300);
+  };
+  const clickTag = async (type, id) => {
+    await root
+      .locator(`[data-rd-entity-tag="${type}"][data-rd-entity-id="${id}"]`)
+      .first()
+      .click();
+    await page.waitForTimeout(400);
+    return readTags();
+  };
+  /**
+   * Back to Progress, read it, and take the tag of one type from wherever Progress shows it (the reading
+   * surface's context line first, then the Activity column). Returns the tag as the page currently renders it,
+   * so the click and the assertion that follows describe the same DOM.
+   */
+  const tagFromProgress = async (type) => {
+    await showView("progress");
+    const state = await readTags();
+    const tag =
+      state.context.find((entry) => entry.type === type) ??
+      state.feed.flatMap((row) => row.tags).find((entry) => entry.type === type) ??
+      null;
+    return { state, tag };
+  };
+  /**
+   * Which axis's bucket can show a given tag at all, derived from the projection rather than guessed: a tag
+   * renders only where its event is, and an event belongs to one axis's bucket. Returns the axis to select and
+   * the tag as it renders there — or a null subject, which every caller turns into a SKIP with a reason.
+   */
+  const feedTagFromProjection = async (kind) => {
+    const bucket = allProgress.activity.byAxis.find((entry) =>
+      entry.events.some((event) =>
+        kind === "repository" ? event.repositoryId !== null : event.problemId !== null
+      )
+    );
+    if (!bucket) {
+      return { state: null, tag: null };
+    }
+    // The axis index only exists in the `Axes` subview, so make sure that is the one on screen.
+    await showView("progress");
+    if ((await readTags()).progress.subview !== "axes") {
+      await root.locator('[data-rd-progress-subview-option="axes"]').click();
+      await page.waitForTimeout(250);
+    }
+    await root.locator(`[data-rd-index-axis="${bucket.axisId}"]`).click();
+    await page.waitForTimeout(300);
+    const state = await readTags();
+    const tag =
+      state.feed.flatMap((row) => row.tags).find((entry) => entry.type === kind) ?? null;
+    return { state, tag };
+  };
+
+  const baseline = {
+    payload: JSON.stringify(await apiProgress(windowDaysNow)),
+    writes: writesSoFar(),
+  };
+
+  // (1) The tags a reader can see on the reading surface, and whether they carry the projection's own names.
+  const atProgress = (await tagFromProgress("topic")).state;
+  const activeAxis =
+    allProgress.axes.axes.find((row) => row.id === atProgress.progress.activeAxis) ?? null;
+  if (activeAxis === null) {
+    skip(
+      "the reading surface names its topic and its axis as tags, with the projection's own ids and labels",
+      "this dataset's projection carries no axis row, so the reading surface has no context to name"
+    );
+  } else {
+    check(
+      "the reading surface names its topic and its axis as tags, with the projection's own ids and labels",
+      atProgress.context.some(
+        (tag) => tag.type === "topic" && tag.id === activeAxis.topicId && tag.label === activeAxis.topicName
+      ) &&
+        atProgress.context.some(
+          (tag) => tag.type === "axis" && tag.id === activeAxis.id && tag.label === activeAxis.title
+        ),
+      `context: ${atProgress.context.map((tag) => `${tag.type}=${tag.label ?? ""}`).join(", ") || "none"}`
+    );
+  }
+
+  // (2) The Activity column's tags, row by row against the events the projection says are in that bucket: no
+  // tag may name something its event did not, and an attributed event must carry its person as a tag.
+  const feedBucket = allProgress.activity.byAxis.find((bucket) => bucket.axisId === activeAxis?.id) ?? null;
+  const feedEvents = feedBucket?.events ?? [];
+  const feedMismatches = [];
+  const unattributed = [];
+  for (const [position, event] of feedEvents.entries()) {
+    const row = atProgress.feed[position] ?? { tags: [], text: "" };
+    const carried = new Set(
+      [
+        event.topicId === null || event.topicId !== activeAxis?.topicId ? null : `topic:${event.topicId}`,
+        event.repositoryId === null ? null : `repository:${event.repositoryId}`,
+        event.person === null ? null : `person:${event.person.id}`,
+        event.problemId === null ? null : `problem:${event.problemId}`,
+      ].filter((entry) => entry !== null)
+    );
+    const seen = row.tags.map((tag) => `${tag.type}:${tag.id}`);
+    if (seen.some((tag) => !carried.has(tag))) {
+      feedMismatches.push(
+        `${row.text.slice(0, 40)} carries ${seen.join("+")} beyond ${[...carried].join("+")}`
+      );
+    }
+    if (event.person !== null && !seen.includes(`person:${event.person.id}`)) {
+      unattributed.push(event.person.displayName);
+    }
+  }
+  if (feedEvents.length === 0) {
+    for (const description of [
+      "every tag in the Activity column names an entity its own event carries, and no more",
+      "an event with a mapped account carries that person's tag, so attribution is navigable and not only text",
+    ]) {
+      skip(description, "the axis on screen has no events in the window, so its feed renders no tags");
+    }
+  } else {
+    check(
+      "every tag in the Activity column names an entity its own event carries, and no more",
+      feedMismatches.length === 0,
+      feedMismatches.join("; ") || `${feedEvents.length} event row(s) checked`
+    );
+    if (unattributed.length === 0 && feedEvents.every((event) => event.person === null)) {
+      skip(
+        "an event with a mapped account carries that person's tag, so attribution is navigable and not only text",
+        "no event in this axis's window is attributed to an account, so there is no person tag to check"
+      );
+    } else {
+      check(
+        "an event with a mapped account carries that person's tag, so attribution is navigable and not only text",
+        unattributed.length === 0,
+        unattributed.length === 0
+          ? `${feedEvents.filter((event) => event.person !== null).length} attributed event(s) checked`
+          : `missing on: ${unattributed.join(", ")}`
+      );
+    }
+  }
+
+  // (3) A topic tag: the canonical view, and the topic actually selected there (its card expanded).
+  const { tag: topicTag } = await tagFromProgress("topic");
+  const topicLanding = topicTag === null ? null : await clickTag("topic", topicTag.id);
+  if (topicTag === null) {
+    skip(
+      "a topic tag lands in Topics with that topic selected, and the label matches the card it opened",
+      "the reading surface shows no topic tag — its axis carries no topic to name"
+    );
+  } else {
+    check(
+      "a topic tag lands in Topics with that topic selected, and the label matches the card it opened",
+      topicLanding.view === "topics" &&
+        topicLanding.topic?.mode === "read" &&
+        topicLanding.topic?.name === topicTag.label,
+      `view ${topicLanding.view ?? "none"}, card ${topicLanding.topic?.name ?? "none"} (wanted ${topicTag.label})`
+    );
+  }
+
+  // (4) A person tag: the same claim for People, whose "selected" state is its panel.
+  const { tag: personTag } = await tagFromProgress("person");
+  const personLanding = personTag === null ? null : await clickTag("person", personTag.id);
+  if (personTag === null) {
+    skip(
+      "a person tag lands in People with that person selected, and the label matches the panel it opened",
+      "no event on the axis on screen is attributed to a mapped account, so the feed shows no person tag"
+    );
+  } else {
+    check(
+      "a person tag lands in People with that person selected, and the label matches the panel it opened",
+      personLanding.view === "people" &&
+        personLanding.person === personTag.label &&
+        personLanding.personId === personTag.id,
+      `view ${personLanding.view ?? "none"}, panel ${personLanding.person ?? "none"} (wanted ${personTag.label})`
+    );
+  }
+
+  // (5) A repository tag, from the Activity column this time (step 5 proved the threads section's). The axis
+  // whose bucket can show one is derived from the projection, so the check looks where the tag must be rather
+  // than where the previous landing happened to leave the page.
+  const repositorySubject = await feedTagFromProjection("repository");
+  if (repositorySubject.tag === null) {
+    skip(
+      "a repository tag in the Activity column lands in Repositories with that repository selected",
+      repositorySubject.state === null
+        ? "no event in this dataset's window names a repository, so no feed row renders a repository tag"
+        : "the feed names a repository this dataset's rollup does not carry, so no tag renders for it"
+    );
+  } else {
+    const repositoryLanding = await clickTag("repository", repositorySubject.tag.id);
+    check(
+      "a repository tag in the Activity column lands in Repositories with that repository selected",
+      repositoryLanding.view === "repositories" &&
+        repositoryLanding.repository === repositorySubject.tag.label &&
+        repositoryLanding.repositoryId === repositorySubject.tag.id,
+      `view ${repositoryLanding.view ?? "none"}, panel ${repositoryLanding.repository ?? "none"} (wanted ${repositorySubject.tag.label})`
+    );
+  }
+
+  // (6) A problem tag — the inversion's own entity, and the one tag that changes Progress's *subview*.
+  const problemSubject = await feedTagFromProjection("problem");
+  if (problemSubject.tag === null) {
+    skip(
+      "a problem tag lands in Progress/Problems with that problem selected",
+      problemSubject.state === null
+        ? "no event in this dataset's window is evidence for a problem, so no feed row renders a problem tag"
+        : "the feed names a problem this dataset's projection does not carry, so no tag renders for it"
+    );
+  } else {
+    const problemLanding = await clickTag("problem", problemSubject.tag.id);
+    check(
+      "a problem tag lands in Progress/Problems with that problem selected — the subview follows the entity",
+      problemLanding.progress.subview === "problems" &&
+        problemLanding.progress.indexMode === "problems" &&
+        problemLanding.progress.shown === problemSubject.tag.id &&
+        problemLanding.progress.problemRowActive === problemSubject.tag.id,
+      `subview ${problemLanding.progress.subview ?? "none"}, shown ${problemLanding.progress.shown.slice(0, 8)} (wanted ${problemSubject.tag.id.slice(0, 8)})`
+    );
+  }
+
+  // (7) An axis tag *from the subview the problem tag just left*: the tag names the axis on screen, so
+  // clicking it is the one traversal that changes the subject and the subview at once. A dataset with no
+  // problem never reaches `Problems`, and the same rule is asserted from `Axes`.
+  const beforeAxis = (await tagFromProgress("axis")).state;
+  const axisTag = beforeAxis.context.find((entry) => entry.type === "axis") ?? null;
+  const axisLanding = axisTag === null ? null : await clickTag("axis", axisTag.id);
+  if (axisTag === null) {
+    skip(
+      "an axis tag lands in Progress/Axes with that axis selected, whichever subview it was clicked from",
+      "the reading surface shows no axis tag — this dataset's projection carries no axis row to name"
+    );
+  } else {
+    check(
+      "an axis tag lands in Progress/Axes with that axis selected, whichever subview it was clicked from",
+      axisLanding.view === "progress" &&
+        axisLanding.progress.subview === "axes" &&
+        axisLanding.progress.indexMode === "axes" &&
+        axisLanding.progress.activeAxis === axisTag.id &&
+        axisLanding.progress.activeAxisTitle === axisTag.label,
+      `from ${beforeAxis.progress.subview ?? "?"}: subview ${axisLanding.progress.subview ?? "none"}, active ${axisLanding.progress.activeAxisTitle ?? "none"} (wanted ${axisTag.label})`
+    );
+  }
+
+  // (8) A badge is not a control, in every view the traversal touched.
+  const badges = await tagFromProgress("axis");
+  check(
+    "no status badge is a tag — reading a state never navigates",
+    badges.state.badgesThatNavigate === 0,
+    `${badges.state.badgesThatNavigate} tag(s) inside a badge`
+  );
+
+  // (9) The whole traversal, bracketed: no write was called, and the projection is byte-identical to the one
+  // read before the first tag was clicked. A tag navigates and selects; if it changed anything, this is where
+  // it would show.
+  const after = JSON.stringify(await apiProgress(windowDaysNow));
+  check(
+    "the tag traversal wrote nothing: no write action was called and the projection is unchanged",
+    writesSoFar() === baseline.writes && after === baseline.payload,
+    `writes ${baseline.writes} -> ${writesSoFar()}; payload ${after === baseline.payload ? "identical" : "CHANGED"}`
+  );
+}
+
   // ------------------------------------------------ C8: no bare state, one vocabulary for the evidence
 // A state is a claim, and the record often holds only an inference. Every rendered state must carry
 // its confidence, and one that is not confirmed must say so where it is read — otherwise the temporal
