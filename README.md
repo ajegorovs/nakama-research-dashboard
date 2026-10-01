@@ -172,12 +172,15 @@ bun install
 NAKAMA_HOST=127.0.0.1 NAKAMA_PORT=4399 NAKAMA_CONFIG_DIR=/tmp/nakama-review \
 NAKAMA_SEED_ADMIN_EMAIL=admin@nakama.local NAKAMA_SEED_ADMIN_NAME=Admin \
 NAKAMA_SEED_ADMIN_PASSWORD=<pick-one> bun run apps/server/src/index.ts
-# and the dashboard web dev server in a second shell — plugin pages live inside it
-NAKAMA_SERVER_URL=http://127.0.0.1:4399 bun run dev:web        # http://127.0.0.1:3003
+# and the dashboard web dev server in a second shell — plugin pages live inside it. Run vite from
+# apps/web directly: the root wrapper (apps/web/scripts/dev.ts) spawns vite with its own argv and drops
+# extra flags, and some checkouts do not expose a root `dev:web` script at all.
+cd apps/web
+NAKAMA_SERVER_URL=http://127.0.0.1:4399 bun run vite --host 127.0.0.1 --port 3003
 
 cd /path/to/this/repo
 bun install                                   # playwright-core
-bunx playwright install chromium              # or point PLAYWRIGHT_CHROMIUM at a chrome binary
+node node_modules/playwright-core/cli.js install chromium   # or set PLAYWRIGHT_CHROMIUM to any chrome binary
 ```
 
 Install and enable the plugin with the env file — one command, which first checks the instance's catalog
