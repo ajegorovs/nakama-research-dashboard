@@ -506,7 +506,23 @@ check(
   JSON.stringify(windowInput) === JSON.stringify({ activitySinceDays: 7 }),
   JSON.stringify(windowInput)
 );
-await page.waitForTimeout(800);
+// A fixed sleep is a guess about how long a re-render takes, and it is the classic harness flake. Where the
+// page's own DOM says what "ready" means, wait for that instead: the wait returns as soon as the condition
+// holds (usually far sooner than the sleep it replaces) and cannot pass by luck on a slow machine. The cap is
+// a bound, not the expected wait — if the condition never holds, the check below reports a real failure
+// instead of the runner timing out.
+const settleUntil = async (predicate, arg, capMs = 3000) => {
+  await page.waitForFunction(predicate, arg, { timeout: capMs, polling: 50 }).catch(() => {});
+  await page.waitForTimeout(50); // one frame, for a React commit that follows the DOM marker
+};
+await settleUntil(
+  (pluginId) =>
+    (document.querySelector(`div[data-plugin-id="${pluginId}"]`)?.innerText ?? "").includes(
+      "Research overview"
+    ),
+  PLUGIN_ID,
+  3000
+);
 const refreshed = await page.evaluate(
   (pluginId) =>
     (document.querySelector(`div[data-plugin-id="${pluginId}"]`)?.innerText ?? "").includes(
@@ -571,7 +587,14 @@ if (leadEntry.hidden > 0) {
 // The read route into the detail — the only route there is. Opening a topic to read it must not be the
 // same action as entering edit mode; the write pass below drives `Edit fields` instead.
 await detailCard.getByRole("button", { name: "Read topic", exact: true }).click();
-await page.waitForTimeout(1500);
+// Ready means the card's own axis rows are in the DOM, which is what the next check reads.
+await settleUntil(
+  ([pluginId, topic]) =>
+    (document.querySelector(`div[data-plugin-id="${pluginId}"] [data-rd-topic="${topic}"]`)
+      ?.querySelectorAll("[data-rd-axis-state]").length ?? 0) > 0,
+  [PLUGIN_ID, CORPUS.topic],
+  4000
+);
 const expanded = await page.evaluate(
   ([pluginId, topic]) => {
     const node = document.querySelector(
@@ -624,7 +647,17 @@ check(
   `mode ${readMode.mode}, editor rendered ${readMode.editor}`
 );
 await detailCard.getByRole("button", { name: "Edit fields", exact: true }).click();
-await page.waitForTimeout(1400);
+// Ready means the editor element itself is in the DOM — not that 1.4 s have passed.
+await settleUntil(
+  ([pluginId, topic]) =>
+    Boolean(
+      document.querySelector(
+        `div[data-plugin-id="${pluginId}"] [data-rd-topic="${topic}"] [data-rd-topic-editor]`
+      )
+    ),
+  [PLUGIN_ID, CORPUS.topic],
+  4000
+);
 const editMode = await modeOf();
 check(
   "the form appears only from Edit fields",
@@ -632,7 +665,15 @@ check(
   `mode ${editMode.mode}, editor rendered ${editMode.editor}`
 );
 await detailCard.getByRole("button", { name: "Done editing", exact: true }).click();
-await page.waitForTimeout(1400);
+// Ready means the editor is GONE — the read view is the absence of that element.
+await settleUntil(
+  ([pluginId, topic]) =>
+    !document.querySelector(
+      `div[data-plugin-id="${pluginId}"] [data-rd-topic="${topic}"] [data-rd-topic-editor]`
+    ),
+  [PLUGIN_ID, CORPUS.topic],
+  4000
+);
 const afterEdit = await modeOf();
 check(
   "finishing an edit returns to reading, with the card still open",
@@ -741,7 +782,9 @@ const unrendered = CORPUS.axes.filter(
 );
 check(
   "every axis state the payload carries reaches the page as that state",
-  unrendered.length === 0,
+  // Non-vacuity: a payload with no axes must not earn this tick by having nothing to render. The subject
+  // absence is a different fact, and it is reported by the checks that skip for want of it.
+  CORPUS.axes.length > 0 && unrendered.length === 0,
   `${CORPUS.axes.length} axes in the payload, states [${[...new Set(CORPUS.axes.map((axis) => axis.state))].join(", ")}]; ` +
     `not rendered as their own state: ${JSON.stringify(unrendered.map((axis) => `${axis.title}=${axis.state}`))}`
 );

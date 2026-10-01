@@ -223,3 +223,87 @@ with failures) — so a **red run silently left the previous green transcript in
 verdict and must be recorded; the pipeline is now run under `set +e`. Caught because the record's mtime did not
 move while the run printed `1 FAILED` — the same class as the mid-run crash that masqueraded as a short record,
 one layer up.
+
+
+## 5. The robustness sweep — positional subjects, mixed instances, flakiness (2026-10-02)
+
+Reviewer-directed, after §4: *"the remaining U10 robustness list rather than further product changes —
+especially any outstanding positional-subject assumptions, mixed-instance assumptions, or latent harness
+flakiness."* The sweep is **greppable and repeatable**, so it can be re-run rather than trusted: four static
+classes plus one empirical probe. No product change came out of it.
+
+### 5.1 Positional subjects — `grep -n '\[0\]' harness/verify-page.mjs` (42 hits on 33 lines)
+
+Classified, not blanket-fixed. Most are the product's **own** order (the projection's first topic / first axis /
+first open problem), and two sites carry comments saying *"not `axes[0]`"* because §1 replaced exactly that
+assumption — those already choose **by property** (`sort(...)[0]`, `filter(...)[0]`, `.find(...)`) with the
+reason written beside them. `overflow`'s remaining `?? problemRowsAll[0]` is a documented *preference* fallback
+(the first problem carrying relations, so the section check has something to read; else the projection's
+first) — a subject choice with a written reason, and if it regressed to "whatever renders first" the check
+would fail rather than pass silently.
+
+### 5.2 Unguarded dereferences — the crash class that produced §1's truncated record
+
+`grep -n '\[0\]\.'` = **one hit**, and it is inside `if (closedOut.length > 0)`. So every element-0 property
+access in the harness is guarded: the class is exhausted, at one site, with a guard whose else-branch skips
+with a reason.
+
+### 5.3 Mixed-instance assumptions
+
+`grep -n 'Layout fixture\|ajegorovs\|UDV\|fixture/'` matches **only the identity guard's own three lines** —
+no check hardcodes a dataset's topic names, counts, ids, or organisation. With §3's refusal, a dataset mismatch
+cannot be measured silently; without dataset literals there is also nothing for a check to "expect" from the
+wrong instance.
+
+### 5.4 Vacuous passes (`.every()` on an empty list is `true`)
+
+Every `.every(`/`.some(` site was audited for a companion count or length assertion. Most have one (the toolbar
+group count, the feed's `rows.length === expected.length`, the plan's `steps.length === expected.steps.length`,
+the inventory's count, the repository landings' `count > 0`). **One did not**: the axis-state check asserted
+`unrendered.length === 0`, which a payload with **no axes at all** would have earned as a tick. It now reads
+`CORPUS.axes.length > 0 && unrendered.length === 0` — a dataset with no axes is a different fact, reported by
+the checks that skip for want of that subject.
+
+### 5.5 Latent flakiness
+
+**Static.** 53 fixed sleeps; the ones that gated a *state read* were replaced by waits on the page's own DOM
+marker, via a new helper:
+
+```js
+const settleUntil = async (predicate, arg, capMs = 3000) => {
+  await page.waitForFunction(predicate, arg, { timeout: capMs, polling: 50 }).catch(() => {});
+  await page.waitForTimeout(50); // one frame, for a React commit that follows the DOM marker
+};
+```
+
+It returns as soon as the condition holds (usually sooner than the sleep it replaced), and the `.catch()` means
+a condition that never holds surfaces as the *check's own* failure rather than a runner timeout. Converted: the
+post-`Read topic` axis-rows wait, the `Edit fields` editor-appears wait, the `Done editing` editor-gone wait, and
+the post-window-change "still renders" read. The remaining sleeps settle after an interaction where each check
+reads its own subject.
+
+**Empirical.** **Three consecutive runs per dataset** — the strongest evidence available short of another
+machine:
+
+| | run 0 | run 1 | run 2 | verdict-sequence md5 |
+|---|---|---|---|---|
+| corpus | 84 · 0 · 22 | 84 · 0 · 22 | 84 · 0 · 22 | `56d284c3` (identical ×3) |
+| fixture | 107 · 0 · 0 | 107 · 0 · 0 | 107 · 0 · 0 | `49e7652b` (identical ×3) |
+
+Full-transcript diffs between runs are **the `# generated:` timestamp line only** — the recorded details are
+byte-identical, so no flakiness was observed on this machine, and the four conversions above remove the class
+where it would have appeared first. The sweep itself is a repeatable procedure: four greps + the repeat-run diff.
+
+### 5.6 One time-dependent field, documented rather than chased
+
+The topic card's `Recent: N events` is the projection's `entry.activityCount`, computed inside `getOverview`
+over a wall-clock window (`activitySinceDays`, default 14). It read **587** in the 02:24 capture and **586** from
+02:26 onward, and held at 586 across the following runs. Recomputing a 14-day window over the transcript's own
+`occurredAt` values gives 563 at both anchors, so the *step* is real and unexplained by that arithmetic —
+recorded here as an open detail rather than given an invented cause. Practical consequence: **a corpus record
+taken on a different day may legitimately differ by a small count in that one line.** If byte-stable records
+across days are wanted, that needs a seeded clock or a stable window anchor — a projection decision, not a
+harness one.
+
+**Counts after the sweep** (both viewports; the harness changed, the page did not): corpus **84 · 0 · 22**,
+fixture **107 · 0 · 0** — unchanged, which is the point: the sweep removed assumptions, it did not move numbers.
