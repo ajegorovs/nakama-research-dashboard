@@ -287,7 +287,7 @@ internally (activities, annotations and plan-step links cannot name a problem cr
 and row ids are server-generated); the applier reads the ids back and does the referencing pass second.
 
 Expected as of U4's step 7, on **separate instances** — a corpus-only one and an isolated fixture-only one:
-corpus **64 pass · 0 fail · 32 skip** and fixture **96 · 0 · 1**, at both viewports. Step 7 added ten checks
+corpus **72 pass · 0 fail · 33 skip** and fixture **105 · 0 · 1**, at both viewports. Step 7's first half added ten checks, its second half nine more (the shared grammar: one badge, one recency label, one detail header, one activity line and one notice across all four views, with the tags each view now emits asserted against its own projection)
 (the EntityTag contract exercised from Progress: the reading surface's topic and axis tags carry the
 projection's own ids and labels, every tag in the Activity column names an entity its own event carries, an
 attributed event's person is a tag, and the topic, person, repository, problem and axis tags each land in their

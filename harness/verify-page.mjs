@@ -1056,6 +1056,35 @@ const apiProgress = (days) =>
     },
     [PLUGIN_ID, days]
   );
+
+/**
+ * Any read action, with the same in-page credentials as `apiProgress`. Used where a section must compare the
+ * DOM against the **projection the page reads** — the overview's rollups, for instance, which no other helper
+ * exposes. Reads only: nothing in this pass writes through it.
+ */
+const apiAction = (key, input) =>
+  page.evaluate(
+    async ([plugin, actionKey, payload]) => {
+      const cookie = (name) =>
+        document.cookie
+          .split("; ")
+          .find((entry) => entry.startsWith(`${name}=`))
+          ?.slice(name.length + 1) ?? "";
+      const orgs = await fetch("/v1/auth/orgs", { credentials: "include" }).then((r) => r.json());
+      const body = await fetch(`/v1/plugins/${plugin}/actions/${actionKey}`, {
+        body: JSON.stringify({ input: payload }),
+        credentials: "include",
+        headers: {
+          "content-type": "application/json",
+          "x-csrf-token": cookie("nakama_csrf"),
+          "x-org-id": orgs.orgs?.[0]?.id ?? "",
+        },
+        method: "POST",
+      }).then((r) => r.json());
+      return body.result ?? null;
+    },
+    [PLUGIN_ID, key, input]
+  );
 const apiIndex = async (days) => {
   // The row list is `axes.axes`: the outer object is the projection (window, threshold, rows).
   const result = await apiProgress(days);
@@ -2345,7 +2374,7 @@ const planOf = (result, axisId) =>
               "[data-rd-state-confidence] [data-rd-entity-tag], [data-rd-step-state] [data-rd-entity-tag]"
             ).length
           : -1,
-        context: tagsIn(scope?.querySelector("[data-rd-progress-context]")),
+        context: tagsIn(scope?.querySelector("[data-rd-detail-context]")),
         feed: [...(scope?.querySelectorAll("[data-rd-feed-event]") ?? [])].map((row) => ({
           tags: tagsIn(row),
           text: (row.innerText ?? "").replace(/\s+/g, " ").trim(),
@@ -2478,6 +2507,9 @@ const planOf = (result, axisId) =>
         event.repositoryId === null ? null : `repository:${event.repositoryId}`,
         event.person === null ? null : `person:${event.person.id}`,
         event.problemId === null ? null : `problem:${event.problemId}`,
+        // The shared activity line tags the axis too, and only when the event's own axis is the one on
+        // screen — the feed's rows all belong to this bucket, so that is exactly this bucket's axis.
+        event.axisId === null || event.axisId !== activeAxis?.id ? null : `axis:${event.axisId}`,
       ].filter((entry) => entry !== null)
     );
     const seen = row.tags.map((tag) => `${tag.type}:${tag.id}`);
@@ -3116,6 +3148,384 @@ if (WRITE) {
       topicNoteKept === topicNote,
     `banners: ${topicConflict.banners}; text: ${topicConflict.banner.slice(0, 90)}; error: ${topicConflict.error.slice(0, 50)}; note kept: ${topicNoteKept === topicNote}`
   );
+}
+
+  // --------------------------------- C9: one grammar across the four views (U4 step 7, second half)
+// The propagation pass gives the four views the primitives Progress proved, without redesigning what each
+// view is *for*. This section asserts the grammar, not the product: every state travels through the one
+// badge, every age through the one recency label (whose words must be the age of the timestamp it carries),
+// every selected entity through the one header, every named entity through the one tag — and a tag clicked
+// in People, Repositories and Topics lands on that entity with the label the destination uses. The traversal
+// is bracketed by the two claims a navigation primitive needs: no write action, and an identical projection.
+{
+  const GRAMMAR_READS = new Set([
+    "get_overview",
+    "get_progress",
+    "get_topic",
+    "list_activity",
+    "list_topics",
+  ]);
+  const grammarWrites = () =>
+    actionCalls.filter((call) => !GRAMMAR_READS.has(call.key)).length;
+  const grammarBaseline = {
+    payload: JSON.stringify(await apiProgress(windowDaysNow)),
+    writes: grammarWrites(),
+  };
+  const overviewProjection = await apiAction("get_overview", {
+    activitySinceDays: windowDaysNow,
+  });
+
+  const showView = async (view) => {
+    await root.locator(`[data-rd-view-option="${view}"]`).click();
+    await page.waitForTimeout(350);
+  };
+  const readGrammar = () =>
+    page.evaluate(() => {
+      const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+      const tagsIn = (node) =>
+        [...(node?.querySelectorAll("[data-rd-entity-tag]") ?? [])].map((n) => ({
+          id: n.getAttribute("data-rd-entity-id"),
+          label: n.getAttribute("data-rd-tag-label"),
+          type: n.getAttribute("data-rd-entity-tag"),
+        }));
+      const rows = [
+        ...(scope?.querySelectorAll("[data-rd-axis-state], [data-rd-scan-axis]") ?? []),
+      ];
+      const headers = [
+        ...(scope?.querySelectorAll("[data-rd-detail-header]") ?? []),
+      ];
+      const notices = [...(scope?.querySelectorAll("[data-rd-notice]") ?? [])];
+      return {
+        badgeCount: scope?.querySelectorAll("[data-rd-state-confidence]").length ?? -1,
+        headers: headers.map((n) => ({
+          context: tagsIn(n.querySelector("[data-rd-detail-context]")),
+          tags: tagsIn(n).length,
+          title: (n.textContent ?? "").trim().slice(0, 80),
+        })),
+        notices: notices.map((n) => ({
+          kind: n.getAttribute("data-rd-notice"),
+          tags: tagsIn(n).length,
+        })),
+        recency: [...(scope?.querySelectorAll("[data-rd-recency]") ?? [])].map((n) => ({
+          at: n.getAttribute("data-rd-recency") ?? "",
+          text: (n.textContent ?? "").trim(),
+        })),
+        rowCount: rows.length,
+        tags: tagsIn(scope),
+        unbadged: rows.filter((row) => !row.querySelector("[data-rd-state-confidence]"))
+          .length,
+        view:
+          scope
+            ?.querySelector('[data-rd-view-option][aria-pressed="true"]')
+            ?.getAttribute("data-rd-view-option") ?? null,
+      };
+    });
+  /** The page's own age vocabulary: the words have to be the age of the timestamp beside them. */
+  const ageOf = (iso) => {
+    const then = new Date(iso).getTime();
+    if (Number.isNaN(then)) {
+      return "unknown";
+    }
+    const days = Math.floor((Date.now() - then) / 86_400_000);
+    if (days <= 0) {
+      return "today";
+    }
+    if (days === 1) {
+      return "yesterday";
+    }
+    if (days < 7) {
+      return `${days} days ago`;
+    }
+    if (days < 14) {
+      return "last week";
+    }
+    if (days < 60) {
+      return `${Math.floor(days / 7)} weeks ago`;
+    }
+    return `${Math.floor(days / 30)} months ago`;
+  };
+
+  const snapshots = {};
+  for (const view of ["topics", "people", "repositories", "progress"]) {
+    await showView(view);
+    snapshots[view] = await readGrammar();
+  }
+
+  // (1) The state claim always travels with its badge, wherever a state row is rendered.
+  const badgedViews = ["topics", "people", "repositories"].filter(
+    (view) => snapshots[view].rowCount > 0
+  );
+  check(
+    "every state row in every view renders its claim through the one badge",
+    badgedViews.length > 0 &&
+      badgedViews.every((view) => snapshots[view].unbadged === 0),
+    badgedViews
+      .map(
+        (view) =>
+          `${view}: ${snapshots[view].rowCount} row(s), ${snapshots[view].unbadged} without a claim`
+      )
+      .join("; ") || "no view rendered a state row"
+  );
+
+  // (2) The age is the age of the timestamp it carries — the component's whole rule.
+  const labels = Object.entries(snapshots).flatMap(([view, snap]) =>
+    snap.recency.map((entry) => ({ ...entry, view }))
+  );
+  const wrongAges = labels.filter((entry) => !entry.text.endsWith(ageOf(entry.at)));
+  const recencyViews = [
+    ...new Set(labels.map((entry) => entry.view)),
+  ].sort();
+  if (labels.length === 0) {
+    skip(
+      "every recency label's words are the age of the timestamp it carries",
+      "no view rendered a dated entity, so there is no recency label to check"
+    );
+  } else {
+    check(
+      "every recency label's words are the age of the timestamp it carries, in all four views",
+      wrongAges.length === 0,
+      `${labels.length} label(s) across ${recencyViews.join(", ")}; ` +
+        (wrongAges.length === 0
+          ? "each matches its own timestamp"
+          : wrongAges
+              .map(
+                (entry) =>
+                  `${entry.view} "${entry.at.slice(0, 10)}" shows "${entry.text}"`
+              )
+              .join("; "))
+    );
+  }
+
+  // (3) A notice names which exceptional state it is, and a notice is never a navigation.
+  const notices = Object.entries(snapshots).flatMap(([view, snap]) =>
+    snap.notices.map((entry) => ({ ...entry, view }))
+  );
+  const badNotices = notices.filter(
+    (entry) =>
+      !["empty", "filtered", "truncated"].includes(entry.kind) || entry.tags > 0
+  );
+  if (notices.length === 0) {
+    skip(
+      "an exceptional state says which one it is, and never navigates",
+      "no view rendered an exceptional state in this dataset, so there is no notice to read"
+    );
+  } else {
+    check(
+      "an exceptional state says which one it is, and never navigates",
+      badNotices.length === 0,
+      `${notices.length} notice(s) across the four views: ` +
+        notices.map((entry) => `${entry.view}/${entry.kind}`).join(", ")
+    );
+  }
+
+  // (4) The tags a view shows are the entities *its own projection* names — same ids, same labels.
+  const peopleProjection = overviewProjection?.people ?? [];
+  const personRow = snapshots.people;
+  // The People view has to be on screen to read *which* person's panel is showing: the snapshot above was
+  // taken while it was, but the loop has since moved on, and a view that is not mounted has no DOM.
+  await showView("people");
+  const selectedPersonId = await page.evaluate(() => {
+    const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+    return (
+      scope
+        ?.querySelector('[data-rd-person][aria-pressed="true"]')
+        ?.getAttribute("data-rd-person-id") ?? null
+    );
+  });
+  const person = peopleProjection.find((entry) => entry.person.id === selectedPersonId) ?? null;
+  if (person === null || person.topics.length === 0) {
+    skip(
+      "a person's topic tags are the topics their own rollup links them to",
+      "no person with a topic link is on screen, so the panel has no topic tag to check"
+    );
+  } else {
+    const wanted = person.topics.map((involvement) => involvement.topic);
+    const shown = personRow.tags.filter((tag) => tag.type === "topic");
+    // Every linked topic has to be reachable, and nothing may be tagged that the rollup does not link:
+    // the panel's activity rows tag their topics too, so the count is an upper bound, not an equality.
+    const covered = wanted.every((topic) =>
+      shown.some((tag) => tag.id === topic.id && tag.label === topic.name)
+    );
+    const foreign = shown.filter(
+      (tag) => !wanted.some((topic) => topic.id === tag.id)
+    );
+    check(
+      "a person's topic tags are the topics their own rollup links them to, ids and names alike",
+      covered && foreign.length === 0,
+      `${shown.length} tag(s) covering ${wanted.length} link(s); ` +
+        (foreign.length === 0
+          ? "every tag names a linked topic"
+          : `foreign: ${foreign.map((tag) => tag.label).join(", ")}`)
+    );
+  }
+
+  const repositoryProjection = overviewProjection?.repositories ?? [];
+  const repositoryRow = snapshots.repositories;
+  const repository = repositoryProjection.find(
+    (entry) =>
+      entry.topics.length > 0 &&
+      repositoryRow.tags.some(
+        (tag) => tag.type === "topic" && tag.id === entry.topics[0].topic.id
+      )
+  );
+  if (repository === null) {
+    skip(
+      "a repository's topic tags are the topics its own rollup links it to",
+      "no repository with a topic link is on screen, so the panel has no topic tag to check"
+    );
+  } else {
+    const wanted = repository.topics.map((link) => link.topic);
+    const shown = repositoryRow.tags.filter((tag) => tag.type === "topic");
+    const covered = wanted.every((topic) =>
+      shown.some((tag) => tag.id === topic.id && tag.label === topic.name)
+    );
+    const foreign = shown.filter(
+      (tag) => !wanted.some((topic) => topic.id === tag.id)
+    );
+    check(
+      "a repository's topic tags are the topics its own rollup links it to, ids and names alike",
+      covered && foreign.length === 0,
+      `${shown.length} tag(s) covering ${wanted.length} link(s); ` +
+        (foreign.length === 0
+          ? "every tag names a linked topic"
+          : `foreign: ${foreign.map((tag) => tag.label).join(", ")}`)
+    );
+  }
+
+  // (5) A tag clicked in a view lands on that entity, selected, under the destination's own name.
+  await showView("people");
+  const peopleTag = (
+    await readGrammar()
+  ).tags.find((tag) => tag.type === "topic");
+  if (peopleTag === undefined) {
+    skip(
+      "a topic tag clicked in People lands in Topics with that topic open",
+      "the selected person's panel shows no topic tag, so this view has no subject for it"
+    );
+  } else {
+    await root
+      .locator(
+        `[data-rd-entity-tag="topic"][data-rd-entity-id="${peopleTag.id}"]`
+      )
+      .first()
+      .click();
+    await page.waitForTimeout(400);
+    const landed = await page.evaluate(() => {
+      const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+      const card = scope?.querySelector(
+        '[data-rd-view="topics"] .rd-topic-card[data-rd-mode="read"]'
+      );
+      return {
+        name: card?.getAttribute("data-rd-topic") ?? null,
+        view:
+          scope
+            ?.querySelector('[data-rd-view-option][aria-pressed="true"]')
+            ?.getAttribute("data-rd-view-option") ?? null,
+      };
+    });
+    check(
+      "a topic tag clicked in People lands in Topics with that topic open, under the same name",
+      landed.view === "topics" && landed.name === peopleTag.label,
+      `view ${landed.view ?? "none"}, opened "${landed.name ?? "none"}" (wanted "${peopleTag.label}")`
+    );
+  }
+
+  await showView("repositories");
+  const repositoryAxisTag = (
+    await readGrammar()
+  ).tags.find((tag) => tag.type === "axis");
+  if (repositoryAxisTag === undefined) {
+    skip(
+      "an axis tag clicked in Repositories lands in Progress/Axes with that axis selected",
+      "no repository panel on screen names an axis, so this view has no subject for it"
+    );
+  } else {
+    await root
+      .locator(
+        `[data-rd-entity-tag="axis"][data-rd-entity-id="${repositoryAxisTag.id}"]`
+      )
+      .first()
+      .click();
+    await page.waitForTimeout(400);
+    const landed = await page.evaluate(() => {
+      const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+      const index = scope?.querySelector('[data-rd-progress-index="true"]');
+      return {
+        activeAxis:
+          index
+            ?.querySelector('[data-rd-index-axis][aria-pressed="true"]')
+            ?.getAttribute("data-rd-index-axis") ?? null,
+        mode: index?.getAttribute("data-rd-progress-index-mode") ?? null,
+        view:
+          scope
+            ?.querySelector('[data-rd-view-option][aria-pressed="true"]')
+            ?.getAttribute("data-rd-view-option") ?? null,
+      };
+    });
+    check(
+      "an axis tag clicked in Repositories lands in Progress/Axes with that axis selected",
+      landed.view === "progress" &&
+        landed.mode === "axes" &&
+        landed.activeAxis === repositoryAxisTag.id,
+      `view ${landed.view ?? "none"}, subview ${landed.mode ?? "none"}, active ${
+        landed.activeAxis ?? "none"
+      } (wanted ${repositoryAxisTag.id})`
+    );
+  }
+
+  await showView("topics");
+  const topicRepositoryTag = (
+    await readGrammar()
+  ).tags.find((tag) => tag.type === "repository");
+  if (topicRepositoryTag === undefined) {
+    skip(
+      "a repository tag clicked in Topics lands in Repositories with that repository selected",
+      "no topic card names a repository, so the default view has no subject for it"
+    );
+  } else {
+    await root
+      .locator(
+        `[data-rd-entity-tag="repository"][data-rd-entity-id="${topicRepositoryTag.id}"]`
+      )
+      .first()
+      .click();
+    await page.waitForTimeout(400);
+    const landed = await page.evaluate(() => {
+      const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+      return {
+        panel:
+          scope
+            ?.querySelector("[data-rd-repository-panel]")
+            ?.getAttribute("data-rd-repository-panel") ?? null,
+        view:
+          scope
+            ?.querySelector('[data-rd-view-option][aria-pressed="true"]')
+            ?.getAttribute("data-rd-view-option") ?? null,
+      };
+    });
+    check(
+      "a repository tag clicked in Topics lands in Repositories with that repository selected",
+      landed.view === "repositories" && landed.panel === topicRepositoryTag.label,
+      `view ${landed.view ?? "none"}, panel "${landed.panel ?? "none"}" (wanted "${
+        topicRepositoryTag.label
+      }")`
+    );
+  }
+
+  // (6) The whole traversal wrote nothing, and left the projection byte-identical.
+  const grammarAfter = JSON.stringify(await apiProgress(windowDaysNow));
+  const grammarWritesAfter = grammarWrites();
+  check(
+    "the grammar traversal wrote nothing: no write action, and the projection is unchanged",
+    grammarWritesAfter === grammarBaseline.writes &&
+      grammarAfter === grammarBaseline.payload,
+    `writes ${grammarBaseline.writes} -> ${grammarWritesAfter}; payload ${
+      grammarAfter === grammarBaseline.payload ? "identical" : "CHANGED"
+    }`
+  );
+
+  // Leave the page where the pass found it — the default view is what the final screenshot shows.
+  await showView("topics");
 }
 
 const screenshot = `${OUT}/research-dashboard-${WRITE ? "write" : "read"}.png`;

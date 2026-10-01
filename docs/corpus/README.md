@@ -167,7 +167,7 @@ Observations, not verdicts — the layout judgement is the review's to make:
   against this corpus as well: **49 checks passed · 0 failed · 7 skipped** (the same skips), on the
   43-check pass of that time. Its screenshots are not published and the store was wiped and re-seeded
   from this bundle afterwards, so what the published images rest on is the **read** pass above —
-  **64 · 0 · 32** as re-measured at U4's step 7 on a corpus-only instance (the step-6 record was 56 · 0 · 30,
+  **72 · 0 · 33** as re-measured in U4 step 7's propagation pass on a corpus-only instance (the step-7 record was 64 · 0 · 32, the step-6 one 56 · 0 · 30,
   the step-5 record 52 · 0 · 26).
   The 36 · 0 · 7 and 43 figures
   still readable elsewhere in this document belong to that earlier 43-check pass, taken against the
@@ -176,7 +176,7 @@ Observations, not verdicts — the layout judgement is the review's to make:
   six views; the harness's `NAKAMA_VIEWPORT` selects one). Nothing is claimed for narrower widths — there
   is no mobile target.
 - **The states this corpus does not have are covered by a second, synthetic dataset** —
-  [`docs/layout-fixtures/`](../layout-fixtures/README.md): its pass reports **96 · 0 · 1** at both
-  viewports against **64 · 0 · 32** here, with each skip becoming an exercised case. The requirements for
+  [`docs/layout-fixtures/`](../layout-fixtures/README.md): its pass reports **105 · 0 · 1** at both
+  viewports against **72 · 0 · 33** here, with each skip becoming an exercised case. The requirements for
   the rework are in
   [`docs/layout-rework-brief.md`](../layout-rework-brief.md).

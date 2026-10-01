@@ -1,6 +1,6 @@
 # harness/read-pass.sh — read pass · dataset fixture · viewport 1440x900
 # dashboard: http://127.0.0.1:3005
-# generated: 2026-10-02T00:46:50+03:00
+# generated: 2026-10-02T01:09:28+03:00
 
 PASS  login — status 200
 corpus: {"axes":6,"blocked":1,"people":2,"repositories":2,"topic":"Layout fixture — crowded card","windowEvents":8}
@@ -10,16 +10,16 @@ PASS  the overview renders from one get_overview call — saw 1: [{"activitySinc
 PASS  a get_overview call reads other plugin actions for nothing else on first paint — list_topics calls: 0
 PASS  the default window is 14 days and is sent as a query parameter — {"activitySinceDays":14}
 PASS  topic cards rendered — 2 cards
-PASS  the header carries the title, window control, archived toggle and count line — {"addTopic":true,"archivedToggle":true,"countsLine":true,"headerText":"Research overview Topics People Repositories Progress 7 days 14 days 30 days All time archived Refresh Add topic 2 topics · 7 axes · 2 people · 2 repositories Layout fixture — crowded card active Fixt","windowButtons":4}
+PASS  the header carries the title, window control, archived toggle and count line — {"addTopic":true,"archivedToggle":true,"countsLine":true,"headerText":"Research overview Topics People Repositories Progress 7 days 14 days 30 days All time archived Refresh Add topic 2 topics · 7 axes · 2 people · 2 repositories Layout fixture — crowded card active fixt","windowButtons":4}
 PASS  the count line reads correctly when the count is one — 2 repositories
 PASS  every topic in the payload has one card, carrying its own axes and none of another topic's — 2 cards for 2 topics; no leaks
 PASS  a topic card leads with people and its state counts — Fixture Alpha on Layout fixture — crowded card; payload states ["1 active","1 draft","1 blocked","1 parked","1 completed","1 abandoned"]; card counts ["1 blocked","1 active","1 draft","1 parked","1 completed","1 abandoned"]
-PASS  the blocked axis shows its blocker text — Layout fixture — crowded card active Fixture Alpha · fixture/crowded-card 1 blocked 1 active 1 draft 1 parked 1 completed 1 abandoned BLOCKED Fixture: blocked axis (blocked + blocker text) experiment 
+PASS  the blocked axis shows its blocker text — Layout fixture — crowded card active fixture/crowded-card Fixture Alpha 1 blocked 1 active 1 draft 1 parked 1 completed 1 abandoned BLOCKED Fixture: blocked axis (blocked + blocker text) experiment fi
 PASS  a topic with a blocked axis is visually distinct — Layout fixture — crowded card: true/3px oklch(0.577 0.245 27.325); Layout fixture — second topic: false
 PASS  each topic card reports its recent-activity summary — Recent: 7 events · last activity today 
 PASS  the window control re-issues get_overview with the new window only — {"activitySinceDays":7}
 PASS  the page still renders after the window change
-PASS  the topic card offers one disclosure control, not two — card buttons ["Read topic","Edit fields"]
+PASS  the topic card offers one disclosure control, not two — card buttons ["fixture/crowded-card","Fixture Alpha","Fixture: blocked axis (blocked + blocker text)","fixture/crowded-card","Fixture: active axis (with evidence)","fixture/crowded-card","Fixture: evidence-free axis (inferred, nothing behind it)","fixture/crowded-card","Read topic","Edit fields"]
 PASS  a card that hides axes states it rather than offering a second way in — note "3 of 6 axes shown · 3 more" (data-rd-hidden-axes=3), 3 rows for 6 axes, 3 hidden
 PASS  reading a card shows every axis it holds — 6 axis rows for 6 axes
 PASS  opening a topic reads it once, in one get_topic call — saw 1: [{"topicId":"cdf56547-bca0-4f21-8eaf-51e175e619f4"}]
@@ -52,7 +52,7 @@ PASS  an event recorded against an axis alone still lands under the right topic 
 progress screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/layout-fixtures/screenshots/1440x900/research-dashboard-read-progress.png
 PASS  the Progress index is the projection for the current window — replaced on change, not extended — matched the projection at 30 and 7 days (7d restored)
 PASS  the get_progress payload carries all three halves the page reads (axes, problems, activity) — 3 halves · axes 7 · problems 3 · activity 5
-PASS  the Progress top area shows the index, the Problem column and the Activity feed side by side — index {"h":756,"w":256,"x":320,"y":154}, problem {"h":123,"w":469,"x":588,"y":154}, feed {"h":154,"w":347,"x":1069,"y":154}
+PASS  the Progress top area shows the index, the Problem column and the Activity feed side by side — index {"h":756,"w":256,"x":320,"y":154}, problem {"h":117,"w":469,"x":588,"y":154}, feed {"h":240,"w":347,"x":1069,"y":154}
 PASS  the axis index opens on the projection's first row, and the detail columns follow it — active bd501d87, projection first bd501d87, problem column bd501d87, feed bd501d87
 PASS  the Problem column shows the projection's first open problem, under the projection's own count — axis "Fixture: active axis (with evidenc": heading "Open problems (2)" (projection 2), shown fe18ee88 vs first open fe18ee88
 PASS  the Activity feed is the projection's bucket for the selected axis, in the projection's order — feed axis bd501d87, count 1 (projection 1), heading "Activity (1)" (index row 1), 1 rows vs 1 in the projection
@@ -107,6 +107,15 @@ PASS  leaving the Progress view restores the topic view with no residue — card
 PASS  command palette lists the plugin page
 palette screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/layout-fixtures/screenshots/1440x900/research-dashboard-read-palette.png
 PASS  palette entry navigates to the page — http://127.0.0.1:3005/plugins/research-dashboard
+PASS  every state row in every view renders its claim through the one badge — topics: 4 row(s), 0 without a claim; people: 4 row(s), 0 without a claim; repositories: 6 row(s), 0 without a claim
+PASS  every recency label's words are the age of the timestamp it carries, in all four views — 9 label(s) across people, progress, repositories, topics; each matches its own timestamp
+PASS  an exceptional state says which one it is, and never navigates — 1 notice(s) across the four views: topics/truncated
+PASS  a person's topic tags are the topics their own rollup links them to, ids and names alike — 7 tag(s) covering 2 link(s); every tag names a linked topic
+PASS  a repository's topic tags are the topics its own rollup links it to, ids and names alike — 6 tag(s) covering 1 link(s); every tag names a linked topic
+PASS  a topic tag clicked in People lands in Topics with that topic open, under the same name — view topics, opened "Layout fixture — crowded card" (wanted "Layout fixture — crowded card")
+PASS  an axis tag clicked in Repositories lands in Progress/Axes with that axis selected — view progress, subview axes, active a1423e4f-bb90-432f-885e-a86c12122ca4 (wanted a1423e4f-bb90-432f-885e-a86c12122ca4)
+PASS  a repository tag clicked in Topics lands in Repositories with that repository selected — view repositories, panel "fixture/crowded-card" (wanted "fixture/crowded-card")
+PASS  the grammar traversal wrote nothing: no write action, and the projection is unchanged — writes 0 -> 0; payload identical
 screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/layout-fixtures/screenshots/1440x900/research-dashboard-read.png
 console issues after login: []
 

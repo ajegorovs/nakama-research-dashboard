@@ -313,6 +313,7 @@ type ProgressIndex = {
  * evidence for the problem shown beside it.
  */
 type ProgressEventRow = {
+  axisId: string | null;
   id: string;
   occurredAt: string;
   person: { displayName: string; id: string } | null;
@@ -394,6 +395,13 @@ type Activity = {
   id: string;
   axisId: string | null;
   topicId: string | null;
+  /**
+   * The entities the event itself names — read by the shared ActivityFeed's tags. The projection carries
+   * them (the store's own `Activity`), so declaring them here is not an addition to the payload, only to
+   * what the page admits it can render.
+   */
+  problemId: string | null;
+  repositoryId: string | null;
   sourceType: string;
   sourceRef: string;
   summary: string;
@@ -1199,10 +1207,14 @@ export function apply(ctx: Context) {
     );
   }
 
-  function AxisItem({ axis }: { axis: AxisOverview }) {
-    const primary = axis.repositories[0]?.fullName ?? "";
+  function AxisItem({
+    axis,
+    onOpenEntity,
+  }: {
+    axis: AxisOverview;
+    onOpenEntity: (type: EntityType, id: string) => void;
+  }) {
     const where = [
-      primary,
       axis.branch,
       axis.prNumber ? `PR #${axis.prNumber}` : "",
     ]
@@ -1214,15 +1226,40 @@ export function apply(ctx: Context) {
         {/* Two levels, not four. The first row is what a reader scans: the state claim and the axis
             name dominate, and the kind recedes to the end of the row. Where the work lives and what it
             says about itself are one subordinate line underneath. A blocker is the exception — it stays
-            on its own line, immediately visible, because it is the thing that needs acting on. */}
+            on its own line, immediately visible, because it is the thing that needs acting on.
+            The axis names itself and it names the repositories it lives in: both are entities, so both
+            are tags (component-contract.md § EntityTag), and the row's own words are unchanged. */}
         <div className="rd-axis-head">
           <StateBadge confidence={axis.stateConfidence} state={axis.state} />
-          <span className="rd-axis-title">{axis.title}</span>
+          <EntityTag
+            compact
+            id={axis.id}
+            label={axis.title}
+            onOpen={onOpenEntity}
+            type="axis"
+          />
           <span className="rd-axis-kind">{axis.kind}</span>
         </div>
-        {where || axis.currentState ? (
+        {where || axis.currentState || axis.repositories.length > 0 ? (
           <p className="rd-axis-secondary">
-            {[where, axis.currentState].filter(Boolean).join(" · ")}
+            <span className="rd-cluster rd-tags">
+              {axis.repositories.map((repository) => (
+                <EntityTag
+                  compact
+                  id={repository.id}
+                  key={repository.id}
+                  label={repository.fullName}
+                  onOpen={onOpenEntity}
+                  type="repository"
+                />
+              ))}
+              {where ? <span className="rd-meta">{where}</span> : null}
+              {axis.currentState ? (
+                <span className="rd-meta">{axis.currentState}</span>
+              ) : null}
+              {/* The age of the timestamp this list is ordered by — the component's whole rule. */}
+              <RecencyLabel at={axis.updatedAt} prefix="· updated " />
+            </span>
           </p>
         ) : null}
         {axis.blocker ? (
@@ -1337,11 +1374,13 @@ export function apply(ctx: Context) {
    * rather than by reading this file. `onOpen` is the page's single navigation entry point.
    */
   function EntityTag({
+    compact = false,
     id,
     label,
     onOpen,
     type,
   }: {
+    compact?: boolean;
     id: string;
     label: string;
     onOpen: (type: EntityType, id: string) => void;
@@ -1349,15 +1388,209 @@ export function apply(ctx: Context) {
   }) {
     return (
       <button
-        className="rd-tag"
+        className={compact ? "rd-tag rd-tag-compact" : "rd-tag"}
         data-rd-entity-id={id}
         data-rd-entity-tag={type}
+        data-rd-tag-compact={compact}
         data-rd-tag-label={label}
         onClick={() => onOpen(type, id)}
         type="button"
       >
         {label}
       </button>
+    );
+  }
+
+  /**
+   * A compact exact event date (component-contract.md § EventDate): `2026-09-28`. One place so the four
+   * views and the Progress feed cannot drift into three date formats. The attribute carries the full
+   * timestamp, so a check can compare what was rendered against the projection the page actually read.
+   */
+  function EventDate({ at }: { at: string }) {
+    return (
+      <span className="rd-meta" data-rd-event-date={at}>
+        {at.slice(0, 10)}
+      </span>
+    );
+  }
+
+  /**
+   * Relative age (component-contract.md § RecencyLabel), derived from the **same timestamp the row is
+   * sorted by** — that is the whole point of the component: a reader comparing two rows must be comparing
+   * the ages of the things the order says they are comparing. `at` is that timestamp, and it travels to
+   * the DOM so a check can prove the label matches its own field rather than trusting the text.
+   */
+  function RecencyLabel({ at, prefix = "" }: { at: string | null; prefix?: string }) {
+    if (at === null) {
+      return <span className="rd-muted">{prefix || "never"}</span>;
+    }
+    return (
+      <span className="rd-meta" data-rd-recency={at}>
+        {prefix}
+        {describeAge(at)}
+      </span>
+    );
+  }
+
+  /**
+   * The common selected-entity header (component-contract.md § DetailHeader): what the panel is about, its
+   * exceptional status where it has one, a compact context line whose navigation tags are the entities it
+   * belongs to, and the age of its last activity. Deliberately not a metadata dump — every caller passes
+   * one line of context at most, and anything longer belongs in the panel's own sections.
+   */
+  function DetailHeader({
+    badge = null,
+    children,
+    context = null,
+    title,
+  }: {
+    badge?: React.ReactNode;
+    children?: React.ReactNode;
+    context?: React.ReactNode;
+    /** The entity's own name — a string or the view's heading node, so a card keeps its heading level. */
+    title: React.ReactNode;
+  }) {
+    return (
+      <div className="rd-detail-head" data-rd-detail-header="true">
+        <div className="rd-row rd-detail-title-row">
+          {title}
+          {badge}
+        </div>
+        {context ? (
+          <div className="rd-cluster rd-tags" data-rd-detail-context="true">
+            {context}
+          </div>
+        ) : null}
+        {children}
+      </div>
+    );
+  }
+
+  /**
+   * What the shared activity line reads. Both payloads that carry events satisfy it structurally — the C6
+   * lists' `Activity` and the Progress feed's own row — so one component renders both without either side
+   * widening its type to match the other's.
+   */
+  type ActivityLineItem = {
+    axisId: string | null;
+    id: string;
+    occurredAt: string;
+    problemId: string | null;
+    repositoryId: string | null;
+    sourceRef: string | null;
+    sourceType: string;
+    summary: string;
+    topicId: string | null;
+  };
+
+  /**
+   * One recorded event, rendered one way (component-contract.md § ActivityFeed): the date, the summary, then
+   * provenance and a tag for every entity the event itself names — its person, the topic and repository it
+   * belongs to, and the problem it is evidence for. The Progress feed resolves attribution and its
+   * repository/topic labels from the payload it already read; the C6 lists pass what they have. A tag
+   * renders only where the entity is named, so one component is honest in every view — and an event with no
+   * mapped account says so in words rather than showing a tag that names nobody.
+   */
+  function ActivityLine({
+    attrs,
+    axisLabel = null,
+    item,
+    onOpenEntity,
+    person = null,
+    problemLabel = null,
+    repositoryLabel = null,
+    topicLabel = null,
+    unattributedNote = null,
+  }: {
+    /** The caller's own marker for this row (e.g. the Progress feed's `data-rd-feed-event`). */
+    attrs?: Record<string, string>;
+    axisLabel?: string | null;
+    item: ActivityLineItem;
+    onOpenEntity: (type: EntityType, id: string) => void;
+    person?: { displayName: string; id: string } | null;
+    problemLabel?: string | null;
+    repositoryLabel?: string | null;
+    topicLabel?: string | null;
+    /** Where attribution is a fact the view states (the Progress feed), the words to say it in. */
+    unattributedNote?: string | null;
+  }) {
+    return (
+      <li data-rd-activity-event="true" {...(attrs ?? {})}>
+        <div className="rd-cluster">
+          <EventDate at={item.occurredAt} />
+          <span className="rd-strong">{item.summary}</span>
+        </div>
+        <div className="rd-cluster rd-tags" data-rd-event-tags="true">
+          <span className="rd-meta">
+            {describeSource(item.sourceType, item.sourceRef ?? "")}
+          </span>
+          {item.topicId !== null && topicLabel !== null ? (
+            <EntityTag
+              id={item.topicId}
+              label={topicLabel}
+              onOpen={onOpenEntity}
+              type="topic"
+            />
+          ) : null}
+          {item.repositoryId !== null && repositoryLabel !== null ? (
+            <EntityTag
+              id={item.repositoryId}
+              label={repositoryLabel}
+              onOpen={onOpenEntity}
+              type="repository"
+            />
+          ) : null}
+          {item.axisId !== null && axisLabel !== null ? (
+            <EntityTag
+              id={item.axisId}
+              label={axisLabel}
+              onOpen={onOpenEntity}
+              type="axis"
+            />
+          ) : null}
+          {person ? (
+            <EntityTag
+              id={person.id}
+              label={person.displayName}
+              onOpen={onOpenEntity}
+              type="person"
+            />
+          ) : unattributedNote !== null ? (
+            <span className="rd-muted">{unattributedNote}</span>
+          ) : null}
+          {item.problemId !== null && problemLabel !== null ? (
+            <EntityTag
+              id={item.problemId}
+              label={problemLabel}
+              onOpen={onOpenEntity}
+              type="problem"
+            />
+          ) : null}
+        </div>
+      </li>
+    );
+  }
+
+  /**
+   * An exceptional state, said in words (component-contract.md § EntityIndex's "show exceptional state where
+   * relevant"): empty, truncated, or filtered. One treatment, because "nothing is recorded here" and
+   * "everything is here and none of it matches your filter" must never look the same, and a check should be
+   * able to ask which of the two it is reading.
+   */
+  function Notice({
+    attrs,
+    children,
+    kind,
+  }: {
+    /** The caller's own fact about this notice, e.g. how many rows are out of view. */
+    attrs?: Record<string, string>;
+    children: React.ReactNode;
+    kind: "empty" | "filtered" | "truncated";
+  }) {
+    return (
+      <p className="rd-notice rd-muted" data-rd-notice={kind} {...(attrs ?? {})}>
+        {children}
+      </p>
     );
   }
 
@@ -1455,6 +1688,7 @@ export function apply(ctx: Context) {
     correction,
     historyOpen,
     onCorrection,
+    onOpenEntity,
     onReload,
     onSave,
     onToggleHistory,
@@ -1465,19 +1699,17 @@ export function apply(ctx: Context) {
     correction: AxisCorrection | null;
     historyOpen: boolean;
     onCorrection: (next: AxisCorrection | null) => void;
+    onOpenEntity: (type: EntityType, id: string) => void;
     onReload: () => void;
     onSave: () => void;
     onToggleHistory: () => void;
   }) {
-    const primary = axis.repositories[0]?.fullName ?? "";
     const line = [
-      primary,
       axis.branch,
       axis.prNumber ? `PR #${axis.prNumber}` : "",
     ]
       .filter(Boolean)
       .join(" · ");
-    const people = axis.people.map((person) => person.displayName).join(", ");
     const correcting = correction?.axisId === axis.id;
     return (
       <li
@@ -1492,16 +1724,48 @@ export function apply(ctx: Context) {
             detail is where they cost the most height. */}
         <div className="rd-axis-head">
           <StateBadge confidence={axis.stateConfidence} state={axis.state} />
-          <span className="rd-axis-title">{axis.title}</span>
+          <EntityTag
+            compact
+            id={axis.id}
+            label={axis.title}
+            onOpen={onOpenEntity}
+            type="axis"
+          />
           <span className="rd-axis-kind">
             {axis.kind} · v{axis.version}
           </span>
         </div>
-        {line || axis.description || people ? (
+        {/* The axis on this card names the repositories it lives in and the people on it, and both are
+            entities with canonical homes — so the line is tags plus the axis's own words, not a string of
+            names that look like they should go somewhere. */}
+        {line || axis.description || axis.people.length > 0 || axis.repositories.length > 0 ? (
           <p className="rd-axis-secondary">
-            {[line, axis.description, people ? `people: ${people}` : ""]
-              .filter(Boolean)
-              .join(" · ")}
+            <span className="rd-cluster rd-tags">
+              {axis.repositories.map((repository) => (
+                <EntityTag
+                  compact
+                  id={repository.id}
+                  key={repository.id}
+                  label={repository.fullName}
+                  onOpen={onOpenEntity}
+                  type="repository"
+                />
+              ))}
+              {axis.people.map((person) => (
+                <EntityTag
+                  compact
+                  id={person.id}
+                  key={person.id}
+                  label={person.displayName}
+                  onOpen={onOpenEntity}
+                  type="person"
+                />
+              ))}
+              {line ? <span className="rd-meta">{line}</span> : null}
+              {axis.description ? (
+                <span className="rd-meta">{axis.description}</span>
+              ) : null}
+            </span>
           </p>
         ) : null}
 
@@ -1728,9 +1992,14 @@ export function apply(ctx: Context) {
   }
 
   /** One axis in a C6 rollup: state, title, repo/branch/PR, and the blocker where there is one. */
-  function AxisScanItem({ axis }: { axis: AxisScan }) {
+  function AxisScanItem({
+    axis,
+    onOpenEntity,
+  }: {
+    axis: AxisScan;
+    onOpenEntity: (type: EntityType, id: string) => void;
+  }) {
     const where = [
-      axis.repositories.map((repository) => repository.fullName).join(", "),
       axis.branch,
       axis.prNumber === null ? "" : `PR #${axis.prNumber}`,
     ]
@@ -1742,15 +2011,37 @@ export function apply(ctx: Context) {
         data-rd-axis-state={axis.state}
         data-rd-scan-axis={axis.title}
       >
+        {/* The axis names itself and it names where the work lives: both are entities, so both are tags —
+            the axis opens in Progress's own subview, the repositories open in theirs. The label is the
+            entity's own name, and the row's own words are unchanged. */}
         <div className="rd-row">
           <span className="rd-cluster">
             <StateBadge confidence={axis.stateConfidence} state={axis.state} />
-            <span className="rd-strong">{axis.title}</span>
+            <EntityTag
+              compact
+              id={axis.id}
+              label={axis.title}
+              onOpen={onOpenEntity}
+              type="axis"
+            />
           </span>
           <span className="rd-muted">{axis.kind}</span>
         </div>
-        <span className="rd-meta">
-          {where || "no repository or branch recorded"}
+        <span className="rd-cluster rd-tags" data-rd-scan-where="true">
+          {axis.repositories.length === 0 ? (
+            <span className="rd-meta">no repository or branch recorded</span>
+          ) : (
+            axis.repositories.map((repository) => (
+              <EntityTag
+                id={repository.id}
+                key={repository.id}
+                label={repository.fullName}
+                onOpen={onOpenEntity}
+                type="repository"
+              />
+            ))
+          )}
+          {where ? <span className="rd-meta">{where}</span> : null}
         </span>
         {axis.blocker ? (
           <span
@@ -1772,30 +2063,49 @@ export function apply(ctx: Context) {
   function ActivityList({
     dataAttr,
     items,
+    labelFor,
+    onOpenEntity,
     windowDays,
   }: {
     dataAttr: string;
     items: Activity[];
+    /**
+     * The entities each event names, resolved by the caller from the payload it already holds. A panel
+     * cannot label a repository its own projection does not carry, and a tag that cannot be named is not
+     * rendered — the alternative is inventing a name, which is worse than a missing tag.
+     */
+    labelFor?: (item: Activity) => {
+      problem?: string | null;
+      repository?: string | null;
+      topic?: string | null;
+    };
+    onOpenEntity: (type: EntityType, id: string) => void;
     windowDays: number;
   }) {
     return (
       <ul className="rd-activity" {...{ [dataAttr]: items.length }}>
-        {items.map((item) => (
-          <li key={item.id}>
-            <div>{item.summary}</div>
-            <span className="rd-meta">
-              {describeSource(item.sourceType, item.sourceRef)} ·{" "}
-              {item.occurredAt.slice(0, 10)}
-            </span>
-          </li>
-        ))}
+        {items.map((item) => {
+          const labels = labelFor?.(item) ?? {};
+          return (
+            <ActivityLine
+              item={item}
+              key={item.id}
+              onOpenEntity={onOpenEntity}
+              problemLabel={labels.problem ?? null}
+              repositoryLabel={labels.repository ?? null}
+              topicLabel={labels.topic ?? null}
+            />
+          );
+        })}
         {items.length === 0 ? (
-          <li className="rd-muted">
-            Nothing recorded in{" "}
-            {windowDays === 0
-              ? "any window"
-              : `the last ${countLabel(windowDays, "day", "days")}`}
-            .
+          <li>
+            <Notice kind="empty">
+              Nothing recorded in{" "}
+              {windowDays === 0
+                ? "any window"
+                : `the last ${countLabel(windowDays, "day", "days")}`}
+              .
+            </Notice>
           </li>
         ) : null}
       </ul>
@@ -1811,9 +2121,11 @@ export function apply(ctx: Context) {
    */
   function PersonPanel({
     entry,
+    onOpenEntity,
     windowDays,
   }: {
     entry: PersonRollup;
+    onOpenEntity: (type: EntityType, id: string) => void;
     windowDays: number;
   }) {
     return (
@@ -1822,15 +2134,18 @@ export function apply(ctx: Context) {
         data-rd-person-panel={entry.person.displayName}
       >
         <CardHeader>
-          <div className="rd-row">
-            <CardTitle>{entry.person.displayName}</CardTitle>
-            {entry.person.githubLogin ? (
-              <span className="rd-muted">@{entry.person.githubLogin}</span>
-            ) : null}
-          </div>
-          <span className="rd-meta" data-rd-person-counts="true">
-            {involvementLine(entry)}
-          </span>
+          <DetailHeader
+            badge={
+              entry.person.githubLogin ? (
+                <span className="rd-muted">@{entry.person.githubLogin}</span>
+              ) : null
+            }
+            title={<CardTitle>{entry.person.displayName}</CardTitle>}
+          >
+            <span className="rd-meta" data-rd-person-counts="true">
+              {involvementLine(entry)}
+            </span>
+          </DetailHeader>
         </CardHeader>
         <CardContent>
           <div className="rd-form">
@@ -1843,7 +2158,13 @@ export function apply(ctx: Context) {
                   key={involvement.topic.id}
                 >
                   <div className="rd-row">
-                    <span className="rd-strong">{involvement.topic.name}</span>
+                    <EntityTag
+                      compact
+                      id={involvement.topic.id}
+                      label={involvement.topic.name}
+                      onOpen={onOpenEntity}
+                      type="topic"
+                    />
                     <span className="rd-muted">
                       {involvement.role
                         ? `${involvement.topic.status} · ${involvement.role}`
@@ -1851,20 +2172,26 @@ export function apply(ctx: Context) {
                     </span>
                   </div>
                   {involvement.axes.length === 0 ? (
-                    <span className="rd-muted">no axis of theirs here</span>
+                    <Notice kind="empty">no axis of theirs here</Notice>
                   ) : (
                     <ul className="rd-axes">
                       {involvement.axes.map((axis) => (
-                        <AxisScanItem axis={axis} key={axis.id} />
+                        <AxisScanItem
+                          axis={axis}
+                          key={axis.id}
+                          onOpenEntity={onOpenEntity}
+                        />
                       ))}
                     </ul>
                   )}
                 </li>
               ))}
               {entry.topics.length === 0 ? (
-                <li className="rd-muted">
-                  Not linked to a topic yet — the link is what puts work on this
-                  page.
+                <li>
+                  <Notice kind="empty">
+                    Not linked to a topic yet — the link is what puts work on this
+                    page.
+                  </Notice>
                 </li>
               ) : null}
             </ul>
@@ -1874,6 +2201,13 @@ export function apply(ctx: Context) {
               <ActivityList
                 dataAttr="data-rd-person-activity"
                 items={entry.recentActivity}
+                labelFor={(item) => ({
+                  topic:
+                    entry.topics.find(
+                      (involvement) => involvement.topic.id === item.topicId
+                    )?.topic.name ?? null,
+                })}
+                onOpenEntity={onOpenEntity}
                 windowDays={windowDays}
               />
             ) : (
@@ -1884,13 +2218,20 @@ export function apply(ctx: Context) {
               </p>
             )}
 
-            <span className="rd-meta" data-rd-person-last="true">
-              {entry.lastActivityAt
-                ? `last activity ${describeAge(entry.lastActivityAt)}`
-                : "no attributable activity yet"}
-              {entry.lastReviewedAt
-                ? ` · last reviewed ${describeAge(entry.lastReviewedAt)}`
-                : " · never reviewed"}
+            <span className="rd-cluster" data-rd-person-last="true">
+              {entry.lastActivityAt ? (
+                <RecencyLabel at={entry.lastActivityAt} prefix="last activity " />
+              ) : (
+                <span className="rd-muted">no attributable activity yet</span>
+              )}
+              {entry.lastReviewedAt ? (
+                <RecencyLabel
+                  at={entry.lastReviewedAt}
+                  prefix="· last reviewed "
+                />
+              ) : (
+                <span className="rd-muted">· never reviewed</span>
+              )}
             </span>
           </div>
         </CardContent>
@@ -1899,11 +2240,13 @@ export function apply(ctx: Context) {
   }
 
   function PeopleView({
+    onOpenEntity,
     people,
     preselect,
     truncated,
     windowDays,
   }: {
+    onOpenEntity: (type: EntityType, id: string) => void;
     people: PersonRollup[];
     preselect: { id: string; seq: number } | null;
     truncated: boolean;
@@ -1964,7 +2307,11 @@ export function apply(ctx: Context) {
           ))}
         </ul>
         {selected ? (
-          <PersonPanel entry={selected} windowDays={windowDays} />
+          <PersonPanel
+            entry={selected}
+            onOpenEntity={onOpenEntity}
+            windowDays={windowDays}
+          />
         ) : null}
       </div>
     );
@@ -1975,11 +2322,13 @@ export function apply(ctx: Context) {
    * against it or against one of those axes. The same rules as the person view — factual, never scored.
    */
   function RepositoriesView({
+    onOpenEntity,
     preselect,
     repositories,
     truncated,
     windowDays,
   }: {
+    onOpenEntity: (type: EntityType, id: string) => void;
     preselect: { id: string; seq: number } | null;
     repositories: RepositoryRollup[];
     truncated: boolean;
@@ -2043,13 +2392,14 @@ export function apply(ctx: Context) {
             data-rd-repository-panel={selected.repository.fullName}
           >
             <CardHeader>
-              <CardTitle>{selected.repository.fullName}</CardTitle>
-              <span className="rd-meta">
-                {selected.repository.description || "no description recorded"}
-                {selected.repository.defaultBranch
-                  ? ` · default branch ${selected.repository.defaultBranch}`
-                  : ""}
-              </span>
+              <DetailHeader title={<CardTitle>{selected.repository.fullName}</CardTitle>}>
+                <span className="rd-meta">
+                  {selected.repository.description || "no description recorded"}
+                  {selected.repository.defaultBranch
+                    ? ` · default branch ${selected.repository.defaultBranch}`
+                    : ""}
+                </span>
+              </DetailHeader>
             </CardHeader>
             <CardContent>
               <div className="rd-form">
@@ -2060,12 +2410,20 @@ export function apply(ctx: Context) {
                 >
                   {selected.topics.map((link) => (
                     <li className="rd-cluster" key={link.topic.id}>
-                      <span className="rd-strong">{link.topic.name}</span>
+                      <EntityTag
+                        compact
+                        id={link.topic.id}
+                        label={link.topic.name}
+                        onOpen={onOpenEntity}
+                        type="topic"
+                      />
                       <span className="rd-muted">· {link.relationship}</span>
                     </li>
                   ))}
                   {selected.topics.length === 0 ? (
-                    <li className="rd-muted">no topic names it yet</li>
+                    <li>
+                      <Notice kind="empty">no topic names it yet</Notice>
+                    </li>
                   ) : null}
                 </ul>
 
@@ -2075,10 +2433,16 @@ export function apply(ctx: Context) {
                   data-rd-repository-axes={selected.axes.length}
                 >
                   {selected.axes.map((axis) => (
-                    <AxisScanItem axis={axis} key={axis.id} />
+                    <AxisScanItem
+                      axis={axis}
+                      key={axis.id}
+                      onOpenEntity={onOpenEntity}
+                    />
                   ))}
                   {selected.axes.length === 0 ? (
-                    <li className="rd-muted">no axis names this repository</li>
+                    <li>
+                      <Notice kind="empty">no axis names this repository</Notice>
+                    </li>
                   ) : null}
                 </ul>
 
@@ -2086,13 +2450,25 @@ export function apply(ctx: Context) {
                 <ActivityList
                   dataAttr="data-rd-repository-activity"
                   items={selected.recentActivity}
+                  labelFor={(item) => ({
+                    topic:
+                      selected.topics.find(
+                        (link) => link.topic.id === item.topicId
+                      )?.topic.name ?? null,
+                  })}
+                  onOpenEntity={onOpenEntity}
                   windowDays={windowDays}
                 />
 
-                <span className="rd-meta" data-rd-repository-last="true">
-                  {selected.lastActivityAt
-                    ? `last activity ${describeAge(selected.lastActivityAt)}`
-                    : "no activity recorded yet"}
+                <span className="rd-cluster" data-rd-repository-last="true">
+                  {selected.lastActivityAt ? (
+                    <RecencyLabel
+                      at={selected.lastActivityAt}
+                      prefix="last activity "
+                    />
+                  ) : (
+                    <span className="rd-muted">no activity recorded yet</span>
+                  )}
                 </span>
               </div>
             </CardContent>
@@ -2569,39 +2945,49 @@ export function apply(ctx: Context) {
           data-rd-progress-problem-open={activeAxis?.openProblems ?? 0}
           data-rd-progress-problem-shown={shownProblem?.id ?? ""}
         >
-          <h3 className="rd-strong">
-            {problemsMode ? "Problem" : `Open problems (${activeAxis?.openProblems ?? 0})`}
-          </h3>
-          {/*
-           * The DetailHeader's "compact context line, navigation tags" (component-contract.md § DetailHeader):
-           * the topic and the axis this reading surface belongs to, as EntityTags, with the recency the rest of
-           * the view sorts by. Rendered in both subviews from the axis on screen — in `Problems` the axis is
-           * derived from the problem, so these are the problem's own parent context, read off the projection
-           * rather than looked up again. A tag navigates and selects; it never filters and writes nothing.
-           */}
-          {activeAxis ? (
-            <div className="rd-cluster rd-tags" data-rd-progress-context="true">
-              <EntityTag
-                id={activeAxis.topicId}
-                label={activeAxis.topicName}
-                onOpen={onOpenEntity}
-                type="topic"
-              />
-              <EntityTag
-                id={activeAxis.id}
-                label={activeAxis.title}
-                onOpen={onOpenEntity}
-                type="axis"
-              />
-              <span className="rd-meta">
-                {problemsMode && shownProblem
-                  ? problemContext(shownProblem)
-                  : `last activity ${describeAge(activeAxis.recencyAt)}${
-                      activeAxis.stale ? " · stale" : ""
-                    }`}
+          <DetailHeader
+            context={
+              activeAxis ? (
+                <>
+                  <EntityTag
+                    id={activeAxis.topicId}
+                    label={activeAxis.topicName}
+                    onOpen={onOpenEntity}
+                    type="topic"
+                  />
+                  <EntityTag
+                    id={activeAxis.id}
+                    label={activeAxis.title}
+                    onOpen={onOpenEntity}
+                    type="axis"
+                  />
+                </>
+              ) : null
+            }
+            title={
+              <h3 className="rd-strong">
+                {problemsMode
+                  ? "Problem"
+                  : `Open problems (${activeAxis?.openProblems ?? 0})`}
+              </h3>
+            }
+          >
+            {activeAxis ? (
+              <span className="rd-cluster" data-rd-progress-recency="true">
+                {problemsMode && shownProblem ? (
+                  <span className="rd-meta">{problemContext(shownProblem)}</span>
+                ) : (
+                  <RecencyLabel
+                    at={activeAxis.recencyAt}
+                    prefix="last activity "
+                  />
+                )}
+                {activeAxis.stale ? (
+                  <span className="rd-muted">· stale</span>
+                ) : null}
               </span>
-            </div>
-          ) : null}
+            ) : null}
+          </DetailHeader>
           {activeAxis === null && !problemsMode ? (
             <p className="rd-muted" data-rd-progress-problem-empty="true">
               No axis is selected.
@@ -2665,65 +3051,35 @@ export function apply(ctx: Context) {
             </p>
           ) : (
             <ul className="rd-feed" data-rd-progress-feed={feed.events.length}>
+              {/*
+               * The ActivityFeed's half of the contract, rendered through the one shared event line
+               * (component-contract.md § ActivityFeed): the date, the summary, provenance, and a tag for
+               * every entity the event names. The repository and problem are resolved from the rollups and
+               * the problem list already in this payload, so a tag costs no call; an event with no mapped
+               * account says so in words, and an event naming a problem the projection does not carry gets no
+               * tag rather than an unnamed one.
+               */}
               {feed.events.map((event) => (
-                <li data-rd-feed-event="true" key={event.id}>
-                  <div className="rd-cluster">
-                    <span className="rd-meta">{event.occurredAt.slice(0, 10)}</span>
-                    <span className="rd-strong">{event.summary}</span>
-                  </div>
-                  <span className="rd-meta">
-                    {describeSource(event.sourceType, event.sourceRef ?? "")}
-                  </span>
-                  {/*
-                   * The ActivityFeed's half of the EntityTag contract (component-contract.md § ActivityFeed:
-                   * "entity tags for relevant topic/repo/person/axis"): the entities this event names, as tags
-                   * that navigate and select. The repository and problem are resolved from the rollups and the
-                   * problem list already in this payload, so a tag costs no call; an event with no mapped account
-                   * says so in words instead of showing a tag that would name nobody, and an event naming a
-                   * problem the projection does not carry gets no tag rather than an unnamed one.
-                   */}
-                  <span className="rd-cluster rd-tags" data-rd-feed-tags="true">
-                    {event.topicId !== null && event.topicId === activeAxis?.topicId ? (
-                      <EntityTag
-                        id={event.topicId}
-                        label={activeAxis?.topicName ?? event.topicId}
-                        onOpen={onOpenEntity}
-                        type="topic"
-                      />
-                    ) : null}
-                    {repositoryOf(event.repositoryId) ? (
-                      <EntityTag
-                        id={repositoryOf(event.repositoryId)!.id}
-                        label={repositoryOf(event.repositoryId)!.fullName}
-                        onOpen={onOpenEntity}
-                        type="repository"
-                      />
-                    ) : null}
-                    {event.person ? (
-                      <EntityTag
-                        id={event.person.id}
-                        label={event.person.displayName}
-                        onOpen={onOpenEntity}
-                        type="person"
-                      />
-                    ) : (
-                      <span className="rd-muted">no account attributed</span>
-                    )}
-                    {problemOf(event.problemId) ? (
-                      <EntityTag
-                        id={problemOf(event.problemId)!.id}
-                        label={problemOf(event.problemId)!.statement}
-                        onOpen={onOpenEntity}
-                        type="problem"
-                      />
-                    ) : null}
-                    {event.problemId !== null && event.problemId === shownProblem?.id ? (
-                      <span className="rd-muted">
-                        evidence for the problem shown
-                      </span>
-                    ) : null}
-                  </span>
-                </li>
+                <ActivityLine
+                  attrs={{ "data-rd-feed-event": "true" }}
+                  axisLabel={
+                    event.axisId !== null && event.axisId === activeAxis?.id
+                      ? activeAxis?.title ?? null
+                      : null
+                  }
+                  item={event}
+                  key={event.id}
+                  onOpenEntity={onOpenEntity}
+                  person={event.person}
+                  problemLabel={problemOf(event.problemId)?.statement ?? null}
+                  repositoryLabel={repositoryOf(event.repositoryId)?.fullName ?? null}
+                  topicLabel={
+                    event.topicId !== null && event.topicId === activeAxis?.topicId
+                      ? activeAxis?.topicName ?? null
+                      : null
+                  }
+                  unattributedNote="no account attributed"
+                />
               ))}
             </ul>
           )}
@@ -3570,22 +3926,38 @@ export function apply(ctx: Context) {
                   key={entry.topic.id}
                 >
                   <CardHeader>
-                    <div className="rd-row">
-                      <CardTitle>{entry.topic.name}</CardTitle>
-                      <span className="rd-muted">{entry.topic.status}</span>
-                    </div>
-                    <span className="rd-meta">
-                      {entry.people.length > 0
-                        ? entry.people
-                            .map((person) => person.displayName)
-                            .join(", ")
-                        : "nobody tagged yet"}
-                      {entry.repositories.length > 0
-                        ? ` · ${entry.repositories
-                            .map((repository) => repository.fullName)
-                            .join(", ")}`
-                        : ""}
-                    </span>
+                    <DetailHeader
+                      badge={
+                        <span className="rd-muted">{entry.topic.status}</span>
+                      }
+                      context={
+                        <>
+                          {entry.repositories.map((repository) => (
+                            <EntityTag
+                              id={repository.id}
+                              key={repository.id}
+                              label={repository.fullName}
+                              onOpen={openEntity}
+                              type="repository"
+                            />
+                          ))}
+                          {entry.people.map((person) => (
+                            <EntityTag
+                              id={person.id}
+                              key={person.id}
+                              label={person.displayName}
+                              onOpen={openEntity}
+                              type="person"
+                            />
+                          ))}
+                          {entry.repositories.length === 0 &&
+                          entry.people.length === 0 ? (
+                            <span className="rd-meta">nobody tagged yet</span>
+                          ) : null}
+                        </>
+                      }
+                      title={<CardTitle>{entry.topic.name}</CardTitle>}
+                    />
                   </CardHeader>
                   <CardContent>
                     <div className="rd-form">
@@ -3602,6 +3974,7 @@ export function apply(ctx: Context) {
                                 historyOpen={historyAxisId === axis.id}
                                 key={axis.id}
                                 onCorrection={setCorrection}
+                                onOpenEntity={openEntity}
                                 onReload={() => {
                                   void reloadAxis(details.topic.id, axis.id);
                                 }}
@@ -3616,15 +3989,27 @@ export function apply(ctx: Context) {
                               />
                             ))
                           : shown.map((axis) => (
-                              <AxisItem axis={axis} key={axis.id} />
+                              <AxisItem
+                                axis={axis}
+                                key={axis.id}
+                                onOpenEntity={openEntity}
+                              />
                             ))}
                       </ul>
 
                       <div className="rd-row">
-                        <span className="rd-muted">
-                          Recent: {entry.activityCount} event
-                          {entry.activityCount === 1 ? "" : "s"} · last activity{" "}
-                          {describeAge(entry.lastActivityAt)}
+                        <span className="rd-cluster" data-rd-topic-recent="true">
+                          <span className="rd-meta">
+                            Recent: {countLabel(entry.activityCount, "event", "events")}
+                          </span>
+                          {entry.lastActivityAt ? (
+                            <RecencyLabel
+                              at={entry.lastActivityAt}
+                              prefix="· last activity "
+                            />
+                          ) : (
+                            <span className="rd-muted">· no activity yet</span>
+                          )}
                         </span>
                         <div className="rd-cluster">
                           {/* Reading and editing are two ways into the same card, not one. Reading is
@@ -3671,9 +4056,13 @@ export function apply(ctx: Context) {
                         // so a second way to expand would be two controls driving one piece of state —
                         // which is what the old `All n axes` button was. This says what is out of view
                         // without inviting a second path to it.
-                        <span className="rd-muted" data-rd-hidden-axes={hidden}>
-                          {shown.length} of {entry.axes.length} axes shown · {hidden} more
-                        </span>
+                        <Notice
+                          attrs={{ "data-rd-hidden-axes": String(hidden) }}
+                          kind="truncated"
+                        >
+                          {shown.length} of {entry.axes.length} axes shown · {hidden}{" "}
+                          more
+                        </Notice>
                       ) : null}
 
                       {details ? (
@@ -3814,30 +4203,25 @@ export function apply(ctx: Context) {
                             className="rd-activity"
                             data-rd-topic-activity={details.activity.length}
                           >
-                            {details.activity.map((item) => {
-                              const axisTitle = details.axes.find(
-                                (axis) => axis.id === item.axisId
-                              )?.title;
-                              return (
-                                <li key={item.id}>
-                                  <div>{item.summary}</div>
-                                  <span className="rd-meta">
-                                    {SOURCE_OPTIONS.find(
-                                      (option) =>
-                                        option.value === item.sourceType
-                                    )?.label ?? item.sourceType}
-                                    {item.sourceRef
-                                      ? ` · ${item.sourceRef}`
-                                      : ""}{" "}
-                                    · {item.occurredAt.slice(0, 10)}
-                                    {item.actorType
-                                      ? ` · ${item.actorType}`
-                                      : ""}
-                                    {axisTitle ? ` · axis: ${axisTitle}` : ""}
-                                  </span>
-                                </li>
-                              );
-                            })}
+                            {details.activity.map((item) => (
+                              <ActivityLine
+                                axisLabel={
+                                  details.axes.find(
+                                    (axis) => axis.id === item.axisId
+                                  )?.title ?? null
+                                }
+                                item={item}
+                                key={item.id}
+                                onOpenEntity={openEntity}
+                                repositoryLabel={
+                                  details.repositories.find(
+                                    (repository) =>
+                                      repository.id === item.repositoryId
+                                  )?.fullName ?? null
+                                }
+                                topicLabel={details.topic.name}
+                              />
+                            ))}
                             {details.activity.length === 0 ? (
                               <li className="rd-muted">
                                 No activity recorded yet.
@@ -3978,6 +4362,7 @@ export function apply(ctx: Context) {
 
         {view === "people" ? (
           <PeopleView
+            onOpenEntity={openEntity}
             people={overview?.people ?? []}
             preselect={entityTarget?.type === "person" ? entityTarget : null}
             truncated={overview?.peopleTruncated === true}
@@ -3987,6 +4372,7 @@ export function apply(ctx: Context) {
 
         {view === "repositories" ? (
           <RepositoriesView
+            onOpenEntity={openEntity}
             preselect={entityTarget?.type === "repository" ? entityTarget : null}
             repositories={overview?.repositories ?? []}
             truncated={overview?.repositoriesTruncated === true}

@@ -685,6 +685,88 @@ record.
 
 ---
 
+---
+
+## 19. One grammar across the four views (step 7, second half)
+
+The reviewer accepted the frozen Progress record and set the propagation pass as the second half of step 7:
+give Topics, People, Repositories and Overview the primitives Progress had just proved, **conservatively** —
+"keep the accepted view-specific product rules intact rather than homogenizing them too aggressively."
+That framing decided almost every judgement below.
+
+**What was extracted into one place.** Five components now carry the grammar, and each is used by more than
+one view:
+
+- `EntityTag` (step 7) — one component, one attribute pair plus `data-rd-tag-label`, one `compact` style for
+  use inside an existing line. Nothing about it changed here; the four views were changed to *use* it.
+- `RecencyLabel` — the age, derived from **the timestamp the row is sorted by**, with that timestamp carried
+  to the DOM (`data-rd-recency`). The four views had four phrasings (`updated <date>`, `last activity 3 days
+  ago`, `· last reviewed …`) and no way to check any of them against the field they came from.
+- `DetailHeader` — the selected-entity header (title node, exceptional status, a context line of tags). Used
+  by the People panel, the Repositories panel, the topic card and the Progress card. The title is a *node*,
+  not a string, so a card keeps its heading level and the Progress card keeps the `<h3>` its own checks read.
+- `DetailHeader`'s context line is the same `rd-tags` cluster the Progress card already used, so the
+  "compact context line, navigation tags" contract is one piece of markup in four places.
+- `ActivityLine` (+ `EventDate`) — one recorded event, rendered one way. It reads a narrow structural type
+  (`ActivityLineItem`), which both the C6 lists' `Activity` and the Progress feed's own row satisfy, so the
+  two payloads did not have to be widened into one another. It renders a tag for every entity the event
+  names and, where the view states it, the words for an unattributed event.
+- `Notice` — an exceptional state that names which one it is (`empty` / `filtered` / `truncated`) and can
+  carry the caller's own fact (the hidden-axis count) without a second element. A notice is never a tag.
+
+**What each view now shows as tags** — always the entity's own name, always only where the entity is named,
+never a call:
+
+| View | tags it emits |
+|---|---|
+| Topics (the default, recency-first surface) | repositories and people from the topic's rollup (card header); the axis on every axis row and card; the repositories each axis lives in; in the topic's own activity, the axis, repository and topic each event names |
+| People | the topic on each involvement line; the axis and its repositories on every axis row |
+| Repositories | the topic on each "supports" link; the axis and repositories on every axis row |
+| Progress | topic and axis on the reading surface's context line; topic, repository, person, problem and axis on every activity row |
+
+**Two structural findings.** An index row is a `<button>`, so a tag **cannot** live inside one — nesting
+buttons is invalid and the browser will not honour it. That is why the Overview's rows carry their tags on
+the *title* (as the row's own name becoming a link) and in the subordinate line's cluster, and why the
+Progress index's rows keep their context as text with the tags living on the card. The second: a view that
+is not mounted has no DOM, so a check that reads a selection must first bring the view back — the same trap
+as step 7's, one level up (there the *view* reset, here the *selection read* was stale).
+
+**The checks.** Ten new ones, all dataset-honest:
+
+1. every state row in every view renders its claim through the one badge (corpus: 3 rows in each of Topics,
+   People, Repositories, none without a claim);
+2. every recency label's words are the age of the timestamp it carries — the harness re-derives the age
+   from the attribute and compares (corpus: 7 labels across all four views, each matching);
+3. an exceptional state says which one it is and never navigates (fixture: the collapsed card's
+   `truncated` notice; corpus: no such surface, so it skips with its reason);
+4. a person's topic tags are the topics their own rollup links them to — every link covered, and **no tag
+   naming a topic the rollup does not link** (this is why the assertion is coverage-plus-no-foreign rather
+   than an equality: the panel's *activity* rows tag their topics too);
+5. the same for a repository;
+6. a topic tag clicked in **People** lands in Topics with that topic open, under the same name;
+7. an axis tag clicked in **Repositories** lands in Progress/Axes with that axis selected;
+8. a repository tag clicked in **Topics** lands in Repositories with that repository selected;
+9. the whole traversal wrote nothing: no write action, projection byte-identical.
+
+**Measured** (both viewports, each dataset on its own isolated instance):
+
+| | fixture | corpus |
+|---|---|---|
+| step 7 second half | **105 · 0 · 1** | **72 · 0 · 33** |
+| step 7 first half | 96 · 0 · 1 | 64 · 0 · 32 |
+
+`bun run check`: 0 typecheck errors · 126 pass · 0 fail · 764 expect(). Release
+`0.2.0+dev.caa231a415f0`, served `ui/app.js` `aa3a478c39ca045d7e96` identical across both instances, the vendored
+checkout and the repo build.
+
+**What deliberately did not change.** The four views' product rules are untouched: Topics still leads with
+its 2–4 most relevant axes and keeps `Read topic` as its only disclosure control, People is still
+person-first and never scores anybody, Repositories is still implementation-first, and the Progress
+composition's columns are the ones step 6 froze. The propagation is grammar and navigation, not a redesign —
+and the step-7 acceptance for Progress is still the record those views are measured against.
+
+---
+
 ## 18. The EntityTag contract, exercised (step 7)
 
 Step 7 was the Progress consolidation/finalization pass: make the shared components, the tag primitive, the status

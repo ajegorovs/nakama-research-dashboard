@@ -1,6 +1,6 @@
 # harness/read-pass.sh — read pass · dataset corpus · viewport 1280x800
 # dashboard: http://127.0.0.1:3007
-# generated: 2026-10-02T00:48:30+03:00
+# generated: 2026-10-02T01:11:25+03:00
 
 PASS  login — status 200
 corpus: {"axes":3,"blocked":0,"people":1,"repositories":1,"topic":"UDV Echo Process","windowEvents":30}
@@ -10,16 +10,16 @@ PASS  the overview renders from one get_overview call — saw 1: [{"activitySinc
 PASS  a get_overview call reads other plugin actions for nothing else on first paint — list_topics calls: 0
 PASS  the default window is 14 days and is sent as a query parameter — {"activitySinceDays":14}
 PASS  topic cards rendered — 1 cards
-PASS  the header carries the title, window control, archived toggle and count line — {"addTopic":true,"archivedToggle":true,"countsLine":true,"headerText":"Research overview Topics People Repositories Progress 7 days 14 days 30 days All time archived Refresh Add topic 1 topic · 3 axes · 1 person · 1 repository UDV Echo Process active ajegorovs · ajegorov","windowButtons":4}
+PASS  the header carries the title, window control, archived toggle and count line — {"addTopic":true,"archivedToggle":true,"countsLine":true,"headerText":"Research overview Topics People Repositories Progress 7 days 14 days 30 days All time archived Refresh Add topic 1 topic · 3 axes · 1 person · 1 repository UDV Echo Process active ajegorovs/udv-echo-p","windowButtons":4}
 PASS  the count line reads correctly when the count is one — 1 repository
 PASS  every topic in the payload has one card, carrying its own axes and none of another topic's — 1 cards for 1 topics; no leaks
 PASS  a topic card leads with people and its state counts — ajegorovs on UDV Echo Process; payload states ["2 active","1 completed"]; card counts ["2 active","1 completed"]
 SKIP  the blocked axis shows its blocker text — no axis in this corpus is blocked
 SKIP  a topic with a blocked axis is visually distinct — no axis in this corpus is blocked, so the attention styling has no subject here
-PASS  each topic card reports its recent-activity summary — Recent: 595 events · last activity 3 days ago 
+PASS  each topic card reports its recent-activity summary — Recent: 594 events · last activity 3 days ago 
 PASS  the window control re-issues get_overview with the new window only — {"activitySinceDays":7}
 PASS  the page still renders after the window change
-PASS  the topic card offers one disclosure control, not two — card buttons ["Read topic","Edit fields"]
+PASS  the topic card offers one disclosure control, not two — card buttons ["ajegorovs/udv-echo-process","ajegorovs","Docs & agent skills — `docs/`, `.agents/skills`","ajegorovs/udv-echo-process","Signal analysis — `analysis/`, SA1–SA5, sparse","ajegorovs/udv-echo-process","Acquisition — `acquire/`, DOP3010 rig","ajegorovs/udv-echo-process","Read topic","Edit fields"]
 SKIP  a card that hides axes states it rather than offering a second way in — the topic leads with all 3 axes (LEAD_AXES is 3), so none are hidden
 PASS  reading a card shows every axis it holds — 3 axis rows for 3 axes
 PASS  opening a topic reads it once, in one get_topic call — saw 1: [{"topicId":"2cd56324-85eb-438c-883c-cc0a29ca2aba"}]
@@ -52,7 +52,7 @@ PASS  an event recorded against an axis alone still lands under the right topic 
 progress screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/screenshots/1280x800/research-dashboard-read-progress.png
 PASS  the Progress index is the projection for the current window — replaced on change, not extended — matched the projection at 30 and 7 days (7d restored)
 PASS  the get_progress payload carries all three halves the page reads (axes, problems, activity) — 3 halves · axes 3 · problems 0 · activity 3
-PASS  the Progress top area shows the index, the Problem column and the Activity feed side by side — index {"h":310,"w":256,"x":320,"y":194}, problem {"h":123,"w":363,"x":588,"y":194}, feed {"h":2148,"w":293,"x":963,"y":194}
+PASS  the Progress top area shows the index, the Problem column and the Activity feed side by side — index {"h":310,"w":256,"x":320,"y":194}, problem {"h":117,"w":363,"x":588,"y":194}, feed {"h":3035,"w":293,"x":963,"y":194}
 PASS  the axis index opens on the projection's first row, and the detail columns follow it — active ccd11229, projection first ccd11229, problem column ccd11229, feed ccd11229
 SKIP  the Problem column shows the projection's first open problem, under the projection's own count — no axis in this dataset has an open problem, so this pass cannot exercise the Problem column
 PASS  the Activity feed is the projection's bucket for the selected axis, in the projection's order — feed axis ccd11229, count 15 (projection 15), heading "Activity (15)" (index row 15), 15 rows vs 15 in the projection
@@ -105,10 +105,19 @@ PASS  leaving the Progress view restores the topic view with no residue — card
 PASS  command palette lists the plugin page
 palette screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/screenshots/1280x800/research-dashboard-read-palette.png
 PASS  palette entry navigates to the page — http://127.0.0.1:3007/plugins/research-dashboard
+PASS  every state row in every view renders its claim through the one badge — topics: 3 row(s), 0 without a claim; people: 3 row(s), 0 without a claim; repositories: 3 row(s), 0 without a claim
+PASS  every recency label's words are the age of the timestamp it carries, in all four views — 7 label(s) across people, progress, repositories, topics; each matches its own timestamp
+SKIP  an exceptional state says which one it is, and never navigates — no view rendered an exceptional state in this dataset, so there is no notice to read
+PASS  a person's topic tags are the topics their own rollup links them to, ids and names alike — 6 tag(s) covering 1 link(s); every tag names a linked topic
+PASS  a repository's topic tags are the topics its own rollup links it to, ids and names alike — 6 tag(s) covering 1 link(s); every tag names a linked topic
+PASS  a topic tag clicked in People lands in Topics with that topic open, under the same name — view topics, opened "UDV Echo Process" (wanted "UDV Echo Process")
+PASS  an axis tag clicked in Repositories lands in Progress/Axes with that axis selected — view progress, subview axes, active ccd11229-0540-4d57-aee2-67cd9338ed96 (wanted ccd11229-0540-4d57-aee2-67cd9338ed96)
+PASS  a repository tag clicked in Topics lands in Repositories with that repository selected — view repositories, panel "ajegorovs/udv-echo-process" (wanted "ajegorovs/udv-echo-process")
+PASS  the grammar traversal wrote nothing: no write action, and the projection is unchanged — writes 0 -> 0; payload identical
 screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/screenshots/1280x800/research-dashboard-read.png
 console issues after login: []
 
-read pass: all checks passed; 32 skipped for want of a subject in this corpus
+read pass: all checks passed; 33 skipped for want of a subject in this corpus
 skipped (each with its reason):
   - the blocked axis shows its blocker text — no axis in this corpus is blocked
   - a topic with a blocked axis is visually distinct — no axis in this corpus is blocked, so the attention styling has no subject here
@@ -142,3 +151,4 @@ skipped (each with its reason):
   - a repository tag in the Activity column lands in Repositories with that repository selected — no event in this dataset's window names a repository, so no feed row renders a repository tag
   - a problem tag lands in Progress/Problems with that problem selected — no event in this dataset's window is evidence for a problem, so no feed row renders a problem tag
   - a person filter that matches nothing attributable says so, and shows no unrelated events — every person in this corpus maps to a platform account, so the unattributable case has no subject
+  - an exceptional state says which one it is, and never navigates — no view rendered an exceptional state in this dataset, so there is no notice to read

@@ -38,8 +38,8 @@ canonical view with the entity selected — plus no status badge being a tag, an
 identical payload). One of the ten **skips here**: no recorded event in this fixture names a repository, so the
 Activity column's repository tag has nothing to render (the repository *navigation* is still exercised, from
 the threads section, by the step-5 checks). At both viewports, with nothing failing.
-**Measured against each other at U4's step 7, on separate instances:** this directory **96 · 0 · 1** and the
-corpus **64 · 0 · 32** — the corpus record is taken on a corpus-only instance, and its 32 skips are the
+**Measured against each other at U4's step 7, on separate instances:** this directory **105 · 0 · 1** and the
+corpus **72 · 0 · 33** — the corpus record is taken on a corpus-only instance, and its 33 skips are the
 checks a corpus with no problem row and no plan cannot exercise, each printed with its reason. So the pair
 that once read 36/43 reads **64/96** (at U4's step 6 it read 56/87; at step 5, 52/80). The pass also *swapped* one check for
 another at step 5 — the closed-out precondition folded into the conditional that replaced it, and a new
