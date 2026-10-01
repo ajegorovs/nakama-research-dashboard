@@ -98,6 +98,21 @@ const FIXTURE = [
         stateConfidence: "confirmed",
         title: "Fixture: completed axis",
       },
+      {
+        // The seventh state, and the only one neither the corpus nor the earlier fixture reached: given
+        // up on deliberately. It is here so the layout has to render `abandoned` as a state rather than
+        // as a missing badge, and so all seven reachable axis states have page-level coverage. Where the
+        // page puts it in the detail's order is the page's business: the fixture's job is that the state
+        // exists somewhere, because a missing badge and a correct badge are indistinguishable otherwise.
+        branch: "data/fixture-abandoned",
+        currentState: "Given up on: the merged approach lost to the simpler baseline.",
+        currentStateConfidence: "confirmed",
+        kind: "experiment",
+        repositories: [repoLink("fixture/crowded-card")],
+        state: "abandoned",
+        stateConfidence: "confirmed",
+        title: "Fixture: abandoned axis (given up on deliberately)",
+      },
     ],
     activities: [
       {
@@ -127,6 +142,15 @@ const FIXTURE = [
         sourceRef: "fixture-activity-4",
         sourceType: "manual",
         summary: "Dataset build archived with its provenance note.",
+      },
+      {
+        // The abandoned axis keeps one activity so it is not mistaken for the evidence-free axis: the
+        // draft axis above is the one that must render "no evidence on record".
+        axisTitle: "Fixture: abandoned axis (given up on deliberately)",
+        occurredAt: "2026-09-22T10:05:00+03:00",
+        sourceRef: "fixture-activity-6",
+        sourceType: "manual",
+        summary: "Abandoned deliberately: the merged approach lost to the simpler baseline.",
       },
     ],
     annotations: [

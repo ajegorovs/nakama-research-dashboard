@@ -231,9 +231,10 @@ bun run harness:fixture -- --env-file /tmp/nakama-review.env
 bun run harness:fixture -- --env-file /tmp/nakama-review.env --viewport 1280x800
 ```
 
-Expected, as of the `pre-ux-v2` tag: corpus **42 pass · 0 fail · 7 skip** and fixture **49 · 0 · 0**, at
-both viewports. The counts move whenever a check is added, so read the run's own summary line rather
-than a number in a document. Each run writes its transcript to
+Expected as of the U1 commit: corpus **43 pass · 0 fail · 7 skip** and fixture **50 · 0 · 0**, at
+both viewports. (Before U1 it was 42 and 49 — U1 added one check, "every axis state the payload carries
+reaches the page as that state", and the `abandoned` fixture axis it needs.) The counts move whenever a
+check is added, so read the run's own summary line rather than a number in a document. Each run writes its transcript to
 `docs/corpus/verify-read[-<viewport>].txt` or `docs/layout-fixtures/verify-fixture-read-<viewport>.txt`
 and its screenshots under `docs/screenshots/` or `docs/layout-fixtures/screenshots/<viewport>/` — i.e.
 over the committed record, by design: re-running is how the record is refreshed. `--shots` and

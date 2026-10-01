@@ -605,6 +605,7 @@ const detail = await page.evaluate(
         ),
         title: node.getAttribute("data-rd-axis-title"),
         version: node.getAttribute("data-rd-axis-version"),
+        state: node.getAttribute("data-rd-axis-state"),
       })
     );
     return {
@@ -655,6 +656,20 @@ check(
   detail.axes
     .map((axis) => `${axis.title}: ${axis.evidenceCount}`)
     .join(", ")
+);
+// Every state the payload carries must reach the page *as that state* — not as a rendered label that
+// drifted, and not dropped. This is what makes the seventh axis state executable coverage rather than a
+// screenshot: `abandoned` is supplied only by the layout fixture (the corpus has no subject for it), and
+// `usable` has no subject anywhere yet, because nothing can legitimately enter it until the transition
+// writer lands (U2/U3).
+const unrendered = CORPUS.axes.filter(
+  (axis) => !detail.axes.some((rendered) => rendered.title === axis.title && rendered.state === axis.state)
+);
+check(
+  "every axis state the payload carries reaches the page as that state",
+  unrendered.length === 0,
+  `${CORPUS.axes.length} axes in the payload, states [${[...new Set(CORPUS.axes.map((axis) => axis.state))].join(", ")}]; ` +
+    `not rendered as their own state: ${JSON.stringify(unrendered.map((axis) => `${axis.title}=${axis.state}`))}`
 );
 // The rule and the page agree: an axis with nothing behind it cannot show a confirmed claim, and a
 // claim nobody stated gets no confidence badge at all. Both need an evidence-free axis to look at.

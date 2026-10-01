@@ -10,7 +10,7 @@ Last updated at the end of **U1**.
 | Chunk | State | Evidence |
 |---|---|---|
 | **U0** Contract, baseline, runnable pass | **done** | `contract/` published verbatim · `BASELINE.md` · the pass moved in-repo and reproduces from a *fresh clone* on a *pristine checkout* (measured below) · PR #1 merged, tagged `pre-ux-v2` · three harness defects found by that run and fixed |
-| **U1** Migration 004 (`usable`, state log, Problems, Plans) | **done** | `migrations/004-ux-v2-model.sql` · design note + truth table in `U1-migration.md` (§3.2, §4, §1a) · `harness/test-004.mjs`: **79 checks, 0 failed**, including the crash-after-COMMIT re-run · applied to the dev instance by the host's own applier — new generation `g9e344…`, ledger 001–004 · both acceptance passes green afterwards (measured below) |
+| **U1** Migration 004 (`usable`, state log, Problems, Plans) | **done** | `migrations/004-ux-v2-model.sql` · design note + truth table in `U1-migration.md` (§3.2, §4, §1a, §1b) · `harness/test-004.mjs`: **79 checks, 0 failed**, including the crash-after-COMMIT re-run · applied to the dev instance by the host's own applier — new generation `g9e344…`, ledger 001–004 · both acceptance passes green afterwards, plus the `abandoned` fixture axis and a check that every state the payload carries renders as itself |
 | U2 Store read models | not started | — |
 | U3 Action surface + skill | not started | — |
 | U4 Five tabs + canonical navigation | not started | — |
@@ -70,10 +70,16 @@ same estate instance the baseline numbers came from, dashboard `http://100.122.4
 
 | Dataset | Viewport | Result | Conditions |
 |---|---|---|---|
-| corpus | 1440×900 | 42 · 0 · 7 | migrated generation, corpus `695`-call replay re-applied after the fixture run |
-| corpus | 1280×800 | 42 · 0 · 7 | same |
-| fixture | 1440×900 | 49 · 0 · 0 | **fixture-only instance** (plugin rows wiped first) |
-| fixture | 1280×800 | 49 · 0 · 0 | same |
+| corpus | 1440×900 | 43 · 0 · 7 | migrated generation, corpus `695`-call replay re-applied after the fixture run |
+| corpus | 1280×800 | 43 · 0 · 7 | same |
+| fixture | 1440×900 | 50 · 0 · 0 | **fixture-only instance** (plugin rows wiped first) |
+| fixture | 1280×800 | 50 · 0 · 0 | same |
+
+Both counts are one higher than the baseline because U1 added one check — *"every axis state the payload
+carries reaches the page as that state"* — which asserts exactly what the new `abandoned` axis exists to
+make assertable: on the fixture it reports `states [blocked, active, draft, parked, completed, abandoned]`
+and nothing unrendered; on the corpus, `states [active, completed]`. It is the difference between the
+seventh state being *on screen* and being *covered*.
 
 Data after migrating, before any wipe: 1 topic, 3 axes (2 `active`, 1 `completed`), 694 activities, 7
 annotations — byte-identical to the pre-004 fingerprint — plus 3 bootstrap rows in `state_log`. Ledger:
@@ -84,7 +90,7 @@ data (3 topics, 9 axes), the fixture pass is 48 · 1 · 0. The failing check is
 `verify-page.mjs:1088` — it requires the filtered view to name exactly one topic, hard-coded to
 `CORPUS.topic`, which in fixture mode is the fixture's topic; with the corpus topic still present, the
 filtered view names that instead. It is a harness assumption, not a plugin or migration regression:
-fixture-only, the same checks are 49 · 0 · 0. Recorded rather than smoothed over, because a reader
+fixture-only, the same checks are 50 · 0 · 0. Recorded rather than smoothed over, because a reader
 comparing the two tables would otherwise wonder which number to trust.
 
 ## Open
@@ -104,8 +110,24 @@ comparing the two tables would otherwise wonder which number to trust.
   its state" claim should see exactly where it stops being true. (004 creates no problems: the table is
   empty, which is why the corpus's numbers are unchanged.)
 - **The plugin is confirmed on upstream 0.4.35** — newer than this estate's deployment (0.4.31).
-- **Fixture coverage for A–J** is U10's, and the `abandoned` axis the reviewer asked for is not in the
-  layout fixture yet; `harness/test-004.mjs` covers all seven states at the database level meanwhile.
+- **`abandoned` now has page-level coverage.** It is in the layout fixture (the crowded card), and the
+  passes above assert it reaches the page as its own state — which is what the fixture axis exists for. The
+  remaining A–J fixtures are U10's.
+- **The retention boundary is a documented product rule, not fixed behaviour** (`U1-migration.md` §1b):
+  completing, parking and abandoning are the ordinary ways a line of work stops; **deleting an axis or a
+  problem is destructive cleanup**, and it takes that entity's history with it. Making history survive
+  deletion is its own schema decision — tombstoning, or detached historical subjects — deliberately not
+  smuggled into 004. U3's skill update must state the rule in the librarian's own words.
+- **An observed ordering, recorded for U7:** with the fixture's six states on one card, the detail renders
+  `blocked · abandoned · active · completed · parked · draft` — `abandoned` second, not last. The contract
+  states no axis order (its only ordering rule is "Problem before Activity before secondary support
+  material" inside a Problem, `contract/interaction-spec.md:261`), so nothing is violated today; ordering
+  becomes a requirement when Progress is built, and the fixture is now where to pin it.
+- **A harness defect is recorded rather than fixed:** `verify-page.mjs:1088` requires the filtered view to
+  name exactly one topic and hard-codes the corpus's topic, so the fixture pass reports **48 · 1 · 0** when
+  run on an instance that also holds the corpus. The frozen protocol isolates the datasets, so it is not a
+  migration failure — it is a page check that should assert the *selected* topic rather than assume there is
+  exactly one. U10's, with this evidence.
 
 ## What a reviewer can usefully do at this point
 

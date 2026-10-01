@@ -52,6 +52,23 @@ preserving organization data"), and the checkout must be re-vendored first
 database is not merely backed up before migrating — it is left in place, unmodified, which is what makes
 the rollback in §5.3 a real path rather than a reconstruction.
 
+### 1b. The retention boundary this migration creates (documented here, deliberately not fixed in 004)
+
+The DELETE guard means log rows are append-only **while their subject exists**, and deleting the subject
+takes its history with it. That is internally coherent, and it is weaker than "a durable historical ledger"
+in plain language: delete an axis and its state history is gone. The reviewer's ruling was not to fix it in
+004 — doing so would turn a migration into deletion/tombstone policy — but to state it, and to put the
+product rule above it:
+
+- lifecycle changes — completing, parking, abandoning — are the ordinary ways a line of work stops being
+  active, and each one is recorded as history;
+- **deleting an axis or a problem is destructive cleanup, not ordinary workflow**;
+- if research history must survive an entity's deletion, that is its own schema decision (tombstoning, or
+  detached historical subjects) with its own review — not a clever trigger.
+
+U3's skill update must carry that rule in the librarian's own words; the current skill predates the log and
+says nothing about deletion.
+
 ## 2. What the host does with a migration (the failure model 004 must live inside)
 
 From `apps/server/src/services/plugin-service.ts` (`applyPluginMigrations`), and confirmed by the header

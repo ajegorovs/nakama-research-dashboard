@@ -25,7 +25,8 @@ instead of the corpus and never mixed into `docs/corpus/`. Every file here is la
 |---|---|---|
 | Blocked axis with a reason | "the blocked axis shows its blocker text" | one axis `state: blocked`, `blockerConfidence: confirmed` |
 | Attention styling | "a topic with a blocked axis is visually distinct" | the blocked axis sits on the first card |
-| A card that hides axes | "a card offers to expand when it hides axes" | 5 axes on one topic (`LEAD_AXES` is 3, so 2 are hidden) |
+| A card that hides axes | "a card offers to expand when it hides axes" | 6 axes on one topic (`LEAD_AXES` is 3, so 3 are hidden) |
+| The seventh axis state | "every axis state the payload carries reaches the page as that state" | one axis `state: abandoned` — the only state neither the corpus nor the earlier fixture reached. Without a subject, "the page renders `abandoned`" is untestable: a missing badge and a correct badge look the same in an assertion |
 | Evidence-free claim | "an axis with no evidence says so and shows no confirmed claim" | an axis with no activity, no branch, no document — `evidence 0`, `conf [inferred]` |
 | An axis that states no progress | "an axis that states no progress carries no confidence for it" | the same axis, with no current-state claim at all |
 | One person, several topics | "one person on several topics shows each topic with its own axes underneath" | `Fixture Alpha`, attributable, 2 topics / 4 axes |
