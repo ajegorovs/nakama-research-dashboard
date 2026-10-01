@@ -180,9 +180,8 @@ bun install                                   # playwright-core
 bunx playwright install chromium              # or point PLAYWRIGHT_CHROMIUM at a chrome binary
 ```
 
-Install and enable the plugin on that instance (`POST /v1/plugins/official/research-dashboard/install`,
-then `POST /v1/plugins/research-dashboard/enable`), and write one env file — credentials stay out of
-command lines and shell history:
+Install and enable the plugin with the env file — one command, which first checks the instance's catalog
+(the failure that means the `vendor/` step was skipped) and exits non-zero if it refuses:
 
 ```bash
 cat > /tmp/nakama-review.env <<ENV
@@ -191,6 +190,9 @@ NAKAMA_DASHBOARD=http://127.0.0.1:3003
 NAKAMA_EMAIL=admin@nakama.local
 NAKAMA_PASSWORD=<the same one>
 ENV
+
+cd /path/to/this/repo
+bun harness/install-plugin.mjs --env-file /tmp/nakama-review.env
 ```
 
 **Corpus** (the real, public dataset) — seeded by replaying the committed transcript, which is the
