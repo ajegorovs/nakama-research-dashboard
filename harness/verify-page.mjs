@@ -1026,7 +1026,7 @@ const readIndex = () =>
       window: Number(index.getAttribute("data-rd-progress-index-window")),
     };
   });
-const apiIndex = (days) =>
+const apiProgress = (days) =>
   page.evaluate(
     async ([plugin, since]) => {
       const cookie = (name) =>
@@ -1045,11 +1045,15 @@ const apiIndex = (days) =>
         },
         method: "POST",
       }).then((r) => r.json());
-      // The row list is `axes.axes`: the outer object is the projection (window, threshold, rows).
-      return (body.result ?? {}).axes?.axes ?? null;
+      return body.result ?? null;
     },
     [PLUGIN_ID, days]
   );
+const apiIndex = async (days) => {
+  // The row list is `axes.axes`: the outer object is the projection (window, threshold, rows).
+  const result = await apiProgress(days);
+  return result?.axes?.axes ?? null;
+};
 const setWindow = async (days) => {
   await root.locator(`[data-rd-window="${days}"]`).click();
   // Returns false instead of throwing: an index that never appears would otherwise abort the whole pass with
@@ -1124,6 +1128,214 @@ check(
   indexMismatches.slice(0, 4).join("; ") || `matched the projection at 30 and 7 days (${startWindow}d restored)`
 );
 await setWindow(startWindow);
+
+// ---------------------------------- C7c: the three-column composition, and selection that changes it
+// Step 2 of the Progress slice: index on the left, the selected axis's Problem in the middle, its Activity
+// beside it — visible at once — with the detail taken from `get_progress`, never reconstructed from the V1
+// topic payload. Everything below is checked **against the projection's own answer**, so it tests the page
+// rather than this dataset: the column headings are the projection's counts, the statement shown is the first
+// open problem in the projection's order, and the feed is the projection's bucket for that axis.
+const readTop = () =>
+  page.evaluate(() => {
+    const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+    const top = scope?.querySelector('[data-rd-progress-top="true"]');
+    const index = top?.querySelector('[data-rd-progress-index="true"]') ?? null;
+    const problemColumn = top?.querySelector(".rd-progress-problem") ?? null;
+    const feedColumn = top?.querySelector(".rd-progress-activity") ?? null;
+    const box = (node) => {
+      const rect = node?.getBoundingClientRect();
+      return rect
+        ? {
+            h: Math.round(rect.height),
+            w: Math.round(rect.width),
+            x: Math.round(rect.left),
+            y: Math.round(rect.top),
+          }
+        : null;
+    };
+    return {
+      boxes: {
+        feed: box(feedColumn),
+        index: box(index),
+        problem: box(problemColumn),
+      },
+      feed: {
+        axis: feedColumn?.getAttribute("data-rd-progress-feed-axis") ?? null,
+        count: Number(feedColumn?.getAttribute("data-rd-progress-feed-count") ?? -1),
+        heading: (feedColumn?.querySelector("h3")?.textContent ?? "").trim(),
+        rows: [...(feedColumn?.querySelectorAll("[data-rd-feed-event]") ?? [])].map(
+          (node) => (node.innerText ?? "").replace(/\s+/g, " ").trim()
+        ),
+      },
+      indexRows: [...(index?.querySelectorAll("[data-rd-index-axis]") ?? [])].map((node) => ({
+        active: node.getAttribute("aria-pressed") === "true",
+        id: node.getAttribute("data-rd-index-axis"),
+      })),
+      problem: {
+        axis: problemColumn?.getAttribute("data-rd-progress-problem-axis") ?? null,
+        choices: [...(problemColumn?.querySelectorAll("[data-rd-problem-choice]") ?? [])].map(
+          (node) => node.getAttribute("data-rd-problem-choice")
+        ),
+        empty: (problemColumn?.querySelector("[data-rd-progress-problem-empty]")?.textContent ?? "").trim(),
+        heading: (problemColumn?.querySelector("h3")?.textContent ?? "").trim(),
+        open: Number(problemColumn?.getAttribute("data-rd-progress-problem-open") ?? -1),
+        shown: problemColumn?.getAttribute("data-rd-progress-problem-shown") ?? "",
+        statement: (
+          problemColumn?.querySelector("[data-rd-problem] .rd-strong")?.textContent ?? ""
+        ).trim(),
+      },
+    };
+  });
+
+/** What the projection says the page should be showing, for one axis. */
+const projectionFor = (result, axisId) => {
+  const axis = result.axes.axes.find((row) => row.id === axisId) ?? null;
+  const problems = result.problems.problems.filter((row) => row.axisId === axisId);
+  return {
+    axis,
+    bucket: result.activity.byAxis.find((entry) => entry.axisId === axisId) ?? null,
+    open: problems.filter((row) => row.state === "open"),
+    problems,
+  };
+};
+
+const windowDaysNow = startWindow;
+const allProgress = await apiProgress(windowDaysNow);
+const top = await readTop();
+const activeRow = top.indexRows.find((row) => row.active) ?? null;
+const first = allProgress?.axes?.axes?.[0] ?? null;
+const firstProblems = first ? projectionFor(allProgress, first.id) : null;
+
+// The composition itself: three regions on one row, in the contract's order, each with a real box.
+{
+  const { index: boxIndex, problem: boxProblem, feed: boxFeed } = top.boxes;
+  const placed = [boxIndex, boxProblem, boxFeed].every(Boolean);
+  const oneRow =
+    placed &&
+    Math.abs(boxIndex.y - boxProblem.y) < 48 &&
+    Math.abs(boxProblem.y - boxFeed.y) < 48 &&
+    boxIndex.x < boxProblem.x &&
+    boxProblem.x < boxFeed.x;
+  check(
+    "the Progress top area shows the index, the Problem column and the Activity feed side by side",
+    oneRow && boxProblem.w > 0 && boxFeed.w > 0 && boxIndex.w > 0,
+    `index ${JSON.stringify(boxIndex)}, problem ${JSON.stringify(boxProblem)}, feed ${JSON.stringify(boxFeed)}`
+  );
+}
+
+// The default selection is the projection's own first row — not a ranking the page invented.
+check(
+  "the axis index opens on the projection's first row, and the detail columns follow it",
+  activeRow !== null && activeRow.id === first?.id && top.problem.axis === first?.id && top.feed.axis === first?.id,
+  `active ${activeRow?.id?.slice(0, 8) ?? "none"}, projection first ${first?.id?.slice(0, 8) ?? "none"}, problem column ${top.problem.axis?.slice(0, 8) ?? "none"}, feed ${top.feed.axis?.slice(0, 8) ?? "none"}`
+);
+
+// The Problem column: the projection's count in the heading, and the first *open* problem in the
+// projection's order on screen. No recency ranking, no activity-count ranking, no repository ranking.
+if (firstProblems && firstProblems.open.length > 0) {
+  check(
+    "the Problem column shows the projection's first open problem, under the projection's own count",
+    top.problem.heading === `Open problems (${firstProblems.axis.openProblems})` &&
+      top.problem.open === firstProblems.axis.openProblems &&
+      top.problem.shown === firstProblems.open[0]?.id &&
+      top.problem.statement === (firstProblems.open[0]?.statement ?? "").trim(),
+    `heading "${top.problem.heading}" (projection ${firstProblems.axis.openProblems}), shown ${top.problem.shown?.slice(0, 8) ?? "none"} vs first open ${firstProblems.open[0]?.id?.slice(0, 8) ?? "none"}`
+  );
+} else {
+  skip(
+    "the Problem column shows the projection's first open problem, under the projection's own count",
+    "this dataset's first axis has no open problem, so there is nothing to compare"
+  );
+}
+
+// When there is more than one open problem, **the others** are listed — in the projection's order, not
+// sorted — and picking one changes the card. The problem already on screen is not repeated in the list.
+{
+  const expected = firstProblems?.open ?? [];
+  const others = expected.slice(1);
+  const listed = top.problem.choices;
+  const inOrder = listed.every((id, position) => id === others[position]?.id);
+  check(
+    "the other open problems are listed in the projection's order, and selecting one changes the card",
+    others.length === 0 ||
+      (listed.length === others.length &&
+        inOrder &&
+        (await (async () => {
+          await root.locator(`[data-rd-problem-choice="${others[0].id}"]`).click();
+          await page.waitForTimeout(300);
+          const afterChoice = await readTop();
+          return afterChoice.problem.shown === others[0].id;
+        })())),
+    `${listed.length} listed of ${others.length} others (${expected.length} open); order ${inOrder ? "matches" : "differs"}; shown ${(await readTop()).problem.shown?.slice(0, 8)}`
+  );
+  if (others.length > 0) {
+    // Back to the projection's first, so the rest of the pass reads the same state the checks above describe.
+    await root.locator(`[data-rd-problem-choice="${expected[0].id}"]`).click();
+    await page.waitForTimeout(200);
+  }
+}
+
+// The Activity feed: the projection's bucket for this axis, same count, same rows, same order.
+{
+  const bucket = firstProblems?.bucket ?? null;
+  const rows = top.feed.rows;
+  const expected = bucket?.events ?? [];
+  const aligned =
+    rows.length === expected.length &&
+    expected.every((event, position) => rows[position]?.includes(event.summary));
+  check(
+    "the Activity feed is the projection's bucket for the selected axis, in the projection's order",
+    top.feed.axis === first?.id &&
+      top.feed.count === (bucket?.eventCount ?? 0) &&
+      top.feed.heading === `Activity (${first?.activityInWindow ?? 0})` &&
+      (expected.length === 0 ? top.feed.rows.length === 0 : aligned),
+    `feed axis ${top.feed.axis?.slice(0, 8)}, count ${top.feed.count} (projection ${bucket?.eventCount ?? 0}), heading "${top.feed.heading}" (index row ${first?.activityInWindow ?? 0}), ${rows.length} rows vs ${expected.length} in the projection`
+  );
+}
+
+// Selection is the point of the index: picking another axis must move **both** columns to that axis's data,
+// and the projection stays the judge of what the new data is.
+{
+  const wanted = allProgress.axes.axes.find(
+    (row) => row.id !== first?.id && (projectionFor(allProgress, row.id).bucket?.events.length ?? 0) > 0
+  );
+  if (!wanted) {
+    skip(
+      "selecting another axis moves the Problem and Activity columns to that axis",
+      "no other axis in this dataset has activity in the window"
+    );
+  } else {
+    await root.locator(`[data-rd-index-axis="${wanted.id}"]`).click();
+    await page.waitForFunction(
+      (axisId) =>
+        document
+          .querySelector('div[data-plugin-id="research-dashboard"] .rd-progress-problem')
+          ?.getAttribute("data-rd-progress-problem-axis") === axisId,
+      wanted.id,
+      { timeout: 10000 }
+    ).catch(() => {});
+    const moved = await readTop();
+    const expected = projectionFor(allProgress, wanted.id);
+    const wantedRows = moved.feed.rows;
+    const wantedEvents = expected.bucket?.events ?? [];
+    check(
+      "selecting another axis moves the Problem and Activity columns to that axis",
+      moved.problem.axis === wanted.id &&
+        moved.feed.axis === wanted.id &&
+        moved.problem.heading === `Open problems (${expected.axis?.openProblems ?? -1})` &&
+        moved.feed.count === (expected.bucket?.eventCount ?? 0) &&
+        (moved.problem.open === 0
+          ? moved.problem.empty !== ""
+          : moved.problem.shown === (expected.open[0]?.id ?? "")) &&
+        wantedRows.length === wantedEvents.length &&
+        wantedEvents.every((event, position) => wantedRows[position]?.includes(event.summary)),
+      `selected ${wanted.id.slice(0, 8)}: problem axis ${moved.problem.axis?.slice(0, 8) ?? "none"}, feed axis ${moved.feed.axis?.slice(0, 8) ?? "none"}, shown ${moved.problem.shown?.slice(0, 8) ?? "none"} (projection ${expected.open[0]?.id?.slice(0, 8) ?? "none open"}), ${wantedRows.length} feed rows vs ${wantedEvents.length}`
+    );
+    // Back to the first row, so the checks after this one read the projection's default again.
+    await root.locator(`[data-rd-index-axis="${first.id}"]`).click();
+    await page.waitForTimeout(300);
+  }
+}
 
 // ------------------------------------------------ C8: no bare state, one vocabulary for the evidence
 // A state is a claim, and the record often holds only an inference. Every rendered state must carry

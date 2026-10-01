@@ -271,6 +271,9 @@ async function dispatch(
         ok: true,
         // Handed over exactly as the store computes them. Every field the Progress view renders is one of
         // these projection fields, so the view derives nothing and holds no display-only state of its own.
+        // `activity` is the Activity column's half: already grouped by axis and put in the index's order, so
+        // the page never filters a flat list to decide what belongs to the axis the reader selected.
+        activity: store.progressActivity(options),
         axes: store.progressAxes(options),
         problems: store.progressProblems(options),
       };

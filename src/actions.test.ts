@@ -1443,6 +1443,31 @@ describe("U4 — Progress reads the model as the store computes it", () => {
     const problemId = (seeded.problems as Array<{ id: string }>)[0]?.id ?? "";
     const stepId =
       (seeded.plans as Array<{ steps: Array<{ id: string }> }>)[0]?.steps[1]?.id ?? "";
+    // Two events inside the window: one that names the axis, and one that names the problem as its evidence.
+    // The Activity column is per axis and the problem's own count is read from the same rows, so the seed has
+    // to produce both — otherwise the feed half of the projection would only ever be tested empty.
+    const recorded = await call(
+      "reconcile_topic",
+      {
+        activities: [
+          {
+            axisId,
+            sourceRef: "experiment:second-seed",
+            sourceType: "experiment",
+            summary: "Second seed swept on the same rig.",
+          },
+          {
+            problemId,
+            sourceRef: "experiment:floor-check",
+            sourceType: "experiment",
+            summary: "The loss floor moved again on the second seed.",
+          },
+        ],
+        topicName: "Progress seed",
+      },
+      { path }
+    );
+    expect(recorded.ok).toBe(true);
     // Resolve and reopen, so the problem row's history is longer than its creation row.
     await call(
       "reconcile_topic",
@@ -1484,6 +1509,7 @@ describe("U4 — Progress reads the model as the store computes it", () => {
 
     expect(result.ok).toBe(true);
     // Deep equality, not a spot check: if the action added, renamed or reshaped anything, this fails.
+    expect(result.activity).toEqual(store.progressActivity(options));
     expect(result.axes).toEqual(store.progressAxes(options));
     expect(result.problems).toEqual(store.progressProblems(options));
   });
@@ -1493,10 +1519,66 @@ describe("U4 — Progress reads the model as the store computes it", () => {
     await seedProgress(path);
 
     const result = await call("get_progress", {}, { path });
-    const axes = result.axes as { axes: Array<Record<string, unknown>> };
-    const problems = result.problems as { problems: Array<Record<string, unknown>> };
+    const activity = result.activity as {
+      byAxis: Array<{ axisId: string; eventCount: number; events: Array<Record<string, unknown>> }>;
+    };
+    const axes = result.axes as {
+      axes: Array<
+        Record<string, unknown> & {
+          activityInWindow: number;
+          id: string;
+          openProblems: number;
+        }
+      >;
+    };
+    const problems = result.problems as {
+      problems: Array<Record<string, unknown> & { axisId: string; state: string }>;
+    };
 
-    expect(Object.keys(result).sort()).toEqual(["axes", "ok", "problems"]);
+    expect(Object.keys(result).sort()).toEqual(["activity", "axes", "ok", "problems"]);
+    expect(Object.keys(activity).sort()).toEqual([
+      "activitySinceDays",
+      "byAxis",
+      "staleAfterDays",
+    ]);
+    expect(Object.keys(activity.byAxis[0] ?? {}).sort()).toEqual([
+      "axisId",
+      "eventCount",
+      "events",
+    ]);
+    // The event row the Activity column renders — one line per event, with the linkage it needs to show
+    // where the event belongs and who is behind it.
+    expect(Object.keys(activity.byAxis[0]?.events[0] ?? {}).sort()).toEqual([
+      "actorId",
+      "actorType",
+      "axisId",
+      "id",
+      "occurredAt",
+      "person",
+      "problemId",
+      "recordedAt",
+      "repositoryId",
+      "sourceRef",
+      "sourceType",
+      "sourceUrl",
+      "summary",
+      "topicId",
+    ]);
+    // The index's per-axis count and the feed's own count are the same number from the same predicate —
+    // asserted rather than trusted, because a column that disagrees with the row it was opened from is
+    // exactly how a projection becomes two.
+    for (const axis of axes.axes) {
+      const feed = activity.byAxis.find((bucket) => bucket.axisId === axis.id);
+      expect(feed?.eventCount).toBe(axis.activityInWindow);
+    }
+    // And the same agreement between the heading the Problem column shows and the rows it can list: the page
+    // takes the projection's rows for the selected axis, so the server's count has to be their count.
+    for (const axis of axes.axes) {
+      const mine = problems.problems.filter(
+        (row) => row.axisId === axis.id && row.state === "open"
+      );
+      expect(mine.length).toBe(axis.openProblems);
+    }
     expect(Object.keys(axes).sort()).toEqual(["activitySinceDays", "axes", "staleAfterDays"]);
     expect(Object.keys(problems).sort()).toEqual([
       "activitySinceDays",
@@ -1567,13 +1649,16 @@ describe("U4 — Progress reads the model as the store computes it", () => {
     await seedProgress(path);
 
     const result = await call("get_progress", { activitySinceDays: 7 }, { path });
+    const activity = result.activity as { activitySinceDays: number; staleAfterDays: number };
     const axes = result.axes as { activitySinceDays: number; staleAfterDays: number };
     const problems = result.problems as { activitySinceDays: number; staleAfterDays: number };
 
     expect(axes.activitySinceDays).toBe(7);
     expect(problems.activitySinceDays).toBe(7);
-    // One stale derivation, shared: the two halves cannot disagree about what "stale" means.
+    expect(activity.activitySinceDays).toBe(7);
+    // One stale derivation, shared: the three halves cannot disagree about what "stale" means.
     expect(axes.staleAfterDays).toBe(problems.staleAfterDays);
+    expect(axes.staleAfterDays).toBe(activity.staleAfterDays);
 
     // 0 means all time, and it is a query parameter rather than stored state.
     const allTime = await call("get_progress", { activitySinceDays: 0 }, { path });
@@ -1598,7 +1683,10 @@ describe("U4 — Progress reads the model as the store computes it", () => {
     expect(axis.stateHistory.map((entry: { toState: string }) => entry.toState)).toEqual(["usable"]);
     expect(axis.plan.steps).toHaveLength(2);
     expect(axis.plan.stepsDone).toBe(0);
-    expect(axis.activityInWindow).toBe(1);
+    // Three events, and the problem-linked one belongs to this axis too: the insert path resolves an event
+    // that named only its problem back up to the axis, so the index count and the feed agree without the
+    // page assembling anything.
+    expect(axis.activityInWindow).toBe(3);
 
     const problem = problems.find((row) => row.id === problemId) ?? {};
     expect(problem.state).toBe("open");
@@ -1645,5 +1733,43 @@ describe("U4 — Progress reads the model as the store computes it", () => {
     expect(onStep?.history.map((entry: { toState: string }) => entry.toState)).toEqual(["open"]);
     // The axis index counts it without the view counting anything itself.
     expect((after.axes as { axes: Array<Record<string, any>> }).axes[0]?.openProblems).toBe(2);
+  });
+
+  test("the activity feed is grouped by the server, in the index's order, and names its problem", async () => {
+    const path = freshDatabase();
+    const { problemId } = await seedProgress(path);
+
+    const result = await call("get_progress", {}, { path });
+    const axes = (result.axes as { axes: Array<{ id: string }> }).axes;
+    const feed = (
+      result.activity as {
+        byAxis: Array<{
+          axisId: string;
+          eventCount: number;
+          events: Array<{ problemId: string | null; sourceRef: string | null; summary: string }>;
+        }>;
+      }
+    ).byAxis;
+
+    // The feed arrives in the index's order, so switching rows never reorders the feed underneath the
+    // reader. Asserted as a relative order over the axes that have events, which is what the guarantee is.
+    const feedIds = feed.map((bucket) => bucket.axisId);
+    expect(feedIds).toEqual(
+      axes.map((row) => row.id).filter((id) => feedIds.includes(id))
+    );
+
+    // Both events land under the one axis — including the one that named only the problem — and the
+    // problem-linked line carries the id the Problem section can match on.
+    expect(feed).toHaveLength(1);
+    expect(feed[0]?.eventCount).toBe(3);
+    const linked = feed[0]?.events.find((event) => event.problemId === problemId);
+    expect(linked?.summary).toBe("The loss floor moved again on the second seed.");
+    // Newest first, like the timeline it shares its derivation with — including the event that named only
+    // the axis and the one recorded through the single-activity action.
+    expect(feed[0]?.events.map((event) => event.sourceRef)).toEqual([
+      "PR #7",
+      "experiment:floor-check",
+      "experiment:second-seed",
+    ]);
   });
 });

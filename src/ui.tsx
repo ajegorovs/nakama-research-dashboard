@@ -31,8 +31,12 @@ type AxisState =
   | "draft"
   | "blocked"
   | "parked"
+  | "usable"
   | "completed"
   | "abandoned";
+
+/** A problem's own vocabulary: distinct from an axis's, and deliberately not merged with it. */
+type ProblemState = "open" | "resolved";
 
 type Topic = {
   id: string;
@@ -256,11 +260,62 @@ type ProgressAxisRow = {
  * declared here yet — undeclared, not dropped.
  */
 type ProgressIndex = {
+  activity: {
+    activitySinceDays: number;
+    byAxis: ProgressActivityBucket[];
+    staleAfterDays: number;
+  };
   axes: {
     activitySinceDays: number;
     axes: ProgressAxisRow[];
     staleAfterDays: number;
   };
+  problems: {
+    activitySinceDays: number;
+    problems: ProgressProblemRow[];
+    staleAfterDays: number;
+  };
+};
+
+/**
+ * One event as the Activity column renders it. Same row the grouped timeline below uses — date, summary,
+ * reported source, attributed person — plus `problemId`, which is what lets the feed mark the line that is
+ * evidence for the problem shown beside it.
+ */
+type ProgressEventRow = {
+  id: string;
+  occurredAt: string;
+  person: { displayName: string; id: string } | null;
+  problemId: string | null;
+  sourceRef: string | null;
+  sourceType: string;
+  summary: string;
+};
+
+/** One axis's events in the window, as the server grouped them. The page picks a bucket; it never filters. */
+type ProgressActivityBucket = {
+  axisId: string;
+  eventCount: number;
+  events: ProgressEventRow[];
+};
+
+/**
+ * One problem as the Problem column renders it — the subset of the store's `ProgressProblemRow` this slice
+ * shows. The fields it does not take (history, authorId, topicId/topicName, planStepId, lastActivityAt,
+ * axisTitle, stale) belong to the Problems subview and the later sections; undeclared, not dropped.
+ */
+type ProgressProblemRow = {
+  activityCount: number;
+  authorType: "agent" | "human";
+  axisId: string;
+  id: string;
+  people: Array<{ displayName: string; id: string }>;
+  planStepTitle: string | null;
+  recencyAt: string | null;
+  repositories: Array<{ fullName: string; id: string }>;
+  state: string;
+  stateConfidence: Confidence;
+  statement: string;
 };
 
 type Activity = {
@@ -638,6 +693,46 @@ const css = `
 }
 [data-plugin-id="research-dashboard"] .rd-index-item:hover {
   border-color: var(--border);
+}
+/* The Progress desktop composition: the index, the Problem column and the Activity feed are siblings in one
+   wrapping row, so they keep the contract's semantic order — Problem before Activity — and stack instead of
+   squeezing when the width runs out. The columns are separated by a rule rather than a box each: the contract
+   asks for a composition, not three cards of equal weight. */
+[data-plugin-id="research-dashboard"] .rd-progress-top > .rd-progress-index {
+  flex: 0 1 16rem;
+}
+[data-plugin-id="research-dashboard"] .rd-progress-problem {
+  flex: 2 1 22rem;
+  min-width: 17rem;
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+}
+[data-plugin-id="research-dashboard"] .rd-progress-activity {
+  flex: 1 1 18rem;
+  min-width: 15rem;
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+}
+[data-plugin-id="research-dashboard"] .rd-problem-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: grid;
+  gap: 4px;
+}
+[data-plugin-id="research-dashboard"] .rd-problem-card p {
+  margin: 0;
+}
+[data-plugin-id="research-dashboard"] .rd-feed {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+[data-plugin-id="research-dashboard"] .rd-feed > li {
+  display: grid;
+  gap: 2px;
 }
 [data-plugin-id="research-dashboard"] .rd-index-item[aria-pressed="true"] {
   border-color: var(--border);
@@ -1060,7 +1155,12 @@ export function apply(ctx: Context) {
     state,
   }: {
     confidence: Confidence | null;
-    state: AxisState;
+    /**
+     * An axis state or a problem state. One badge for both, because a state is a claim wherever it appears
+     * and a second component would be a second vocabulary; the subject decides which states are legal, and
+     * the `data-rd-state` attribute carries whichever it is.
+     */
+    state: AxisState | ProblemState;
   }) {
     return (
       <span
@@ -1818,6 +1918,11 @@ export function apply(ctx: Context) {
     windowDays: number;
   }) {
     const [selectedAxisId, setSelectedAxisId] = React.useState<string | null>(null);
+    /**
+     * Which problem the Problem column shows. Set only by picking one from the list beside it — the default is
+     * the projection's first open problem for the selected axis, so this holds "the reader chose otherwise".
+     */
+    const [selectedProblemId, setSelectedProblemId] = React.useState<string | null>(null);
     const [topicFilter, setTopicFilter] = React.useState("all");
     const [personFilter, setPersonFilter] = React.useState("all");
     const [repositoryFilter, setRepositoryFilter] = React.useState("all");
@@ -1864,8 +1969,63 @@ export function apply(ctx: Context) {
       repositoryFilter !== "all" ||
       stateFilter !== "all";
 
+    // ---- the selected axis, and the two columns that follow it -----------------------------------------
+    // Defaulting to the projection's own first row is not a ranking: the index arrives ordered by attention,
+    // so the axis most in need of a reader is already first. Selection changes which row is active; it does
+    // not change the order, and nothing here re-sorts anything.
+    const axisRows = progress?.axes.axes ?? [];
+    const activeAxis =
+      axisRows.find((row) => row.id === selectedAxisId) ?? axisRows[0] ?? null;
+    // The axis's own problems, taken from the projection's list in the projection's order. The *count* in the
+    // heading is the server's (`activeAxis.openProblems`), and the rows are the server's rows: a test asserts
+    // the two agree, so a heading can never overstate what it lists.
+    const axisProblems = (progress?.problems.problems ?? []).filter(
+      (row) => row.axisId === activeAxis?.id
+    );
+    const openAxisProblems = axisProblems.filter((row) => row.state === "open");
+    // No invented priority, per the reviewer's rule: the first *open* problem in the projection's own order is
+    // shown, and every other one is listed beside it and one click away. Selecting one only changes which is
+    // displayed.
+    const chosenProblem: ProgressProblemRow | null = selectedProblemId
+      ? (axisProblems.find((row) => row.id === selectedProblemId) ?? null)
+      : null;
+    const shownProblem: ProgressProblemRow | null =
+      chosenProblem ?? openAxisProblems[0] ?? axisProblems[0] ?? null;
+    // "The others immediately selectable/listed" (the reviewer's rule): the problem already on screen is not
+    // repeated in the list, and the list keeps the projection's order rather than sorting by anything.
+    const otherOpenProblems = openAxisProblems.filter((problem) => problem.id !== shownProblem?.id);
+    // The server already grouped the window by axis and put the groups in the index's order, so the page
+    // looks a bucket up rather than filtering a flat list to decide what belongs to this axis.
+    const feed =
+      (progress?.activity.byAxis ?? []).find(
+        (bucket) => bucket.axisId === activeAxis?.id
+      ) ?? null;
+
+    /** The problem's own fields, phrased — nothing here is computed that the projection did not carry. */
+    function problemFacts(problem: ProgressProblemRow): string {
+      const parts = [
+        problem.authorType === "human" ? "owner-authored" : "librarian-inferred",
+      ];
+      if (problem.planStepTitle) {
+        parts.push(`step: ${problem.planStepTitle}`);
+      }
+      if (problem.repositories.length > 0) {
+        parts.push(problem.repositories.map((repo) => repo.fullName).join(", "));
+      }
+      parts.push(countLabel(problem.activityCount, "event", "events"));
+      parts.push(`last activity ${describeAge(problem.recencyAt)}`);
+      return parts.join(" · ");
+    }
+
     return (
       <div className="rd-stack" data-rd-view="progress">
+        {/*
+         * The desktop composition the contract asks for: the index on the left, the selected axis's Problem in
+         * the central column, and its Activity feed beside it — all three visible at once. They are siblings
+         * in one wrapping row, so below a reading width they stack in semantic order (Problem, then Activity,
+         * per interaction-spec §13) rather than squeezing into columns that no longer fit.
+         */}
+        <div className="rd-split rd-progress-top" data-rd-progress-top="true">
         {/*
          * The axis index — this slice's one new element, rendered straight from `get_progress.axes.axes`.
          *
@@ -1892,7 +2052,12 @@ export function apply(ctx: Context) {
             {(progress?.axes.axes ?? []).map((row) => (
               <li key={row.id}>
                 <button
-                  aria-pressed={selectedAxisId === row.id}
+                  /*
+                   * The row the detail columns are actually showing — the derived default included. Marking
+                   * only the *clicked* row would leave the page displaying an axis's detail with nothing
+                   * selected, which is a hidden state the reader cannot see through.
+                   */
+                  aria-pressed={activeAxis?.id === row.id}
                   className="rd-index-item"
                   data-rd-index-activity={row.activityInWindow}
                   data-rd-index-axis={row.id}
@@ -1920,6 +2085,113 @@ export function apply(ctx: Context) {
               No axes yet.
             </p>
           ) : null}
+        </div>
+
+        {/*
+         * The central Problem column. The heading's number is the projection's own `openProblems` for this
+         * axis; the card below it is the first open problem *in the projection's order* — no recency ranking,
+         * no activity-count ranking, no repository-count ranking — and the remaining ones are listed and
+         * selectable, which is the whole of the selection rule.
+         */}
+        <div
+          className="rd-progress-problem"
+          data-rd-progress-problem-axis={activeAxis?.id ?? ""}
+          data-rd-progress-problem-open={activeAxis?.openProblems ?? 0}
+          data-rd-progress-problem-shown={shownProblem?.id ?? ""}
+        >
+          <h3 className="rd-strong">
+            {`Open problems (${activeAxis?.openProblems ?? 0})`}
+          </h3>
+          {activeAxis === null ? (
+            <p className="rd-muted" data-rd-progress-problem-empty="true">
+              No axis is selected.
+            </p>
+          ) : shownProblem === null ? (
+            <p className="rd-muted" data-rd-progress-problem-empty="true">
+              Nothing is recorded against this axis.
+            </p>
+          ) : (
+            <div className="rd-problem-card" data-rd-problem={shownProblem.id}>
+              <div className="rd-cluster">
+                <StateBadge
+                  confidence={shownProblem.stateConfidence}
+                  state={shownProblem.state as ProblemState}
+                />
+                <span className="rd-meta">{describeAge(shownProblem.recencyAt)}</span>
+              </div>
+              <p className="rd-strong">{shownProblem.statement}</p>
+              <p className="rd-meta" data-rd-problem-facts="true">
+                {problemFacts(shownProblem)}
+              </p>
+              {shownProblem.people.length > 0 ? (
+                <p className="rd-meta">
+                  {shownProblem.people
+                    .map((person) => person.displayName)
+                    .join(", ")}
+                </p>
+              ) : null}
+            </div>
+          )}
+          {otherOpenProblems.length > 0 ? (
+            <ul className="rd-feed" data-rd-progress-problem-list="true">
+              {otherOpenProblems.map((problem) => (
+                <li key={problem.id}>
+                  <button
+                    aria-pressed={problem.id === shownProblem?.id}
+                    className="rd-index-item"
+                    data-rd-problem-choice={problem.id}
+                    onClick={() => setSelectedProblemId(problem.id)}
+                    type="button"
+                  >
+                    <span className="rd-strong">{problem.statement}</span>
+                    <span className="rd-meta">{`last activity ${describeAge(problem.recencyAt)}`}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+
+        {/*
+         * The Activity column: the server's bucket for this axis, newest first, rendered with the same line
+         * the grouped view below uses. The count in the heading is the axis row's `activityInWindow`, which
+         * the projection computes from the same predicate as the bucket's `eventCount`.
+         */}
+        <div
+          className="rd-progress-activity"
+          data-rd-progress-feed-axis={activeAxis?.id ?? ""}
+          data-rd-progress-feed-count={feed?.eventCount ?? 0}
+        >
+          <h3 className="rd-strong">
+            {`Activity (${activeAxis?.activityInWindow ?? 0})`}
+          </h3>
+          {feed === null || feed.events.length === 0 ? (
+            <p className="rd-muted" data-rd-progress-feed-empty="true">
+              Nothing recorded against this axis in this window.
+            </p>
+          ) : (
+            <ul className="rd-feed" data-rd-progress-feed={feed.events.length}>
+              {feed.events.map((event) => (
+                <li data-rd-feed-event="true" key={event.id}>
+                  <div className="rd-cluster">
+                    <span className="rd-meta">{event.occurredAt.slice(0, 10)}</span>
+                    <span className="rd-strong">{event.summary}</span>
+                  </div>
+                  <span className="rd-meta">
+                    {describeSource(event.sourceType, event.sourceRef ?? "")}
+                    {" · "}
+                    {event.person
+                      ? event.person.displayName
+                      : "no account attributed"}
+                    {event.problemId && event.problemId === shownProblem?.id
+                      ? " · evidence for the problem shown"
+                      : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
         </div>
 
         <div className="rd-cluster rd-filters">
@@ -2260,6 +2532,8 @@ export function apply(ctx: Context) {
             completed: 0,
             draft: 0,
             parked: 0,
+            // A topic that was just created has no axes, so every bucket is 0 — including the state U1 added.
+            usable: 0,
           },
           lastActivityAt: null,
           people: [],

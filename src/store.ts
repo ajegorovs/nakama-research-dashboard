@@ -1316,6 +1316,33 @@ export type ProgressProblems = {
 };
 
 /**
+ * One axis's events inside the window, newest first — the Activity column's unit.
+ *
+ * `eventCount` is the true total in the window (the row list is capped, like the timeline's), and it is the
+ * same number the index row reports as `activityInWindow`: both are the axis's rows in `activities` judged by
+ * the same `visibleContext.inWindow`, so the column and the index cannot disagree about how much happened.
+ * A test asserts that agreement rather than leaving it to convention.
+ */
+export type ProgressActivityAxis = {
+  axisId: string;
+  events: TimelineEvent[];
+  eventCount: number;
+};
+
+/**
+ * The window's activity, grouped by axis, in the index's own order.
+ *
+ * Only axis-linked events appear: the Activity column belongs to a selected axis, and an event that names
+ * only its topic has no axis row to be selected. Those events are not lost — they keep their topic-level
+ * bucket in the grouped timeline the Progress view already renders below.
+ */
+export type ProgressActivity = {
+  activitySinceDays: number;
+  byAxis: ProgressActivityAxis[];
+  staleAfterDays: number;
+};
+
+/**
  * Attention order for axes on the overview: what needs a human first, then the rest of the work.
  * Completed and abandoned work sinks to the bottom instead of disappearing.
  *
@@ -3971,6 +3998,78 @@ export class ResearchStore {
     });
   }
 
+  /**
+   * The Progress view's activity side: the window's events grouped by axis, in the index's own order.
+   *
+   * The grouping is the server's, not the page's. A client filtering a flat row list by the selected axis
+   * would be deciding what is in scope — the projection's job, and the same mistake as filtering an axis
+   * list in JSX. Each axis's rows are newest first and capped like the timeline's, with `eventCount` the
+   * true total; the count comes from the same predicate as the index row's `activityInWindow`.
+   */
+  progressActivity(options?: {
+    activitySinceDays?: number;
+    includeArchived?: boolean;
+    limit?: number;
+  }): ProgressActivity {
+    return this.snapshot(() => {
+      const scope = this.visibleContext({
+        activitySinceDays: options?.activitySinceDays,
+        includeArchived: options?.includeArchived ?? false,
+      });
+      const limit = clampLimit(options?.limit, MAX_ROLLUP_LIMIT, MAX_ROLLUP_LIMIT);
+      const personByAccount = this.personRefByAccount();
+      const rows = this.db
+        .query(
+          `SELECT * FROM activities
+           WHERE axis_id IS NOT NULL
+           ORDER BY occurred_at DESC, rowid DESC`
+        )
+        .all() as ActivityRow[];
+
+      const byAxis = new Map<string, ProgressActivityAxis>();
+      for (const row of rows) {
+        const event = toActivity(row);
+        const axisId = event.axisId;
+        if (!axisId || !scope.scans.has(axisId) || !scope.inWindow(event.occurredAt)) {
+          continue;
+        }
+        const bucket = byAxis.get(axisId) ?? { axisId, eventCount: 0, events: [] };
+        bucket.eventCount += 1;
+        if (bucket.events.length < limit) {
+          bucket.events.push({
+            ...event,
+            person: personByAccount.get(event.actorId) ?? null,
+          });
+        }
+        byAxis.set(axisId, bucket);
+      }
+
+      // The index's own order, not a second one — and any axis whose events the index's capped list left
+      // out keeps them, newest first, rather than being dropped for not being selectable.
+      const listed = this.progressAxes({
+        activitySinceDays: options?.activitySinceDays,
+        includeArchived: options?.includeArchived ?? false,
+        limit,
+      }).axes.map((row) => row.id);
+      const byIndexOrder = listed
+        .map((id) => byAxis.get(id))
+        .filter((bucket): bucket is ProgressActivityAxis => Boolean(bucket));
+      const unlisted = [...byAxis.values()]
+        .filter((bucket) => !listed.includes(bucket.axisId))
+        .sort((left, right) =>
+          (right.events[0]?.occurredAt ?? "").localeCompare(
+            left.events[0]?.occurredAt ?? ""
+          )
+        );
+
+      return {
+        activitySinceDays: scope.activitySinceDays,
+        byAxis: [...byIndexOrder, ...unlisted],
+        staleAfterDays: STALE_AFTER_DAYS,
+      };
+    });
+  }
+
   // --------------------------------------------------------- composite writers
 
   /**
@@ -4899,6 +4998,27 @@ export class ResearchStore {
     occurredAt: string;
   }): Activity {
     const id = input.id ?? crypto.randomUUID();
+    // "Naming a problem is enough: the axis and topic are implied." Resolved **here**, on the one path every
+    // activity row goes through, rather than left to callers. An event stored with a problem but no axis is
+    // invisible to that axis's Activity column and missing from its `activityInWindow` count — the two read
+    // models agree precisely because they read the same column, so a dropped `axis_id` shows up as work that
+    // silently happened nowhere. Called before the problems exist in a *single* call (the write order is
+    // activities → problems), which is why the fixture references a problem in a second pass; when the row is
+    // there, the link is completed.
+    let topicId = input.topicId;
+    let axisId = input.axisId;
+    if (input.problemId && (axisId === null || topicId === null)) {
+      const problem = this.db
+        .query("SELECT axis_id FROM problems WHERE id = ?")
+        .get(input.problemId) as { axis_id: string } | null;
+      if (problem) {
+        const axis = this.db
+          .query("SELECT topic_id FROM development_axes WHERE id = ?")
+          .get(problem.axis_id) as { topic_id: string } | null;
+        axisId = axisId ?? problem.axis_id;
+        topicId = topicId ?? axis?.topic_id ?? null;
+      }
+    }
     const recordedAt = nowIso();
     this.db
       .query(
@@ -4909,8 +5029,8 @@ export class ResearchStore {
       )
       .run(
         id,
-        input.topicId,
-        input.axisId,
+        topicId,
+        axisId,
         input.problemId,
         input.repositoryId,
         input.summary,
@@ -4923,8 +5043,8 @@ export class ResearchStore {
         recordedAt
       );
     // One transaction: the activity and the ordering bump on its parents cannot disagree.
-    this.touch("topics", input.topicId);
-    this.touch("development_axes", input.axisId);
+    this.touch("topics", topicId);
+    this.touch("development_axes", axisId);
     return toActivity(
       this.db
         .query("SELECT * FROM activities WHERE id = ?")

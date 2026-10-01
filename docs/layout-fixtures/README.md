@@ -17,9 +17,11 @@ hidden-axis case, the evidence-free claim, and the two people cases. A redesign 
 the corpus and regress exactly those.
 
 (Those two figures are the numbers as first measured, on a 43-check pass. Checks have been added since —
-U1's "every axis state the payload carries reaches the page as that state" and U4's window check — so the
-same fixture pass now reports **51**, at both viewports, with nothing failing. The transcripts in this
-directory are the record; read a run's own summary line rather than a number in a document.)
+U1's "every axis state the payload carries reaches the page as that state", then U4's window check and, with
+U4's step-2 composition, six more that compare the three-column Progress layout and its selection against
+`get_progress`'s own answer — so the same fixture pass now reports **57**, at both viewports, with nothing
+failing. The transcripts in this directory are the record; read a run's own summary line rather than a number
+in a document.)
 
 **Rule: the corpus stays canonical.** This directory is a *second* dataset, applied to the instance
 instead of the corpus and never mixed into `docs/corpus/`. Every file here is labelled synthetic.

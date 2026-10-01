@@ -271,17 +271,17 @@ bun run harness:fixture -- --env-file /tmp/nakama-review.env --viewport 1280x800
 The layout fixture also seeds **Fixture E** (contract `fixtures.md` §E): one open Problem on two repositories
 with a person link, an activity, an evidence record, a human-authored steering note and a plan step it sits
 on, plus a second Problem with no plan step, no repository and no artifact. It is applied by the same command,
-it is re-runnable without duplicating itself, and it **does not move the counts below** — the page as it
-stands renders no problems, which is exactly why it can be seeded before the Progress view that reads it
-exists. It takes two calls internally (activities, annotations and plan-step links cannot name a problem
-created in the same transaction, and row ids are server-generated); the applier reads the ids back and does
-the referencing pass second.
+it is re-runnable without duplicating itself, and it **does not move the counts below**. It takes two calls
+internally (activities, annotations and plan-step links cannot name a problem created in the same transaction,
+and row ids are server-generated); the applier reads the ids back and does the referencing pass second.
 
-Expected as of the U1 commit: corpus **43 pass · 0 fail · 7 skip** and fixture **50 · 0 · 0**, at
+Expected as of U4's step 2: corpus **43 pass · 0 fail · 7 skip** and fixture **57 · 0 · 0**, at
 both viewports. (Before U1 it was 42 and 49 — U1 added one check, "every axis state the payload carries
-reaches the page as that state", and the `abandoned` fixture axis it needs. U4 added one more, the Progress
-window check, so the fixture pass now reports **51**.) The counts move whenever a
-check is added, so read the run's own summary line rather than a number in a document. Each run writes its transcript to
+reaches the page as that state", and the `abandoned` fixture axis it needs. U4's step 1 added the Progress
+window check, taking the fixture pass to 51, and step 2 added six more that compare the three-column
+composition and its selection against `get_progress`'s own answer, taking it to **57**.) The counts move
+whenever a check is added, so read the run's own summary line rather than a number in a document. Each run
+writes its transcript to
 `docs/corpus/verify-read[-<viewport>].txt` or `docs/layout-fixtures/verify-fixture-read-<viewport>.txt`
 and its screenshots under `docs/screenshots/` or `docs/layout-fixtures/screenshots/<viewport>/` — i.e.
 over the committed record, by design: re-running is how the record is refreshed. `--shots` and
@@ -312,6 +312,14 @@ bun harness/update-plugin.mjs --env-file /tmp/review.env --data-root /path/to/na
 while preserving organization data"), waits for the install to settle, and — with `--data-root` — prints the
 old and new generation with their row counts, so "did my data survive" is answered by the run rather than
 by hope.
+
+**Vendor first, or you will ship the previous build.** The reinstall installs from the checkout's vendored
+copy, so running `update-plugin.mjs` on its own after a `src/` change mints a new release, bumps the revision
+and leaves the *old* bundle in place — the run reports success and the instance keeps serving the code you had
+before. The symptom is a change that simply does not appear (once, an action still answering with its previous
+key set, which showed up as a `TypeError` in the harness rather than a wrong number). Always
+`vendor-into-nakama.sh` → `update-plugin.mjs`, in that order, and treat the release's `+dev.<digest>` changing
+as the evidence that a new bundle was actually installed.
 
 Migration 004's own tests run without any instance:
 

@@ -275,7 +275,97 @@ own line reads
 PASS  the Progress index is the projection for the current window — replaced on change, not extended — matched the projection at 30 and 7 days (7d restored)
 ```
 
-## 10. What the shared dev instance measured, and the corpus record
+## 10. The three-column composition (step 2)
+
+Step 2 is the reviewer's "real desktop composition": **index on the left, the selected axis's Problem in the
+centre, its Activity beside it**, all three visible at once. The geometry ruling was explicit that step 1 must
+not fake a two-column shell with an empty right side, and that step 2 establishes the real one — so this is
+where the composition appears, and where selection stops being decorative.
+
+**What renders, and where each piece comes from.** The traceability criterion is the same as step 1's: every
+visible element is a projection field or a phrase over one.
+
+| On screen | Projection field |
+|---|---|
+| `Open problems (N)` | the axis row's `openProblems` — the server's count |
+| the card's state badge | the problem row's `state` + `stateConfidence` |
+| the statement | `statement` |
+| `owner-authored` / `librarian-inferred` | `authorType` |
+| `step: …` | `planStepTitle` (absent when the problem has no step — Fixture E's second problem) |
+| the repository names | `repositories[]` |
+| `N events` · `last activity …` | `activityCount`, `recencyAt` |
+| the other open problems listed | the projection's `problems[]` for this axis, in its order |
+| `Activity (N)` | the axis row's `activityInWindow` |
+| each feed line | the bucket's `events[]`: `occurredAt`, `summary`, `sourceType`/`sourceRef`, `person` |
+| `evidence for the problem shown` | `problemId` matching the shown problem |
+
+**The selection rule is the reviewer's, applied literally.** An axis can have several open problems, so the
+column shows the first **open** problem *in the projection's own order* — the projection already sorts by
+recency — and lists **the others** beside it, immediately selectable. Nothing is ranked by activity count,
+repository count or any other client-side notion of importance; selecting one changes only which card is
+displayed. The default axis is likewise the projection's first row, so the column never opens on a choice the
+page invented rather than one the projection made.
+
+**The Activity half is new, and it is grouped by the server.** `get_progress` previously carried two halves
+(`axes`, `problems`) and no events; the Activity column needs rows. Rather than let the page filter a flat
+list by the selected axis — client-side scoping, the thing the reviewer warned would be a second model — the
+store gained `progressActivity`, which returns the window's events **already grouped per axis, in the index's
+order**. The page looks a bucket up; it filters and counts nothing. `eventCount` is computed from the same
+predicate as the index row's `activityInWindow` (the axis's rows in `activities`, judged by the same
+`visibleContext.inWindow`), and a test asserts the two agree for every axis in the payload, so a heading can
+never overstate the list beneath it. The same agreement is asserted for `openProblems` against the rows the
+Problem column can list.
+
+**A defect the new half exposed, and the fix.** Recording an event that names *only* its problem did not put
+the event on the axis. The writer's own comment claimed the opposite ("Naming a problem is evidence for it:
+the axis and topic follow from the problem's own links"), but the axis was never resolved from the problem, so
+the row carried `problem_id` with `axis_id = NULL`: invisible to the axis's Activity column and missing from
+its count. The fix is in `insertActivity` — the single path every activity row goes through — so the
+derivation cannot be skipped by a caller, the same place the claim-targeting rule was fixed in U3. The
+remaining limitation is real and stays documented: an activity written in the **same** call that creates its
+problem cannot resolve the axis, because activities are written before problems inside the transaction. That
+is the model fact behind Fixture E's two-pass shape, not something to paper over in the UI.
+
+**Also fixed, found by widening a type.** The page's `AxisState` mirror listed six states and was missing
+`usable` — the state U1 added — so the page's own types disagreed with the contract's vocabulary even though
+nothing rendered wrong. `usable` is now in the mirror, and the compiler immediately demanded it in the
+`axisCounts` literal for a newly created topic, which is the kind of drift that widening a local type is
+supposed to surface.
+
+**What step 2 deliberately does not include:** the optional Plan/work package and its steps, the open-problems
+list as its own section, repository threads, evidence and human steering (steps 3–5), and the `Axes | Problems`
+subview (step 6). The V1 filter row and the grouped timeline below the composition are untouched — they are
+still the V1 surface, and step 7 is where shared primitives propagate.
+
+**One open question for the reviewer.** The Problem column takes the projection's `problems[]` and shows the
+subset belonging to the selected axis. The *count* is the server's and the *order* is the server's, and a test
+asserts the count matches the subset's length — but the subsetting itself happens in the page. That is the same
+shape of decision as the index filters, so it is worth an explicit ruling: keep it (selection is navigation,
+not filtering), or move the grouping server-side as it was for the activity half when the Problems subview
+arrives (step 6).
+
+**Measured:** isolated fixture-only instance, **57 PASS / 0 FAIL / 0 skip at both viewports** (1440×900,
+1280×800) — 51 plus the six checks step 2 added, all of them comparing the DOM against the live projection:
+the three regions sit on one row in the contract's order; the index opens on the projection's first row with
+the detail columns following it; the Problem column shows the projection's first open problem under the
+projection's count; the other open problems are listed in the projection's order and picking one changes the
+card; the feed is the projection's bucket, row for row, in order; and selecting another axis moves **both**
+columns to that axis's data. The live release on the isolated instance moved through revisions 25 → 57
+(`+dev.aaa050430c7f`, `+dev.cac5f44486fb`, `+dev.bdca2624c91b`) with the **generation unchanged** — no
+migration, only bundle changes.
+
+### The recipe defect that run exposed
+
+Re-pushing a checkout to a running host is **two** steps, and doing only the second one silently serves the
+old code: `update-plugin.mjs` calls the host's `reinstall` route, which installs from the **vendored copy**
+inside the Nakama checkout (`packages/plugins/research-dashboard/`), not from this repository. Without a fresh
+`vendor/vendor-into-nakama.sh`, the reinstall mints a release and bumps the revision while the bundle it
+installs is the previous one — the action answered with the old key set and no `activity` half at all. The
+symptom was a `TypeError` in the harness rather than a wrong number, which is the right way for it to fail.
+The README's recipe now spells out the order (`vendor` → `update`).
+
+## 11. What the shared dev instance measured, and the corpus record
+
 
 Run on the shared dev instance (corpus + fixture + Fixture E), the same pass reports **50 pass · 1 fail · 0
 skip**: the 7 skips of the corpus-only record became real checks once fixture data was present, and one of them
@@ -288,7 +378,7 @@ filter and the expectation describe different origins, so they disagree — the 
 and the **committed corpus record was not overwritten** with a mixed-instance result. A corpus number that a
 reviewer can reproduce needs a corpus-only instance, which is U10's work.
 
-## 11. A pre-existing flake, root-caused
+## 12. A pre-existing flake, root-caused
 
 While running `bun run check` after the render, the U3 action test *"a refusal keeps its kind across the action
 boundary"* failed — and then failed 3 runs in 6. It is not timing in the store: a topic's axes come back

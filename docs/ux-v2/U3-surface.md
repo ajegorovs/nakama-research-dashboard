@@ -196,7 +196,9 @@ the manifest does not enumerate either.
   instance — a fresh server on `:4400` with its own config dir and its own web dev server, the plugin
   installed and enabled there, then the fixture applied. The committed transcript *and* screenshots were
   refreshed from these runs, which is the documented way the record is kept. (U4's step 1 has since added one
-  check to the pass, so the same fixture runs now report **51/0/0**; see `U4-progress.md` §9. U3's numbers are
+  check to the pass, so the same fixture runs reported **51/0/0**; see `U4-progress.md` §9. U4's step 2 has
+  since added six more (the composition and its selection against the projection), so the pass now reports
+  **57/0/0**; see `U4-progress.md` §10. U3's numbers are
   kept as U3 measured them.)
 - **Corpus: 43 PASS / 0 FAIL / 7 skip**, unchanged from its committed shape.
 

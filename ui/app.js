@@ -280,6 +280,46 @@ var css = `
 [data-plugin-id="research-dashboard"] .rd-index-item:hover {
   border-color: var(--border);
 }
+/* The Progress desktop composition: the index, the Problem column and the Activity feed are siblings in one
+   wrapping row, so they keep the contract's semantic order — Problem before Activity — and stack instead of
+   squeezing when the width runs out. The columns are separated by a rule rather than a box each: the contract
+   asks for a composition, not three cards of equal weight. */
+[data-plugin-id="research-dashboard"] .rd-progress-top > .rd-progress-index {
+  flex: 0 1 16rem;
+}
+[data-plugin-id="research-dashboard"] .rd-progress-problem {
+  flex: 2 1 22rem;
+  min-width: 17rem;
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+}
+[data-plugin-id="research-dashboard"] .rd-progress-activity {
+  flex: 1 1 18rem;
+  min-width: 15rem;
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+}
+[data-plugin-id="research-dashboard"] .rd-problem-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: grid;
+  gap: 4px;
+}
+[data-plugin-id="research-dashboard"] .rd-problem-card p {
+  margin: 0;
+}
+[data-plugin-id="research-dashboard"] .rd-feed {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+[data-plugin-id="research-dashboard"] .rd-feed > li {
+  display: grid;
+  gap: 2px;
+}
 [data-plugin-id="research-dashboard"] .rd-index-item[aria-pressed="true"] {
   border-color: var(--border);
   background: var(--muted, rgba(127, 127, 127, 0.1));
@@ -1010,6 +1050,7 @@ function apply(ctx) {
     windowDays
   }) {
     const [selectedAxisId, setSelectedAxisId] = React.useState(null);
+    const [selectedProblemId, setSelectedProblemId] = React.useState(null);
     const [topicFilter, setTopicFilter] = React.useState("all");
     const [personFilter, setPersonFilter] = React.useState("all");
     const [repositoryFilter, setRepositoryFilter] = React.useState("all");
@@ -1023,9 +1064,34 @@ function apply(ctx) {
     }).filter((group) => group.axes.length > 0);
     const eventCount = groups.reduce((total, group) => total + group.axes.reduce((sum, bucket) => sum + bucket.events.length, 0), 0);
     const filtered = topicFilter !== "all" || personFilter !== "all" || repositoryFilter !== "all" || stateFilter !== "all";
+    const axisRows = progress?.axes.axes ?? [];
+    const activeAxis = axisRows.find((row) => row.id === selectedAxisId) ?? axisRows[0] ?? null;
+    const axisProblems = (progress?.problems.problems ?? []).filter((row) => row.axisId === activeAxis?.id);
+    const openAxisProblems = axisProblems.filter((row) => row.state === "open");
+    const chosenProblem = selectedProblemId ? axisProblems.find((row) => row.id === selectedProblemId) ?? null : null;
+    const shownProblem = chosenProblem ?? openAxisProblems[0] ?? axisProblems[0] ?? null;
+    const otherOpenProblems = openAxisProblems.filter((problem) => problem.id !== shownProblem?.id);
+    const feed = (progress?.activity.byAxis ?? []).find((bucket) => bucket.axisId === activeAxis?.id) ?? null;
+    function problemFacts(problem) {
+      const parts = [
+        problem.authorType === "human" ? "owner-authored" : "librarian-inferred"
+      ];
+      if (problem.planStepTitle) {
+        parts.push(`step: ${problem.planStepTitle}`);
+      }
+      if (problem.repositories.length > 0) {
+        parts.push(problem.repositories.map((repo) => repo.fullName).join(", "));
+      }
+      parts.push(countLabel(problem.activityCount, "event", "events"));
+      parts.push(`last activity ${describeAge(problem.recencyAt)}`);
+      return parts.join(" · ");
+    }
     return /* @__PURE__ */ React.createElement("div", {
       className: "rd-stack",
       "data-rd-view": "progress"
+    }, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-split rd-progress-top",
+      "data-rd-progress-top": "true"
     }, /* @__PURE__ */ React.createElement("div", {
       className: "rd-progress-index",
       "data-rd-progress-index": "true",
@@ -1037,7 +1103,7 @@ function apply(ctx) {
     }, (progress?.axes.axes ?? []).map((row) => /* @__PURE__ */ React.createElement("li", {
       key: row.id
     }, /* @__PURE__ */ React.createElement("button", {
-      "aria-pressed": selectedAxisId === row.id,
+      "aria-pressed": activeAxis?.id === row.id,
       className: "rd-index-item",
       "data-rd-index-activity": row.activityInWindow,
       "data-rd-index-axis": row.id,
@@ -1059,6 +1125,74 @@ function apply(ctx) {
       className: "rd-muted",
       "data-rd-progress-index-empty": "true"
     }, "No axes yet.") : null), /* @__PURE__ */ React.createElement("div", {
+      className: "rd-progress-problem",
+      "data-rd-progress-problem-axis": activeAxis?.id ?? "",
+      "data-rd-progress-problem-open": activeAxis?.openProblems ?? 0,
+      "data-rd-progress-problem-shown": shownProblem?.id ?? ""
+    }, /* @__PURE__ */ React.createElement("h3", {
+      className: "rd-strong"
+    }, `Open problems (${activeAxis?.openProblems ?? 0})`), activeAxis === null ? /* @__PURE__ */ React.createElement("p", {
+      className: "rd-muted",
+      "data-rd-progress-problem-empty": "true"
+    }, "No axis is selected.") : shownProblem === null ? /* @__PURE__ */ React.createElement("p", {
+      className: "rd-muted",
+      "data-rd-progress-problem-empty": "true"
+    }, "Nothing is recorded against this axis.") : /* @__PURE__ */ React.createElement("div", {
+      className: "rd-problem-card",
+      "data-rd-problem": shownProblem.id
+    }, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-cluster"
+    }, /* @__PURE__ */ React.createElement(StateBadge, {
+      confidence: shownProblem.stateConfidence,
+      state: shownProblem.state
+    }), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, describeAge(shownProblem.recencyAt))), /* @__PURE__ */ React.createElement("p", {
+      className: "rd-strong"
+    }, shownProblem.statement), /* @__PURE__ */ React.createElement("p", {
+      className: "rd-meta",
+      "data-rd-problem-facts": "true"
+    }, problemFacts(shownProblem)), shownProblem.people.length > 0 ? /* @__PURE__ */ React.createElement("p", {
+      className: "rd-meta"
+    }, shownProblem.people.map((person) => person.displayName).join(", ")) : null), otherOpenProblems.length > 0 ? /* @__PURE__ */ React.createElement("ul", {
+      className: "rd-feed",
+      "data-rd-progress-problem-list": "true"
+    }, otherOpenProblems.map((problem) => /* @__PURE__ */ React.createElement("li", {
+      key: problem.id
+    }, /* @__PURE__ */ React.createElement("button", {
+      "aria-pressed": problem.id === shownProblem?.id,
+      className: "rd-index-item",
+      "data-rd-problem-choice": problem.id,
+      onClick: () => setSelectedProblemId(problem.id),
+      type: "button"
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-strong"
+    }, problem.statement), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, `last activity ${describeAge(problem.recencyAt)}`))))) : null), /* @__PURE__ */ React.createElement("div", {
+      className: "rd-progress-activity",
+      "data-rd-progress-feed-axis": activeAxis?.id ?? "",
+      "data-rd-progress-feed-count": feed?.eventCount ?? 0
+    }, /* @__PURE__ */ React.createElement("h3", {
+      className: "rd-strong"
+    }, `Activity (${activeAxis?.activityInWindow ?? 0})`), feed === null || feed.events.length === 0 ? /* @__PURE__ */ React.createElement("p", {
+      className: "rd-muted",
+      "data-rd-progress-feed-empty": "true"
+    }, "Nothing recorded against this axis in this window.") : /* @__PURE__ */ React.createElement("ul", {
+      className: "rd-feed",
+      "data-rd-progress-feed": feed.events.length
+    }, feed.events.map((event) => /* @__PURE__ */ React.createElement("li", {
+      "data-rd-feed-event": "true",
+      key: event.id
+    }, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-cluster"
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, event.occurredAt.slice(0, 10)), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-strong"
+    }, event.summary)), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, describeSource(event.sourceType, event.sourceRef ?? ""), " · ", event.person ? event.person.displayName : "no account attributed", event.problemId && event.problemId === shownProblem?.id ? " · evidence for the problem shown" : "")))))), /* @__PURE__ */ React.createElement("div", {
       className: "rd-cluster rd-filters"
     }, /* @__PURE__ */ React.createElement(FilterSelect, {
       label: "Filter by topic",
@@ -1290,7 +1424,8 @@ function apply(ctx) {
             blocked: 0,
             completed: 0,
             draft: 0,
-            parked: 0
+            parked: 0,
+            usable: 0
           },
           lastActivityAt: null,
           people: [],

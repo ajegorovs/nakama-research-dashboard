@@ -1759,6 +1759,48 @@ class ResearchStore {
       };
     });
   }
+  progressActivity(options) {
+    return this.snapshot(() => {
+      const scope = this.visibleContext({
+        activitySinceDays: options?.activitySinceDays,
+        includeArchived: options?.includeArchived ?? false
+      });
+      const limit = clampLimit(options?.limit, MAX_ROLLUP_LIMIT, MAX_ROLLUP_LIMIT);
+      const personByAccount = this.personRefByAccount();
+      const rows = this.db.query(`SELECT * FROM activities
+           WHERE axis_id IS NOT NULL
+           ORDER BY occurred_at DESC, rowid DESC`).all();
+      const byAxis = new Map;
+      for (const row of rows) {
+        const event = toActivity(row);
+        const axisId = event.axisId;
+        if (!axisId || !scope.scans.has(axisId) || !scope.inWindow(event.occurredAt)) {
+          continue;
+        }
+        const bucket = byAxis.get(axisId) ?? { axisId, eventCount: 0, events: [] };
+        bucket.eventCount += 1;
+        if (bucket.events.length < limit) {
+          bucket.events.push({
+            ...event,
+            person: personByAccount.get(event.actorId) ?? null
+          });
+        }
+        byAxis.set(axisId, bucket);
+      }
+      const listed = this.progressAxes({
+        activitySinceDays: options?.activitySinceDays,
+        includeArchived: options?.includeArchived ?? false,
+        limit
+      }).axes.map((row) => row.id);
+      const byIndexOrder = listed.map((id) => byAxis.get(id)).filter((bucket) => Boolean(bucket));
+      const unlisted = [...byAxis.values()].filter((bucket) => !listed.includes(bucket.axisId)).sort((left, right) => (right.events[0]?.occurredAt ?? "").localeCompare(left.events[0]?.occurredAt ?? ""));
+      return {
+        activitySinceDays: scope.activitySinceDays,
+        byAxis: [...byIndexOrder, ...unlisted],
+        staleAfterDays: STALE_AFTER_DAYS
+      };
+    });
+  }
   reconcileTopic(input) {
     return this.atomic(() => {
       const actor = {
@@ -2205,13 +2247,23 @@ class ResearchStore {
   }
   insertActivity(input) {
     const id = input.id ?? crypto.randomUUID();
+    let topicId = input.topicId;
+    let axisId = input.axisId;
+    if (input.problemId && (axisId === null || topicId === null)) {
+      const problem = this.db.query("SELECT axis_id FROM problems WHERE id = ?").get(input.problemId);
+      if (problem) {
+        const axis = this.db.query("SELECT topic_id FROM development_axes WHERE id = ?").get(problem.axis_id);
+        axisId = axisId ?? problem.axis_id;
+        topicId = topicId ?? axis?.topic_id ?? null;
+      }
+    }
     const recordedAt = nowIso();
     this.db.query(`INSERT INTO activities (
            id, topic_id, axis_id, problem_id, repository_id, summary, source_type, source_ref,
            source_url, actor_type, actor_id, occurred_at, recorded_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(id, input.topicId, input.axisId, input.problemId, input.repositoryId, input.summary, input.sourceType, input.sourceRef, input.sourceUrl, input.actorType, input.actorId, input.occurredAt, recordedAt);
-    this.touch("topics", input.topicId);
-    this.touch("development_axes", input.axisId);
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(id, topicId, axisId, input.problemId, input.repositoryId, input.summary, input.sourceType, input.sourceRef, input.sourceUrl, input.actorType, input.actorId, input.occurredAt, recordedAt);
+    this.touch("topics", topicId);
+    this.touch("development_axes", axisId);
     return toActivity(this.db.query("SELECT * FROM activities WHERE id = ?").get(id));
   }
   insertAnnotation(input) {
@@ -2437,6 +2489,7 @@ async function dispatch(input, context, store) {
       };
       return {
         ok: true,
+        activity: store.progressActivity(options),
         axes: store.progressAxes(options),
         problems: store.progressProblems(options)
       };

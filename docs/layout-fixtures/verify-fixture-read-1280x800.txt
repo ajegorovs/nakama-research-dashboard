@@ -1,6 +1,6 @@
 # harness/read-pass.sh — read pass · dataset fixture · viewport 1280x800
 # dashboard: http://127.0.0.1:3005
-# generated: 2026-10-01T17:46:13+03:00
+# generated: 2026-10-01T20:26:46+03:00
 
 PASS  login — status 200
 corpus: {"axes":6,"blocked":1,"people":2,"repositories":2,"topic":"Layout fixture — crowded card","windowEvents":14}
@@ -51,7 +51,13 @@ PASS  the Progress view groups the window by topic → axis instead of one flat 
 PASS  an event recorded against an axis alone still lands under the right topic and its own axis — rails matched 5/6; looked for a 2026-10-01 event; events ["2026-10-01 Second topic, so the People view has a person with two involvements. manual not","2026-10-01 Second topic, so the People view has a person with two involvements. manual not","2026-09-29 Blocked on the vendor's firmware window; nothing to record until it lands. manu"]
 progress screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/layout-fixtures/screenshots/1280x800/research-dashboard-read-progress.png
 PASS  the Progress index is the projection for the current window — replaced on change, not extended — matched the projection at 30 and 7 days (7d restored)
-PASS  every rendered state carries its claim, and one that is not confirmed says so (C8) — states 12, carrying a claim 12, not confirmed 3 but unqualified 0; sample ["PARKED · INFERRED","DRAFT · INFERRED"]
+PASS  the Progress top area shows the index, the Problem column and the Activity feed side by side — index {"h":756,"w":256,"x":320,"y":142}, problem {"h":341,"w":363,"x":588,"y":142}, feed {"h":488,"w":293,"x":963,"y":142}
+PASS  the axis index opens on the projection's first row, and the detail columns follow it — active 15752f2b, projection first 15752f2b, problem column 15752f2b, feed 15752f2b
+PASS  the Problem column shows the projection's first open problem, under the projection's own count — heading "Open problems (3)" (projection 3), shown 6354ab7c vs first open 6354ab7c
+PASS  the other open problems are listed in the projection's order, and selecting one changes the card — 2 listed of 2 others (3 open); order matches; shown 836a5a55
+PASS  the Activity feed is the projection's bucket for the selected axis, in the projection's order — feed axis 15752f2b, count 4 (projection 4), heading "Activity (4)" (index row 4), 4 rows vs 4 in the projection
+PASS  selecting another axis moves the Problem and Activity columns to that axis — selected 1bcb6a13: problem axis 1bcb6a13, feed axis 1bcb6a13, shown  (projection none open), 2 feed rows vs 2
+PASS  every rendered state carries its claim, and one that is not confirmed says so (C8) — states 13, carrying a claim 13, not confirmed 3 but unqualified 0; sample ["PARKED · INFERRED","DRAFT · INFERRED"]
 PASS  the corpus's inferred states reach the view as unconfirmed, not laundered into facts (C8) — 2 of 6 axes are unconfirmed in the payload (Fixture: evidence-free axis (inferred, nothing behind it)=inferred, Fixture: parked axis (inferred state)=inferred); the view rendered 3 unconfirmed states
 PASS  a recorded event names its source the way it is reported, not the way the menu offers it (C8) — sample ["manual note · fixture-activity-5 · Fixture Alpha","manual note · fixture-activity-5 · Fixture Alpha"]
 PASS  filtering by a repository keeps only the axes that name it, and says it is filtered — topics ["Layout fixture — crowded card"]; rails ["Fixture: blocked axis (blocked + blocker text)","Fixture: active axis (with evidence)","Fixture: parked axis (inferred state)","Fixture: completed axis"] (stray [] of ["Fixture: blocked axis (blocked + blocker text)","Fixture: active axis (with evidence)","Fixture: evidence-free axis (inferred, nothing behind it)","Fixture: parked axis (inferred state)","Fixture: completed axis","Fixture: abandoned axis (given up on deliberately)"]); summary "Last 7 days · 10 events across 1 topic (filtered)"
