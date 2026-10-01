@@ -149,3 +149,75 @@ context, problem history) currently have nothing to render against. Rendering th
 extended with problems (the reviewer's `fixtures.md` describes them), or a problem seeded live through the
 action surface before a visual check. Worth deciding before the Problems subview is written: verifying a view
 with no data is how display-only semantics get invented.
+
+## 7. Fixture E — the seeded structure, and the defect it exposed
+
+Per the reviewer's ruling, Fixture E was seeded **before** rendering, so Progress cannot be "implemented"
+against empty data. It lives in `harness/apply-layout-fixture.mjs` (so it is reproducible, not hand-run), and
+it hangs off an axis and repositories that **already exist** — which is what keeps the frozen baseline
+untouched.
+
+What it carries, per the reviewer's list: one parent axis; one **open** Problem on **two** repositories; a
+person link; an activity tied to the Problem; an evidence/artifact record; a human-authored steering note;
+and a plan with the step the Problem sits on — plus a second Problem with no step, no repository and no
+artifact, so `planStep = null` stays a *rendered* case rather than an assumption.
+
+**It needs two calls, and the model forces that rather than taste.** Inside one `reconcile_topic` the writes
+are ordered topic → people → repositories → axes → **activities → annotations → plans → problems**, and row
+ids are server-generated (`const id = crypto.randomUUID()` — no caller-supplied id can name a new row). So an
+activity, an annotation and a `planStepId` link cannot reference a problem created in the same call. The
+applier reads the ids back and does the referencing pass second.
+
+**Idempotence had to be designed, twice.** Problems have no natural key, so re-applying the fixture would
+pile up duplicates; the applier uses the statement as one (a fixture convention, explicitly not a model
+guarantee), dedupes activities on `sourceRef` and annotations on their exact text, and treats the plan as
+present once it carries the step title. The first attempt at this still duplicated the plan, because
+re-sending a step without a `stepId` creates another step — so when the plan exists, only the **missing**
+step is sent.
+
+**The defect it found — a claim's target rule escaped the action boundary.** Seeding the steering note (a
+claim on an axis *and* a problem at once) returned **HTTP 500, "An unexpected server error occurred", with no
+`kind`** — while every other caller mistake returns a structured refusal. Isolated by bisecting the payload
+live:
+
+| annotation | targets | before | after |
+|---|---|---|---|
+| `steering` | one (problem **or** axis) | 200 ✔ | 200 ✔ |
+| `steering` | two | **500, no kind** | `invalid-input` |
+| `steering` | none | **500, no kind** | `invalid-input` |
+| `interpretation` | two | **500, no kind** | `invalid-input` |
+
+Root cause, and it was a *class* rather than one site: migration 004 enforces the rule with a CHECK
+constraint — `kind = 'note' OR (topic_id IS NOT NULL) + (axis_id IS NOT NULL) + (problem_id IS NOT NULL) = 1`
+— and the JS check lived only in `addAnnotation` (the `add_annotation` action's path). The reconcile loop
+calls the low-level `insertAnnotation` **directly**, so a mis-targeted claim reached the INSERT and died on
+the constraint: a raw `SQLiteError`, which is not a `ResearchStoreError`, so `run()`'s catch did not convert
+it and it surfaced as a 500. Fix: the check now sits in `insertAnnotation` — the single place the row is
+written — so **no caller can skip it**; the CHECK constraint stays as the backstop for anything writing SQL
+directly. `StoreErrorCode` also gained `invalid-input`, which the taxonomy and `refusalKind`'s default
+already used but the store could not name.
+
+Pinned by tests (`src/actions.test.ts`, *"a mis-targeted claim is a refusal, not a server error"*): two
+targets, no target, and the accepted one-target case — including that a refusal writes **nothing**.
+
+**Measured, not inferred: the baseline is undisturbed.** On the isolated fixture-only instance, with Fixture
+E applied, the frozen fixture acceptance pass is **50 PASS / 0 FAIL / 0 skip** — the same as the committed
+baseline — and the instance still reports **2 topics, 7 axes, 2 people, 2 repositories**, exactly as before
+the seed. That is the check that the new structure is invisible to the V1 page (it renders no problems), so
+U4 can render `get_progress` without the old checks becoming meaningless. On that instance the fixture's own
+person is `Fixture Alpha`; on the shared dev instance the same seed links `ajegorovs`, because the mixed
+instance merged them — the by-axis person lookup handles both, and says which it used.
+
+Clean Fixture E numbers, isolated instance:
+
+```
+fixture E: created 2 problem(s), 1 plan with 2 steps
+fixture E: linked 2 activity/evidence record(s), 2 annotation(s), the plan step and the person link
+fixture E: problem on a step — 2 repositories, 1 person, 2 activity record(s), step "Fixture step 2: …", history 1 row
+fixture E: problem with nothing behind it — repositories 0, step null, history 1 row
+```
+
+**One disclosure:** the shared dev instance carries diagnosis leftovers — probe activities on the fixture
+problem (6 activity records there rather than 2) and one duplicated plan from the first failed attempt. The
+numbers above are from the isolated instance, which is where the fixture is meant to be read; the dev
+instance is mixed by design and its corpus record stands as U3's step 10 left it.

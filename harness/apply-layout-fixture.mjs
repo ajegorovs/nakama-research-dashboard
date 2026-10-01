@@ -209,6 +209,278 @@ const FIXTURE = [
 
 const jar = new Map();
 
+// --- Fixture E: a Problem with real structure (contract `fixtures.md` §E) -------------------------
+//
+// It hangs off an axis and repositories that **already exist**, so nothing about the V1 layout changes:
+// the page as it stands renders no problems at all, which is why seeding this cannot disturb the frozen
+// baseline. What it has to exercise, per the reviewer: one parent axis; one open Problem on two
+// repositories; a person link; an activity tied to the Problem; an evidence/artifact link; a
+// human-authored steering note; and a plan with a step the Problem sits on — plus a second Problem with no
+// step, no repository and no artifact, so `planStep = null` stays a rendered case rather than an assumption.
+//
+// It needs **two calls**, and the model forces that rather than taste: within one `reconcile_topic` the
+// writes are ordered topic → people → repositories → axes → activities → annotations → plans → problems,
+// and row ids are server-generated. An activity or annotation therefore cannot name a problem created in
+// the same call, and no caller-supplied id can name a new row.
+const FIXTURE_E_AXIS = "Fixture: active axis (with evidence)";
+const FIXTURE_E_PERSON = "Fixture Alpha";
+const FIXTURE_E_TOPIC = "Layout fixture — crowded card";
+const FIXTURE_E_STEP_1 = "Fixture step 1: reproduce the disagreement on the second rig pass";
+const FIXTURE_E_STEP_2 = "Fixture step 2: reconcile the two rigs' floors";
+const FIXTURE_E_ON_STEP =
+  "Fixture E: the two rigs disagree on the loss floor by more than the reported spread.";
+const FIXTURE_E_UNLINKED =
+  "Fixture E: no plan step, no repository and no artifact on purpose — this one must still render.";
+const FIXTURE_E_EVENT_REF = "fixture-activity-7";
+const FIXTURE_E_EVIDENCE_REF = "fixture-evidence-1";
+const FIXTURE_E_EVIDENCE_URL = "https://example.invalid/fixture/rig-floor-comparison";
+const FIXTURE_E_EVENT =
+  "Fixture E: rig two's floor measured 4% below rig one's on the same seed.";
+const FIXTURE_E_EVIDENCE_SUMMARY =
+  "Fixture E: logged the rig-floor comparison sheet as the artifact both rigs are measured against.";
+const FIXTURE_E_NOTE =
+  "Fixture E evidence link: the rig-floor comparison sheet both rigs are measured against.";
+const FIXTURE_E_STEERING =
+  "Fixture E (human-authored steering): do not reconcile the two floors by widening the reported spread.";
+
+/**
+ * Fixture E, idempotently. Re-applying the fixture must not pile up duplicates, and problems have no
+ * natural key in the model — the statement is used as one **here**, which is a fixture convention, not a
+ * guarantee the store makes. Activities dedupe on `sourceRef` and annotations on their exact text, both
+ * read back from the instance first.
+ */
+async function applyFixtureE(headers) {
+  const act = async (key, input) => {
+    const { body, status } = await call(
+      `/v1/plugins/${PLUGIN_ID}/actions/${key}`,
+      { input },
+      headers
+    );
+    return { ok: status === 200 && body?.result?.ok === true, result: body?.result, raw: body };
+  };
+  const fail = (what, raw) => {
+    console.error(`FAILED  fixture E: ${what}: ${JSON.stringify(raw).slice(0, 240)}`);
+    return 1;
+  };
+
+  const progress = await act("get_progress", { activitySinceDays: 0 });
+  if (!progress.ok) {
+    return fail("reading the current state", progress.raw);
+  }
+  const axisRow = (progress.result.axes?.axes ?? []).find(
+    (row) => row.topicName === FIXTURE_E_TOPIC && row.title === FIXTURE_E_AXIS
+  );
+  if (!axisRow) {
+    return fail(`no axis "${FIXTURE_E_AXIS}" on "${FIXTURE_E_TOPIC}"`, progress.raw);
+  }
+  const onAxis = (progress.result.problems?.problems ?? []).filter(
+    (row) => row.topicName === FIXTURE_E_TOPIC && row.axisTitle === FIXTURE_E_AXIS
+  );
+  const haveOnStep = onAxis.find((row) => row.statement === FIXTURE_E_ON_STEP);
+  const haveUnlinked = onAxis.find((row) => row.statement === FIXTURE_E_UNLINKED);
+
+  // Call 1 — the plan (with the step the problem will name) and whichever problem is missing. Steps have no
+  // natural key either, so the plan is treated as present once it carries the step title, and when it does
+  // exist but lack that step, only the **missing step** is sent: re-sending step 1 would add it again.
+  const planId = axisRow.plan?.id ?? "";
+  const plannedStep =
+    (axisRow.plan?.steps ?? []).find((step) => step.title === FIXTURE_E_STEP_2) ?? null;
+  const needsPlan = !plannedStep;
+  if (needsPlan || !haveOnStep || !haveUnlinked) {
+    const payload = { topicName: FIXTURE_E_TOPIC };
+    if (needsPlan) {
+      payload.plans = [
+        {
+          ...(planId ? { planId } : {}),
+          axisTitle: FIXTURE_E_AXIS,
+          steps: planId
+            ? [{ position: 1, state: "active", title: FIXTURE_E_STEP_2 }]
+            : [
+                { position: 0, state: "done", title: FIXTURE_E_STEP_1 },
+                { position: 1, state: "active", title: FIXTURE_E_STEP_2 },
+              ],
+          summary: "Fixture E: two staged steps, so a problem can name the one it is working on.",
+        },
+      ];
+    }
+    payload.problems = [];
+    if (!haveOnStep) {
+      payload.problems.push({
+        axisTitle: FIXTURE_E_AXIS,
+        repositoryFullNames: ["fixture/crowded-card", "fixture/second-topic"],
+        statement: FIXTURE_E_ON_STEP,
+      });
+    }
+    if (!haveUnlinked) {
+      payload.problems.push({ axisTitle: FIXTURE_E_AXIS, statement: FIXTURE_E_UNLINKED });
+    }
+    const seeded = await act("reconcile_topic", payload);
+    if (!seeded.ok) {
+      return fail("creating the problems / plan", seeded.raw);
+    }
+    const created = seeded.result.problems ?? [];
+    console.log(
+      `fixture E: created ${created.length} problem(s), ` +
+        `${payload.plans ? (planId ? "1 step added to the existing plan" : "1 plan with 2 steps") : "plan already present"}`
+    );
+  } else {
+    console.log("fixture E: the problems and plan are already there — nothing to create");
+  }
+
+  // Re-read, so the ids are the store's own rather than anything assumed from the write.
+  const after = await act("get_progress", { activitySinceDays: 0 });
+  if (!after.ok) {
+    return fail("reading the problems back", after.raw);
+  }
+  const rows = (after.result.problems?.problems ?? []).filter(
+    (row) => row.topicName === FIXTURE_E_TOPIC && row.axisTitle === FIXTURE_E_AXIS
+  );
+  const onStep = rows.find((row) => row.statement === FIXTURE_E_ON_STEP);
+  const unlinked = rows.find((row) => row.statement === FIXTURE_E_UNLINKED);
+  if (!onStep || !unlinked) {
+    return fail("the problems are not readable after the write", after.raw);
+  }
+  // Read the topic back once: the step it must link to, the people on the axis, and what is already there.
+  const topic = await act("get_topic", { topicName: FIXTURE_E_TOPIC, includeAnnotations: true });
+  if (!topic.ok) {
+    return fail("reading the topic back", topic.raw);
+  }
+  const afterAxis = (after.result.axes?.axes ?? []).find(
+    (row) => row.topicName === FIXTURE_E_TOPIC && row.title === FIXTURE_E_AXIS
+  );
+  let stepId = onStep.planStepId ?? "";
+  if (!stepId) {
+    // The step the problem belongs to. Its id cannot be known before call 1 (the store mints it), so the
+    // link is written in call 2 — the same two-pass shape as the activity and the annotations.
+    const steps = afterAxis?.plan?.steps ?? [];
+    stepId = (steps.find((step) => step.title === FIXTURE_E_STEP_2) ?? steps[1] ?? {}).id ?? "";
+  }
+  if (!stepId) {
+    return fail("the fixture plan has no step to link the problem to", after.raw);
+  }
+  if (unlinked.planStepId !== null) {
+    // The null case is the contract's, not a convenience: a problem must stay meaningful with no plan.
+    return fail(`the unlinked problem has planStepId=${unlinked.planStepId}, expected null`, after.raw);
+  }
+
+  // The person to link, taken from the **axis** rather than looked up by name over the whole instance: on a
+  // shared instance the fixture's own person is the corpus person (the attribution bleed the isolated rerun
+  // exposed), so a by-name lookup finds nothing and a by-axis lookup finds the right person either way.
+  const axisPeople =
+    (topic.result?.axes ?? []).find((axis) => axis.title === FIXTURE_E_AXIS)?.people ?? [];
+  const person =
+    axisPeople.find((entry) => entry.displayName === FIXTURE_E_PERSON) ?? axisPeople[0] ?? null;
+  if (!person) {
+    return fail(`no person on "${FIXTURE_E_AXIS}" to link the problem to`, topic.raw);
+  }
+  const personId = person.id;
+  if (person.displayName !== FIXTURE_E_PERSON) {
+    console.log(
+      `fixture E: this instance's "${FIXTURE_E_AXIS}" carries ${person.displayName} rather than ` +
+        `"${FIXTURE_E_PERSON}" — a shared instance merges the two, so the link follows the axis`
+    );
+  }
+
+  // Call 2 — everything that references a problem by id. Each piece is written only if it is not there.
+  const alreadyLinked = (onStep.people ?? []).some((linked) => linked.id === personId);
+  const annotationTexts = new Set(
+    (topic.result?.annotations ?? []).map((annotation) => annotation.text)
+  );
+  const activity = await act("list_activity", { axisId: onStep.axisId, limit: 100, sinceDays: 365 });
+  const sourceRefs = new Set(
+    (activity.result?.activities ?? []).map((entry) => entry.sourceRef ?? "")
+  );
+
+  const link = { topicName: FIXTURE_E_TOPIC };
+  if (!sourceRefs.has(FIXTURE_E_EVENT_REF)) {
+    link.activities = [
+      {
+        axisTitle: FIXTURE_E_AXIS,
+        occurredAt: "2026-10-01T15:20:00+03:00",
+        problemId: onStep.id,
+        sourceRef: FIXTURE_E_EVENT_REF,
+        sourceType: "experiment",
+        summary: FIXTURE_E_EVENT,
+      },
+    ];
+  }
+  if (!sourceRefs.has(FIXTURE_E_EVIDENCE_REF)) {
+    // The evidence/artifact link is an activity carrying the artifact reference: annotations have no
+    // source fields (`fixtures.md` §E asks for a link, and this is where the model keeps one).
+    link.activities = [
+      ...(link.activities ?? []),
+      {
+        axisTitle: FIXTURE_E_AXIS,
+        occurredAt: "2026-10-01T15:25:00+03:00",
+        problemId: onStep.id,
+        sourceRef: FIXTURE_E_EVIDENCE_REF,
+        sourceType: "repo_document",
+        sourceUrl: FIXTURE_E_EVIDENCE_URL,
+        summary: FIXTURE_E_EVIDENCE_SUMMARY,
+      },
+    ];
+  }
+  const missingAnnotations = [
+    { axisTitle: FIXTURE_E_AXIS, kind: "note", problemId: onStep.id, text: FIXTURE_E_NOTE },
+    // The steering claim names the **problem alone**: a claim kind must sit on exactly one target, and an
+    // axis link alongside the problem link is the two-target row the schema refuses. (The note above may
+    // carry both, which is how the corpus's own notes are shaped.)
+    { kind: "steering", problemId: onStep.id, text: FIXTURE_E_STEERING },
+  ].filter((annotation) => !annotationTexts.has(annotation.text));
+  if (missingAnnotations.length > 0) {
+    link.annotations = missingAnnotations;
+  }
+  const needsStepLink = onStep.planStepId !== stepId;
+  const linkProblem =
+    !alreadyLinked || needsStepLink
+      ? {
+          planStepId: stepId,
+          problemId: onStep.id,
+          statement: FIXTURE_E_ON_STEP,
+          ...(alreadyLinked ? {} : { personIds: [personId] }),
+        }
+      : null;
+
+  if (Object.keys(link).length > 1 || linkProblem) {
+    const referenced = await act("reconcile_topic", {
+      ...link,
+      ...(linkProblem ? { problems: [linkProblem] } : {}),
+    });
+    if (!referenced.ok) {
+      return fail("linking the activity/evidence/annotations/person/step", referenced.raw);
+    }
+    console.log(
+      `fixture E: linked ${(link.activities ?? []).length} activity/evidence record(s), ` +
+        `${(link.annotations ?? []).length} annotation(s)` +
+        `${linkProblem ? `, the plan step and${alreadyLinked ? " " : " the person and "}link` : ""}`
+    );
+  } else {
+    console.log("fixture E: the activity, evidence, annotations and person link are already there");
+  }
+
+  const final = await act("get_progress", { activitySinceDays: 0 });
+  const finalOnStep = (final.result?.problems?.problems ?? []).find(
+    (row) => row.statement === FIXTURE_E_ON_STEP
+  );
+  const finalUnlinked = (final.result?.problems?.problems ?? []).find(
+    (row) => row.statement === FIXTURE_E_UNLINKED
+  );
+  if (!finalOnStep || !finalUnlinked) {
+    return fail("the fixture is not readable through get_progress", final.raw);
+  }
+  console.log(
+    `fixture E: problem on a step — ${finalOnStep.repositories.length} repositories, ` +
+      `${finalOnStep.people.length} person, ${finalOnStep.activityCount} activity record(s), ` +
+      `step "${finalOnStep.planStepTitle}", history ${finalOnStep.history.length} row(s)`
+  );
+  console.log(
+    `fixture E: problem with nothing behind it — repositories ${finalUnlinked.repositories.length}, ` +
+      `step ${finalUnlinked.planStepTitle === null ? "null" : finalUnlinked.planStepTitle}, ` +
+      `history ${finalUnlinked.history.length} row(s)`
+  );
+  return 0;
+}
+
 const cookieHeader = () => [...jar].map(([name, value]) => `${name}=${value}`).join("; ");
 
 async function call(path, body, headers = {}) {
@@ -293,6 +565,9 @@ async function main() {
         `topic ${String(result.topic?.id ?? "?").slice(0, 8)}`
     );
   }
+
+  // Fixture E needs a second pass that references the problems it creates, so it runs after the loop.
+  failures += await applyFixtureE({ "x-csrf-token": csrf, "x-org-id": orgId });
 
   const overview = await call(
     `/v1/plugins/${PLUGIN_ID}/actions/get_overview`,

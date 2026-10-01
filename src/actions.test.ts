@@ -1290,6 +1290,100 @@ describe("U3 action surface", () => {
 });
 
 /**
+ * U4 — the refusal taxonomy at the annotation boundary.
+ *
+ * The claim kinds (`interpretation`, `steering`) must name exactly one target. The store enforces that, and
+ * `store-ux-v2.test.ts` asserts the throw. What was never pinned is what the **action boundary** does with
+ * it: found while seeding Fixture E, a two-target (or targetless) claim answered HTTP 500 with "An
+ * unexpected server error occurred" and no `kind`, while every other caller mistake returns a structured
+ * refusal. A caller cannot act on a 500, which is the whole reason the kinds exist.
+ */
+describe("U4 — a mis-targeted claim is a refusal, not a server error", () => {
+  /** A topic with one axis and one problem: enough for a claim to have two targets, or none. */
+  async function seedClaim(path: string): Promise<{ axisTitle: string; problemId: string }> {
+    const axisTitle = "Claim axis";
+    const created = await call(
+      "reconcile_topic",
+      {
+        axes: [{ title: axisTitle }],
+        problems: [{ axisTitle, statement: "The claim about this problem is mis-targeted." }],
+        topic: { summary: "Claim targeting." },
+        topicName: "Claim topic",
+      },
+      { path }
+    );
+    expect(created.ok).toBe(true);
+    return { axisTitle, problemId: (created.problems as Array<{ id: string }>)[0]?.id ?? "" };
+  }
+
+  test("two targets on a steering claim come back as invalid-input", async () => {
+    const path = freshDatabase();
+    const { axisTitle, problemId } = await seedClaim(path);
+
+    const refused = await call(
+      "reconcile_topic",
+      {
+        annotations: [
+          {
+            axisTitle,
+            kind: "steering",
+            problemId,
+            text: "Steering aimed at an axis and a problem at once.",
+          },
+        ],
+        topicName: "Claim topic",
+      },
+      { path }
+    );
+
+    expect(refused.ok).toBe(false);
+    expect(refused.kind).toBe("invalid-input");
+    expect(String(refused.error)).toMatch(/exactly one/);
+
+    // And nothing was written: the refusal is not a partial write.
+    const after = await call("get_topic", { topicName: "Claim topic" }, { path });
+    expect(after.annotations).toHaveLength(0);
+  });
+
+  test("no target on an interpretation claim comes back as invalid-input", async () => {
+    const path = freshDatabase();
+    await seedClaim(path);
+
+    const refused = await call(
+      "reconcile_topic",
+      {
+        annotations: [
+          { kind: "interpretation", text: "An interpretation that names nothing." },
+        ],
+        topicName: "Claim topic",
+      },
+      { path }
+    );
+
+    expect(refused.ok).toBe(false);
+    expect(refused.kind).toBe("invalid-input");
+  });
+
+  test("one target on a steering claim is accepted", async () => {
+    const path = freshDatabase();
+    const { problemId } = await seedClaim(path);
+
+    const accepted = await call(
+      "reconcile_topic",
+      {
+        annotations: [
+          { kind: "steering", problemId, text: "Steering that names the problem it is about." },
+        ],
+        topicName: "Claim topic",
+      },
+      { path }
+    );
+
+    expect(accepted.ok).toBe(true);
+  });
+});
+
+/**
  * U4 step 1 — the Progress view's data boundary.
  *
  * U4's acceptance criterion is that every visible Progress element traces to a projection/store field or

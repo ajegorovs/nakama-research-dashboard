@@ -268,6 +268,15 @@ bun run harness:fixture -- --env-file /tmp/nakama-review.env
 bun run harness:fixture -- --env-file /tmp/nakama-review.env --viewport 1280x800
 ```
 
+The layout fixture also seeds **Fixture E** (contract `fixtures.md` §E): one open Problem on two repositories
+with a person link, an activity, an evidence record, a human-authored steering note and a plan step it sits
+on, plus a second Problem with no plan step, no repository and no artifact. It is applied by the same command,
+it is re-runnable without duplicating itself, and it **does not move the counts below** — the page as it
+stands renders no problems, which is exactly why it can be seeded before the Progress view that reads it
+exists. It takes two calls internally (activities, annotations and plan-step links cannot name a problem
+created in the same transaction, and row ids are server-generated); the applier reads the ids back and does
+the referencing pass second.
+
 Expected as of the U1 commit: corpus **43 pass · 0 fail · 7 skip** and fixture **50 · 0 · 0**, at
 both viewports. (Before U1 it was 42 and 49 — U1 added one check, "every axis state the payload carries
 reaches the page as that state", and the `abandoned` fixture axis it needs.) The counts move whenever a

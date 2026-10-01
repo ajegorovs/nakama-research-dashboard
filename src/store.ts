@@ -405,6 +405,7 @@ export const BUSY_TIMEOUT_MS = 5000;
 export const STORE_ERROR_CODES = [
   "conflict",
   "human-authored",
+  "invalid-input",
   "invalid-state",
   "no-op",
 ] as const;
@@ -4941,6 +4942,21 @@ export class ResearchStore {
     authorType: "human" | "agent";
     authorId: string;
   }): Annotation {
+    // The one place a claim's target rule is enforced on **every** path. `addAnnotation` checks it too, but
+    // the reconcile loop calls this directly — so before this check existed here, a two-target (or
+    // targetless) claim reached the INSERT and died on the schema's CHECK constraint: a raw SQLiteError that
+    // escaped the action boundary as "an unexpected server error" with no `kind`, instead of the
+    // `invalid-input` a caller can act on. The database constraint stays as the backstop for anything
+    // writing SQL directly; this is what turns the violation into a refusal. Found while seeding Fixture E.
+    const targets = [input.topicId, input.axisId, input.problemId].filter(
+      (value) => value !== null
+    ).length;
+    if (input.kind !== "note" && targets !== 1) {
+      throw new ResearchStoreError(
+        `A ${input.kind} claim must sit on exactly one of a topic, an axis or a problem — it names ${targets}.`,
+        "invalid-input"
+      );
+    }
     const id = crypto.randomUUID();
     this.db
       .query(

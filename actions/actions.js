@@ -2215,6 +2215,10 @@ class ResearchStore {
     return toActivity(this.db.query("SELECT * FROM activities WHERE id = ?").get(id));
   }
   insertAnnotation(input) {
+    const targets = [input.topicId, input.axisId, input.problemId].filter((value) => value !== null).length;
+    if (input.kind !== "note" && targets !== 1) {
+      throw new ResearchStoreError(`A ${input.kind} claim must sit on exactly one of a topic, an axis or a problem \u2014 it names ${targets}.`, "invalid-input");
+    }
     const id = crypto.randomUUID();
     this.db.query(`INSERT INTO annotations (
            id, topic_id, axis_id, problem_id, text, kind, confidence, author_type, author_id, created_at
