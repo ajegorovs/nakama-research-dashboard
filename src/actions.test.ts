@@ -43,6 +43,7 @@ const MIGRATIONS = [
   "001-research.sql",
   "002-coordination-model.sql",
   "003-drop-legacy.sql",
+  "004-ux-v2-model.sql",
 ].map((name) => readFileSync(join(repoRoot, "migrations", name), "utf8"));
 
 /** The five agent tools, and nothing else (D4). */

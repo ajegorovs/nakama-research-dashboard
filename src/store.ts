@@ -52,7 +52,25 @@ export const AXIS_STATES = [
   "parked",
   "completed",
   "abandoned",
+  /**
+   * Sufficient for the current research need, with known gaps, and resumable without implying failure.
+   * Distinct from `completed` (the work is done) and from `parked` (it is set aside). Appended rather than
+   * inserted: if anything orders axes by position in this list, adding a state must not silently reorder
+   * every existing one. Presenting `usable` in its own place is a view decision (U4 onward), not a
+   * vocabulary decision.
+   */
+  "usable",
 ] as const;
+/** A problem is unresolved or resolved — nothing else. Work context lives on its axis, its steps or a note. */
+export const PROBLEM_STATES = ["open", "resolved"] as const;
+export const PLAN_STEP_STATES = ["pending", "active", "done", "blocked"] as const;
+/** The claim kinds an annotation may carry. `note` is the historical shape and stays the default. */
+export const ANNOTATION_KINDS = ["note", "interpretation", "steering"] as const;
+/**
+ * Who authored a piece of text, and who caused a state transition — the same two answers, deliberately
+ * one vocabulary. `migration` is the migration's word and is not available to a caller.
+ */
+export const AUTHOR_TYPES = ["human", "agent"] as const;
 export const CONFIDENCES = ["confirmed", "inferred", "uncertain"] as const;
 export const SOURCE_TYPES = [
   "manual",
@@ -71,6 +89,11 @@ export type TopicStatus = (typeof TOPIC_STATUSES)[number];
 export type AxisKind = (typeof AXIS_KINDS)[number];
 export type AxisState = (typeof AXIS_STATES)[number];
 export type Confidence = (typeof CONFIDENCES)[number];
+export type ProblemState = (typeof PROBLEM_STATES)[number];
+export type PlanStepState = (typeof PLAN_STEP_STATES)[number];
+export type AnnotationKind = (typeof ANNOTATION_KINDS)[number];
+/** Who wrote a thing: the only two answers a caller may give. */
+export type Author = (typeof AUTHOR_TYPES)[number];
 export type SourceType = (typeof SOURCE_TYPES)[number];
 export type ActorType = (typeof ACTOR_TYPES)[number];
 export type Relationship = (typeof RELATIONSHIPS)[number];
@@ -130,6 +153,11 @@ export type Activity = {
   id: string;
   topicId: string | null;
   axisId: string | null;
+  /**
+   * The problem this event is evidence for, when it is about one. A durable relationship rather than a
+   * presentation value: it is what makes "a problem's latest activity" answerable at all.
+   */
+  problemId: string | null;
   repositoryId: string | null;
   summary: string;
   sourceType: SourceType;
@@ -145,10 +173,75 @@ export type Annotation = {
   id: string;
   topicId: string | null;
   axisId: string | null;
+  problemId: string | null;
   text: string;
+  kind: AnnotationKind;
+  /** Null when the note is not a claim at all — which is most notes. */
+  confidence: Confidence | null;
   authorType: "human" | "agent";
   authorId: string;
   createdAt: string;
+};
+
+/** Text a human wrote, and who last wrote it: `authorType` describes the stored text, not the row's origin. */
+export type AuthoredText = {
+  authorType: "human" | "agent";
+  authorId: string;
+};
+
+/**
+ * A problem is a first-class child of an axis: unresolved or resolved, meaningful without a repository, a
+ * plan step or any activity. Those are implementation and evidence links, not parentage.
+ */
+export type Problem = {
+  id: string;
+  axisId: string;
+  statement: string;
+  state: ProblemState;
+  stateConfidence: Confidence;
+  planStepId: string | null;
+  authorType: "human" | "agent";
+  authorId: string;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Optional by design: most axes will never have one, and creating a problem must never invent one. */
+export type Plan = {
+  id: string;
+  axisId: string;
+  summary: string;
+  authorType: "human" | "agent";
+  authorId: string;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type PlanStep = {
+  id: string;
+  planId: string;
+  title: string;
+  /** Null where the plan has no order — an unordered checklist is not an ordered one with gaps filled in. */
+  position: number | null;
+  state: PlanStepState;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** One row of the append-only state log. `fromState` is null only for the migration's bootstrap rows. */
+export type StateLogEntry = {
+  id: string;
+  axisId: string | null;
+  problemId: string | null;
+  fromState: string | null;
+  toState: string;
+  origin: Author | "migration";
+  actorId: string;
+  /** When the state was observed, when anyone knows. Null is a fact, not a gap to be filled with `recordedAt`. */
+  observedAt: string | null;
+  recordedAt: string;
 };
 
 /** A repository as attached to a topic or an axis, with the relationship carried on the link row. */
@@ -209,6 +302,7 @@ type ActivityRow = {
   id: string;
   topic_id: string | null;
   axis_id: string | null;
+  problem_id: string | null;
   repository_id: string | null;
   summary: string;
   source_type: string;
@@ -224,10 +318,60 @@ type AnnotationRow = {
   id: string;
   topic_id: string | null;
   axis_id: string | null;
+  problem_id: string | null;
   text: string;
+  kind: string;
+  confidence: string | null;
   author_type: string;
   author_id: string;
   created_at: string;
+};
+
+type ProblemRow = {
+  id: string;
+  axis_id: string;
+  statement: string;
+  state: string;
+  state_confidence: string;
+  plan_step_id: string | null;
+  author_type: string;
+  author_id: string;
+  version: number;
+  created_at: string;
+  updated_at: string;
+};
+
+type PlanRow = {
+  id: string;
+  axis_id: string;
+  summary: string;
+  author_type: string;
+  author_id: string;
+  version: number;
+  created_at: string;
+  updated_at: string;
+};
+
+type PlanStepRow = {
+  id: string;
+  plan_id: string;
+  title: string;
+  position: number | null;
+  state: string;
+  created_at: string;
+  updated_at: string;
+};
+
+type StateLogRow = {
+  id: string;
+  axis_id: string | null;
+  problem_id: string | null;
+  from_state: string | null;
+  to_state: string;
+  origin: string;
+  actor_id: string;
+  observed_at: string | null;
+  recorded_at: string;
 };
 
 export const DEFAULT_ACTIVITY_LIMIT = 25;
@@ -296,6 +440,22 @@ function optionalOneOf<T extends string>(
 
 function text(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+/**
+ * A plan step's place in an order, when its plan has one. Absent and null both mean "unordered": an
+ * unordered checklist is not an ordered one with positions filled in by guesswork.
+ */
+function optionalPosition(value: unknown): number | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    throw new ResearchStoreError(
+      "position must be a non-negative integer, or omitted for an unordered plan."
+    );
+  }
+  return value;
 }
 
 function clampLimit(value: unknown, fallback: number, max: number): number {
@@ -425,6 +585,7 @@ function toActivity(row: ActivityRow): Activity {
     axisId: row.axis_id,
     id: row.id,
     occurredAt: row.occurred_at,
+    problemId: row.problem_id,
     recordedAt: row.recorded_at,
     repositoryId: row.repository_id,
     sourceRef: row.source_ref,
@@ -440,10 +601,77 @@ function toAnnotation(row: AnnotationRow): Annotation {
     authorId: row.author_id,
     authorType: row.author_type === "agent" ? "agent" : "human",
     axisId: row.axis_id,
+    confidence: (row.confidence as Confidence | null) ?? null,
     createdAt: row.created_at,
     id: row.id,
+    kind: asAnnotationKind(row.kind),
+    problemId: row.problem_id,
     text: row.text,
     topicId: row.topic_id,
+  };
+}
+
+/** An unknown kind reads as `note`: the value a row had before kinds existed. */
+function asAnnotationKind(value: string): AnnotationKind {
+  return value === "interpretation" || value === "steering" ? value : "note";
+}
+
+function toProblem(row: ProblemRow): Problem {
+  return {
+    authorId: row.author_id,
+    authorType: row.author_type === "human" ? "human" : "agent",
+    axisId: row.axis_id,
+    createdAt: row.created_at,
+    id: row.id,
+    planStepId: row.plan_step_id,
+    state: row.state === "resolved" ? "resolved" : "open",
+    stateConfidence: (row.state_confidence as Confidence) ?? "confirmed",
+    statement: row.statement,
+    updatedAt: row.updated_at,
+    version: row.version,
+  };
+}
+
+function toPlan(row: PlanRow): Plan {
+  return {
+    authorId: row.author_id,
+    authorType: row.author_type === "human" ? "human" : "agent",
+    axisId: row.axis_id,
+    createdAt: row.created_at,
+    id: row.id,
+    summary: row.summary,
+    updatedAt: row.updated_at,
+    version: row.version,
+  };
+}
+
+function toPlanStep(row: PlanStepRow): PlanStep {
+  const state = row.state;
+  return {
+    createdAt: row.created_at,
+    id: row.id,
+    planId: row.plan_id,
+    position: row.position,
+    state:
+      state === "active" || state === "done" || state === "blocked"
+        ? state
+        : "pending",
+    title: row.title,
+    updatedAt: row.updated_at,
+  };
+}
+
+function toStateLogEntry(row: StateLogRow): StateLogEntry {
+  return {
+    actorId: row.actor_id,
+    axisId: row.axis_id,
+    fromState: row.from_state,
+    id: row.id,
+    observedAt: row.observed_at,
+    origin: row.origin === "migration" ? "migration" : row.origin === "agent" ? "agent" : "human",
+    problemId: row.problem_id,
+    recordedAt: row.recorded_at,
+    toState: row.to_state,
   };
 }
 
@@ -815,14 +1043,20 @@ export type TimelineGroup = {
 /**
  * Attention order for axes on the overview: what needs a human first, then the rest of the work.
  * Completed and abandoned work sinks to the bottom instead of disappearing.
+ *
+ * `usable` sits next to `active` rather than near `completed`: the work is in use and its gaps are known,
+ * which is live work, not finished work — parking it at the bottom would read as "done" and hide the gaps.
+ * The contract states no axis order, so this placement is a product decision of ours, not a transcription;
+ * it is one line to change if Progress decides otherwise, and nothing in either dataset is `usable` yet.
  */
 const AXIS_STATE_ATTENTION: Record<AxisState, number> = {
-  abandoned: 5,
+  abandoned: 6,
   active: 1,
   blocked: 0,
-  completed: 4,
-  draft: 2,
-  parked: 3,
+  completed: 5,
+  draft: 3,
+  parked: 4,
+  usable: 2,
 };
 
 /** Topic lifecycle order on the front page, so retired topics do not float above live work. */
@@ -881,6 +1115,8 @@ export class ResearchStore {
   private readonly db: Database;
   /** Depth of the transaction in flight; >0 means a nested call must join it, not open a second one. */
   private depth = 0;
+  /** The same, for a read snapshot — a read model assembled out of other read models must not re-`BEGIN`. */
+  private readDepth = 0;
 
   constructor(databasePath: string) {
     this.db = new Database(databasePath);
@@ -940,12 +1176,17 @@ export class ResearchStore {
   /**
    * A consistent read across several queries. Deferred (no write lock), so a dashboard aggregate
    * cannot mix a row from before a write with one from after it.
+   *
+   * Reentrant, and for the same reason `atomic` is: a read model built out of other read models (a plan
+   * assembled from its steps, an axis's problems plus their evidence) must join the snapshot in flight
+   * instead of issuing a second `BEGIN`, which SQLite refuses outright.
    */
   private snapshot<T>(fn: () => T): T {
-    if (this.depth > 0) {
+    if (this.depth > 0 || this.readDepth > 0) {
       return fn();
     }
     this.db.exec("BEGIN");
+    this.readDepth += 1;
     try {
       const result = fn();
       this.db.exec("COMMIT");
@@ -957,6 +1198,8 @@ export class ResearchStore {
         // Already unwound; the original error is the useful one.
       }
       throw error;
+    } finally {
+      this.readDepth -= 1;
     }
   }
 
@@ -2331,6 +2574,8 @@ export class ResearchStore {
   addActivity(input: {
     topicId?: string;
     axisId?: string;
+    /** The problem this event is evidence for. Naming it is enough: the axis and topic are implied. */
+    problemId?: string;
     repositoryId?: string;
     /** Registered inside the same transaction when given, so a caller never has to two-step it. */
     repositoryFullName?: string;
@@ -2344,10 +2589,19 @@ export class ResearchStore {
   }): Activity {
     return this.atomic(() => {
       const summary = required(input.summary, "summary");
+      const problemId = input.problemId ? required(input.problemId, "problemId") : null;
+      const problem = problemId ? this.getProblem(problemId) : null;
+      if (problemId && !problem) {
+        throw new ResearchStoreError("Problem not found.");
+      }
+      // The common shape: an event names its problem, and the axis and topic are implied by where that
+      // problem already sits. Making the caller repeat them is how one recording contradicts another.
       const topicId = input.topicId ? required(input.topicId, "topicId") : null;
-      const axisId = input.axisId ? required(input.axisId, "axisId") : null;
+      const axisId = input.axisId
+        ? required(input.axisId, "axisId")
+        : (problem?.axisId ?? null);
       if (!(topicId || axisId)) {
-        throw new ResearchStoreError("topicId or axisId is required.");
+        throw new ResearchStoreError("topicId, axisId or problemId is required.");
       }
       if (topicId && !this.getTopic(topicId)) {
         throw new ResearchStoreError("Topic not found.");
@@ -2374,6 +2628,7 @@ export class ResearchStore {
           optionalOneOf(input.actorType, ACTOR_TYPES, "actorType") ?? "unknown",
         axisId,
         occurredAt: input.occurredAt ?? nowIso(),
+        problemId,
         repositoryId: repositoryId ?? null,
         sourceRef: text(input.sourceRef),
         // Validated here rather than left to the column's CHECK: a raw SQLite error reaches the caller
@@ -2391,16 +2646,36 @@ export class ResearchStore {
   addAnnotation(input: {
     topicId?: string;
     axisId?: string;
+    problemId?: string;
     text: string;
+    kind?: AnnotationKind;
+    /** Only meaningful on a claim. A plain note has nothing to be confident about. */
+    confidence?: Confidence | null;
     authorType?: "human" | "agent";
     authorId?: string;
   }): Annotation {
     return this.atomic(() => {
       const body = required(input.text, "text");
+      const kind = optionalOneOf(input.kind, ANNOTATION_KINDS, "kind") ?? "note";
       const topicId = input.topicId ? required(input.topicId, "topicId") : null;
       const axisId = input.axisId ? required(input.axisId, "axisId") : null;
-      if (!(topicId || axisId)) {
-        throw new ResearchStoreError("topicId or axisId is required.");
+      const problemId = input.problemId
+        ? required(input.problemId, "problemId")
+        : null;
+      if (!(topicId || axisId || problemId)) {
+        throw new ResearchStoreError("topicId, axisId or problemId is required.");
+      }
+      // One canonical target for the claim kinds, enforced here as well as in the schema. A `note` may
+      // still sit on several entities at once — five of the seven rows in the real corpus database do, and
+      // rewriting them would trade history for tidiness — but a steering or interpretation claim that
+      // points at two things is ambiguous the moment one of them changes.
+      const targets = [topicId, axisId, problemId].filter(
+        (value) => value !== null
+      ).length;
+      if (kind !== "note" && targets !== 1) {
+        throw new ResearchStoreError(
+          `A ${kind} claim must sit on exactly one of a topic, an axis or a problem — it names ${targets}.`
+        );
       }
       if (topicId && !this.getTopic(topicId)) {
         throw new ResearchStoreError("Topic not found.");
@@ -2409,13 +2684,562 @@ export class ResearchStore {
       if (axisId && !axis) {
         throw new ResearchStoreError("Axis not found.");
       }
+      if (problemId && !this.getProblem(problemId)) {
+        throw new ResearchStoreError("Problem not found.");
+      }
+      if (
+        kind === "note" &&
+        input.confidence !== undefined &&
+        input.confidence !== null
+      ) {
+        throw new ResearchStoreError(
+          "A plain note carries no confidence — carrying one is what makes it an interpretation."
+        );
+      }
       return this.insertAnnotation({
         authorId: input.authorId ?? "",
         authorType: input.authorType ?? "human",
+        // Deliberately not derived from the problem: an axis link as well as a problem link is two targets,
+        // which is exactly what the claim kinds may not have.
         axisId,
+        confidence:
+          optionalOneOf(input.confidence ?? undefined, CONFIDENCES, "confidence") ??
+          null,
+        kind,
+        problemId,
         text: body,
-        topicId: topicId ?? axis?.topicId ?? null,
+        // Only a note inherits the axis's topic. For a claim kind that inheritance would silently create a
+        // second target — a steering claim on an axis would also be filed against its topic, and the row
+        // the schema forbids is exactly the row this would write.
+        topicId:
+          kind === "note" ? (topicId ?? axis?.topicId ?? null) : topicId,
       });
+    });
+  }
+
+  // ------------------------------------------- problems, plans and state transitions
+
+  listProblems(axisId: string): Problem[] {
+    return this.snapshot(() =>
+      (
+        this.db
+          .query("SELECT * FROM problems WHERE axis_id = ? ORDER BY created_at, id")
+          .all(required(axisId, "axisId")) as ProblemRow[]
+      ).map(toProblem)
+    );
+  }
+
+  getProblem(id: string): Problem | null {
+    const row = this.db
+      .query("SELECT * FROM problems WHERE id = ?")
+      .get(id) as ProblemRow | null;
+    return row ? toProblem(row) : null;
+  }
+
+  /** The repository side of the rollup: problems whose evidence links name this repository. */
+  problemsForRepository(repositoryId: string): Problem[] {
+    return this.snapshot(() =>
+      (
+        this.db
+          .query(
+            `SELECT p.* FROM problems p
+               JOIN problem_repositories l ON l.problem_id = p.id
+              WHERE l.repository_id = ?
+              ORDER BY p.created_at, p.id`
+          )
+          .all(required(repositoryId, "repositoryId")) as ProblemRow[]
+      ).map(toProblem)
+    );
+  }
+
+  /** Oldest first: a history read backwards is a history nobody can follow. */
+  problemStateHistory(problemId: string): StateLogEntry[] {
+    return this.stateHistory("problem_id", required(problemId, "problemId"));
+  }
+
+  axisStateHistory(axisId: string): StateLogEntry[] {
+    return this.stateHistory("axis_id", required(axisId, "axisId"));
+  }
+
+  listPlans(axisId: string): Plan[] {
+    return this.snapshot(() =>
+      (
+        this.db
+          .query("SELECT * FROM plans WHERE axis_id = ? ORDER BY created_at, id")
+          .all(required(axisId, "axisId")) as PlanRow[]
+      ).map(toPlan)
+    );
+  }
+
+  getPlan(id: string): Plan | null {
+    const row = this.db
+      .query("SELECT * FROM plans WHERE id = ?")
+      .get(id) as PlanRow | null;
+    return row ? toPlan(row) : null;
+  }
+
+  /**
+   * The plan a view should show: the most recent one for the axis, with its steps.
+   *
+   * More than one plan per axis is legal (the schema forbids nothing), so "the plan" is a presentation
+   * choice and this is where it is made — newest first, and the rest are still reachable through
+   * `listPlans`. Steps come back in their own order when they have one and in the order they were written
+   * when they do not; no positions are synthesized for an unordered checklist.
+   */
+  planForAxis(axisId: string): { plan: Plan; steps: PlanStep[] } | null {
+    return this.snapshot(() => {
+      const plans = this.listPlans(axisId);
+      const plan = plans.at(-1) ?? null;
+      return plan ? { plan, steps: this.listPlanSteps(plan.id) } : null;
+    });
+  }
+
+  listPlanSteps(planId: string): PlanStep[] {
+    return (
+      this.db
+        .query(
+          `SELECT * FROM plan_steps WHERE plan_id = ?
+            ORDER BY position IS NULL, position, created_at, id`
+        )
+        .all(required(planId, "planId")) as PlanStepRow[]
+    ).map(toPlanStep);
+  }
+
+  /**
+   * A problem is created in a state and that state is recorded, with `from_state` null: the row means "this
+   * is what it was when its history began", exactly like the migration's bootstrap rows. Without it, a
+   * problem's history would start at its first *change*, and "when did this open" would be unanswerable.
+   */
+  createProblem(input: {
+    axisId: string;
+    statement: string;
+    authorType: Author;
+    authorId?: string;
+    state?: ProblemState;
+    stateConfidence?: Confidence;
+    planStepId?: string | null;
+    repositoryIds?: string[];
+    /** Registered inside this transaction, so naming a repository is still one step for the caller. */
+    repositoryFullNames?: string[];
+    personIds?: string[];
+  }): Problem {
+    return this.atomic(() => {
+      const axis = this.getAxis(required(input.axisId, "axisId"));
+      if (!axis) {
+        throw new ResearchStoreError("Axis not found.");
+      }
+      const authorType = oneOf(input.authorType, AUTHOR_TYPES, "authorType");
+      const state = optionalOneOf(input.state, PROBLEM_STATES, "state") ?? "open";
+      const stateConfidence =
+        optionalOneOf(input.stateConfidence, CONFIDENCES, "stateConfidence") ??
+        "confirmed";
+      const planStepId = input.planStepId ?? null;
+      if (planStepId) {
+        this.assertPlanStepBelongsToAxis(planStepId, axis.id);
+      }
+      const id = crypto.randomUUID();
+      const at = nowIso();
+      this.db
+        .query(
+          `INSERT INTO problems (
+             id, axis_id, statement, state, state_confidence, plan_step_id,
+             author_type, author_id, version, created_at, updated_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
+        )
+        .run(
+          id,
+          axis.id,
+          required(input.statement, "statement"),
+          state,
+          stateConfidence,
+          planStepId,
+          authorType,
+          input.authorId ?? "",
+          at,
+          at
+        );
+      this.insertStateLogEntry({
+        actorId: input.authorId ?? "",
+        axisId: null,
+        fromState: null,
+        observedAt: null,
+        origin: authorType,
+        problemId: id,
+        toState: state,
+      });
+      for (const repositoryId of input.repositoryIds ?? []) {
+        this.linkProblemRepository(id, repositoryId);
+      }
+      for (const fullName of input.repositoryFullNames ?? []) {
+        this.linkProblemRepository(
+          id,
+          this.upsertRepository({ fullName }).repository.id
+        );
+      }
+      for (const personId of input.personIds ?? []) {
+        this.linkProblemPerson(id, personId);
+      }
+      this.touch("development_axes", axis.id);
+      return this.getProblem(id) as Problem;
+    });
+  }
+
+  /**
+   * A state change is not an update: it goes through `transitionProblem`, which appends history. This
+   * writer touches the statement, its confidence, the plan-step link and the links — never the state.
+   */
+  updateProblem(input: {
+    id: string;
+    statement?: string;
+    stateConfidence?: Confidence;
+    planStepId?: string | null;
+    authorType: Author;
+    authorId?: string;
+    expectedVersion?: number;
+    repositoryIds?: string[];
+    personIds?: string[];
+  }): Problem {
+    return this.atomic(() => {
+      const problem = this.getProblem(required(input.id, "id"));
+      if (!problem) {
+        throw new ResearchStoreError("Problem not found.");
+      }
+      const authorType = oneOf(input.authorType, AUTHOR_TYPES, "authorType");
+      this.assertVersion(
+        "problem",
+        problem.statement,
+        problem.version,
+        input.expectedVersion
+      );
+      const sets: string[] = [];
+      const values: (string | null)[] = [];
+      if (input.statement !== undefined) {
+        this.assertTextIsReplaceable(
+          problem.authorType,
+          authorType,
+          "the statement of this problem"
+        );
+        sets.push("statement = ?");
+        values.push(required(input.statement, "statement"));
+        // Authorship follows the words: the text this row now holds was written by this caller, so the
+        // next agent to come along must not be able to replace it.
+        sets.push("author_type = ?", "author_id = ?");
+        values.push(authorType, input.authorId ?? problem.authorId);
+      }
+      if (input.stateConfidence !== undefined) {
+        sets.push("state_confidence = ?");
+        values.push(
+          oneOf(input.stateConfidence, CONFIDENCES, "stateConfidence")
+        );
+      }
+      if (input.planStepId !== undefined) {
+        if (input.planStepId !== null) {
+          this.assertPlanStepBelongsToAxis(input.planStepId, problem.axisId);
+        }
+        sets.push("plan_step_id = ?");
+        values.push(input.planStepId);
+      }
+      if (sets.length > 0) {
+        sets.push("version = version + 1", "updated_at = ?");
+        values.push(nowIso(), problem.id);
+        this.db
+          .query(`UPDATE problems SET ${sets.join(", ")} WHERE id = ?`)
+          .run(...values);
+      }
+      if (input.repositoryIds) {
+        this.replaceProblemRepositories(problem.id, input.repositoryIds);
+      }
+      if (input.personIds) {
+        this.replaceProblemPeople(problem.id, input.personIds);
+      }
+      this.touch("development_axes", problem.axisId);
+      return this.getProblem(problem.id) as Problem;
+    });
+  }
+
+  /**
+   * Moves a problem between `open` and `resolved`.
+   *
+   * A no-op is refused rather than written: the database cannot compare the requested state with the
+   * current one (no CHECK can see another row), so refusing a non-change is this writer's job. Reopening is
+   * not a special case — it is a transition to `open`, and because the log is append-only the earlier
+   * `resolved` row survives it.
+   */
+  transitionProblem(input: {
+    id: string;
+    toState: ProblemState;
+    origin: Author;
+    actorId?: string;
+    observedAt?: string | null;
+    expectedVersion?: number;
+  }): { problem: Problem; transition: StateLogEntry } {
+    return this.atomic(() => {
+      const problem = this.getProblem(required(input.id, "id"));
+      if (!problem) {
+        throw new ResearchStoreError("Problem not found.");
+      }
+      const toState = oneOf(input.toState, PROBLEM_STATES, "toState");
+      const origin = oneOf(input.origin, AUTHOR_TYPES, "origin");
+      // Version before state: a writer that lost the race should hear "someone else wrote", not
+      // "nothing to do" — otherwise a caller retries a stale request believing it was a no-op.
+      this.assertVersion(
+        "problem",
+        problem.statement,
+        problem.version,
+        input.expectedVersion
+      );
+      if (problem.state === toState) {
+        throw new ResearchStoreError(
+          `no-op: the problem is already "${toState}" — nothing was written.`
+        );
+      }
+      this.db
+        .query(
+          "UPDATE problems SET state = ?, version = version + 1, updated_at = ? WHERE id = ?"
+        )
+        .run(toState, nowIso(), problem.id);
+      const transition = this.insertStateLogEntry({
+        actorId: input.actorId ?? "",
+        axisId: null,
+        fromState: problem.state,
+        observedAt: input.observedAt ?? null,
+        origin,
+        problemId: problem.id,
+        toState,
+      });
+      this.touch("development_axes", problem.axisId);
+      return { problem: this.getProblem(problem.id) as Problem, transition };
+    });
+  }
+
+  /**
+   * Moves an axis between states and records it. Same rules as a problem's transition, plus the one the
+   * store already held: an axis cannot be `blocked` without saying what it is waiting on.
+   *
+   * There is deliberately **no table of forbidden transitions**. The contract names three reopenings and
+   * enumerates no illegal edges, so every change to a different valid state is accepted — including
+   * `abandoned -> active`. If a transition reads oddly, its log row is what explains it; refusing a
+   * legitimate research decision because we guessed a workflow graph would be worse than a surprising row.
+   */
+  transitionAxis(input: {
+    axisId: string;
+    toState: AxisState;
+    origin: Author;
+    actorId?: string;
+    observedAt?: string | null;
+    expectedVersion?: number;
+    /** Required when entering `blocked`, the rule `updateAxis` already enforces. */
+    blocker?: string;
+  }): { axis: Axis; transition: StateLogEntry } {
+    return this.atomic(() => {
+      const axis = this.getAxis(required(input.axisId, "axisId"));
+      if (!axis) {
+        throw new ResearchStoreError("Axis not found.");
+      }
+      const toState = oneOf(input.toState, AXIS_STATES, "toState");
+      const origin = oneOf(input.origin, AUTHOR_TYPES, "origin");
+      this.assertVersion("axis", axis.title, axis.version, input.expectedVersion);
+      if (axis.state === toState) {
+        throw new ResearchStoreError(
+          `no-op: the axis is already "${toState}" — nothing was written.`
+        );
+      }
+      const blocker =
+        input.blocker === undefined ? axis.blocker : text(input.blocker);
+      this.assertBlockerPresent(toState, blocker);
+      this.db
+        .query(
+          "UPDATE development_axes SET state = ?, blocker = ?, version = version + 1, updated_at = ? WHERE id = ?"
+        )
+        .run(toState, blocker, nowIso(), axis.id);
+      const transition = this.insertStateLogEntry({
+        actorId: input.actorId ?? "",
+        axisId: axis.id,
+        fromState: axis.state,
+        observedAt: input.observedAt ?? null,
+        origin,
+        problemId: null,
+        toState,
+      });
+      return { axis: this.getAxis(axis.id) as Axis, transition };
+    });
+  }
+
+  createPlan(input: {
+    axisId: string;
+    summary: string;
+    authorType: Author;
+    authorId?: string;
+  }): Plan {
+    return this.atomic(() => {
+      const axis = this.getAxis(required(input.axisId, "axisId"));
+      if (!axis) {
+        throw new ResearchStoreError("Axis not found.");
+      }
+      const id = crypto.randomUUID();
+      const at = nowIso();
+      this.db
+        .query(
+          `INSERT INTO plans (id, axis_id, summary, author_type, author_id, version, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, 1, ?, ?)`
+        )
+        .run(
+          id,
+          axis.id,
+          required(input.summary, "summary"),
+          oneOf(input.authorType, AUTHOR_TYPES, "authorType"),
+          input.authorId ?? "",
+          at,
+          at
+        );
+      this.touch("development_axes", axis.id);
+      return this.getPlan(id) as Plan;
+    });
+  }
+
+  updatePlan(input: {
+    id: string;
+    summary?: string;
+    authorType: Author;
+    authorId?: string;
+    expectedVersion?: number;
+  }): Plan {
+    return this.atomic(() => {
+      const plan = this.getPlan(required(input.id, "id"));
+      if (!plan) {
+        throw new ResearchStoreError("Plan not found.");
+      }
+      const authorType = oneOf(input.authorType, AUTHOR_TYPES, "authorType");
+      this.assertVersion("plan", plan.summary, plan.version, input.expectedVersion);
+      if (input.summary !== undefined) {
+        this.assertTextIsReplaceable(
+          plan.authorType,
+          authorType,
+          "this plan's summary"
+        );
+        this.db
+          .query(
+            "UPDATE plans SET summary = ?, author_type = ?, author_id = ?, version = version + 1, updated_at = ? WHERE id = ?"
+          )
+          .run(
+            required(input.summary, "summary"),
+            authorType,
+            input.authorId ?? plan.authorId,
+            nowIso(),
+            plan.id
+          );
+      }
+      return this.getPlan(plan.id) as Plan;
+    });
+  }
+
+  createPlanStep(input: {
+    planId: string;
+    title: string;
+    position?: number | null;
+    state?: PlanStepState;
+  }): PlanStep {
+    return this.atomic(() => {
+      const plan = this.getPlan(required(input.planId, "planId"));
+      if (!plan) {
+        throw new ResearchStoreError("Plan not found.");
+      }
+      const id = crypto.randomUUID();
+      const at = nowIso();
+      this.db
+        .query(
+          `INSERT INTO plan_steps (id, plan_id, title, position, state, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(
+          id,
+          plan.id,
+          required(input.title, "title"),
+          optionalPosition(input.position),
+          optionalOneOf(input.state, PLAN_STEP_STATES, "state") ?? "pending",
+          at,
+          at
+        );
+      return this.listPlanSteps(plan.id).find((step) => step.id === id) as PlanStep;
+    });
+  }
+
+  /**
+   * A step's state, position and title are all editable here. Note the gap: `plan_steps` carries no
+   * authorship columns, so the protection that keeps an agent from rewriting a human's words cannot be
+   * enforced for a step title — there is nothing on the row to compare against. Stated rather than
+   * pretended; giving steps authorship is a schema change with its own review.
+   */
+  updatePlanStep(input: {
+    id: string;
+    title?: string;
+    position?: number | null;
+    state?: PlanStepState;
+  }): PlanStep {
+    return this.atomic(() => {
+      const existing = this.db
+        .query("SELECT * FROM plan_steps WHERE id = ?")
+        .get(required(input.id, "id")) as PlanStepRow | null;
+      if (!existing) {
+        throw new ResearchStoreError("Plan step not found.");
+      }
+      const sets: string[] = [];
+      const values: (string | number | null)[] = [];
+      if (input.title !== undefined) {
+        sets.push("title = ?");
+        values.push(required(input.title, "title"));
+      }
+      if (input.position !== undefined) {
+        sets.push("position = ?");
+        values.push(optionalPosition(input.position));
+      }
+      if (input.state !== undefined) {
+        sets.push("state = ?");
+        values.push(oneOf(input.state, PLAN_STEP_STATES, "state"));
+      }
+      if (sets.length > 0) {
+        sets.push("updated_at = ?");
+        values.push(nowIso(), existing.id);
+        this.db
+          .query(`UPDATE plan_steps SET ${sets.join(", ")} WHERE id = ?`)
+          .run(...values);
+      }
+      const row = this.db
+        .query("SELECT * FROM plan_steps WHERE id = ?")
+        .get(existing.id) as PlanStepRow;
+      return toPlanStep(row);
+    });
+  }
+
+  linkProblemRepository(problemId: string, repositoryId: string): void {
+    this.atomic(() => {
+      if (!this.getProblem(problemId)) {
+        throw new ResearchStoreError("Problem not found.");
+      }
+      if (!this.repositoryExists(repositoryId)) {
+        throw new ResearchStoreError("Repository not found.");
+      }
+      this.db
+        .query(
+          "INSERT OR IGNORE INTO problem_repositories (problem_id, repository_id) VALUES (?, ?)"
+        )
+        .run(problemId, repositoryId);
+    });
+  }
+
+  linkProblemPerson(problemId: string, personId: string): void {
+    this.atomic(() => {
+      if (!this.getProblem(problemId)) {
+        throw new ResearchStoreError("Problem not found.");
+      }
+      if (!this.getPerson(personId)) {
+        throw new ResearchStoreError("Person not found.");
+      }
+      this.db
+        .query(
+          "INSERT OR IGNORE INTO problem_people (problem_id, person_id) VALUES (?, ?)"
+        )
+        .run(problemId, personId);
     });
   }
 
@@ -2590,6 +3414,8 @@ export class ResearchStore {
           sourceUrl: text(activityInput.sourceUrl),
           summary: required(activityInput.summary, "summary"),
           topicId: topic.id,
+          // Reconcile's own recordings are not evidence for a problem yet — U3 extends the input for that.
+          problemId: null,
         });
         activities.push(activity.id);
       }
@@ -2606,6 +3432,11 @@ export class ResearchStore {
             annotationInput.authorType ??
             (actor.type === "agent" ? "agent" : "human"),
           axisId,
+          // Reconcile still writes plain notes, including the historical shape that names a topic and an
+          // axis at once. Claim kinds and problem targets arrive with U3, where the action input grows.
+          confidence: null,
+          kind: "note",
+          problemId: null,
           text: required(annotationInput.text, "text"),
           topicId: topic.id,
         });
@@ -3036,10 +3867,121 @@ export class ResearchStore {
       .run(parentId, repositoryId, next);
   }
 
+  /**
+   * The one place a transition row is written, so every writer produces the same shape: `from_state` is
+   * the state actually being replaced, `recorded_at` is always now, and `observed_at` stays null when
+   * nobody knows when the change was observed — a different fact from when the ledger heard about it.
+   */
+  private insertStateLogEntry(input: {
+    axisId: string | null;
+    problemId: string | null;
+    fromState: string | null;
+    toState: string;
+    origin: Author;
+    actorId: string;
+    observedAt: string | null;
+  }): StateLogEntry {
+    const id = crypto.randomUUID();
+    this.db
+      .query(
+        `INSERT INTO state_log (
+           id, axis_id, problem_id, from_state, to_state, origin, actor_id, observed_at, recorded_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        id,
+        input.axisId,
+        input.problemId,
+        input.fromState,
+        input.toState,
+        input.origin,
+        input.actorId,
+        input.observedAt,
+        nowIso()
+      );
+    return toStateLogEntry(
+      this.db.query("SELECT * FROM state_log WHERE id = ?").get(id) as StateLogRow
+    );
+  }
+
+  /**
+   * Oldest first. `rowid` breaks ties inside one millisecond, so two transitions recorded in the same tick
+   * still read back in the order they were written rather than in an order SQLite happened to pick.
+   */
+  private stateHistory(
+    column: "axis_id" | "problem_id",
+    id: string
+  ): StateLogEntry[] {
+    return (
+      this.db
+        .query(
+          `SELECT * FROM state_log WHERE ${column} = ? ORDER BY recorded_at, rowid`
+        )
+        .all(id) as StateLogRow[]
+    ).map(toStateLogEntry);
+  }
+
+  /**
+   * A human's words are not an agent's to replace. `existing` is the authorship of the text **currently
+   * stored**, not of whoever created the row: a human rewrite makes the text human-authored, so the
+   * protection follows the words rather than the row's origin.
+   */
+  private assertTextIsReplaceable(
+    existing: Author,
+    incoming: Author,
+    what: string
+  ): void {
+    if (existing === "human" && incoming === "agent") {
+      throw new ResearchStoreError(
+        `human-authored: ${what} was written by a human — an agent cannot rewrite it. Change the state, the links or a plan step instead, or have the human edit the text.`
+      );
+    }
+  }
+
+  /** A problem may only point at a step of a plan on its own axis; anything else is a cross-axis claim. */
+  private assertPlanStepBelongsToAxis(planStepId: string, axisId: string): void {
+    const row = this.db
+      .query(
+        `SELECT p.axis_id AS axis_id
+           FROM plan_steps s
+           JOIN plans p ON p.id = s.plan_id
+          WHERE s.id = ?`
+      )
+      .get(planStepId) as { axis_id: string } | null;
+    if (!row) {
+      throw new ResearchStoreError("Plan step not found.");
+    }
+    if (row.axis_id !== axisId) {
+      throw new ResearchStoreError(
+        "That plan step belongs to a plan on another axis."
+      );
+    }
+  }
+
+  private replaceProblemRepositories(
+    problemId: string,
+    repositoryIds: string[]
+  ): void {
+    this.db
+      .query("DELETE FROM problem_repositories WHERE problem_id = ?")
+      .run(problemId);
+    for (const repositoryId of repositoryIds) {
+      this.linkProblemRepository(problemId, repositoryId);
+    }
+  }
+
+  private replaceProblemPeople(problemId: string, personIds: string[]): void {
+    this.db.query("DELETE FROM problem_people WHERE problem_id = ?").run(problemId);
+    for (const personId of personIds) {
+      this.linkProblemPerson(problemId, personId);
+    }
+  }
+
   private insertActivity(input: {
     id?: string;
     topicId: string | null;
     axisId: string | null;
+    problemId: string | null;
     repositoryId: string | null;
     summary: string;
     sourceType: SourceType;
@@ -3054,14 +3996,15 @@ export class ResearchStore {
     this.db
       .query(
         `INSERT INTO activities (
-           id, topic_id, axis_id, repository_id, summary, source_type, source_ref, source_url,
-           actor_type, actor_id, occurred_at, recorded_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           id, topic_id, axis_id, problem_id, repository_id, summary, source_type, source_ref,
+           source_url, actor_type, actor_id, occurred_at, recorded_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         id,
         input.topicId,
         input.axisId,
+        input.problemId,
         input.repositoryId,
         input.summary,
         input.sourceType,
@@ -3085,20 +4028,28 @@ export class ResearchStore {
   private insertAnnotation(input: {
     topicId: string | null;
     axisId: string | null;
+    problemId: string | null;
     text: string;
+    kind: AnnotationKind;
+    confidence: Confidence | null;
     authorType: "human" | "agent";
     authorId: string;
   }): Annotation {
     const id = crypto.randomUUID();
     this.db
       .query(
-        "INSERT INTO annotations (id, topic_id, axis_id, text, author_type, author_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        `INSERT INTO annotations (
+           id, topic_id, axis_id, problem_id, text, kind, confidence, author_type, author_id, created_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         id,
         input.topicId,
         input.axisId,
+        input.problemId,
         input.text,
+        input.kind,
+        input.confidence,
         input.authorType,
         input.authorId,
         nowIso()
@@ -3168,7 +4119,7 @@ export class ResearchStore {
   }
 
   private assertVersion(
-    entity: "topic" | "axis",
+    entity: "topic" | "axis" | "problem" | "plan",
     label: string,
     current: number,
     expected?: number

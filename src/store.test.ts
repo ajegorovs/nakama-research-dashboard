@@ -1,7 +1,7 @@
 /**
  * Store v2 tests.
  *
- * Every test runs against a database built from the **shipped migrations** (001, 002, 003) rather than
+ * Every test runs against a database built from the **shipped migrations** (001–004) rather than
  * hand-written DDL, so the store is checked against the schema the platform will actually hand it.
  *
  * The interesting tests here are the ones V1 could not have passed: the pragmas (each action runs in a
@@ -25,6 +25,7 @@ const MIGRATIONS = [
   "001-research.sql",
   "002-coordination-model.sql",
   "003-drop-legacy.sql",
+  "004-ux-v2-model.sql",
 ].map((name) => readFileSync(join(migrationsDir, name), "utf8"));
 
 function tempPath(): string {
