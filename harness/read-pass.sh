@@ -110,9 +110,10 @@ export NAKAMA_PAGE_LABEL="${NAKAMA_PAGE_LABEL:-Research}"
 # Credentials. NAKAMA_EMAIL / NAKAMA_PASSWORD are the names every script in harness/ uses, and the ones
 # the README's env file sets; the older NAKAMA_DEV_* pair is still accepted, because the estate wrapper
 # that calls this script exports both. The checker itself (verify-page.mjs) reads the DEV pair, so the
-# alias is exported for it rather than renaming the variable underneath it.
-export NAKAMA_DEV_EMAIL="${NAKAMA_DEV_EMAIL:-${NAKAMA_EMAIL:-}}"
-export NAKAMA_DEV_PASSWORD="${NAKAMA_DEV_PASSWORD:-${NAKAMA_PASSWORD:-}}"
+# alias is exported for it rather than renaming the variable underneath it. The documented names win:
+# a shell that happens to carry an old NAKAMA_DEV_* value must not override the env file it was handed.
+export NAKAMA_DEV_EMAIL="${NAKAMA_EMAIL:-${NAKAMA_DEV_EMAIL:-}}"
+export NAKAMA_DEV_PASSWORD="${NAKAMA_PASSWORD:-${NAKAMA_DEV_PASSWORD:-}}"
 if [[ -z "$NAKAMA_DEV_EMAIL" || -z "$NAKAMA_DEV_PASSWORD" ]]; then
   echo "read-pass: no credentials — set NAKAMA_EMAIL / NAKAMA_PASSWORD (or the NAKAMA_DEV_* pair), in the environment or in --env-file" >&2
   exit 2
