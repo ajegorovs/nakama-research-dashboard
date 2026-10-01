@@ -793,6 +793,21 @@ const css = `
   font-size: 0.85em;
   padding: 0 6px;
 }
+/* The problem inventory is the same kind of secondary section as the plan: a rule above it, quiet rows, and
+   each row is a button because picking one drives the card in the middle column. */
+[data-plugin-id="research-dashboard"] .rd-progress-problems {
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 4px;
+  padding-top: 10px;
+}
+[data-plugin-id="research-dashboard"] .rd-problems {
+  display: grid;
+  gap: 4px;
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
 [data-plugin-id="research-dashboard"] .rd-index-item[aria-pressed="true"] {
   border-color: var(--border);
   background: var(--muted, rgba(127, 127, 127, 0.1));
@@ -2062,9 +2077,6 @@ export function apply(ctx: Context) {
       : null;
     const shownProblem: ProgressProblemRow | null =
       chosenProblem ?? openAxisProblems[0] ?? axisProblems[0] ?? null;
-    // "The others immediately selectable/listed" (the reviewer's rule): the problem already on screen is not
-    // repeated in the list, and the list keeps the projection's order rather than sorting by anything.
-    const otherOpenProblems = openAxisProblems.filter((problem) => problem.id !== shownProblem?.id);
     // The server already grouped the window by axis and put the groups in the index's order, so the page
     // looks a bucket up rather than filtering a flat list to decide what belongs to this axis.
     const feed =
@@ -2077,6 +2089,21 @@ export function apply(ctx: Context) {
     // than letting the list's order read as a sequence the model never asserted.
     const planClaimsOrder =
       axisPlan?.steps.some((step) => step.position !== null) ?? false;
+
+    /** The inventory's compact context for one problem: its repositories, its step, and how alive it is. */
+    function problemContext(problem: ProgressProblemRow): string {
+      const parts: string[] = [
+        problem.repositories.length === 0
+          ? "no repository"
+          : problem.repositories.map((repo) => repo.fullName).join(", "),
+      ];
+      if (problem.planStepTitle) {
+        parts.push(`step: ${problem.planStepTitle}`);
+      }
+      parts.push(countLabel(problem.activityCount, "event", "events"));
+      parts.push(`last activity ${describeAge(problem.recencyAt)}`);
+      return parts.join(" · ");
+    }
 
     /** The problem's own fields, phrased — nothing here is computed that the projection did not carry. */
     function problemFacts(problem: ProgressProblemRow): string {
@@ -2209,24 +2236,6 @@ export function apply(ctx: Context) {
               ) : null}
             </div>
           )}
-          {otherOpenProblems.length > 0 ? (
-            <ul className="rd-feed" data-rd-progress-problem-list="true">
-              {otherOpenProblems.map((problem) => (
-                <li key={problem.id}>
-                  <button
-                    aria-pressed={problem.id === shownProblem?.id}
-                    className="rd-index-item"
-                    data-rd-problem-choice={problem.id}
-                    onClick={() => setSelectedProblemId(problem.id)}
-                    type="button"
-                  >
-                    <span className="rd-strong">{problem.statement}</span>
-                    <span className="rd-meta">{`last activity ${describeAge(problem.recencyAt)}`}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
         </div>
 
         {/*
@@ -2322,6 +2331,52 @@ export function apply(ctx: Context) {
                       the step the problem on screen sits on
                     </span>
                   ) : null}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
+        {/*
+         * The axis's problem inventory: navigation plus compact context, while the card in the middle column
+         * stays the detailed reading surface. Open problems only — resolved ones are not folded in yet — in
+         * the projection's own order and set, with no ranking, severity or importance of any kind. The list
+         * is *not* "the others": every open problem appears, including the one on screen, which is marked
+         * active so the reader can see which card the list is driving.
+         *
+         * The heading carries no count on purpose: the count is already on the card column's heading, and two
+         * headings asserting the same number would be two sources for one fact. An axis with no open problem
+         * renders nothing here — the axis is meaningful on its own, and a warning about a missing problem
+         * would say otherwise.
+         */}
+        {openAxisProblems.length > 0 ? (
+          <section
+            className="rd-progress-problems"
+            data-rd-progress-problems={openAxisProblems.length}
+            data-rd-progress-problems-axis={activeAxis?.id ?? ""}
+          >
+            <span className="rd-section">Open problems on this axis</span>
+            <ul className="rd-problems" data-rd-problem-list={openAxisProblems.length}>
+              {openAxisProblems.map((problem) => (
+                <li key={problem.id}>
+                  <button
+                    aria-pressed={problem.id === shownProblem?.id}
+                    className="rd-index-item"
+                    data-rd-problem-choice={problem.id}
+                    onClick={() => setSelectedProblemId(problem.id)}
+                    type="button"
+                  >
+                    <div className="rd-cluster">
+                      <StateBadge
+                        confidence={problem.stateConfidence}
+                        state={problem.state as ProblemState}
+                      />
+                      <span className="rd-strong">{problem.statement}</span>
+                    </div>
+                    <span className="rd-meta" data-rd-problem-context="true">
+                      {problemContext(problem)}
+                    </span>
+                  </button>
                 </li>
               ))}
             </ul>

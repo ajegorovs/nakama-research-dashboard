@@ -20,9 +20,12 @@ the corpus and regress exactly those.
 U1's "every axis state the payload carries reaches the page as that state", then U4's window check, then six
 with U4's step-2 composition (the three-column Progress layout and its selection, compared against
 `get_progress`'s own answer), then five with step 3 (the optional Plan section: its silent absence, the stored
-positions, the plan ↔ problem link both ways, and the unordered-plan discriminator) — so the same fixture pass
-now reports **62**, at both viewports, with nothing failing. The transcripts in this directory are the record;
-read a run's own summary line rather than a number in a document.)
+positions, the plan ↔ problem link both ways, and the unordered-plan discriminator), then eight more with U4's
+step 4 (the open-problem inventory: its membership and order, the active row, selection driving the card, a
+closed-out problem staying out and an axis with none rendering no section) — one check from step 2 went with
+that step's inline list — so the same fixture pass now reports **69**, at both viewports, with nothing failing.
+The transcripts in this directory are the record; read a run's own summary line rather than a number in a
+document.)
 
 **Rule: the corpus stays canonical.** This directory is a *second* dataset, applied to the instance
 instead of the corpus and never mixed into `docs/corpus/`. Every file here is labelled synthetic.

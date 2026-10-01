@@ -1020,6 +1020,17 @@ describe("U3 action surface", () => {
     );
     expect(resolved.ok).toBe(true);
 
+    // While it is closed out, the projection counts it among the axis's problems and **not** among the open
+    // ones — the distinction the inventory's "open problems only" rendering rests on (U4 step 4).
+    const closed = (await call("get_progress", { activitySinceDays: 0 }, { path })) as {
+      axes?: { axes?: Array<{ id: string; openProblems: number; problems: number }> };
+      problems?: { problems?: Array<{ axisId: string; id: string; state: string }> };
+    };
+    const closedProblem = (closed.problems?.problems ?? []).find((row) => row.id === problemId);
+    const closedAxis = (closed.axes?.axes ?? []).find((row) => row.id === closedProblem?.axisId);
+    expect(closedProblem?.state).toBe("resolved");
+    expect(closedAxis?.problems).toBeGreaterThan(closedAxis?.openProblems ?? 0);
+
     const reopened = await call(
       "reconcile_topic",
       {

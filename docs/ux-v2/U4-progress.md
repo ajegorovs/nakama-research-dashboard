@@ -440,7 +440,39 @@ the linkage both ways; the unordered discriminator; and the silent absence. Rele
 unordered plan present — it adds structure, not entities, which is what keeps it invisible to the frozen V1
 checks.
 
-## 12. What the shared dev instance measured, and the corpus record
+## 12. The problem inventory (step 4)
+
+Step 4 gives the axis's **open problems** their own section, below the plan, and takes the list out of the card
+column where step 2 had put it. The list is *not* "the others": every open problem appears, including the one on
+screen, which is marked active — so the reader can see which row is driving the card.
+
+**Where each thing comes from.** Membership, order, state and counts are the projection's: `problems.problems`
+filtered by `axisId` and `state === "open"`, in the order the server returned them. The page decides only which
+already-returned problem the card shows — the boundary the reviewer set in step 2 and kept here. Each row's
+context line is the problem's own fields, phrased: its repositories (or `no repository`), the step it sits on
+where it names one, its event count, and its recency using the same timestamp that sorts it.
+
+**Two cases the section must not show.** *Closed-out problems:* the fixture gained one on Fixture E's axis —
+created and then moved to `resolved` through `transitions[]`, since a problem's state changes only that way —
+so the axis now carries **4 problems, 3 open**. The check asserts that case exists before asserting the
+inventory has 3 rows, which is what keeps "open only" from passing on a dataset with nothing to leak.
+*No open problems at all:* an axis with none renders **nothing** — no section, no shell, no "missing problem"
+wording (nothing matching `missing problem|error|warning|invalid` on the page) — while the axis's title and the
+card column keep rendering, because the axis is meaningful on its own.
+
+**Why the heading carries no count.** The card column's heading already says `Open problems (3)`; a second
+heading asserting the same number would be two sources for one fact. The count that matters is asserted where
+it is rendered, and the section's own row count is checked against the projection.
+
+**Measured.** Fixture acceptance **69 PASS / 0 FAIL / 0 skip at both viewports** — 62, minus step 2's "the
+others are listed" check (the list it asserted is no longer in that column) plus step 4's eight. The action
+suite also pins the distinction at the contract level: with the problem closed out, its axis counts 1 problem
+and 0 open. `bun run check` = **0 typecheck · 125 pass · 0 fail · 745 expect()**; release
+`+dev.fea09a3701bf`, revision 65, **generation unchanged**. Eye-checked at 1440×900: the inventory sits below
+the plan, each row carries a chip, its statement and its compact context, the first row is highlighted and the
+card above is the same problem — no clipping.
+
+## 13. What the shared dev instance measured, and the corpus record
 
 
 Run on the shared dev instance (corpus + fixture + Fixture E), the same pass reports **50 pass · 1 fail · 0
@@ -454,7 +486,7 @@ filter and the expectation describe different origins, so they disagree — the 
 and the **committed corpus record was not overwritten** with a mixed-instance result. A corpus number that a
 reviewer can reproduce needs a corpus-only instance, which is U10's work.
 
-## 13. A pre-existing flake, root-caused
+## 14. A pre-existing flake, root-caused
 
 While running `bun run check` after the render, the U3 action test *"a refusal keeps its kind across the action
 boundary"* failed — and then failed 3 runs in 6. It is not timing in the store: a topic's axes come back

@@ -252,6 +252,11 @@ const FIXTURE_E_UNORDERED_FIRST = "Fixture E: unordered step — zulu, written f
 const FIXTURE_E_UNORDERED_SECOND = "Fixture E: unordered step — alpha, written second";
 const FIXTURE_E_UNORDERED_SUMMARY =
   "Fixture E: an unordered checklist, so nothing about it claims a sequence.";
+// U4 step 4's case: a problem on the same axis that has been **closed out**. The inventory may not list it,
+// and without one the rule "open problems only" would be untestable — the check would pass on a dataset that
+// simply had no resolved problem to leak.
+const FIXTURE_E_RESOLVED =
+  "Fixture E: closed out — the second rig's floor was traced to a stale calibration file.";
 
 /**
  * Fixture E, idempotently. Re-applying the fixture must not pile up duplicates, and problems have no
@@ -389,6 +394,44 @@ async function applyFixtureE(headers) {
     console.log(
       `fixture E: created an unordered plan on "${FIXTURE_E_UNORDERED_AXIS}" — 2 steps, no positions, ` +
         `written "zulu" before "alpha" so any client-side sort would flip them`
+    );
+  }
+
+  // ---- Fixture E's closed-out problem ------------------------------------------------------------------
+  // U4 step 4 lists the axis's *open* problems. This one is created and then resolved through the action
+  // surface (a problem's state changes only through `transitions[]`), so the inventory has something it must
+  // exclude: without it, "open problems only" is a rule nothing on the dataset could break.
+  const haveResolved = onAxis.find((row) => row.statement === FIXTURE_E_RESOLVED);
+  if (haveResolved) {
+    console.log("fixture E: the closed-out problem is already there — nothing to create");
+  } else {
+    const created = await act("reconcile_topic", {
+      problems: [{ axisTitle: FIXTURE_E_AXIS, statement: FIXTURE_E_RESOLVED }],
+      topicName: FIXTURE_E_TOPIC,
+    });
+    if (!created.ok) {
+      return fail("creating the closed-out problem", created.raw);
+    }
+    // Its id is the store's, so it is read back rather than assumed — the same two-pass shape as the rest.
+    const reread = await act("get_progress", { activitySinceDays: 0 });
+    if (!reread.ok) {
+      return fail("reading the closed-out problem back", reread.raw);
+    }
+    const target = (reread.result.problems?.problems ?? []).find(
+      (row) => row.statement === FIXTURE_E_RESOLVED
+    );
+    if (!target) {
+      return fail("the closed-out problem is not readable after the write", reread.raw);
+    }
+    const resolved = await act("reconcile_topic", {
+      topicName: FIXTURE_E_TOPIC,
+      transitions: [{ problemId: target.id, subject: "problem", toState: "resolved" }],
+    });
+    if (!resolved.ok) {
+      return fail("resolving the closed-out problem", resolved.raw);
+    }
+    console.log(
+      `fixture E: created and resolved one problem — the inventory has a row it must not list (${target.state} → resolved)`
     );
   }
 

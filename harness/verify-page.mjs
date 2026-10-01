@@ -1173,9 +1173,6 @@ const readTop = () =>
       })),
       problem: {
         axis: problemColumn?.getAttribute("data-rd-progress-problem-axis") ?? null,
-        choices: [...(problemColumn?.querySelectorAll("[data-rd-problem-choice]") ?? [])].map(
-          (node) => node.getAttribute("data-rd-problem-choice")
-        ),
         empty: (problemColumn?.querySelector("[data-rd-progress-problem-empty]")?.textContent ?? "").trim(),
         heading: (problemColumn?.querySelector("h3")?.textContent ?? "").trim(),
         open: Number(problemColumn?.getAttribute("data-rd-progress-problem-open") ?? -1),
@@ -1248,32 +1245,9 @@ if (firstProblems && firstProblems.open.length > 0) {
   );
 }
 
-// When there is more than one open problem, **the others** are listed — in the projection's order, not
-// sorted — and picking one changes the card. The problem already on screen is not repeated in the list.
-{
-  const expected = firstProblems?.open ?? [];
-  const others = expected.slice(1);
-  const listed = top.problem.choices;
-  const inOrder = listed.every((id, position) => id === others[position]?.id);
-  check(
-    "the other open problems are listed in the projection's order, and selecting one changes the card",
-    others.length === 0 ||
-      (listed.length === others.length &&
-        inOrder &&
-        (await (async () => {
-          await root.locator(`[data-rd-problem-choice="${others[0].id}"]`).click();
-          await page.waitForTimeout(300);
-          const afterChoice = await readTop();
-          return afterChoice.problem.shown === others[0].id;
-        })())),
-    `${listed.length} listed of ${others.length} others (${expected.length} open); order ${inOrder ? "matches" : "differs"}; shown ${(await readTop()).problem.shown?.slice(0, 8)}`
-  );
-  if (others.length > 0) {
-    // Back to the projection's first, so the rest of the pass reads the same state the checks above describe.
-    await root.locator(`[data-rd-problem-choice="${expected[0].id}"]`).click();
-    await page.waitForTimeout(200);
-  }
-}
+// The command's own problem list moved out of this column in step 4 (it is the axis's inventory now, its own
+// section below), so what is asserted here is the card: it is the projection's first open problem, under the
+// projection's count, and the column no longer duplicates the list.
 
 // The Activity feed: the projection's bucket for this axis, same count, same rows, same order.
 {
@@ -1545,7 +1519,139 @@ const planOf = (result, axisId) =>
   await selectAxis(first.id);
 }
 
-// ------------------------------------------------ C8: no bare state, one vocabulary for the evidence
+// ------------------------------------- C7e: the axis's problem inventory, and the cases it must not show
+// Step 4: the axis's **open** problems are their own section — navigation plus compact context — while the
+// middle column's card stays the detailed reading surface. Membership, order, state and counts come from the
+// projection; the page only decides which already-returned problem the card shows.
+{
+  const readInventory = () =>
+    page.evaluate(() => {
+      const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+      const section = scope?.querySelector(".rd-progress-problems") ?? null;
+      return {
+        axis: section?.getAttribute("data-rd-progress-problems-axis") ?? null,
+        count: Number(section?.getAttribute("data-rd-progress-problems") ?? -1),
+        rows: [...(section?.querySelectorAll("[data-rd-problem-choice]") ?? [])].map((node) => ({
+          active: node.getAttribute("aria-pressed") === "true",
+          claims: node.querySelector("[data-rd-state]")?.hasAttribute("data-rd-state-confidence") ?? null,
+          context: (node.querySelector("[data-rd-problem-context]")?.textContent ?? "").trim(),
+          id: node.getAttribute("data-rd-problem-choice"),
+          state: node.querySelector("[data-rd-state]")?.getAttribute("data-rd-state") ?? "",
+          statement: (node.querySelector(".rd-strong")?.textContent ?? "").trim(),
+        })),
+        stated: Number(
+          section?.querySelector("[data-rd-problem-list]")?.getAttribute("data-rd-problem-list") ?? -1
+        ),
+        text: (section?.innerText ?? "").replace(/\s+/g, " ").trim(),
+      };
+    });
+
+  const openProblemsOf = (axisId) =>
+    (allProgress.problems.problems ?? []).filter(
+      (problem) => problem.axisId === axisId && problem.state === "open"
+    );
+
+  // (1) Every open problem of the axis is listed, in the projection's order, under the projection's count.
+  await selectAxis(first.id);
+  const inventory = await readInventory();
+  const expectedOpen = openProblemsOf(first.id);
+  const listed = inventory.rows.map((row) => row.id).join("|");
+  const wanted = expectedOpen.map((problem) => problem.id).join("|");
+  check(
+    "the inventory lists every open problem of the axis, in the projection's order",
+    inventory.count === expectedOpen.length && inventory.stated === expectedOpen.length && listed === wanted,
+    `${inventory.rows.length} row(s) of ${expectedOpen.length} open; count ${inventory.count}, list ${inventory.stated}; order ${listed === wanted ? "matches" : "differs"}`
+  );
+  const statesMatch = inventory.rows.every((row, position) => row.state === expectedOpen[position]?.state);
+  const contextsMatch = inventory.rows.every((row, position) => {
+    const problem = expectedOpen[position];
+    const repos = problem.repositories.map((repo) => repo.fullName).join(", ");
+    return (
+      row.context.includes(repos || "no repository") &&
+      row.context.includes("last activity") &&
+      Boolean(problem.planStepTitle) === row.context.includes("step: ")
+    );
+  });
+  check(
+    "each row carries its own state, repositories, step link and recency — compact context, nothing re-derived",
+    statesMatch && contextsMatch,
+    `states ${statesMatch ? "match" : "differ"}; contexts ${contextsMatch ? "match" : "differ"}; first ${JSON.stringify(inventory.rows[0]?.context ?? "")}`
+  );
+
+  // (2) Exactly one row is active — the one the card is showing — and picking another moves the card.
+  const shownBefore = (await readTop()).problem.shown;
+  const activeRows = inventory.rows.filter((row) => row.active);
+  check(
+    "exactly the problem on screen is the active row",
+    expectedOpen.length === 0 || (activeRows.length === 1 && activeRows[0]?.id === shownBefore),
+    `active ${activeRows.length} (${activeRows[0]?.id?.slice(0, 8) ?? "none"}), card ${shownBefore?.slice(0, 8) ?? "none"}`
+  );
+  if (expectedOpen.length > 1) {
+    const other = expectedOpen.find((problem) => problem.id !== shownBefore);
+    await root.locator(`[data-rd-problem-choice="${other.id}"]`).click();
+    await page.waitForTimeout(300);
+    const moved = await readInventory();
+    const topAfter = await readTop();
+    const movedActive = moved.rows.filter((row) => row.active);
+    check(
+      "selecting a row in the inventory moves the card, and the active row with it",
+      topAfter.problem.shown === other.id && movedActive.length === 1 && movedActive[0]?.id === other.id,
+      `card ${topAfter.problem.shown?.slice(0, 8)} (wanted ${other.id.slice(0, 8)}); active ${movedActive.length}`
+    );
+    await root.locator(`[data-rd-problem-choice="${shownBefore}"]`).click();
+    await page.waitForTimeout(200);
+  }
+
+  // (3) The fixture carries a closed-out problem on this axis, and the inventory must not list it. Asserting
+  // the fixture's own case first keeps "open problems only" from passing vacuously on a dataset that simply
+  // had nothing to leak.
+  const onAxis = (allProgress.problems.problems ?? []).filter((problem) => problem.axisId === first.id);
+  const closedOut = onAxis.filter((problem) => problem.state !== "open");
+  check(
+    "the fixture still carries a closed-out problem on this axis, so 'open only' can actually fail",
+    closedOut.length > 0,
+    `${closedOut.length} closed-out of ${onAxis.length} problem(s) on the axis`
+  );
+  const leaked = closedOut.filter((problem) => inventory.text.includes(problem.statement.slice(0, 30)));
+  check(
+    "a closed-out problem is not listed in the inventory",
+    leaked.length === 0 && inventory.rows.length === expectedOpen.length,
+    `${inventory.rows.length} row(s) for ${expectedOpen.length} open of ${onAxis.length} on the axis; closed-out ${leaked.length ? "leaked" : "absent"}`
+  );
+
+  // (4) An axis with no open problem: no section, and nothing alarming said about the absence — the axis
+  // itself stays meaningful, which is what the reviewer's rule protects.
+  const bare = allProgress.axes.axes.find((row) => row.openProblems === 0);
+  if (bare) {
+    await selectAxis(bare.id);
+    const none = await readInventory();
+    const column = await readTop();
+    const scopeText = await page.evaluate(() =>
+      (document.querySelector('div[data-plugin-id="research-dashboard"]')?.innerText ?? "")
+        .replace(/\s+/g, " ")
+        .trim()
+    );
+    const alarming = /missing problem|problem is missing|\berror\b|\bwarning\b|\binvalid\b/i.test(scopeText);
+    check(
+      "an axis with no open problem renders no inventory section, and says nothing alarming about the absence",
+      none.rows.length === 0 && none.text === "" && !alarming,
+      `rows ${none.rows.length}; section ${JSON.stringify(none.text.slice(0, 40))}; alarming ${alarming ? "present" : "absent"}; open problems ${bare.openProblems}`
+    );
+    check(
+      "the axis still renders: its title is readable and the card column follows the selection",
+      scopeText.includes(bare.title) && column.problem.axis === bare.id,
+      `title ${scopeText.includes(bare.title) ? "present" : "absent"}; column axis ${column.problem.axis?.slice(0, 8) ?? "none"} vs ${bare.id.slice(0, 8)}`
+    );
+    await selectAxis(first.id);
+  } else {
+    check(
+      "the fixture still carries an axis with no open problem, so the empty case is exercised",
+      false,
+      "no axis with openProblems === 0"
+    );
+  }
+}
+  // ------------------------------------------------ C8: no bare state, one vocabulary for the evidence
 // A state is a claim, and the record often holds only an inference. Every rendered state must carry
 // its confidence, and one that is not confirmed must say so where it is read — otherwise the temporal
 // view launders an inference into a fact.
