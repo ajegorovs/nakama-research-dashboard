@@ -4,6 +4,23 @@ What to change and what must not change. The corpus and the fixture are the two 
 (`docs/corpus/README.md`, `docs/layout-fixtures/README.md`); this file is the contract for the rework
 itself. Where a requirement came from a review note, it says so.
 
+## Status
+
+| Step | State |
+|---|---|
+| 1. Separate read and edit modes | **done** — `Read topic` / `Edit fields` / `Done editing`; three harness checks (`docs/layout-pr/`) |
+| 2. Group controls in the toolbar | **done** — three divided groups, one harness check |
+| 3. Compress axis presentation to one primary row | **done** — state claim · title on one row with the kind receding, one subordinate line beneath; applied to lead rows *and* detail blocks. Corpus detail 4496 → 4374 px, fixture 2648 → 2529 px |
+| 4. Reduce counts that restate rows | not started — and it is where the remaining detail height lives, not step 3 |
+| 5. One grammar for People / Repositories / Progress | not started |
+| 6. Both datasets at both viewports after each change | continuous — all four combinations pass after 1–3 |
+| 7. Polish: borders, muted text, whitespace, emphasis, state colours | not started |
+
+Between steps 2 and 3 a review found the card had **two disclosure controls** — the axis expander and
+`Read topic` — driving one piece of state. Fixed: the expander is gone, hidden work is stated passively
+(`3 of 5 axes shown · 2 more`), and two checks now pin it (one disclosure control; hidden work stated,
+not offered).
+
 ## What you are working from
 
 Two datasets, deliberately different jobs:
