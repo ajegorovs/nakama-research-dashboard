@@ -11,10 +11,10 @@ itself. Where a requirement came from a review note, it says so.
 | 1. Separate read and edit modes | **done** — `Read topic` / `Edit fields` / `Done editing`; three harness checks (`docs/layout-pr/`) |
 | 2. Group controls in the toolbar | **done** — three divided groups, one harness check |
 | 3. Compress axis presentation to one primary row | **done** — state claim · title on one row with the kind receding, one subordinate line beneath; applied to lead rows *and* detail blocks. Corpus detail 4496 → 4374 px, fixture 2648 → 2529 px |
-| 4. Reduce counts that restate rows | not started — and it is where the remaining detail height lives, not step 3 |
-| 5. One grammar for People / Repositories / Progress | not started |
+| 4. Reduce counts that restate rows | **U9 — remaining** (this is where the remaining detail height lives, not step 3) |
+| 5. One grammar for People / Repositories / Progress | **done in U4** — one `EntityTag`, one `StateBadge`, `RecencyLabel` vs `EventDate`, `DetailHeader`, `ActivityLine`, `Notice`, shared by Topics, People, Repositories and the Overview surface (`docs/ux-v2/U4-progress.md` §19) |
 | 6. Both datasets at both viewports after each change | continuous — all four combinations pass after 1–3 |
-| 7. Polish: borders, muted text, whitespace, emphasis, state colours | not started |
+| 7. Polish: borders, muted text, whitespace, emphasis, state colours | **U9 — remaining** |
 
 Between steps 2 and 3 a review found the card had **two disclosure controls** — the axis expander and
 `Read topic` — driving one piece of state. Fixed: the expander is gone, hidden work is stated passively
