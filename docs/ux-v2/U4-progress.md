@@ -765,6 +765,16 @@ person-first and never scores anybody, Repositories is still implementation-firs
 composition's columns are the ones step 6 froze. The propagation is grammar and navigation, not a redesign —
 and the step-7 acceptance for Progress is still the record those views are measured against.
 
+**Ruled on — U4 is closed (2026-10-02).** The reviewer accepted these records as the frozen U4 acceptance
+(fixture **105 · 0 · 1**, corpus **72 · 0 · 33**) and both skips as legitimate data-dependent gaps rather than
+hidden failures: the corpus renders no exceptional-state notice, and neither dataset has an event carrying a
+repository id. The boundary this pass settled was endorsed as the right one — a clickable tag inside a
+clickable index row would be nested-interactive markup with ambiguous behaviour, so the index stays textual
+and the entity tags live in the selected detail. With that, **U0–U4 are complete**: the product model, runtime
+semantics, action surface, read projections, the Progress interaction model, tags/navigation and the
+cross-view grammar are live and acceptance-covered. The remaining work is refinement, hardening and merge
+readiness (U10/U11) rather than proving the concept.
+
 ---
 
 ## 18. The EntityTag contract, exercised (step 7)

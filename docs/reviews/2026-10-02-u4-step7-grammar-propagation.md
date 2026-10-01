@@ -70,7 +70,11 @@ axes and keeps `Read topic` as its only disclosure control; People is still pers
 anybody; Repositories is still implementation-first; the Progress composition is exactly the one step 6
 froze. This pass is grammar and navigation.
 
-## What I would like ruled on
+## Ruled on
+
+**The reviewer closed U4 on 2026-10-02, accepting the records above as the frozen U4 acceptance and both
+skips as data-dependent gaps rather than hidden failures — U0–U4 are complete.** (The text below was the
+question this note opened; it is kept as the record of what was asked.)
 
 **U4 is complete on this evidence, if you accept it.** The Progress vertical slice has its frozen record
 (step 7), the shared grammar is exercised in all four remaining views, and the acceptance records are
