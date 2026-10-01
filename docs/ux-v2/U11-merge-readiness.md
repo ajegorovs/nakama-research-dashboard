@@ -125,7 +125,14 @@ store has no user, and the install step failed `HTTP 401` until the instance was
 `NAKAMA_SEED_ADMIN_*` values exported (the same mechanism first boot uses). The README's clean-instance recipe
 now carries that line.
 
-## 6. Merge path
+## 6. Merge path — executed
+
+**Merged 2026-10-02.** Evidence committed first (`63e1d4c` on `ux-v2`), annotated tag `ux-v2-complete` placed at
+the candidate, then `git checkout main && git merge --ff-only ux-v2` → `Updating 9b48f99..63e1d4c
+Fast-forward` (90 files), pushed with the tag, and verified on the remote: the two branch refs both resolve to
+`63e1d4c4fbc188451f556fba012089e5a09dc9a4`. Rollback remains one command (`git reset --hard pre-ux-v2`, or
+`git push origin pre-ux-v2:main`).
+
 
 - **`main` is the merge base**: `main` = `9b48f99` (PR #1), `ux-v2` is **42 commits ahead, 0 behind** → the merge
   is a **fast-forward**, so the merge commit *is* the candidate commit and no merge-only diff can appear.
