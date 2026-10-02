@@ -319,8 +319,17 @@ const CORPUS = await page.evaluate(
       people: all.people.map((person) => ({
         attributable: person.attributable,
         axes: person.axes.length,
+        // C2: the repositories the payload's own axes name — the rail's card must be exactly this set,
+        // derived rather than invented, so the check compares ids rather than trusting the rendering.
+        axisRepoIds: [
+          ...new Set(
+            person.axes.flatMap((axis) => axis.repositories.map((repository) => repository.id))
+          ),
+        ],
         lastActivityAt: person.lastActivityAt ?? null,
         name: person.person.displayName,
+        // C2: the person's own note. The About card renders this verbatim or says there is none.
+        notes: person.person.notes ?? "",
         recent: person.recentActivity.length,
         topics: person.topics.length,
       })),
@@ -1931,6 +1940,126 @@ if (personPayload !== undefined && personPayload.topics >= 2) {
   skip(
     "one person on several topics shows each topic with its own axes underneath",
     `this corpus links ${personName || "the person"} to ${personPayload?.topics ?? 1} topic(s), so the grouping has one entry`
+  );
+}
+
+// C2 increments 2 and 3: the inner split and its rail. Structure and dominance are asserted *relatively*
+// — never a prototype's pixel widths — and every content claim is compared against the payload the page
+// itself fetched. The "concise default row" check exists because the failure mode this unit is most likely
+// to drift into is a person's involvement row quietly becoming a copy of the axis's own lane.
+const personDetail = await page.evaluate(() => {
+  const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+  const panel = scope?.querySelector("[data-rd-person-panel]");
+  const lane = panel?.querySelector("[data-rd-person-lane]");
+  const rail = panel?.querySelector("[data-rd-person-rail]");
+  const box = (node) => {
+    const rect = node?.getBoundingClientRect();
+    return rect ? { height: rect.height, width: rect.width, x: rect.x, y: rect.y } : null;
+  };
+  const repos = rail?.querySelector("[data-rd-person-repositories]");
+  const notes = rail?.querySelector("[data-rd-person-notes]");
+  return {
+    lane: box(lane),
+    laneRows: [...(lane?.querySelectorAll("[data-rd-scan-axis]") ?? [])].map((row) => ({
+      evidence: row.querySelector(".rd-evidence") !== null,
+      heavier:
+        row.querySelector(
+          "[data-rd-history-toggle], [data-rd-correct-toggle], .rd-axis-history, .rd-correction"
+        ) !== null,
+      moreOpen: row.querySelector("[data-rd-person-axis-more]")?.open ?? null,
+      reading: row.querySelector("[data-rd-person-axis-reading]") !== null,
+    })),
+    notes: {
+      marker: notes?.getAttribute("data-rd-person-notes") ?? null,
+      text: (notes?.textContent ?? "").trim(),
+    },
+    rail: box(rail),
+    railCards: [...(rail?.querySelectorAll(".rd-side-title") ?? [])].map(
+      (node) => node.textContent?.trim() ?? ""
+    ),
+    repoCount: Number(repos?.getAttribute("data-rd-person-repositories") ?? -1),
+    repoIds: [
+      ...(repos?.querySelectorAll('[data-rd-entity-tag="repository"]') ?? []),
+    ].map((node) => node.getAttribute("data-rd-entity-id") ?? ""),
+    split: panel?.querySelector("[data-rd-person-split]") !== null,
+  };
+});
+check(
+  "C2: the person detail is an inner split — lane left of a rail, lane materially wider, tops aligned",
+  personDetail.split &&
+    personDetail.lane !== null &&
+    personDetail.rail !== null &&
+    personDetail.lane.x < personDetail.rail.x &&
+    personDetail.lane.width >= personDetail.rail.width * 1.25 &&
+    Math.abs(personDetail.lane.y - personDetail.rail.y) <= 2,
+  `lane ${JSON.stringify(personDetail.lane)} rail ${JSON.stringify(personDetail.rail)}`
+);
+check(
+  "C2: the rail is Recent activity, About and Related repositories, in that order",
+  personDetail.railCards.join(" | ") === "Recent activity | About | Related repositories",
+  personDetail.railCards.join(" | ")
+);
+check(
+  "C2: the default involvement row stays concise — a reading, and none of the axis lane's heavier material",
+  personDetail.laneRows.length > 0 &&
+    personDetail.laneRows.every(
+      (row) =>
+        row.reading && !row.heavier && !row.evidence && row.moreOpen === false
+    ),
+  JSON.stringify(personDetail.laneRows)
+);
+const personAbout = CORPUS.people.find((person) => person.name === personName);
+check(
+  "C2: About is the person's own recorded note, verbatim — and says so when there is none",
+  personAbout !== undefined &&
+    personDetail.notes.marker !== null &&
+    personDetail.notes.text ===
+      (personAbout.notes !== ""
+        ? personAbout.notes
+        : "No note recorded for this person."),
+  `page ${JSON.stringify(personDetail.notes)} payload notes ${JSON.stringify(personAbout?.notes)}`
+);
+check(
+  "C2: Related repositories are the ones the payload's own axes name — derived, not invented",
+  personAbout !== undefined &&
+    personDetail.repoCount === personDetail.repoIds.length &&
+    personDetail.repoCount === personAbout.axisRepoIds.length &&
+    [...personDetail.repoIds].sort().join(",") ===
+      [...personAbout.axisRepoIds].sort().join(","),
+  `page ${JSON.stringify(personDetail.repoIds)} payload ${JSON.stringify(personAbout?.axisRepoIds)}`
+);
+
+// The About card has two branches and the fixture carries both: one person with a real note, one without.
+// Select the other person and read it, so the "none recorded" wording is proven rather than assumed — and
+// data-driven, because a dataset holding a single person can only show one branch (it skips, stating why).
+const otherPerson = CORPUS.people.find((person) => person.name !== personName);
+if (otherPerson !== undefined) {
+  await root.locator(`[data-rd-person="${otherPerson.name}"]`).click();
+  await page.waitForTimeout(400);
+  const otherAbout = await page.evaluate(() => {
+    const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+    const node = scope?.querySelector("[data-rd-person-notes]");
+    return {
+      panel:
+        scope
+          ?.querySelector("[data-rd-person-panel]")
+          ?.getAttribute("data-rd-person-panel") ?? "",
+      text: (node?.textContent ?? "").trim(),
+    };
+  });
+  check(
+    "C2: About's other branch — a person with no note is told so, never given prose",
+    otherAbout.panel === otherPerson.name &&
+      otherAbout.text ===
+        (otherPerson.notes !== ""
+          ? otherPerson.notes
+          : "No note recorded for this person."),
+    `panel ${otherAbout.panel} text ${JSON.stringify(otherAbout.text)} payload notes ${JSON.stringify(otherPerson.notes)}`
+  );
+} else {
+  skip(
+    "C2: About's other branch — a person with no note is told so, never given prose",
+    "this dataset holds a single person, so the card has only one branch to read"
   );
 }
 

@@ -1324,11 +1324,94 @@ function apply(ctx) {
       kind: "empty"
     }, "Nothing recorded in", " ", windowDays === 0 ? "any window" : `the last ${countLabel(windowDays, "day", "days")}`, ".")) : null);
   }
+  function PersonAxisRow({
+    axis,
+    onOpenEntity
+  }) {
+    const where = [
+      axis.branch,
+      axis.prNumber === null ? "" : `PR #${axis.prNumber}`
+    ].filter((value) => value !== "").join(" · ");
+    return /* @__PURE__ */ React.createElement("li", {
+      className: "rd-axis",
+      "data-rd-axis-state": axis.state,
+      "data-rd-scan-axis": axis.title
+    }, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-axis-head"
+    }, /* @__PURE__ */ React.createElement(StateBadge, {
+      confidence: axis.stateConfidence,
+      state: axis.state
+    }), /* @__PURE__ */ React.createElement(EntityTag, {
+      compact: true,
+      id: axis.id,
+      label: axis.title,
+      onOpen: onOpenEntity,
+      type: "axis"
+    }), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-axis-kind"
+    }, axis.kind, " · v", axis.version)), /* @__PURE__ */ React.createElement("p", {
+      className: "rd-axis-reading",
+      "data-rd-person-axis-reading": axis.id
+    }, axis.blocker ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-claim-value"
+    }, axis.blocker), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-cluster"
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-muted"
+    }, "blocker"), /* @__PURE__ */ React.createElement(ConfidenceBadge, {
+      value: axis.blockerConfidence
+    }))) : /* @__PURE__ */ React.createElement("span", {
+      className: "rd-muted"
+    }, "no blocker recorded")), /* @__PURE__ */ React.createElement("div", {
+      className: "rd-axis-secondary rd-axis-refs"
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-cluster rd-tags",
+      "data-rd-scan-where": "true"
+    }, axis.repositories.length === 0 ? /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, "no repository or branch recorded") : axis.repositories.map((repository) => /* @__PURE__ */ React.createElement(EntityTag, {
+      id: repository.id,
+      key: repository.id,
+      label: repository.fullName,
+      onOpen: onOpenEntity,
+      type: "repository"
+    })), where ? /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, where) : null)), /* @__PURE__ */ React.createElement("details", {
+      className: "rd-axis-more",
+      "data-rd-person-axis-more": axis.id
+    }, /* @__PURE__ */ React.createElement("summary", null, "More on this axis"), /* @__PURE__ */ React.createElement("div", {
+      className: "rd-cluster"
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-muted"
+    }, "state"), /* @__PURE__ */ React.createElement(ConfidenceBadge, {
+      value: axis.stateConfidence
+    }), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-muted"
+    }, "last recorded ", axis.updatedAt.slice(0, 10)), axis.lastReviewedAt ? /* @__PURE__ */ React.createElement("span", {
+      className: "rd-muted"
+    }, "· last reviewed ", axis.lastReviewedAt.slice(0, 10)) : null)));
+  }
   function PersonPanel({
     entry,
     onOpenEntity,
     windowDays
   }) {
+    const [railAll, setRailAll] = React.useState(false);
+    const railActivity = entry.recentActivity;
+    const railShown = railAll ? railActivity : railActivity.slice(0, RAIL_ACTIVITY_LEAD);
+    const railHidden = railActivity.length - railShown.length;
+    const relatedRepositories = React.useMemo(() => {
+      const seen = new Map;
+      for (const axis of entry.axes) {
+        for (const repository of axis.repositories) {
+          if (!seen.has(repository.id)) {
+            seen.set(repository.id, repository);
+          }
+        }
+      }
+      return [...seen.values()];
+    }, [entry]);
     return /* @__PURE__ */ React.createElement(Card, {
       className: "rd-panel",
       "data-rd-person-panel": entry.person.displayName
@@ -1341,10 +1424,14 @@ function apply(ctx) {
       className: "rd-meta",
       "data-rd-person-counts": "true"
     }, involvementLine(entry)))), /* @__PURE__ */ React.createElement(CardContent, null, /* @__PURE__ */ React.createElement("div", {
-      className: "rd-form"
+      className: "rd-detail-grid",
+      "data-rd-person-split": "true"
+    }, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-current-work",
+      "data-rd-person-lane": "current"
     }, /* @__PURE__ */ React.createElement("span", {
       className: "rd-section"
-    }, "Topics they are on"), /* @__PURE__ */ React.createElement("ul", {
+    }, "Current involvement"), /* @__PURE__ */ React.createElement("ul", {
       className: "rd-view",
       "data-rd-person-topics": entry.topics.length
     }, entry.topics.map((involvement) => /* @__PURE__ */ React.createElement("li", {
@@ -1365,23 +1452,41 @@ function apply(ctx) {
       kind: "empty"
     }, "no axis of theirs here") : /* @__PURE__ */ React.createElement("ul", {
       className: "rd-axes"
-    }, involvement.axes.map((axis) => /* @__PURE__ */ React.createElement(AxisScanItem, {
+    }, involvement.axes.map((axis) => /* @__PURE__ */ React.createElement(PersonAxisRow, {
       axis,
       key: axis.id,
       onOpenEntity
     }))))), entry.topics.length === 0 ? /* @__PURE__ */ React.createElement("li", null, /* @__PURE__ */ React.createElement(Notice, {
       kind: "empty"
-    }, "Not linked to a topic yet — the link is what puts work on this page.")) : null), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-section"
-    }, "Activity attributable to them"), entry.attributable ? /* @__PURE__ */ React.createElement(ActivityList, {
+    }, "Not linked to a topic yet — the link is what puts work on this page.")) : null)), /* @__PURE__ */ React.createElement("aside", {
+      className: "rd-side-stack",
+      "data-rd-person-rail": "true"
+    }, /* @__PURE__ */ React.createElement("section", {
+      className: "rd-side-card"
+    }, /* @__PURE__ */ React.createElement("h3", {
+      className: "rd-side-title"
+    }, "Recent activity"), entry.attributable ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("div", {
+      "data-rd-person-activity-shown": railShown.length,
+      "data-rd-person-activity-total": railActivity.length
+    }, /* @__PURE__ */ React.createElement(ActivityList, {
       dataAttr: "data-rd-person-activity",
-      items: entry.recentActivity,
+      items: railShown,
       labelFor: (item) => ({
         topic: entry.topics.find((involvement) => involvement.topic.id === item.topicId)?.topic.name ?? null
       }),
       onOpenEntity,
       windowDays
-    }) : /* @__PURE__ */ React.createElement("p", {
+    })), railHidden > 0 || railAll ? /* @__PURE__ */ React.createElement("div", {
+      className: "rd-cluster",
+      "data-rd-person-activity-more": String(railHidden)
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta",
+      "data-rd-person-activity-note": "true"
+    }, railAll ? `all ${railActivity.length} shown, newest first` : `${railShown.length} of ${railActivity.length} shown, newest first`), /* @__PURE__ */ React.createElement(Button, {
+      onClick: () => setRailAll(!railAll),
+      size: "sm",
+      variant: "ghost"
+    }, railAll ? "Show fewer" : `Show all ${railActivity.length}`)) : null) : /* @__PURE__ */ React.createElement("p", {
       className: "rd-muted",
       "data-rd-attributable": "false"
     }, "No account is mapped to this person, so no recorded event can be attributed to them. That is a missing link, not an absence of work."), /* @__PURE__ */ React.createElement("span", {
@@ -1397,7 +1502,31 @@ function apply(ctx) {
       prefix: "· last reviewed "
     }) : /* @__PURE__ */ React.createElement("span", {
       className: "rd-muted"
-    }, "· never reviewed")))));
+    }, "· never reviewed"))), /* @__PURE__ */ React.createElement("section", {
+      className: "rd-side-card"
+    }, /* @__PURE__ */ React.createElement("h3", {
+      className: "rd-side-title"
+    }, "About"), entry.person.notes ? /* @__PURE__ */ React.createElement("p", {
+      "data-rd-person-notes": "true"
+    }, entry.person.notes) : /* @__PURE__ */ React.createElement("p", {
+      className: "rd-muted",
+      "data-rd-person-notes": "empty"
+    }, "No note recorded for this person.")), /* @__PURE__ */ React.createElement("section", {
+      className: "rd-side-card"
+    }, /* @__PURE__ */ React.createElement("h3", {
+      className: "rd-side-title"
+    }, "Related repositories"), /* @__PURE__ */ React.createElement("div", {
+      className: "rd-cluster rd-tags",
+      "data-rd-person-repositories": relatedRepositories.length
+    }, relatedRepositories.map((repository) => /* @__PURE__ */ React.createElement(EntityTag, {
+      id: repository.id,
+      key: repository.id,
+      label: repository.fullName,
+      onOpen: onOpenEntity,
+      type: "repository"
+    })), relatedRepositories.length === 0 ? /* @__PURE__ */ React.createElement("span", {
+      className: "rd-muted"
+    }, "No repository is named by their axes yet.") : null))))));
   }
   function PeopleView({
     onOpenEntity,

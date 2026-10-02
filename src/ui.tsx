@@ -2325,6 +2325,104 @@ export function apply(ctx: Context) {
   }
 
   /**
+   * C2 (increment 2): the C1 axis-row grammar, as far as the person rollup can carry it.
+   *
+   * A C1 row's dominant element is its current-state *reading*, and `AxisScan` does not hold one: it is a scan
+   * of the links (title, kind, state and its confidence, blocker, branch/PR, version, when it was last touched,
+   * repositories), not the axis detail. So the reading here is the one narrative fact the rollup does have
+   * about the axis's condition — its blocker — and where there is none the row says so, because "no blocker
+   * recorded" is a claim and inventing a sentence to fill the space would be worse than the gap. Everything
+   * else is one quiet reference line plus a disclosure, and there are no controls: this panel has no write
+   * path, and the row stays short on purpose (a person's involvement is a pointer to the axis, not a copy of
+   * the axis's own lane).
+   */
+  function PersonAxisRow({
+    axis,
+    onOpenEntity,
+  }: {
+    axis: AxisScan;
+    onOpenEntity: (type: EntityType, id: string) => void;
+  }) {
+    const where = [
+      axis.branch,
+      axis.prNumber === null ? "" : `PR #${axis.prNumber}`,
+    ]
+      .filter((value) => value !== "")
+      .join(" · ");
+    return (
+      <li
+        className="rd-axis"
+        data-rd-axis-state={axis.state}
+        data-rd-scan-axis={axis.title}
+      >
+        <div className="rd-axis-head">
+          <StateBadge confidence={axis.stateConfidence} state={axis.state} />
+          <EntityTag
+            compact
+            id={axis.id}
+            label={axis.title}
+            onOpen={onOpenEntity}
+            type="axis"
+          />
+          <span className="rd-axis-kind">
+            {axis.kind} · v{axis.version}
+          </span>
+        </div>
+        {/* The reading. A C1 row leads with its current-state claim and its own confidence; this rollup has
+            no current state, so the claim here is the axis's blocker where it has one, in C1's own
+            "value + label + confidence" shape. Where it has none the row reads one muted sentence and stops:
+            an orphan `blocker` label under "no blocker recorded" is noise that reads like the blocker text. */}
+        <p className="rd-axis-reading" data-rd-person-axis-reading={axis.id}>
+          {axis.blocker ? (
+            <>
+              <span className="rd-claim-value">{axis.blocker}</span>
+              <span className="rd-cluster">
+                <span className="rd-muted">blocker</span>
+                <ConfidenceBadge value={axis.blockerConfidence} />
+              </span>
+            </>
+          ) : (
+            <span className="rd-muted">no blocker recorded</span>
+          )}
+        </p>
+        <div className="rd-axis-secondary rd-axis-refs">
+          <span className="rd-cluster rd-tags" data-rd-scan-where="true">
+            {axis.repositories.length === 0 ? (
+              <span className="rd-meta">no repository or branch recorded</span>
+            ) : (
+              axis.repositories.map((repository) => (
+                <EntityTag
+                  id={repository.id}
+                  key={repository.id}
+                  label={repository.fullName}
+                  onOpen={onOpenEntity}
+                  type="repository"
+                />
+              ))
+            )}
+            {where ? <span className="rd-meta">{where}</span> : null}
+          </span>
+        </div>
+        <details className="rd-axis-more" data-rd-person-axis-more={axis.id}>
+          <summary>More on this axis</summary>
+          <div className="rd-cluster">
+            <span className="rd-muted">state</span>
+            <ConfidenceBadge value={axis.stateConfidence} />
+            <span className="rd-muted">
+              last recorded {axis.updatedAt.slice(0, 10)}
+            </span>
+            {axis.lastReviewedAt ? (
+              <span className="rd-muted">
+                · last reviewed {axis.lastReviewedAt.slice(0, 10)}
+              </span>
+            ) : null}
+          </div>
+        </details>
+      </li>
+    );
+  }
+
+  /**
    * Person-first (C6): the index answers "who", the panel answers "what are they on" — the topics they
    * are linked to, their own axes inside each, and only the events the store can attribute to their own
    * account. Where attribution is impossible the panel says so, because "cannot be attributed" is a
@@ -2340,6 +2438,36 @@ export function apply(ctx: Context) {
     onOpenEntity: (type: EntityType, id: string) => void;
     windowDays: number;
   }) {
+    /**
+     * C2 (increment 3): the rail's own window. The same rule the Topics rail follows — the newest few events,
+     * the remainder stated with a count and one click to have them, and the list bounded by height as well as
+     * by count (`.rd-side-card .rd-activity`), so About and Related repositories sit on the first screen
+     * whatever the activity volume. The state is per panel and resets with the selection, which is what a
+     * reader expects of a rail.
+     */
+    const [railAll, setRailAll] = React.useState(false);
+    const railActivity = entry.recentActivity;
+    const railShown = railAll
+      ? railActivity
+      : railActivity.slice(0, RAIL_ACTIVITY_LEAD);
+    const railHidden = railActivity.length - railShown.length;
+    /**
+     * C2: the repositories their own axes name — derived from the involvement the payload already carries,
+     * never fetched again and never guessed. De-duplicated by id in first-mention order, so the card is stable
+     * across renders. `AxisScan.repositories` is built from every `axis_people` link the store holds, with no
+     * cap, so this list is complete for the axes shown rather than a window of them.
+     */
+    const relatedRepositories = React.useMemo(() => {
+      const seen = new Map<string, LinkedRepository>();
+      for (const axis of entry.axes) {
+        for (const repository of axis.repositories) {
+          if (!seen.has(repository.id)) {
+            seen.set(repository.id, repository);
+          }
+        }
+      }
+      return [...seen.values()];
+    }, [entry]);
     return (
       <Card
         className="rd-panel"
@@ -2360,91 +2488,172 @@ export function apply(ctx: Context) {
           </DetailHeader>
         </CardHeader>
         <CardContent>
-          <div className="rd-form">
-            <span className="rd-section">Topics they are on</span>
-            <ul className="rd-view" data-rd-person-topics={entry.topics.length}>
-              {entry.topics.map((involvement) => (
-                <li
-                  className="rd-involvement"
-                  data-rd-involvement={involvement.topic.name}
-                  key={involvement.topic.id}
-                >
-                  <div className="rd-row">
-                    <EntityTag
-                      compact
-                      id={involvement.topic.id}
-                      label={involvement.topic.name}
-                      onOpen={onOpenEntity}
-                      type="topic"
-                    />
-                    <span className="rd-muted">
-                      {involvement.role
-                        ? `${involvement.topic.status} · ${involvement.role}`
-                        : involvement.topic.status}
-                    </span>
-                  </div>
-                  {involvement.axes.length === 0 ? (
-                    <Notice kind="empty">no axis of theirs here</Notice>
+          {/* C2 increment 2: the inner split, on C1's own grid. `rd-detail-grid` is the composition unit the
+              Topics detail already uses — a 1fr lane against a `minmax(250px, 0.6fr)` rail, which is exactly
+              what makes the lane measurably dominant (≥1.25×) at both reference viewports rather than merely
+              wider, and it stacks below 1000px. Inheriting the grid means People inherits the dominance rule
+              rather than restating it with its own numbers. */}
+          <div className="rd-detail-grid" data-rd-person-split="true">
+            <div className="rd-current-work" data-rd-person-lane="current">
+              <span className="rd-section">Current involvement</span>
+              <ul className="rd-view" data-rd-person-topics={entry.topics.length}>
+                {entry.topics.map((involvement) => (
+                  <li
+                    className="rd-involvement"
+                    data-rd-involvement={involvement.topic.name}
+                    key={involvement.topic.id}
+                  >
+                    <div className="rd-row">
+                      <EntityTag
+                        compact
+                        id={involvement.topic.id}
+                        label={involvement.topic.name}
+                        onOpen={onOpenEntity}
+                        type="topic"
+                      />
+                      <span className="rd-muted">
+                        {involvement.role
+                          ? `${involvement.topic.status} · ${involvement.role}`
+                          : involvement.topic.status}
+                      </span>
+                    </div>
+                    {involvement.axes.length === 0 ? (
+                      <Notice kind="empty">no axis of theirs here</Notice>
+                    ) : (
+                      <ul className="rd-axes">
+                        {involvement.axes.map((axis) => (
+                          <PersonAxisRow
+                            axis={axis}
+                            key={axis.id}
+                            onOpenEntity={onOpenEntity}
+                          />
+                        ))}
+                      </ul>
+                    )}
+                  </li>
+                ))}
+                {entry.topics.length === 0 ? (
+                  <li>
+                    <Notice kind="empty">
+                      Not linked to a topic yet — the link is what puts work on this
+                      page.
+                    </Notice>
+                  </li>
+                ) : null}
+              </ul>
+            </div>
+
+            <aside className="rd-side-stack" data-rd-person-rail="true">
+              <section className="rd-side-card">
+                <h3 className="rd-side-title">Recent activity</h3>
+                {entry.attributable ? (
+                  <>
+                    <div
+                      data-rd-person-activity-shown={railShown.length}
+                      data-rd-person-activity-total={railActivity.length}
+                    >
+                      <ActivityList
+                        dataAttr="data-rd-person-activity"
+                        items={railShown}
+                        labelFor={(item) => ({
+                          topic:
+                            entry.topics.find(
+                              (involvement) => involvement.topic.id === item.topicId
+                            )?.topic.name ?? null,
+                        })}
+                        onOpenEntity={onOpenEntity}
+                        windowDays={windowDays}
+                      />
+                    </div>
+                    {/* The remainder, stated — the same treatment the Topics rail gives it, because the same
+                        rule applies: a bounded window is only honest if the reader is told what it holds and
+                        can have the rest in one click. */}
+                    {railHidden > 0 || railAll ? (
+                      <div
+                        className="rd-cluster"
+                        data-rd-person-activity-more={String(railHidden)}
+                      >
+                        <span
+                          className="rd-meta"
+                          data-rd-person-activity-note="true"
+                        >
+                          {railAll
+                            ? `all ${railActivity.length} shown, newest first`
+                            : `${railShown.length} of ${railActivity.length} shown, newest first`}
+                        </span>
+                        <Button
+                          onClick={() => setRailAll(!railAll)}
+                          size="sm"
+                          variant="ghost"
+                        >
+                          {railAll
+                            ? "Show fewer"
+                            : `Show all ${railActivity.length}`}
+                        </Button>
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="rd-muted" data-rd-attributable="false">
+                    No account is mapped to this person, so no recorded event can be
+                    attributed to them. That is a missing link, not an absence of
+                    work.
+                  </p>
+                )}
+                <span className="rd-cluster" data-rd-person-last="true">
+                  {entry.lastActivityAt ? (
+                    <RecencyLabel at={entry.lastActivityAt} prefix="last activity " />
                   ) : (
-                    <ul className="rd-axes">
-                      {involvement.axes.map((axis) => (
-                        <AxisScanItem
-                          axis={axis}
-                          key={axis.id}
-                          onOpenEntity={onOpenEntity}
-                        />
-                      ))}
-                    </ul>
+                    <span className="rd-muted">no attributable activity yet</span>
                   )}
-                </li>
-              ))}
-              {entry.topics.length === 0 ? (
-                <li>
-                  <Notice kind="empty">
-                    Not linked to a topic yet — the link is what puts work on this
-                    page.
-                  </Notice>
-                </li>
-              ) : null}
-            </ul>
+                  {entry.lastReviewedAt ? (
+                    <RecencyLabel
+                      at={entry.lastReviewedAt}
+                      prefix="· last reviewed "
+                    />
+                  ) : (
+                    <span className="rd-muted">· never reviewed</span>
+                  )}
+                </span>
+              </section>
 
-            <span className="rd-section">Activity attributable to them</span>
-            {entry.attributable ? (
-              <ActivityList
-                dataAttr="data-rd-person-activity"
-                items={entry.recentActivity}
-                labelFor={(item) => ({
-                  topic:
-                    entry.topics.find(
-                      (involvement) => involvement.topic.id === item.topicId
-                    )?.topic.name ?? null,
-                })}
-                onOpenEntity={onOpenEntity}
-                windowDays={windowDays}
-              />
-            ) : (
-              <p className="rd-muted" data-rd-attributable="false">
-                No account is mapped to this person, so no recorded event can be
-                attributed to them. That is a missing link, not an absence of
-                work.
-              </p>
-            )}
+              {/* About is the person's own recorded note and nothing else: no generated prose, no inferred
+                  role, no summary of their involvement dressed up as a description. Where the record holds no
+                  note the card says so, which is the same claim the rest of the page makes about absences. */}
+              <section className="rd-side-card">
+                <h3 className="rd-side-title">About</h3>
+                {entry.person.notes ? (
+                  <p data-rd-person-notes="true">{entry.person.notes}</p>
+                ) : (
+                  <p className="rd-muted" data-rd-person-notes="empty">
+                    No note recorded for this person.
+                  </p>
+                )}
+              </section>
 
-            <span className="rd-cluster" data-rd-person-last="true">
-              {entry.lastActivityAt ? (
-                <RecencyLabel at={entry.lastActivityAt} prefix="last activity " />
-              ) : (
-                <span className="rd-muted">no attributable activity yet</span>
-              )}
-              {entry.lastReviewedAt ? (
-                <RecencyLabel
-                  at={entry.lastReviewedAt}
-                  prefix="· last reviewed "
-                />
-              ) : (
-                <span className="rd-muted">· never reviewed</span>
-              )}
-            </span>
+              <section className="rd-side-card">
+                <h3 className="rd-side-title">Related repositories</h3>
+                <div
+                  className="rd-cluster rd-tags"
+                  data-rd-person-repositories={relatedRepositories.length}
+                >
+                  {relatedRepositories.map((repository) => (
+                    <EntityTag
+                      id={repository.id}
+                      key={repository.id}
+                      label={repository.fullName}
+                      onOpen={onOpenEntity}
+                      type="repository"
+                    />
+                  ))}
+                  {relatedRepositories.length === 0 ? (
+                    <span className="rd-muted">
+                      No repository is named by their axes yet.
+                    </span>
+                  ) : null}
+                </div>
+              </section>
+            </aside>
           </div>
         </CardContent>
       </Card>

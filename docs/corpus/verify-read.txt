@@ -1,6 +1,6 @@
 # harness/read-pass.sh — read pass · dataset corpus · viewport 1440x900
 # dashboard: http://100.122.4.42:3003
-# generated: 2026-10-02T17:22:39+03:00
+# generated: 2026-10-02T18:18:46+03:00
 
 PASS  login — status 200
 identity: expected corpus · 1 topic(s) (0 fixture-named) · 0 of 1 repository(ies) under fixture/ · observed corpus markers (no fixture-named topic or repository)
@@ -44,7 +44,7 @@ PASS  the completed/abandoned fold opens on demand — open after a click: true
 PASS  the folded axes render their own text once the fold is open — folded axis 1: 424 char(s)
 SKIP  selecting another index row changes the detail — this dataset has a single topic
 PASS  Current work renders every non-terminal axis; the fold holds the terminal ones — current ["Signal analysis — `analysis/`, SA1–SA5, sparse","Docs & agent skills — `docs/`, `.agents/skills`"] (payload ["Signal analysis — `analysis/`, SA1–SA5, sparse","Docs & agent skills — `docs/`, `.agents/skills`"]), folded ["Acquisition — `acquire/`, DOP3010 rig"] (payload ["Acquisition — `acquire/`, DOP3010 rig"])
-PASS  opening a topic reads it once, in one get_topic call — saw 1 call(s) over 1 topic(s) — 1 load read + 0 selection read(s) over 0 distinct: [{"topicId":"8dc41a8d-4a27-4850-b3b1-2a4a7a1c2054"}]
+PASS  opening a topic reads it once, in one get_topic call — saw 1 call(s) over 1 topic(s) — 1 load read + 0 selection read(s) over 0 distinct: [{"topicId":"6a490cea-1488-4f1e-912d-8baf1fb9fba0"}]
 PASS  reading a topic does not open the editor — pane present true, editor rendered false
 PASS  the topic detail offers no broad edit control (D7: Topics is read-first) — edit-open 0, Edit/Done labels 0, editors 0
 PASS  the narrow note affordance is part of the read detail, with no mode to enter (D7) — note inputs 1, pane present true
@@ -65,11 +65,18 @@ PASS  a per-axis history expands inside its own axis — 25 rows for Signal anal
 PASS  the axis's notes are kept out of its history list — history 25 rows, notes 2 rows, probe "SA3/POD and SA6 UI remain demand-driven; #49 remains"
 detail screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/screenshots/research-dashboard-read-detail.png
 PASS  the People view lists every person once — the header's count, not one row per link — index 1, header 1, duplicated []
+PASS  every person index row carries its context, and its recency is the payload's own — {"rows":[{"context":"2 active · 3 axes · 1 topic","name":"ajegorovs","recency":"2026-09-28T18:22:23+03:00"}],"expected":[["ajegorovs","2026-09-28T18:22:23+03:00"]]}
 PASS  person-first shows one person at a time, with their involvement grouped underneath — selected 1, panel ajegorovs, topics 1, involvements ["UDV Echo Process"]
 PASS  the person panel states attribution instead of implying idleness — payload attributable=true; page marker n/a; activity lists 1
 people: ajegorovs | selected: ajegorovs | involved in: UDV Echo Process
 PASS  one person is exactly one row in the index, and the panel is theirs — rows 1, panel ajegorovs
 SKIP  one person on several topics shows each topic with its own axes underneath — this corpus links ajegorovs to 1 topic(s), so the grouping has one entry
+PASS  C2: the person detail is an inner split — lane left of a rail, lane materially wider, tops aligned — lane {"height":330.0625,"width":488.75,"x":597,"y":276} rail {"height":366,"width":293.25,"x":1097.75,"y":276}
+PASS  C2: the rail is Recent activity, About and Related repositories, in that order — Recent activity | About | Related repositories
+PASS  C2: the default involvement row stays concise — a reading, and none of the axis lane's heavier material — [{"evidence":false,"heavier":false,"moreOpen":false,"reading":true},{"evidence":false,"heavier":false,"moreOpen":false,"reading":true},{"evidence":false,"heavier":false,"moreOpen":false,"reading":true}]
+PASS  C2: About is the person's own recorded note, verbatim — and says so when there is none — page {"marker":"empty","text":"No note recorded for this person."} payload notes ""
+PASS  C2: Related repositories are the ones the payload's own axes name — derived, not invented — page ["d8f6fbc4-740f-426f-a15d-c0cec1a82073"] payload ["d8f6fbc4-740f-426f-a15d-c0cec1a82073"]
+SKIP  C2: About's other branch — a person with no note is told so, never given prose — this dataset holds a single person, so the card has only one branch to read
 people screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/screenshots/research-dashboard-read-people.png
 PASS  the Repositories view is repository-first: the index is the set, and one of them is selected — 1 repositories ["ajegorovs/udv-echo-process"]; panel ajegorovs/udv-echo-process: supports 1, axes ["Signal analysis — `analysis/`, SA1–SA5, sparse","Docs & agent skills — `docs/`, `.agents/skills`","Acquisition — `acquire/`, DOP3010 rig"]
 PASS  a repository that supports work names the topics it supports and the axes happening in it — panel ajegorovs/udv-echo-process: supports 1 of 1, axes 3 of 3
@@ -81,10 +88,10 @@ progress screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/screenshot
 PASS  the Progress index is the projection for the current window — replaced on change, not extended — matched the projection at 30 and 7 days (7d restored)
 PASS  the get_progress payload carries all three halves the page reads (axes, problems, activity) — 3 halves · axes 3 · problems 3 · activity 3
 PASS  the Progress top area shows the index, the Problem column and the Activity feed side by side — index {"h":310,"w":256,"x":320,"y":181}, problem {"h":88,"w":469,"x":588,"y":181}, feed {"h":2026,"w":347,"x":1069,"y":181}
-PASS  the axis index opens on the projection's first row, and the detail columns follow it — active d5d3c08d, projection first d5d3c08d, problem column d5d3c08d, feed d5d3c08d
-PASS  the Problem column shows the projection's first open problem, under the projection's own count — axis "Signal analysis — `analysis/`, SA1": heading "Open problems (2)" (projection 2), shown c4502cc7 vs first open c4502cc7
-PASS  the Activity feed is the projection's bucket for the selected axis, newest first, capped and stating the remainder — feed axis d5d3c08d, count 33 (projection 33), heading "Activity (33)" (index row 33), shown 12/33 (rendered 12), holds back 21, note "12 of 33 shown, newest first"
-PASS  selecting another axis moves the Problem and Activity columns to that axis — selected 507d142f: problem axis 507d142f, feed axis 507d142f, shown c4502cc7 (projection c4502cc7), 12 feed rows vs 12
+PASS  the axis index opens on the projection's first row, and the detail columns follow it — active 8200e39c, projection first 8200e39c, problem column 8200e39c, feed 8200e39c
+PASS  the Problem column shows the projection's first open problem, under the projection's own count — axis "Signal analysis — `analysis/`, SA1": heading "Open problems (2)" (projection 2), shown 4269d3e1 vs first open 4269d3e1
+PASS  the Activity feed is the projection's bucket for the selected axis, newest first, capped and stating the remainder — feed axis 8200e39c, count 30 (projection 30), heading "Activity (30)" (index row 30), shown 12/30 (rendered 12), holds back 18, note "12 of 30 shown, newest first"
+PASS  selecting another axis moves the Problem and Activity columns to that axis — selected 03552526: problem axis 03552526, feed axis 03552526, shown 4269d3e1 (projection 4269d3e1), 12 feed rows vs 12
 SKIP  the plan renders below the composition, from the projection — no axis in this dataset carries a plan
 SKIP  the problem's step and the step's problem are marked, both ways — no axis in this dataset has a plan and a problem naming one of its steps
 SKIP  an unordered plan keeps the store's order and invents no sequence — no axis in this dataset carries a multi-step plan with no positions
@@ -92,11 +99,11 @@ PASS  an axis with no plan renders no plan section at all — plan section prese
 PASS  the fixture still carries an axis with open problems to inventory — 2 open problem(s) on "Signal analysis — `analysis/`, SA1–SA5, sparse"
 PASS  the inventory lists every open problem of the axis, in the projection's order — 2 row(s) of 2 open; count 2, list 2; order matches
 PASS  each row carries its own state, repositories, step link and recency — compact context, nothing re-derived — states match; contexts match; first "ajegorovs/udv-echo-process · 1 event · last activity today"
-PASS  exactly the problem on screen is the active row — active 1 (c4502cc7), card c4502cc7
-PASS  selecting a row in the inventory moves the card, and the active row with it — card 6649ba13 (wanted 6649ba13); active 1
+PASS  exactly the problem on screen is the active row — active 1 (4269d3e1), card 4269d3e1
+PASS  selecting a row in the inventory moves the card, and the active row with it — card 6b39cb87 (wanted 6b39cb87); active 1
 SKIP  a closed-out problem is not listed in the inventory — this dataset has no resolved problem on the axis (2 problem(s), all open) — the fixture's axis carries one, so that run discriminates
 PASS  an axis with no open problem renders no inventory section, and says nothing alarming about the absence — rows 0; section ""; alarming absent; open problems 0
-PASS  the axis still renders: its title is readable and the card column follows the selection — title present; column axis d5d3c08d vs d5d3c08d
+PASS  the axis still renders: its title is readable and the card column follows the selection — title present; column axis 8200e39c vs 8200e39c
 SKIP  the repository threads are the problem's own relations, in the projection's order, with nothing marked primary — this dataset carries no problem with more than one repository, so the step-5 sections have no subject here (3 problem row(s) in the payload) — the fixture's axis carries one, so that run discriminates
 SKIP  evidence is the projection's records with their provenance: source type, reference, summary and date — this dataset carries no problem with more than one repository, so the step-5 sections have no subject here (3 problem row(s) in the payload) — the fixture's axis carries one, so that run discriminates
 SKIP  human steering is exactly the projection's claims, under the scope each was aimed at — this dataset carries no problem with more than one repository, so the step-5 sections have no subject here (3 problem row(s) in the payload) — the fixture's axis carries one, so that run discriminates
@@ -109,10 +116,10 @@ SKIP  a problem with no repositories, no evidence and no steering renders no she
 SKIP  and the steering section follows the data: it is absent unless the axis itself carries a claim — this dataset carries no problem with nothing behind it (no repositories, no evidence, no steering), so the negative cases have no subject — the fixture's sparse problem does, so that run discriminates
 PASS  the Progress index offers both subjects, and opens on Axes (U4 step 6) — subjects axes|problems; pressed axes; group mode axes; index mode axes; card mode axes
 PASS  the Problems index lists the projection's problems, in the server's order, with each row's own state, axis, topic and recency — 3 row(s) of 3; order matches; fields match; first "Signal analysis — `analysis/`, SA1–SA5, sparse · UDV Echo Process · ajegorovs/udv-echo-process · 1 event · last activity today"
-PASS  picking a problem shows it in the same reading surface, with the axis columns following its parent — card c4502cc7 (wanted c4502cc7); axis 507d142f; feed 507d142f count 105 (projection 105); parent "on Signal analysis — `analysis/`, SA1–SA5, sparse" (axis "Signal analysis — `analysis/`, SA1–SA5, sparse")
+PASS  picking a problem shows it in the same reading surface, with the axis columns following its parent — card 4269d3e1 (wanted 4269d3e1); axis 03552526; feed 03552526 count 105 (projection 105); parent "on Signal analysis — `analysis/`, SA1–SA5, sparse" (axis "Signal analysis — `analysis/`, SA1–SA5, sparse")
 PASS  the repository threads, evidence and steering sections render from that same problem object — sections 1 repo / 1 evidence / steering absent; projection 1 / 1 / absent
 problems screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/screenshots/research-dashboard-read-problems.png
-PASS  switching back to Axes marks the parent axis of the problem that was on screen — active 507d142f (wanted 507d142f); card axis 507d142f shown c4502cc7
+PASS  switching back to Axes marks the parent axis of the problem that was on screen — active 03552526 (wanted 03552526); card axis 03552526 shown 4269d3e1
 PASS  switching the index's subject issues no action call — 0 extra get_progress call(s) across the switches
 PASS  and the projection is unchanged: switching a subview writes nothing — the live answer is identical before and after
 PASS  the reading surface names its topic and its axis as tags, with the projection's own ids and labels — context: topic=UDV Echo Process, axis=Signal analysis — `analysis/`, SA1–SA5, sparse
@@ -121,7 +128,7 @@ PASS  an event with a mapped account carries that person's tag, so attribution i
 PASS  a topic tag lands in Topics with that topic selected, and the label matches the card it opened — view topics, card UDV Echo Process (wanted UDV Echo Process)
 PASS  a person tag lands in People with that person selected, and the label matches the panel it opened — view people, panel ajegorovs (wanted ajegorovs)
 PASS  a repository tag in the Activity column lands in Repositories with that repository selected — view repositories, panel ajegorovs/udv-echo-process (wanted ajegorovs/udv-echo-process)
-PASS  a problem tag lands in Progress/Problems with that problem selected — the subview follows the entity — subview problems, shown 28a35975 (wanted 28a35975)
+PASS  a problem tag lands in Progress/Problems with that problem selected — the subview follows the entity — subview problems, shown 0ae99231 (wanted 0ae99231)
 PASS  an axis tag lands in Progress/Axes with that axis selected, whichever subview it was clicked from — from problems: subview axes, active Acquisition — `acquire/`, DOP3010 rig (wanted Acquisition — `acquire/`, DOP3010 rig)
 PASS  no status badge is a tag — reading a state never navigates — 0 tag(s) inside a badge
 PASS  the tag traversal wrote nothing: no write action was called and the projection is unchanged — writes 0 -> 0; projection identical (the two baseline reads agreed)
@@ -141,18 +148,18 @@ PASS  no view runs away with the scroll at the reference size (budget: eight scr
 PASS  the Progress glance — the Problem column and the newest Activity row — is inside the first screen — problem top 237px, newest activity row bottom 435px, screen 900px
 PASS  every view names itself under the shell title (§7), in all four views — topics → "Topics", people → "People", repositories → "Repositories", progress → "Progress"
 PASS  every state row in every view renders its claim through the one badge — topics: 3 row(s), 0 without a claim; people: 3 row(s), 0 without a claim; repositories: 3 row(s), 0 without a claim
-PASS  every recency label's words are the age of the timestamp it carries, in all four views — 4 label(s) across people, progress, repositories, topics; each matches its own timestamp
+PASS  every recency label's words are the age of the timestamp it carries, in all four views — 5 label(s) across people, progress, repositories, topics; each matches its own timestamp
 SKIP  an exceptional state says which one it is, and never navigates — this dataset renders no exceptional-state subject (no bare repository), 0 notice(s) seen: none
-PASS  a person's topic tags are the topics their own rollup links them to, ids and names alike — 6 tag(s) covering 1 link(s); every tag names a linked topic
+PASS  a person's topic tags are the topics their own rollup links them to, ids and names alike — 5 tag(s) covering 1 link(s); every tag names a linked topic
 PASS  a repository's topic tags are the topics its own rollup links it to, ids and names alike — 6 tag(s) covering 1 link(s) in ajegorovs/udv-echo-process; every tag names a linked topic
 PASS  a topic tag clicked in People lands in Topics with that topic open, under the same name — view topics, opened "UDV Echo Process" (wanted "UDV Echo Process")
-PASS  an axis tag clicked in Repositories lands in Progress/Axes with that axis selected — view progress, subview axes, active 507d142f-9f42-4b57-961f-ae6eeb6d3ad5 (wanted 507d142f-9f42-4b57-961f-ae6eeb6d3ad5)
+PASS  an axis tag clicked in Repositories lands in Progress/Axes with that axis selected — view progress, subview axes, active 03552526-ff5e-414b-96f9-f874545fc177 (wanted 03552526-ff5e-414b-96f9-f874545fc177)
 PASS  a repository tag clicked in Topics lands in Repositories with that repository selected — view repositories, panel "ajegorovs/udv-echo-process" (wanted "ajegorovs/udv-echo-process")
 PASS  the grammar traversal wrote nothing: no write action, and the projection is unchanged — writes 0 -> 0; payload identical
 screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/screenshots/research-dashboard-read.png
-console issues after login: ["error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)","error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"]
+console issues after login: ["error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"]
 
-read pass: all checks passed; 23 skipped for want of a subject in this corpus
+read pass: all checks passed; 24 skipped for want of a subject in this corpus
 skipped (each with its reason):
   - the blocked axis shows its blocker text — no axis in this corpus is blocked
   - a topic with a blocked axis is visually distinct — no axis in this corpus is blocked, so the attention styling has no subject here
@@ -160,6 +167,7 @@ skipped (each with its reason):
   - an axis with no evidence says so and shows no confirmed claim — all 3 axes in this dataset carry evidence, so nothing here shows the bare state
   - an axis that states no progress carries no confidence for it — all 3 axes in this dataset carry evidence, so nothing here shows the bare state
   - one person on several topics shows each topic with its own axes underneath — this corpus links ajegorovs to 1 topic(s), so the grouping has one entry
+  - C2: About's other branch — a person with no note is told so, never given prose — this dataset holds a single person, so the card has only one branch to read
   - the plan renders below the composition, from the projection — no axis in this dataset carries a plan
   - the problem's step and the step's problem are marked, both ways — no axis in this dataset has a plan and a problem naming one of its steps
   - an unordered plan keeps the store's order and invents no sequence — no axis in this dataset carries a multi-step plan with no positions
