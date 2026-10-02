@@ -1,6 +1,6 @@
 # harness/read-pass.sh — read pass · dataset corpus · viewport 1440x900
 # dashboard: http://100.122.4.42:3003
-# generated: 2026-10-02T13:52:32+03:00
+# generated: 2026-10-02T13:56:45+03:00
 
 PASS  login — status 200
 identity: expected corpus · 1 topic(s) (0 fixture-named) · 0 of 1 repository(ies) under fixture/ · observed corpus markers (no fixture-named topic or repository)
@@ -11,7 +11,7 @@ PASS  the overview renders from one logical get_overview load — saw 2 call(s) 
 PASS  a get_overview call reads other plugin actions for nothing else on first paint — list_topics calls: 0
 PASS  the default window is 14 days and is sent as a query parameter — {"activitySinceDays":14}
 PASS  the topic index rendered — 1 index rows
-PASS  the header carries the title, window control, archived toggle and count line, and no create/edit control — {"createControl":false,"editControl":false,"archivedToggle":true,"countsLine":true,"headerText":"Research overview Topics People Repositories Progress 7 days 14 days 30 days All time archived Refresh 1 topic · 3 axes · 1 person · 1 repository UDV Echo Process 3 days ago 2 current axes UDV Echo Pr","windowButtons":4}
+PASS  the header carries the title, window control, archived toggle and count line, and no create/edit control — {"createControl":false,"editControl":false,"archivedToggle":true,"countsLine":true,"headerText":"Research overview Topics People Repositories Progress 7 days 14 days 30 days All time archived Refresh An unexpected server error occurred. 1 topic · 3 axes · 1 person · 1 repository UDV Echo Process ","windowButtons":4}
 PASS  the count line reads correctly when the count is one — 1 repository
 PASS  every topic in the payload has one index row, and the visible detail carries its own topic's axes and none of another's — 1 rows for 1 topics; no leaks
 PASS  the selected index row states its current-axis count, and the detail carries its people — row "UDV Echo Process 3 days ago 2 current axes" (data-rd-index-current=2; payload non-terminal 2); detail context "ajegorovs/udv-echo-process ajegorovs"
@@ -30,6 +30,11 @@ PASS  the state-count strip is gone from the topic detail — 0 count strip(s) i
 PASS  Current work is visible without a disclosure — current-work lane visible: true
 PASS  the side rail carries Recent activity, Notes and Related repositories — activity 1, notes 1, repositories 1
 PASS  the narrow note/correction affordance is reachable in the detail — 1 note input(s)
+PASS  the topic rail sits left of the detail, tops aligned, with the detail the wider pane — rail 320..560 (w 240) | detail 572..1416 (w 844); tops 154 / 154
+PASS  the index reads as a rail, not a column of the page (about a fifth to a quarter of the container) — rail 240px of a 1144px container = 21.0%
+PASS  both panes begin within the first viewport — rail top 154, detail top 154, viewport 900
+PASS  inside the detail, Current Work is left of the side rail, tops aligned — main 572..1084 | rail 1096..1416; tops 352 / 352
+PASS  Current Work is materially wider than the side rail — the detail reads as the work, not as a report with a sidebar — main 512px / side rail 320px = 1.60x (needs 1.25x)
 PASS  completed/abandoned work is folded, and the fold is closed initially — fold open before any click: false
 PASS  the completed/abandoned fold opens on demand — open after a click: true
 PASS  the folded axes render their own text once the fold is open — folded axis 1: 603 char(s)

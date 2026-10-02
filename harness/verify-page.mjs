@@ -583,16 +583,22 @@ check(
 );
 
 if (CORPUS.blockedEntries.length > 0) {
+  // This branch runs above the `settleUntil` declaration (only the fixture has a blocked axis, so the
+  // corpus never reached it and the fault hid until the fixture ran), so it waits directly.
+  const waitInDetail = (topic, selector, capMs = 6000) =>
+    page
+      .waitForFunction(
+        ([pluginId, name, sel]) =>
+          document.querySelector(
+            `div[data-plugin-id="${pluginId}"] [data-rd-detail="${name}"] ${sel}`
+          ) !== null,
+        [PLUGIN_ID, topic, selector],
+        { polling: 50, timeout: capMs }
+      )
+      .catch(() => {});
   const blockedEntry = CORPUS.blockedEntries[0];
   await root.locator(`[data-rd-index-topic="${blockedEntry.topic}"]`).click();
-  await settleUntil(
-    ([pluginId, topic]) =>
-      document.querySelector(
-        `div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"] [data-rd-axis-state="blocked"]`
-      ) !== null,
-    [PLUGIN_ID, blockedEntry.topic],
-    6000
-  );
+  await waitInDetail(blockedEntry.topic, '[data-rd-axis-state="blocked"]');
   const blockedCard = await page.evaluate(
     ([pluginId, topic]) => {
       const node = document.querySelector(
@@ -618,14 +624,7 @@ if (CORPUS.blockedEntries.length > 0) {
   );
   // Back to the topic the checks below read.
   await root.locator(`[data-rd-index-topic="${CORPUS.topic}"]`).click();
-  await settleUntil(
-    ([pluginId, topic]) =>
-      document.querySelector(
-        `div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"] [data-rd-claim="summary"]`
-      ) !== null,
-    [PLUGIN_ID, CORPUS.topic],
-    6000
-  );
+  await waitInDetail(CORPUS.topic, '[data-rd-claim="summary"]');
 } else {
   skip("the blocked axis shows its blocker text", "no axis in this corpus is blocked");
   skip(
@@ -762,6 +761,84 @@ check(
   anatomy.noteInput === 1,
   `${anatomy.noteInput} note input(s)`
 );
+
+// ------------------------------------------------------------------ C1 geometry (container-relative)
+// The host owns the page and its width varies (the Nakama shell consumes ~296px of a 1280 viewport),
+// so every measurement is relative to the plugin container, never an absolute prototype width. What is
+// asserted is the composition's *shape*: rail left of detail, tops aligned, detail the wider pane, rail
+// a rail rather than a column, both panes beginning in the first viewport, and — the point of the unit —
+// Current Work materially wider than the side rail, so the detail reads as the work rather than as a
+// report with a sidebar.
+const geometry = await page.evaluate(
+  ([pluginId, topic]) => {
+    const scope = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
+    if (!scope) {
+      return null;
+    }
+    const box = (node) => {
+      if (!node) {
+        return null;
+      }
+      const rect = node.getBoundingClientRect();
+      return { h: rect.height, left: rect.left, right: rect.right, top: rect.top, w: rect.width };
+    };
+    const pane = scope.querySelector(`[data-rd-detail="${topic}"]`);
+    return {
+      container: box(scope),
+      detail: box(pane),
+      index: box(scope.querySelector(".rd-topic-index")),
+      main: box(pane?.querySelector("[data-rd-current-work]") ?? null),
+      rail: box(pane?.querySelector(".rd-side-stack") ?? null),
+      viewport: { h: window.innerHeight, w: window.innerWidth },
+    };
+  },
+  [PLUGIN_ID, CORPUS.topic]
+);
+if (geometry === null || geometry.index === null || geometry.detail === null) {
+  skip(
+    "the topic rail and the detail are laid out side by side",
+    `the rail or the detail is not on the page (rail ${geometry?.index !== null}, detail ${geometry?.detail !== null})`
+  );
+} else {
+  const g = geometry;
+  const aligned = (a, b) => Math.abs(a.top - b.top) <= 2;
+  const share = g.index.w / g.container.w;
+  check(
+    "the topic rail sits left of the detail, tops aligned, with the detail the wider pane",
+    g.index.right <= g.detail.left + 1 && aligned(g.index, g.detail) && g.detail.w > g.index.w,
+    `rail ${Math.round(g.index.left)}..${Math.round(g.index.right)} (w ${Math.round(g.index.w)}) | ` +
+      `detail ${Math.round(g.detail.left)}..${Math.round(g.detail.right)} (w ${Math.round(g.detail.w)}); ` +
+      `tops ${Math.round(g.index.top)} / ${Math.round(g.detail.top)}`
+  );
+  check(
+    "the index reads as a rail, not a column of the page (about a fifth to a quarter of the container)",
+    share >= 0.2 && share <= 0.27,
+    `rail ${Math.round(g.index.w)}px of a ${Math.round(g.container.w)}px container = ${(share * 100).toFixed(1)}%`
+  );
+  check(
+    "both panes begin within the first viewport",
+    g.index.top < g.viewport.h && g.detail.top < g.viewport.h,
+    `rail top ${Math.round(g.index.top)}, detail top ${Math.round(g.detail.top)}, viewport ${g.viewport.h}`
+  );
+  if (g.main === null || g.rail === null) {
+    skip(
+      "inside the detail, Current Work is left of the side rail and materially wider",
+      `the detail has no current-work lane or no side rail (main ${g.main !== null}, rail ${g.rail !== null})`
+    );
+  } else {
+    check(
+      "inside the detail, Current Work is left of the side rail, tops aligned",
+      g.main.right <= g.rail.left + 1 && aligned(g.main, g.rail),
+      `main ${Math.round(g.main.left)}..${Math.round(g.main.right)} | rail ${Math.round(g.rail.left)}..${Math.round(g.rail.right)}; ` +
+        `tops ${Math.round(g.main.top)} / ${Math.round(g.rail.top)}`
+    );
+    check(
+      "Current Work is materially wider than the side rail — the detail reads as the work, not as a report with a sidebar",
+      g.main.w >= 1.25 * g.rail.w,
+      `main ${Math.round(g.main.w)}px / side rail ${Math.round(g.rail.w)}px = ${(g.main.w / g.rail.w).toFixed(2)}x (needs 1.25x)`
+    );
+  }
+}
 if (anatomy.foldPresent === false) {
   skip(
     "completed/abandoned work is folded, closed initially, and opens on demand",
