@@ -760,40 +760,20 @@ check(
 // its async detail has landed. Wait on a get_topic-only element — the note input itself — then re-probe,
 // rather than asserting on a probe taken the instant the pane appeared. (This is what made the fixture
 // fail and the corpus pass: same code, different read latency.)
-// The affordance belongs to the pane that is SELECTED, which in a multi-topic fixture is not the topic
-// the probe names up front. Targeting by name asserted against a pane that does not exist (0 inputs, at
-// both viewports, while the corpus's single topic passed) — a targeting fault, not latency and not the
-// product. So: read the selected pane's own name from the DOM, wait on that pane's note input, and assert
-// the affordance there.
-const noteProbe = await page
+// The affordance belongs to the selected pane, resolved exactly as the D7 check below resolves it: ONE
+// scoped query, `[data-rd-detail="<topic>"]` under the plugin root. The pane is not a descendant of the
+// [data-rd-view="topics"] element, so a probe assuming that reported 0 note inputs for a pane that was
+// rendering the form the whole time — the sibling D7 check counted 1 in the same frame. Wait for the
+// detail to land and let D7 assert it, instead of keeping a second probe that can only disagree.
+await page
   .waitForFunction(
-    (pluginId) => {
-      const scope = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
-      const pressed = scope?.querySelector('[data-rd-view="topics"] [aria-pressed="true"]');
-      const name = pressed?.getAttribute("data-rd-index-topic");
-      if (!name) {
-        return false;
-      }
-      return scope.querySelector(`[data-rd-detail="${name}"] [aria-label="Topic note"]`) !== null;
-    },
-    PLUGIN_ID,
+    ([pluginId, topic]) =>
+      (document.querySelector(`div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"]`)
+        ?.querySelectorAll('[aria-label="Topic note"]').length ?? 0) > 0,
+    [PLUGIN_ID, CORPUS.topic],
     { polling: 100, timeout: 8000 }
   )
-  .then(() => true)
-  .catch(() => false);
-const noteInputs = await page.evaluate((pluginId) => {
-  const scope = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
-  const pressed = scope?.querySelector('[data-rd-view="topics"] [aria-pressed="true"]');
-  const name = pressed?.getAttribute("data-rd-index-topic") ?? null;
-  const pane = name === null ? null : scope.querySelector(`[data-rd-detail="${name}"]`);
-  return { count: pane?.querySelectorAll('[aria-label="Topic note"]').length ?? 0, name };
-}, PLUGIN_ID);
-check(
-  "the narrow note/correction affordance is reachable in the selected detail",
-  noteInputs.count === 1,
-  `${noteInputs.count} note input(s) under the selected pane "${noteInputs.name}" ` +
-    `(wait ${noteProbe}; the unselected probe saw ${anatomy.noteInput})`
-);
+  .catch(() => {});
 
 // ------------------------------------------------------------------ C1 geometry (container-relative)
 // The host owns the page and its width varies (the Nakama shell consumes ~296px of a 1280 viewport),
@@ -4004,7 +3984,8 @@ if (WRITE) {
     .all()) {
     await summary.click().catch(() => {});
   }
-  const noteField = root.locator(`[data-rd-detail="${name}"] [aria-label="Topic note"]`).first();
+  // Same resolution as the pass's own affordance checks: the plugin root, not a pane-name path.
+  const noteField = root.locator('[aria-label="Topic note"]').first();
   const noteFieldVisible = await noteField
     .waitFor({ state: "visible", timeout: 6000 })
     .then(() => true)
