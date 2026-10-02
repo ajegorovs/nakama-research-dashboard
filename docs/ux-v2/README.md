@@ -13,8 +13,11 @@ This directory is the reviewer's entry point: `STATUS.md` says where the work st
 Six requirements in the contract have no state behind them in the implementation as of the `pre-ux-v2`
 tag, so the work is model-first and the UI is rebuilt on top of it:
 
-1. **Overview becomes a view of its own** (contract `README.md` view model, `interaction-spec.md` §5):
+1. ~~**Overview becomes a view of its own**~~ (contract `README.md` view model, `interaction-spec.md` §5):
    recency and attention, `[STALE]` on what has gone quiet. Today the topic-card list *is* the overview.
+   **Superseded — see [`DECISIONS.md`](DECISIONS.md) §3:** the final implementation has four navigable views
+   (Topics, People, Repositories, Progress) and "Research overview" is the shell/title. The recency-first
+   default surface described here is **dashboard-shell / default landing behavior**, not a fifth tab.
 2. **Problem is first-class** (`information-architecture.md` §3): a concrete thing blocking or advancing
    an axis, traceable to repositories and evidence, with its own subview and its own tag type.
 3. **Plan / work package** (`interaction-spec.md` §10): optional, with steps, never a template filler.

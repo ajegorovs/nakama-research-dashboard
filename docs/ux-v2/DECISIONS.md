@@ -31,3 +31,23 @@ There is **no always-on deployed dashboard service** today. The project is merge
 reproducible from a clone; "production deployed" would be inaccurate. This restates D6 (dev instance only until
 v2 is proven; the Docker deployment is out of scope) and is kept explicit in `services/nakama/HANDOFF-UX-V2.md`
 and the estate's service README so no reader infers a live service from the acceptance records.
+
+## 3. The Overview destination — four navigable views, and "Research overview" is the shell (2026-10-02)
+
+> **Post-contract clarification — Overview destination.** The final UX-v2 implementation has **four navigable
+> views: Topics, People, Repositories, Progress**. "Research overview" is the dashboard **shell/title**, not a
+> separate destination. Earlier prototype/spec language describing Overview as an independent tab is
+> **superseded**.
+
+- **Superseded by this decision:** the "Overview becomes a view of its own" entry in `docs/ux-v2/README.md`,
+  and the U5 label wherever it reads as an unfinished standalone Overview view (the estate plan, the handoff,
+  `STATUS.md`).
+- **Not superseded:** what the shell actually does. The page title, the counts line under it and the
+  recency-first default surface stay as they are — described as **dashboard-shell / default landing behavior**,
+  not as a fifth tab.
+- **What the implementation says:** `VIEW_OPTIONS` in `src/ui.tsx` lists four views, and the page renders
+  `<h2 class="rd-page-title">Research overview</h2>` above whichever one is active. The read pass's view checks
+  address exactly those four.
+- **Where the work lands:** documentation, plus one consequence for the pass — the density checks name the four
+  views that exist. An earlier measurement named a fifth and reported the default surface's numbers under it
+  (a click with no control to click fails quietly); the instrument was corrected, not the page.

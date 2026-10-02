@@ -9,13 +9,24 @@
  * (`vendor/vendor-into-nakama.sh`) simply does not list the plugin. This does all of that and exits
  * non-zero when the instance refuses.
  *
- * Idempotent: on an instance where it is already installed it only reports the state.
+ * Idempotent: on an instance where it is already installed it only reports the state. That default is
+ * deliberate — an acceptance run must not change the build it is measuring — so refreshing a *review*
+ * instance onto the vendored build is an explicit act: pass `--reinstall`.
+ *
+ *   bun harness/install-plugin.mjs --env-file <env> --reinstall
+ *
+ * `--reinstall` calls the official-plugin reinstall endpoint, which reloads the bundled copy from the
+ * checkout while preserving organization data, and prints the version/revision before and after. Use it
+ * when a long-running instance is serving a build older than the checkout (a plugin is installed *into*
+ * the instance's config dir; restarting the server reloads that copy, not the checkout).
  */
 import { loadEnvFileArg } from "./env-file.mjs";
 
 loadEnvFileArg();
 
 const BASE = (process.env.NAKAMA_URL ?? "http://127.0.0.1:4399").replace(/\/+$/, "");
+/** Opt-in: refresh an existing install onto the vendored build (see the header). */
+const REINSTALL = process.argv.includes("--reinstall");
 const PLUGIN_ID = process.env.NAKAMA_PLUGIN_ID ?? "research-dashboard";
 const EMAIL = process.env.NAKAMA_EMAIL ?? process.env.NAKAMA_DEV_EMAIL ?? "";
 const PASSWORD = process.env.NAKAMA_PASSWORD ?? process.env.NAKAMA_DEV_PASSWORD ?? "";
@@ -127,6 +138,27 @@ if (detail.lifecycleState !== "enabled") {
   }
   console.log(`install-plugin: enabled — lifecycleState ${state}`);
   detail = (await call(`/v1/plugins/${PLUGIN_ID}`, undefined, headers)).body ?? {};
+}
+
+if (REINSTALL && detail.selectedVersion !== undefined) {
+  const beforeVersion = detail.selectedVersion;
+  const beforeRevision = detail.revision;
+  const reload = await call(
+    `/v1/plugins/official/${PLUGIN_ID}/reinstall`,
+    { expectedRevision: beforeRevision },
+    headers
+  );
+  if (reload.status !== 200) {
+    console.error(
+      `install-plugin: reinstall refused (HTTP ${reload.status}) ${JSON.stringify(reload.body).slice(0, 300)}`
+    );
+    process.exit(1);
+  }
+  detail = (await call(`/v1/plugins/${PLUGIN_ID}`, undefined, headers)).body ?? {};
+  console.log(
+    `install-plugin: reinstalled — version ${beforeVersion} -> ${detail.selectedVersion ?? "?"}, ` +
+      `revision ${beforeRevision} -> ${detail.revision ?? "?"}`
+  );
 }
 
 console.log(
