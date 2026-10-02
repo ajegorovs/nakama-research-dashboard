@@ -334,4 +334,28 @@ evidence)` showing the problem that renders all three support cards:
 The capture also proves the build: the asset it fetched for the fixture hashes to
 `68cbab80…`, the same bytes the served-build guard reports for both instances.
 
+## Accepted (reviewer, 2026-10-02)
+
+> C4 now passes visual fidelity. The structural mismatch from the previous review is gone. … **F2 retirement:
+> closed. C4 functional acceptance: closed. C4 geometry/composition acceptance: closed. C4 visual fidelity:
+> closed. C4: accepted.**
+
+Recorded with the reviewer's own observations, because they are the acceptance criteria in plain words and the
+next unit should be held to the same ones: the selected axis is the subject of the whole right pane rather than
+context attached to the Problem column; the Problem is materially dominant over the Activity and the measured
+`1.67×` is visually evident; Plan/Open problems read as a real second row rather than unrelated sections
+stacked underneath; the three support sections form an unmistakable band; the page ends after the window
+summary line, with no residual sense of the retired audit/feed surface continuing below; the absent
+repository/person tags in the axis header are **correct under the current payload contract** — the projection
+is not to be widened merely to imitate prototype decoration; and the running version is denser than the
+hand-authored prototype because it carries real provenance and state qualifiers without crossing back into the
+report/dump problem.
+
+Ruled in the same breath: the conditional-layout strategy — absent material **collapses** rather than leaving
+prototype-shaped empty holes — is the right choice, and it is the strategy rows 2 and the support band are
+built on.
+
+Nothing in C4 is left open. The next unit is C3, unblocked by this verdict.
+
+
 
