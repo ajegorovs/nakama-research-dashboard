@@ -309,7 +309,17 @@ internally (activities, annotations and plan-step links cannot name a problem cr
 and row ids are server-generated); the applier reads the ids back and does the referencing pass second.
 
 Expected as of U4's step 7, on **separate instances** — a corpus-only one and an isolated fixture-only one:
-corpus **84 pass · 0 fail · 22 skip** and fixture **107 · 0 · 0**, at both viewports (the fixture now records *zero* skips: U10's two seeds gave the repository-tag and exceptional-state checks their subjects). **A pass that cannot be trusted is not recorded:** it refuses (exit 3, `read pass: REFUSED — no verdict, no record`) when the instance is not the dataset `--dataset` asked for — identity comes from the fixture's own naming (`Layout fixture …` topics, `fixture/` repositories) and the corpus's *absence* of it, so a **mixed** instance is refused too — and an abort prints `ABORTED … this transcript is PARTIAL` and exits 2; on either code the committed transcript is left untouched and the partial run is kept in `${TMPDIR}`. Step 7's first half added ten checks, its second half nine more (the shared grammar: one badge, one recency label, one detail header, one activity line and one notice across all four views, with the tags each view now emits asserted against its own projection)
+corpus **84 pass · 0 fail · 22 skip** and fixture **107 · 0 · 0**, at both viewports (the fixture now records *zero* skips: U10's two seeds gave the repository-tag and exceptional-state checks their subjects).
+
+**Current records (C1, revision 410, one session on one build):** corpus **105 · 0 · 23** at both
+viewports, the write pass **117 · 0 · 23**, fixture **130 · 0 · 0** at both viewports. The corpus skip
+count moved from the 34 this document quoted earlier for a dataset reason, not a check-set one: a corpus
+re-seeded by the current `replay-corpus.mjs` derives **3 problem rows and 3 repository-naming events**
+from its own material (the seeder prints both), so eleven checks that previously had no subject are now
+exercised — the same eleven lines are present in both records, SKIP in the older one and PASS in the
+current one. Read a run's own summary line, never a number in this document.
+
+**A pass that cannot be trusted is not recorded:** it refuses (exit 3, `read pass: REFUSED — no verdict, no record`) when the instance is not the dataset `--dataset` asked for — identity comes from the fixture's own naming (`Layout fixture …` topics, `fixture/` repositories) and the corpus's *absence* of it, so a **mixed** instance is refused too — and an abort prints `ABORTED … this transcript is PARTIAL` and exits 2; on either code the committed transcript is left untouched and the partial run is kept in `${TMPDIR}`. Step 7's first half added ten checks, its second half nine more (the shared grammar: one badge, one recency label, one detail header, one activity line and one notice across all four views, with the tags each view now emits asserted against its own projection)
 (the EntityTag contract exercised from Progress: the reading surface's topic and axis tags carry the
 projection's own ids and labels, every tag in the Activity column names an entity its own event carries, an
 attributed event's person is a tag, and the topic, person, repository, problem and axis tags each land in their
@@ -353,8 +363,11 @@ and its screenshots under `docs/screenshots/` or `docs/layout-fixtures/screensho
 over the committed record, by design: re-running is how the record is refreshed. `--shots` and
 `--transcript` divert a scratch run so it does not.
 
-`--write` also creates a topic, opens its editor and records an activity through the page. It **mutates
-the dataset** — wipe and re-seed afterwards; the corpus must not carry a `smoke-check` topic.
+`--write` drives the page's surviving writes without a create form: it creates a topic through the
+plugin's own action (the way the librarian does), opens the folded write affordances the way a reader
+does, writes a topic note from the read detail, and then exercises the stale-correction refusal inside
+an axis — including that the refused correction wrote nothing and kept what was typed. It **mutates the
+dataset** — wipe and re-seed afterwards; the corpus must not carry a `ui-check …` topic.
 
 ## Applying a plugin migration
 

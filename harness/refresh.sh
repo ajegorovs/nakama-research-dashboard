@@ -22,6 +22,14 @@ ESTATE="${ESTATE:-/mnt/otrais/services}"
 CHECKOUT="${NAKAMA_CHECKOUT:-/mnt/otrais/repos/nakama}"
 ENV_FILE="${NAKAMA_ENV_FILE:-$ESTATE/compose/nakama/.env}"
 GUARD_TIMEOUT="${GUARD_TIMEOUT:-90}"
+# The guard measures the page the *acceptance pass* will measure, so it has to be pointed at the same
+# dashboard. Default :3003 (the web dev server, matching harness/read-pass.sh); the guard's own :4399
+# fallback is the instance, which serves the API only — the guard then reports "the page never fetched
+# a plugin UI asset", which reads like a plugin fault and is a wrong target. On this estate Vite binds
+# the tailnet address, so the caller passes the reachable URL (services/nakama/scripts/verify-read.sh
+# does the same for the pass itself).
+NAKAMA_DASHBOARD="${NAKAMA_DASHBOARD:-http://127.0.0.1:3003}"
+export NAKAMA_DASHBOARD
 
 step() { printf '\n== %s\n' "$1"; }
 
@@ -57,6 +65,14 @@ export NAKAMA_URL="${NAKAMA_URL:-http://127.0.0.1:4399}"
 bun harness/reinstall-plugin.mjs
 
 step "4/4 served digest == repo build digest (retry up to ${GUARD_TIMEOUT}s)"
+# Refuse before the retry loop: a dashboard that does not answer makes the guard measure nothing, and
+# its message points at the plugin rather than at the target.
+if ! curl -fsS -o /dev/null --max-time 5 "$NAKAMA_DASHBOARD"; then
+  printf 'refresh: REFUSED — no dashboard at %s, so the served-digest guard cannot measure the page\n' \
+    "$NAKAMA_DASHBOARD" >&2
+  printf 'refresh: set NAKAMA_DASHBOARD to the URL the acceptance pass uses (see read-pass.sh)\n' >&2
+  exit 1
+fi
 deadline=$(( $(date +%s) + GUARD_TIMEOUT ))
 attempt=0
 until out="$(bun harness/served-build-guard.mjs 2>&1)"; do

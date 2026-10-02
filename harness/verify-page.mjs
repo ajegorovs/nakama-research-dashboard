@@ -208,13 +208,31 @@ page.on("response", async (response) => {
   if (!match) {
     return;
   }
-  let body = "";
+  let text = "";
   try {
-    body = (await response.text()).slice(0, 300);
+    text = await response.text();
   } catch {
-    body = "<unreadable>";
+    text = "<unreadable>";
   }
-  actionResponses.push({ body, key: match[1], status: response.status() });
+  // The identity is parsed from the FULL body and stored as a field, never recovered later from a
+  // truncated one. The 300-char cut kept only this for readability and once produced a `null`
+  // `result.topic.id` that read like evidence for a write-path branch; it was a truncation artifact.
+  // `body` stays short for a human reading the transcript; `parsed` is the machine-readable answer.
+  let parsed = null;
+  try {
+    const outer = JSON.parse(text);
+    const inner = typeof outer?.result === "string" ? JSON.parse(outer.result) : outer?.result;
+    parsed = {
+      ok: inner?.ok ?? null,
+      topicId: inner?.topic?.id ?? null,
+      topicName: inner?.topic?.name ?? null,
+      error: typeof inner?.error === "string" ? inner.error : null,
+      keys: inner && typeof inner === "object" ? Object.keys(inner).slice(0, 12) : null,
+    };
+  } catch {
+    parsed = null;
+  }
+  actionResponses.push({ body: text.slice(0, 300), key: match[1], parsed, status: response.status() });
 });
 
 await page.goto(DASHBOARD, { waitUntil: "domcontentloaded" });
@@ -395,13 +413,6 @@ check("overview renders as the default screen", render.heading);
 
 // ------------------------------------------------------------------ C4: the overview shell
 const overviewCalls = callsFor("get_overview");
-if (process.env.RD_DIAG === "1") {
-  const mounts = await page.evaluate(() => window.__rdMounts ?? -1);
-  console.log("DIAG mounts:", mounts);
-  console.log("DIAG document requests:", JSON.stringify(documentRequests, null, 0));
-  console.log("DIAG action call order:", JSON.stringify(actionCalls.map((c) => `${c.key}@${c.at}`)));
-  console.log("DIAG get_overview initiators:", JSON.stringify(initiators, null, 1));
-}
 // ONE logical load. React's *development* runtime mounts passive effects twice — the dev-only StrictMode
 // reconnect pass — so a dev-served bundle issues the same load twice from the same effect. That was
 // established rather than assumed: identical input, an identical stack through `runWithFiberInDEV` to
@@ -1161,58 +1172,6 @@ check(
     (CORPUS.topicActivityRows === 0 ? detail.topicActivityRows === 0 : detail.topicActivityRows >= 1),
   `topic notes in payload ${CORPUS.topicNotes} → rendered ${detail.noteRows}; activity rows ${detail.topicActivityRows}`
 );
-if (process.env.RD_DIAG === "1") {
-  const axisDiag = await page.evaluate(
-    ([pluginId, topic]) => {
-      const pane = document.querySelector(
-        `div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"]`
-      );
-      const marked = pane?.querySelector("[data-rd-axis-title]");
-      const chain = [];
-      let node = marked;
-      while (node && node !== pane) {
-        chain.push({
-          cls: node.className?.toString().split(" ").slice(0, 3).join("."),
-          hasState: node.textContent.includes("current state"),
-          hasV: /v[0-9]+/.test(node.textContent),
-          len: node.innerText?.length ?? -1,
-          tag: node.tagName.toLowerCase(),
-        });
-        node = node.parentElement;
-      }
-      const tags = [...(pane?.querySelectorAll('[class*="rd-tag"]') ?? [])].map((el) => ({
-        children: [...el.children].map((child) => ({
-          cls: child.className?.toString().split(" ")[0],
-          h: Math.round(child.getBoundingClientRect().height),
-        })),
-        cls: el.className?.toString(),
-        display: getComputedStyle(el).display,
-        h: Math.round(el.getBoundingClientRect().height),
-        parent: el.parentElement?.className?.toString().split(" ")[0],
-        rects: el.getClientRects().length,
-        text: (el.textContent ?? "").slice(0, 40),
-        w: Math.round(el.getBoundingClientRect().width),
-      }));
-      const clauses = [...(pane?.querySelectorAll("[data-rd-axis-title]") ?? [])].map((node) => {
-        const block = node.closest(".rd-axis-detail") ?? node;
-        const text = (block.innerText ?? "").replace(/\s+/g, " ");
-        return {
-          conf: block.querySelectorAll("[data-rd-conf]").length,
-          hasCurrentState: text.includes("current state"),
-          hasEvidenceLine: text.includes("evidence: ") || text.includes("no evidence on record"),
-          textHead: text.slice(0, 110),
-          textLen: text.length,
-          version: /v[0-9]+/.test(text),
-        };
-      });
-      return { chain, clauses, markedCls: marked?.className?.toString(), tags };
-    },
-    [PLUGIN_ID, CORPUS.topic]
-  );
-  console.log("DIAG axis chain:", JSON.stringify(axisDiag.chain));
-  console.log("DIAG axis clauses:", JSON.stringify(axisDiag.clauses, null, 1));
-  console.log("DIAG marked:", axisDiag.markedCls);
-}
 check(
   "each axis shows full metadata with its own state and per-claim confidence",
   detail.axes.every(
@@ -3277,26 +3236,6 @@ const planOf = (result, axisId) =>
       "the reading surface shows no topic tag — its axis carries no topic to name"
     );
   } else {
-    if (process.env.RD_DIAG === "1") {
-      const landingDiag = await page.evaluate((pluginId) => {
-        const scope = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
-        return {
-          indexRows: [...(scope?.querySelectorAll("[data-rd-index-topic]") ?? [])].map(
-            (row) => `${row.getAttribute("data-rd-index-topic")}:${row.getAttribute("aria-pressed")}`
-          ),
-          panes: [...(scope?.querySelectorAll("[data-rd-detail]") ?? [])].map((pane) =>
-            pane.getAttribute("data-rd-detail")
-          ),
-          views: [...(scope?.querySelectorAll("[data-rd-view]") ?? [])].map((node) =>
-            node.getAttribute("data-rd-view")
-          ),
-        };
-      }, PLUGIN_ID);
-      console.log(
-        "DIAG landing:",
-        JSON.stringify({ ...landingDiag, tag: topicTag })
-      );
-    }
     check(
       "a topic tag lands in Topics with that topic selected, and the label matches the card it opened",
       topicLanding.view === "topics" &&
@@ -3779,14 +3718,6 @@ if (paletteReachable) {
       tagShape.bad.length === 0,
       tagShape.bad.join("; ") || `${tagShape.clusters} cluster(s), every chip one line`
     );
-    if (process.env.RD_DIAG === "1") {
-      const chipDiag = await page.evaluate(() => ({
-        cluster: window.__rdChipCluster ?? null,
-        chips: window.__rdChipDiag ?? null,
-      }));
-      console.log("DIAG chips: cluster", chipDiag.cluster);
-      console.log("DIAG chips:", chipDiag.chips);
-    }
   }
 
   if (visual.exceptional === "") {

@@ -138,8 +138,13 @@ var css = `
   border-left: var(--rd-rule);
   padding: 0 0 0 10px;
 }
+/* Blocked is an exceptional state and must be legible before its badge is read: it keeps the narrow
+   left rule every axis has, but the rule thickens and takes the exceptional colour. The blocked
+   .rd-axis-detail rule below states the same accent for the detail element, so the axis reads as
+   blocked on whichever element owns it, and a normal axis is untouched (U9: exceptional colour only
+   for exceptional state). No box, no background, no new treatment. */
 [data-plugin-id="research-dashboard"] .rd-axis[data-rd-axis-state="blocked"] {
-  border-left-color: var(--destructive, #b91c1c);
+  border-left: 3px solid var(--destructive, #b91c1c);
 }
 [data-plugin-id="research-dashboard"] .rd-axis-title { font-weight: 600; }
 /* Step 3: one primary row per axis (state claim + name, kind receding), one subordinate line for where
@@ -2084,6 +2089,9 @@ function apply(ctx) {
       };
     }, [expandedId]);
     function selectTopic(topicId) {
+      if (topicId === expandedId) {
+        return;
+      }
       setExpandedId(topicId);
       setDetail(null);
       setConflict(null);

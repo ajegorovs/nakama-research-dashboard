@@ -3749,6 +3749,16 @@ export function apply(ctx: Context) {
 
     /** Selecting in the rail is the whole interaction — there is no disclosure control to close. */
     function selectTopic(topicId: string) {
+      if (topicId === expandedId) {
+        // Re-clicking the row that is already selected is not a change of subject, and it must not be
+        // treated as one. `detail` is cleared only when the subject changes: the effect that fetches it
+        // runs on `expandedId`, so clearing it here for the *same* id leaves the pane with nothing to
+        // re-fetch it — the note surface and the current/folded split never come back, while the card
+        // still renders from the overview row (the pane looks open and is empty). The conflict notice
+        // stays too: it is scoped to the thing being edited and is cleared on a save, a re-read, or a
+        // new subject, not by a stray click.
+        return;
+      }
       setExpandedId(topicId);
       setDetail(null);
       setConflict(null);
