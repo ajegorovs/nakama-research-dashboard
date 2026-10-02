@@ -210,6 +210,10 @@ update the copy here.
 hermes skills trust "$(git rev-parse --show-toplevel)"   # once per machine
 ```
 
+**Nothing here is vendored from another repository, so there is no `skills-lock.json` to keep in step** — a lock
+file exists to pin skills taken from elsewhere (the estate's `udv-echo-process` carries one for the two it takes
+from upstream). Everything in `.agents/skills/` is written for this repo and reviewed here.
+
 **Do not let these fork with the profile-global skill.** The generic craft of *authoring a Nakama plugin*
 belongs to the Hermes skill `nakama-plugin-development` (outside this repository, maintained by the agent); the
 procedures for *this plugin, this harness, these records* belong here. A project-local skill **shadows** a
