@@ -1,4 +1,4 @@
-# verify-plugin-page.mjs — read pass, dev instance at http://100.122.4.42:3003
+# verify-plugin-page.mjs — read pass, dev instance at http://<box>.<tailnet>.ts.net:3003
 # viewport: 1440x900
 # generated: 2026-10-01T02:29:58+03:00
 
@@ -57,7 +57,7 @@ SKIP  a person filter that matches nothing attributable says so, and shows no un
 PASS  leaving the Progress view restores the topic view with no residue — cards 1, progress views 0
 PASS  command palette lists the plugin page
 palette screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/layout-pr/after-1440x900/research-dashboard-read-palette.png
-PASS  palette entry navigates to the page — http://100.122.4.42:3003/plugins/research-dashboard
+PASS  palette entry navigates to the page — http://<box>.<tailnet>.ts.net:3003/plugins/research-dashboard
 screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/layout-pr/after-1440x900/research-dashboard-read.png
 console issues after login: []
 

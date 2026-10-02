@@ -1,6 +1,11 @@
 /**
  * montage.mjs — build side-by-side montages: approved prototype (top) vs the running app (bottom).
  * Read-only.   bun harness/fidelity/montage.mjs --fidelity docs/ux-v2/fidelity --out <dir>
+ *
+ * The running-UI caption carries the review URL and the served build. **Neither is hardcoded**: the URL
+ * label comes from `--url-label` (default: the placeholder form, so a committed montage never carries a
+ * real host name) and the build from `--build` (get it from `served-build.mjs` at capture time — a build
+ * string written into this file would be a lie the moment the next release is minted).
  */
 import { chromium } from "playwright-core";
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
@@ -13,6 +18,10 @@ const flag = (name, fallback) => {
 };
 const FID = flag("fidelity", "docs/ux-v2/fidelity");
 const OUT = flag("out", path.join(FID, "side-by-side"));
+// Placeholder by default: docs in this tree carry no host/tailnet identifiers (estate AGENTS.md § Doc
+// Hygiene). Pass --url-label only for a montage that will not be committed.
+const URL_LABEL = flag("url-label", "<box>.<tailnet>.ts.net:3003");
+const BUILD = flag("build", null);
 
 const cachedChromium = () => {
   const root = path.join(process.env.HOME ?? "", ".cache", "ms-playwright");
@@ -61,7 +70,7 @@ for (const [name, protoStem, currentFile] of PAIRS) {
     <div class="cap"><b>${name} — APPROVED PROTOTYPE</b><span>docs/ux-v2/contract/prototypes/${protoStem}.html</span></div>
     <img src="${abs(proto)}">
     <div class="gap"></div>
-    <div class="cap"><b>${name} — RUNNING REVIEW UI</b><span>http://smi-alex-516-pc.tail63f186.ts.net:3003 — build 0.2.0+dev.ae3049008d5f</span></div>
+    <div class="cap"><b>${name} — RUNNING REVIEW UI</b><span>http://${URL_LABEL}${BUILD === null ? "" : ` — build ${BUILD}`}</span></div>
     <img src="${abs(current)}">
   </body></html>`;
   const file = path.join(OUT, `${name}.html`);

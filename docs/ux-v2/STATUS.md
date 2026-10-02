@@ -120,7 +120,7 @@ instances the run started itself from empty data roots — one per dataset, neve
 to **111 · 0 · 596** (see the U2 row above); the 82 is kept here because it is what that run measured.
 
 **After 004, on the migrated dev instance** (generation `g9e344…`, plugin version `0.2.0+dev.d5b23ff08253`,
-same estate instance the baseline numbers came from, dashboard `http://100.122.4.42:3003`):
+same estate instance the baseline numbers came from, dashboard `http://<box>.<tailnet>.ts.net:3003`):
 
 | Dataset | Viewport | Result | Conditions |
 |---|---|---|---|
