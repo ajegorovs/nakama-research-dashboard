@@ -48,7 +48,12 @@ const PAIRS = [
   ["people", "people", "people.png"],
   ["repositories", "repositories", "repositories.png"],
   ["progress", "progress", "progress.png"],
-  ["overview-vs-default", "overview", "topics.png"],
+  /**
+   * C3 — the landing is compared against the prototype's Overview. Until C3 the pair pointed at `topics.png`
+   * because the Topics index *was* the default screen; now the default screen is the aggregation, so the
+   * comparison is like for like (and `topics.png` still gets its own pair above).
+   */
+  ["overview", "overview", "overview.png"],
 ];
 
 mkdirSync(OUT, { recursive: true });

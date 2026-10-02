@@ -351,6 +351,13 @@ const CORPUS = await page.evaluate(
       topic: topic?.topic?.name ?? "",
       topicId: topic?.topic?.id ?? "",
       topicNames: all.topics.map((entry) => entry.topic.name),
+      // C3: the landing's two columns must be exactly the payload's own collections, in the payload's own
+      // order, and a topic card's activity line must be the payload's own count for that topic.
+      topicIds: all.topics.map((entry) => entry.topic.id),
+      topicActivity: Object.fromEntries(
+        all.topics.map((entry) => [entry.topic.id, entry.activityCount])
+      ),
+      repositoryIds: all.repositories.map((repo) => repo.repository.id),
     };
   },
   [PLUGIN_ID, 14]
@@ -476,6 +483,143 @@ check(
   JSON.stringify(overviewInput) === JSON.stringify({ activitySinceDays: 14 }),
   JSON.stringify(overviewInput)
 );
+
+// ------------------------------------------------------------------ C3: the default landing
+// Read **before anything is clicked**: the landing is the initial state, and it stops being on screen the
+// moment a view is chosen. The checks after this block read the Topics view, so they navigate to it instead
+// of inheriting whatever the shell happens to open on — inheriting it was possible only while the default
+// *was* a view, which is the arrangement this unit replaced.
+const landing = await page.evaluate((pluginId) => {
+  const root = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
+  if (!root) {
+    return null;
+  }
+  const box = (node) => {
+    const rect = node.getBoundingClientRect();
+    return {
+      height: Math.round(rect.height),
+      left: Math.round(rect.left),
+      top: Math.round(rect.top),
+      width: Math.round(rect.width),
+    };
+  };
+  const columns = {};
+  for (const name of ["topics", "repositories"]) {
+    const node = root.querySelector(`[data-rd-landing-column="${name}"]`);
+    columns[name] = node
+      ? {
+          box: box(node),
+          count: Number(node.getAttribute(`data-rd-landing-${name}`) ?? -1),
+        }
+      : null;
+  }
+  const repositoryCards = [...root.querySelectorAll("[data-rd-landing-repository]")];
+  return {
+    activityLines: [...root.querySelectorAll("[data-rd-landing-activity]")].map((node) => ({
+      id: node.getAttribute("data-rd-landing-activity"),
+      text: (node.innerText ?? "").replace(/\s+/g, " ").trim(),
+    })),
+    columns,
+    countOmitted: root.querySelectorAll('[data-rd-landing-count-omitted="d4"]').length,
+    home: root.querySelector("[data-rd-home]")?.getAttribute("data-rd-home") ?? null,
+    landing: root.querySelector("[data-rd-landing]") !== null,
+    pressedViews: [...root.querySelectorAll('[data-rd-view-option][aria-pressed="true"]')].map(
+      (node) => node.getAttribute("data-rd-view-option")
+    ),
+    // A repository card printing a *window* count would be the D4 defect: the capped list's length presented
+    // as a total. The topic cards legitimately say "in the selected window"; the repository cards must not.
+    repositoryCards: repositoryCards.map((node) => ({
+      id: node.getAttribute("data-rd-landing-repository"),
+      windowCountLines: /in the selected window/.test(node.innerText ?? "") ? 1 : 0,
+    })),
+    topicCards: [...root.querySelectorAll("[data-rd-landing-topic]")].map((node) =>
+      node.getAttribute("data-rd-landing-topic")
+    ),
+    viewContainers: root.querySelectorAll("[data-rd-view]").length,
+    viewport: { height: window.innerHeight, width: window.innerWidth },
+  };
+}, PLUGIN_ID);
+
+check(
+  "the shell opens on the default landing, with no view selected",
+  landing !== null &&
+    landing.landing === true &&
+    landing.viewContainers === 0 &&
+    landing.pressedViews.length === 0 &&
+    landing.home === "current",
+  `landing=${landing?.landing}; view container(s)=${landing?.viewContainers}; pressed view option(s)=${JSON.stringify(landing?.pressedViews)}; home=${landing?.home}`
+);
+
+check(
+  "the landing shows both aggregation columns",
+  landing !== null && landing.columns.topics !== null && landing.columns.repositories !== null,
+  `topic column=${landing?.columns.topics ? "yes" : "no"}; repository column=${landing?.columns.repositories ? "yes" : "no"}`
+);
+
+check(
+  "every topic in the payload appears on the landing exactly once, in the payload's own order",
+  JSON.stringify(landing?.topicCards) === JSON.stringify(CORPUS.topicIds),
+  `rendered ${JSON.stringify(landing?.topicCards)} vs payload ${JSON.stringify(CORPUS.topicIds)}`
+);
+
+check(
+  "every repository in the payload appears on the landing exactly once, in the payload's own order",
+  JSON.stringify(landing?.repositoryCards.map((card) => card.id)) ===
+    JSON.stringify(CORPUS.repositoryIds),
+  `rendered ${JSON.stringify(landing?.repositoryCards.map((card) => card.id))} vs payload ${JSON.stringify(CORPUS.repositoryIds)}`
+);
+
+// D4 as a positive assertion: the omission is *marked* on every repository card, and no repository card
+// prints a window count. A check that merely failed to find one would also pass on a card that forgot the
+// whole footer.
+check(
+  "the repository cards state the omitted window count instead of printing a capped list length (D4)",
+  landing !== null &&
+    landing.countOmitted === landing.repositoryCards.length &&
+    landing.repositoryCards.every((card) => card.windowCountLines === 0),
+  `omission markers ${landing?.countOmitted} for ${landing?.repositoryCards.length} repository card(s); cards printing a window count: ${landing?.repositoryCards.filter((card) => card.windowCountLines > 0).length}`
+);
+
+check(
+  "each topic card's activity line is the payload's own count for that topic, with no event title",
+  landing !== null &&
+    landing.activityLines.length === CORPUS.topicIds.length &&
+    landing.activityLines.every((line) => {
+      const count = CORPUS.topicActivity[line.id];
+      const expected = `${count} ${count === 1 ? "event" : "events"} in the selected window`;
+      return typeof count === "number" && line.text.startsWith(expected);
+    }),
+  landing?.activityLines
+    .map((line) => `${line.id}: "${line.text}" (payload ${CORPUS.topicActivity[line.id]})`)
+    .join("; ") ?? "no activity lines"
+);
+
+// Geometry, container-relative (D8/D9): side by side, topic column wider, aligned tops, both beginning in
+// the first viewport. The prototype's asymmetry is the claim, so it is measured rather than assumed.
+check(
+  "the two columns sit side by side with the topic column wider, both beginning in the first viewport",
+  landing !== null &&
+    landing.columns.topics.box.left < landing.columns.repositories.box.left &&
+    landing.columns.topics.box.width > landing.columns.repositories.box.width &&
+    Math.abs(landing.columns.topics.box.top - landing.columns.repositories.box.top) <= 2 &&
+    landing.columns.topics.box.top < landing.viewport.height &&
+    landing.columns.repositories.box.top < landing.viewport.height,
+  `topics ${JSON.stringify(landing?.columns.topics.box)} vs repositories ${JSON.stringify(landing?.columns.repositories.box)} in ${JSON.stringify(landing?.viewport)}`
+);
+
+// The pass reads the Topics view from here on, so it goes there rather than assuming it is already there.
+await root.locator('[data-rd-view-option="topics"]').click();
+await page.waitForSelector(`div[data-plugin-id] [data-rd-view="topics"]`, { timeout: 10000 });
+
+// Leave the page where the checks that follow expect it: the Topics view, on its default selection, with the
+// detail loaded. This block deliberately moves around — two views, the landing and back — and stopping wherever
+// it happens to land left the next checks reading a view they did not ask for.
+if ((await root.locator('[data-rd-home="available"]').count()) > 0) {
+  await root.locator('[data-rd-home="available"]').click();
+  await page.waitForSelector(`div[data-plugin-id] [data-rd-landing]`, { timeout: 10000 });
+}
+await root.locator('[data-rd-view-option="topics"]').click();
+await page.waitForSelector(`div[data-plugin-id] [data-rd-view="topics"]`, { timeout: 10000 });
 
 const indexRows = await page.evaluate((pluginId) => {
   const nodes = document.querySelectorAll(
@@ -1267,6 +1411,201 @@ check(
   `saw ${detailIds.length} call(s) over ${new Set(detailIds).size} topic(s) — 1 load read + ` +
     `${selectionReads.length} selection read(s) over ${new Set(selectionReads).size} distinct: ${JSON.stringify(detailCalls.map((c) => c.input))}`
 );
+
+// The C3 interaction block sits here, not beside the landing checks, because it opens topics on purpose:
+// placed earlier it inflated the `get_topic` count the check just above measures, and left its own selection
+// in place for the index checks that follow. Both were my harness leaking state into other checks' premises.
+// It returns to the landing first, since the read checks leave the page in whatever view they were reading.
+if ((await root.locator('[data-rd-home="available"]').count()) > 0) {
+  await root.locator('[data-rd-home="available"]').click();
+  await page.waitForSelector(`div[data-plugin-id] [data-rd-landing]`, { timeout: 10000 });
+}
+// The card actions are navigation, not filters — the same contract the tag chips use — and the shell title is
+// the way home. Both behavioural checks the reviewer added are read from that: each card action lands in its
+// own view with that entity selected, and coming home preserves the window rather than resetting it.
+const windowPressed = () =>
+  page.evaluate((pluginId) => {
+    const root = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
+    return (
+      root?.querySelector('[data-rd-window][aria-pressed="true"]')?.getAttribute("data-rd-window") ?? null
+    );
+  }, PLUGIN_ID);
+
+// Remember the window the pass was running with, so this block hands back exactly what it found rather than
+// a value it liked the look of. Restoring a hard-coded 14 here left every check below reading the topic
+// through a narrower window: the detail frames still rendered, but their axes, notes and activity came back
+// empty and the pass aborted on a disclosure that had nothing to open.
+const windowAtBlockStart = await windowPressed();
+
+// Move the window off its default while still on the landing, so "preserved" means something.
+await root.locator('[data-rd-window="30"]').click();
+await page.waitForFunction(
+  (pluginId) =>
+    document
+      .querySelector(`div[data-plugin-id="${pluginId}"] [data-rd-window][aria-pressed="true"]`)
+      ?.getAttribute("data-rd-window") === "30",
+  PLUGIN_ID,
+  { timeout: 10000 }
+);
+const windowAfterChange = await windowPressed();
+
+const firstTopicCard = landing.topicCards[0];
+// The Topics index row names its topic by *name* (`data-rd-index-topic`), while the landing card carries the
+// id — so the identity is compared through the card's own rendered name, the same way the repository action
+// below is compared through the repository name. Comparing an id to a name would fail on a correct page.
+const firstTopicName = await page.evaluate(
+  ([pluginId, id]) =>
+    document
+      .querySelector(
+        `div[data-plugin-id="${pluginId}"] [data-rd-landing-topic="${id}"] [data-rd-landing-name]`
+      )
+      ?.innerText?.trim() ?? null,
+  [PLUGIN_ID, firstTopicCard]
+);
+await root.locator(`[data-rd-landing-topic="${firstTopicCard}"] [data-rd-landing-open="topic"]`).click();
+await page.waitForSelector(`div[data-plugin-id] [data-rd-view="topics"]`, { timeout: 10000 });
+const openedTopic = await page.evaluate((pluginId) => {
+  const root = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
+  return {
+    home: root?.querySelector("[data-rd-home]")?.getAttribute("data-rd-home") ?? null,
+    selected: [
+      ...(root?.querySelectorAll('[data-rd-index-topic][aria-pressed="true"]') ?? []),
+    ].map((node) => node.getAttribute("data-rd-index-topic")),
+  };
+}, PLUGIN_ID);
+check(
+  "`Open topic` lands in the Topics view with that topic selected",
+  openedTopic.home === "available" &&
+    firstTopicName !== null &&
+    JSON.stringify(openedTopic.selected) === JSON.stringify([firstTopicName]),
+  `selected ${JSON.stringify(openedTopic.selected)} for card ${JSON.stringify(firstTopicName)} (${firstTopicCard}); home=${openedTopic.home}`
+);
+
+await root.locator('[data-rd-home="available"]').click();
+await page.waitForSelector(`div[data-plugin-id] [data-rd-landing]`, { timeout: 10000 });
+const windowAfterHome = await windowPressed();
+check(
+  "the shell title returns to the landing and carries the window with it",
+  windowAfterHome === windowAfterChange && windowAfterChange === "30",
+  `window before ${windowAfterChange}, after returning home ${windowAfterHome}`
+);
+
+const firstRepositoryCard = landing.repositoryCards[0].id;
+const firstRepositoryName = await page.evaluate(
+  ([pluginId, id]) =>
+    document
+      .querySelector(`div[data-plugin-id="${pluginId}"] [data-rd-landing-repository="${id}"] [data-rd-landing-name]`)
+      ?.innerText?.trim() ?? null,
+  [PLUGIN_ID, firstRepositoryCard]
+);
+await root
+  .locator(`[data-rd-landing-repository="${firstRepositoryCard}"] [data-rd-landing-open="repository"]`)
+  .click();
+await page.waitForSelector(`div[data-plugin-id] [data-rd-view="repositories"]`, { timeout: 10000 });
+const openedRepository = await page.evaluate((pluginId) => {
+  const root = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
+  return (
+    root?.querySelector("[data-rd-repository-panel]")?.getAttribute("data-rd-repository-panel") ?? null
+  );
+}, PLUGIN_ID);
+check(
+  "`Expand activity` lands in the Repositories view with that repository selected",
+  openedRepository !== null && openedRepository === firstRepositoryName,
+  `panel shows ${JSON.stringify(openedRepository)} for card ${JSON.stringify(firstRepositoryName)}`
+);
+
+// The reviewer's stale-target question, tested rather than argued. Home clears only the *view* selection, so
+// a target from an earlier card action must not resurface as a surprise: after two card actions and two
+// returns home, a plain view choice (which asks for no entity at all) must land on the entity the reader last
+// asked for — not a third one, and not a target that was superseded. The fixture carries two topics, so a
+// stale target would be exactly the other card's topic.
+//
+// The block opens by returning home, because the check above left the page in the Repositories view: a landing
+// card cannot be clicked from there, and reaching for one is what aborted the pass on the first attempt.
+await root.locator('[data-rd-home="available"]').click();
+await page.waitForSelector(`div[data-plugin-id] [data-rd-landing]`, { timeout: 10000 });
+await root.locator(`[data-rd-landing-topic="${firstTopicCard}"] [data-rd-landing-open="topic"]`).click();
+await page.waitForSelector(`div[data-plugin-id] [data-rd-view="topics"]`, { timeout: 10000 });
+await root.locator('[data-rd-home="available"]').click();
+await page.waitForSelector(`div[data-plugin-id] [data-rd-landing]`, { timeout: 10000 });
+
+const secondTopicCard = landing.topicCards[1] ?? null;
+if (secondTopicCard !== null) {
+  const secondTopicName = await page.evaluate(
+    ([pluginId, id]) =>
+      document
+        .querySelector(
+          `div[data-plugin-id="${pluginId}"] [data-rd-landing-topic="${id}"] [data-rd-landing-name]`
+        )
+        ?.innerText?.trim() ?? null,
+    [PLUGIN_ID, secondTopicCard]
+  );
+  await root.locator(`[data-rd-landing-topic="${secondTopicCard}"] [data-rd-landing-open="topic"]`).click();
+  await page.waitForSelector(`div[data-plugin-id] [data-rd-view="topics"]`, { timeout: 10000 });
+  await root.locator('[data-rd-home="available"]').click();
+  await page.waitForSelector(`div[data-plugin-id] [data-rd-landing]`, { timeout: 10000 });
+  await root.locator('[data-rd-view-option="topics"]').click();
+  await page.waitForSelector(`div[data-plugin-id] [data-rd-view="topics"]`, { timeout: 10000 });
+  const afterPlainNav = await page.evaluate((pluginId) => {
+    const root = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
+    return [
+      ...(root?.querySelectorAll('[data-rd-index-topic][aria-pressed="true"]') ?? []),
+    ].map((node) => node.getAttribute("data-rd-index-topic"));
+  }, PLUGIN_ID);
+  check(
+    "a plain view choice after two card actions lands on the entity asked for last, not a superseded one",
+    JSON.stringify(afterPlainNav) === JSON.stringify([secondTopicName]),
+    `landed on ${JSON.stringify(afterPlainNav)}; last asked for ${JSON.stringify(secondTopicName)} (first was ${JSON.stringify(firstTopicName)})`
+  );
+  await root.locator('[data-rd-home="available"]').click();
+  await page.waitForSelector(`div[data-plugin-id] [data-rd-landing]`, { timeout: 10000 });
+} else {
+  skip(
+    "a plain view choice after two card actions lands on the entity asked for last, not a superseded one",
+    "this corpus has a single topic, so a superseded target would be indistinguishable from the current one"
+  );
+}
+
+// Back home — unless the block above already left the page there, which is one of the two legal outcomes.
+// Then on to the view the rest of the pass reads: the pass navigates rather than inheriting.
+if ((await root.locator('[data-rd-home="available"]').count()) > 0) {
+  await root.locator('[data-rd-home="available"]').click();
+  await page.waitForSelector(`div[data-plugin-id] [data-rd-landing]`, { timeout: 10000 });
+}
+// Leave the window exactly where it was found, so nothing downstream is reading a window this block moved.
+if (windowAtBlockStart) {
+  await root.locator(`[data-rd-window="${windowAtBlockStart}"]`).click();
+  await page.waitForFunction(
+    ([thePluginId, days]) =>
+      document
+        .querySelector(`div[data-plugin-id="${thePluginId}"] [data-rd-window][aria-pressed="true"]`)
+        ?.getAttribute("data-rd-window") === days,
+    [PLUGIN_ID, windowAtBlockStart],
+    { timeout: 10000 }
+  );
+}
+// …and leave the *selection* as the pass expects to find it. The checks below read the default topic's pane by
+// id — `[data-rd-detail="<topic id>"]` — so this block must not hand them the second topic it selected on the
+// way to proving the stale-target behaviour, or no pane at all because it stopped on the landing. Two ways
+// this went wrong before, both worth keeping: stopping on a view the next checks did not ask for, and clicking
+// the first row when it was already the pressed row — that re-click does not hold the selection here, and an
+// empty pane aborted the axis-disclosure check on a 30s timeout.
+await root.locator('[data-rd-view-option="topics"]').click();
+await page.waitForSelector(`div[data-plugin-id] [data-rd-view="topics"]`, { timeout: 10000 });
+const pressedRowName = await page.evaluate(
+  (pluginId) =>
+    document
+      .querySelector(`div[data-plugin-id="${pluginId}"] [data-rd-index-topic][aria-pressed="true"]`)
+      ?.getAttribute("data-rd-index-topic") ?? null,
+  PLUGIN_ID
+);
+const firstRow = page.locator('div[data-plugin-id] [data-rd-index-topic]').first();
+const firstRowName = (await firstRow.count()) > 0 ? await firstRow.getAttribute("data-rd-index-topic") : null;
+if (firstRowName !== null && pressedRowName !== firstRowName) {
+  await firstRow.click();
+  await page.waitForSelector('div[data-plugin-id] [data-rd-detail]', { timeout: 20000 });
+}
+
 
 // Reading is the card's only mode, and the detail it renders has no form in it. Asserted as separate
 // facts so a regression names itself: reading renders no editor, no broad edit control exists anywhere in
@@ -4886,6 +5225,11 @@ if (WRITE) {
   // way in is the read disclosure (D7), and the note affordance lives inside that detail.
   await page.goto(`${DASHBOARD}/plugins/${PLUGIN_ID}`, { waitUntil: "networkidle" });
   await root.waitFor({ state: "visible", timeout: 20000 });
+  // A reload opens the shell on its landing now (C3), not on Topics — so the view this section writes from has
+  // to be chosen rather than assumed. Before the landing default it was simply there, and the row click below
+  // aborted on a 30s locator timeout against a page that had no index at all.
+  await root.locator('[data-rd-view-option="topics"]').click();
+  await page.waitForSelector(`div[data-plugin-id] [data-rd-view="topics"]`, { timeout: 10000 });
   // The detail is persistent, but this fixture topic is not the server's first: select its rail row.
   await root.locator(`[data-rd-index-topic="${name}"]`).click();
   // Confirm the click actually selected the row before asserting anything about its pane: without this

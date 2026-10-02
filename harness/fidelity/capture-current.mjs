@@ -53,7 +53,7 @@ const OUT = flag("out", null);
 // `--full` also writes a full-page PNG beside each viewport clip. Opt-in, because the montage compares first
 // screens and nothing else reads anything but the clip.
 const FULL = args.includes("--full");
-const VIEWS = ["topics", "people", "repositories", "progress"];
+const VIEWS = ["overview", "topics", "people", "repositories", "progress"];
 // The capture's own scratch directory, created only once every layer up to the first screenshot has
 // held. `refuse` removes it, so a late failure leaves no half-capture behind.
 let scratchDir = null;
@@ -62,6 +62,17 @@ let scratchDir = null;
 // composition's core claim, and every view now names itself (§7: the shell title stays, the view says which
 // one it is), so a build that lost the heading or the pane cannot be captured under either name.
 const VIEW_MARKERS = {
+  /**
+   * C3 — the landing. There is deliberately no nav control for it (the aggregation is shell behaviour, not a
+   * fifth destination), so its markers include the home affordance in its "nothing selected" form: the shell
+   * title is a plain heading on the landing and a control everywhere else.
+   */
+  overview: [
+    "[data-rd-landing]",
+    '[data-rd-landing-column="topics"]',
+    '[data-rd-landing-column="repositories"]',
+    '[data-rd-home="current"]',
+  ],
   people: ['[data-rd-view="people"]', "[data-rd-people]", '[data-rd-view-heading="people"]'],
   progress: [
     '[data-rd-view="progress"]',
@@ -158,8 +169,12 @@ try {
   }
 
   await page.goto(PAGE_URL, { waitUntil: "networkidle" }).catch(() => {});
+  // C3 — the mount gate waits for what the shell actually opens on: the **default landing**, which by design
+  // renders no view container (there is no fifth destination and no view is selected yet). It waited for the
+  // Topics container until this unit, which is the same "the default is a view" assumption the acceptance
+  // pass had to drop; a view container at this point would mean the shell silently picked a view.
   const mounted = await page
-    .waitForSelector(`${PLUGIN_ROOT} [data-rd-view="topics"]`, { timeout: 20000 })
+    .waitForSelector(`${PLUGIN_ROOT} [data-rd-landing]`, { timeout: 20000 })
     .then(() => true)
     .catch(() => false);
   if (!mounted) {
@@ -308,18 +323,29 @@ try {
 
   const shots = [];
   for (const view of VIEWS) {
-    const control = page.locator(`div[data-plugin-id] [data-rd-view-option="${view}"]`);
-    if ((await control.count()) > 0) {
-      await control.first().click();
-      const switched = await page
-        .waitForSelector(`div[data-plugin-id] [data-rd-view="${view}"]`, { timeout: 10000 })
-        .then(() => true)
-        .catch(() => false);
-      if (!switched) {
-        refuse(`view ${view} never rendered its container ([data-rd-view="${view}"])`);
+    if (view === "overview") {
+      /* C3 — the landing is the *initial* state, so it is captured before anything is clicked, and there is
+         no control to click for it: the ruling allows the aggregation as default landing behaviour and no
+         fifth nav item. Refuse if a view container is already on screen, because a shot named "overview" that
+         is really some other view is worse than no shot at all. */
+      const alreadyInView = await page.locator(`${PLUGIN_ROOT} [data-rd-view]`).count();
+      if (alreadyInView > 0) {
+        refuse("the overview shot would record a view the reader had already selected");
       }
-    } else if (view !== "topics") {
-      refuse(`no control for view ${view} — the capture would record another view under its name`);
+    } else {
+      const control = page.locator(`div[data-plugin-id] [data-rd-view-option="${view}"]`);
+      if ((await control.count()) > 0) {
+        await control.first().click();
+        const switched = await page
+          .waitForSelector(`div[data-plugin-id] [data-rd-view="${view}"]`, { timeout: 10000 })
+          .then(() => true)
+          .catch(() => false);
+        if (!switched) {
+          refuse(`view ${view} never rendered its container ([data-rd-view="${view}"])`);
+        }
+      } else if (view !== "topics") {
+        refuse(`no control for view ${view} — the capture would record another view under its name`);
+      }
     }
     const markers = VIEW_MARKERS[view].map((selector) => `${PLUGIN_ROOT} ${selector}`);
     const present = await page.evaluate((selectors) => {

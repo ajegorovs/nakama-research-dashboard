@@ -1,6 +1,6 @@
 # harness/read-pass.sh — read pass · dataset fixture · viewport 1280x800
 # dashboard: http://127.0.0.1:3005
-# generated: 2026-10-02T19:33:04+03:00
+# generated: 2026-10-02T20:52:58+03:00
 
 PASS  login — status 200
 identity: expected fixture · 2 topic(s) (2 fixture-named) · 3 of 3 repository(ies) under fixture/ · observed fixture markers only
@@ -10,6 +10,13 @@ PASS  overview renders as the default screen
 PASS  the overview renders from one logical get_overview load — saw 2 call(s) over 1 distinct input(s); react-dom is a development build: true: [{"activitySinceDays":14},{"activitySinceDays":14}]
 PASS  a get_overview call reads other plugin actions for nothing else on first paint — list_topics calls: 0
 PASS  the default window is 14 days and is sent as a query parameter — {"activitySinceDays":14}
+PASS  the shell opens on the default landing, with no view selected — landing=true; view container(s)=0; pressed view option(s)=[]; home=current
+PASS  the landing shows both aggregation columns — topic column=yes; repository column=yes
+PASS  every topic in the payload appears on the landing exactly once, in the payload's own order — rendered ["d4e3c517-b5ec-4ea6-9746-957df570ed3b","e4d352d2-18c0-4be8-8713-b192af82f9cc"] vs payload ["d4e3c517-b5ec-4ea6-9746-957df570ed3b","e4d352d2-18c0-4be8-8713-b192af82f9cc"]
+PASS  every repository in the payload appears on the landing exactly once, in the payload's own order — rendered ["c3bd0a08-ffda-42dc-b601-61a8db6bdafb","2298d937-8e00-4a76-a295-614766c960cf","29ef52c8-97c2-4c8e-aaf6-198a698d305c"] vs payload ["c3bd0a08-ffda-42dc-b601-61a8db6bdafb","2298d937-8e00-4a76-a295-614766c960cf","29ef52c8-97c2-4c8e-aaf6-198a698d305c"]
+PASS  the repository cards state the omitted window count instead of printing a capped list length (D4) — omission markers 3 for 3 repository card(s); cards printing a window count: 0
+PASS  each topic card's activity line is the payload's own count for that topic, with no event title — d4e3c517-b5ec-4ea6-9746-957df570ed3b: "8 events in the selected window · last activity yesterday" (payload 8); e4d352d2-18c0-4be8-8713-b192af82f9cc: "1 event in the selected window · last activity yesterday" (payload 1)
+PASS  the two columns sit side by side with the topic column wider, both beginning in the first viewport — topics {"height":462,"left":320,"top":187,"width":504} vs repositories {"height":510,"left":836,"top":187,"width":420} in {"height":800,"width":1280}
 PASS  the topic index rendered — 2 index rows
 PASS  the header carries the title, window control, archived toggle and count line, and no create/edit control — {"createControl":false,"editControl":false,"archivedToggle":true,"countsLine":true,"headerText":"Research overview Topics People Repositories Progress 7 days 14 days 30 days All time archived Refresh 2 topics · 7 axes · 2 people · 3 repositories Topics Most recently active first · primarily read-","windowButtons":4}
 PASS  the count line reads correctly when the count is one — 3 repositories
@@ -46,6 +53,10 @@ PASS  selecting another index row changes the detail — clicked "Layout fixture
 PASS  changing selection does not reorder the index (server order preserved) — before ["Layout fixture — crowded card","Layout fixture — second topic"] / after ["Layout fixture — crowded card","Layout fixture — second topic"]
 PASS  Current work renders every non-terminal axis; the fold holds the terminal ones — current ["Fixture: active axis (with evidence)","Fixture: parked axis (inferred state)","Fixture: blocked axis (blocked + blocker text)","Fixture: evidence-free axis (inferred, nothing behind it)"] (payload ["Fixture: blocked axis (blocked + blocker text)","Fixture: active axis (with evidence)","Fixture: evidence-free axis (inferred, nothing behind it)","Fixture: parked axis (inferred state)"]), folded ["Fixture: abandoned axis (given up on deliberately)","Fixture: completed axis"] (payload ["Fixture: completed axis","Fixture: abandoned axis (given up on deliberately)"])
 PASS  opening a topic reads it once, in one get_topic call — saw 3 call(s) over 2 topic(s) — 1 load read + 2 selection read(s) over 2 distinct: [{"topicId":"d4e3c517-b5ec-4ea6-9746-957df570ed3b"},{"topicId":"e4d352d2-18c0-4be8-8713-b192af82f9cc"},{"topicId":"d4e3c517-b5ec-4ea6-9746-957df570ed3b"}]
+PASS  `Open topic` lands in the Topics view with that topic selected — selected ["Layout fixture — crowded card"] for card "Layout fixture — crowded card" (d4e3c517-b5ec-4ea6-9746-957df570ed3b); home=available
+PASS  the shell title returns to the landing and carries the window with it — window before 30, after returning home 30
+PASS  `Expand activity` lands in the Repositories view with that repository selected — panel shows "fixture/0-bare-repository" for card "fixture/0-bare-repository"
+PASS  a plain view choice after two card actions lands on the entity asked for last, not a superseded one — landed on ["Layout fixture — second topic"]; last asked for "Layout fixture — second topic" (first was "Layout fixture — crowded card")
 PASS  reading a topic does not open the editor — pane present true, editor rendered false
 PASS  the topic detail offers no broad edit control (D7: Topics is read-first) — edit-open 0, Edit/Done labels 0, editors 0
 PASS  the narrow note affordance is part of the read detail, with no mode to enter (D7) — note inputs 1, pane present true
@@ -152,8 +163,8 @@ PASS  command palette lists the plugin page
 palette screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/layout-fixtures/screenshots/1280x800/research-dashboard-read-palette.png
 PASS  palette entry navigates to the page — http://127.0.0.1:3005/plugins/research-dashboard
 PASS  one surface per level: no boxed block nests inside another, except a refusal banner — 0 nested box(es) on this view, all refusal banners
-PASS  tags stay chips when they wrap: one height per cluster, one line each — 12 cluster(s), every chip one line
-PASS  the exceptional colour is used only for the exceptional state — nothing else renders in oklch(0.577 0.245 27.325)
+PASS  tags stay chips when they wrap: one height per cluster, one line each — 4 cluster(s), every chip one line
+SKIP  the exceptional colour is used only for the exceptional state — no blocked state badge is on this view, so the theme's exceptional colour cannot be read off one
 PASS  no view runs away with the scroll at the reference size (budget: eight screens of content) — Topics 1.4 screen(s), People 1 screen(s), Repositories 0.9 screen(s), Progress 1.6 screen(s)
 PASS  the Progress glance — the Problem column and the newest Activity row — is inside the first screen — problem top 319px, newest activity row bottom 493px, screen 800px
 PASS  every view names itself under the shell title (§7), in all four views — topics → "Topics", people → "People", repositories → "Repositories", progress → "Progress"
@@ -167,8 +178,9 @@ PASS  an axis tag clicked in Repositories lands in Progress/Axes with that axis 
 PASS  a repository tag clicked in Topics lands in Repositories with that repository selected — view repositories, panel "fixture/crowded-card" (wanted "fixture/crowded-card")
 PASS  the grammar traversal wrote nothing: no write action, and the projection is unchanged — writes 0 -> 0; payload identical
 screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/layout-fixtures/screenshots/1280x800/research-dashboard-read.png
-console issues after login: ["error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)","error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"]
+console issues after login: []
 
-read pass: all checks passed; 1 skipped for want of a subject in this corpus
+read pass: all checks passed; 2 skipped for want of a subject in this corpus
 skipped (each with its reason):
   - the rail's three cards all begin in the first screen — this run is 1280×800; the first-screen budget is a 1440×900 decision, and the rail's start is set by the host chrome rather than by the viewport
+  - the exceptional colour is used only for the exceptional state — no blocked state badge is on this view, so the theme's exceptional colour cannot be read off one

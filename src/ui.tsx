@@ -409,6 +409,20 @@ type Activity = {
   actorType: string;
 };
 
+/**
+ * A blocked axis as the overview's own `blocked[]` states it: the axis, its topic, and the blocker sentence
+ * that axis actually asserted. Mirrored here because the landing's current-work line reads it — the store
+ * already sends it (`Overview.blocked`), so this admits a field rather than adding one.
+ */
+type BlockedAxis = {
+  axisId: string;
+  topicId: string;
+  topicName: string;
+  title: string;
+  state: AxisState;
+  blocker: string;
+};
+
 type Overview = {
   generatedAt: string;
   activitySinceDays: number;
@@ -419,6 +433,8 @@ type Overview = {
     people: number;
   };
   axesByState: Record<string, number>;
+  /** Blocked axes, with the blocker each one states. Read by the landing's current-work line. */
+  blocked: BlockedAxis[];
   topics: TopicOverview[];
   recentActivity: Activity[];
   people: PersonRollup[];
@@ -632,6 +648,36 @@ const css = `
   --rd-rule: 2px solid var(--border);
 }
 [data-plugin-id="research-dashboard"] .rd-stack { display: grid; gap: var(--rd-gap-block); }
+
+  /* C3 — the default landing. Two columns from one payload. Topic activity is the wider column, the way the
+     prototype has it, and both begin in the first viewport at 1440 and 1280 (the host leaves a 1144px and a
+     984px container at those widths). It collapses to one column only below the narrowest review width, so a
+     single-column read is never confused with the composition being judged. */
+  [data-plugin-id="research-dashboard"] .rd-landing { display: grid; gap: var(--rd-gap-block); }
+  [data-plugin-id="research-dashboard"] .rd-landing-grid {
+    align-items: start;
+    display: grid;
+    gap: var(--rd-gap-block);
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  }
+  [data-plugin-id="research-dashboard"] .rd-landing-column { display: grid; gap: 10px; }
+  [data-plugin-id="research-dashboard"] .rd-landing-head {
+    align-items: baseline; display: flex; gap: 8px; justify-content: space-between;
+  }
+  [data-plugin-id="research-dashboard"] .rd-landing-card { display: grid; gap: 6px; }
+  [data-plugin-id="research-dashboard"] .rd-landing-top {
+    align-items: baseline; display: flex; gap: 8px; justify-content: space-between;
+  }
+  [data-plugin-id="research-dashboard"] .rd-landing-pills { display: flex; flex-wrap: wrap; gap: 4px; }
+  /* The shell title as the way home: the same type as the heading it replaces, with nothing of a tab about
+     it — no border, no fill, no pressed state. It underlines on hover and that is the whole affordance. */
+  [data-plugin-id="research-dashboard"] .rd-home {
+    background: none; border: 0; cursor: pointer; font: inherit; padding: 0; text-align: left;
+  }
+  [data-plugin-id="research-dashboard"] .rd-home:hover { text-decoration: underline; }
+  @media (max-width: 899px) {
+    [data-plugin-id="research-dashboard"] .rd-landing-grid { grid-template-columns: minmax(0, 1fr); }
+  }
 [data-plugin-id="research-dashboard"] .rd-row {
   display: flex;
   align-items: center;
@@ -1371,7 +1417,12 @@ export function apply(ctx: Context) {
     onChange,
     disabled,
   }: {
-    value: ViewName;
+    /**
+     * `null` is the shell's default landing (C3): no view is selected yet, so the control shows nothing
+     * pressed — the landing is shell behaviour, not a fifth destination, and pretending otherwise by
+     * highlighting Topics would say the reader is in a view they have not chosen.
+     */
+    value: ViewName | null;
     onChange: (next: ViewName) => void;
     disabled: boolean;
   }) {
@@ -2780,6 +2831,255 @@ export function apply(ctx: Context) {
   }
 
   /**
+  /**
+   * C3 — the default landing: the prototype's Overview aggregation, re-homed as shell behaviour
+   * (`COMPOSITION.md` §4.1) so the dashboard gains the composition **without** a fifth navigation item. No
+   * view is selected until one is chosen or a tag navigates, and the shell title is the way back.
+   *
+   * Both columns read the SAME `get_overview` payload the four views read — topics from `Overview.topics`,
+   * repositories from `Overview.repositories`, the very collections the Topics and Repositories views render —
+   * so the landing cannot drift from them and cannot become a second reading surface. Each column keeps the
+   * payload's order and says which order it is: topics arrive in attention order (status, then a blocked axis,
+   * then recency), repositories by name. Nothing here re-ranks or re-aggregates.
+   *
+   * Two prototype fields are absent by decision, each **marked rather than faked**. The repository card's
+   * window event count is omitted under D4: `RepositoryRollup` carries no authoritative total, and printing
+   * the length of its capped `recentActivity` list would restate rows — the defect this phase exists to
+   * remove. The topic card carries no latest-event title: `TopicOverview` states an activity count and a
+   * last-activity time but no event, and the only route to one is the window-wide activity read F2 retired.
+   * The repository card *does* carry a last-event row, from the rollup's own newest event, used as *an event*
+   * and never counted.
+   */
+  function LandingView({
+    blocked,
+    onOpenEntity,
+    repositories,
+    topics,
+  }: {
+    blocked: BlockedAxis[];
+    onOpenEntity: (type: EntityType, id: string) => void;
+    repositories: RepositoryRollup[];
+    topics: TopicOverview[];
+  }) {
+    /**
+     * The current-work line, composed from facts the payload already states and nothing else: the axis-state
+     * counts the front page and both C6 rollups share, plus the blocked axis's own blocker sentence when the
+     * topic carries one. No generated prose — the prototype's line is hand-written decoration, and C2's role
+     * line was ruled on exactly this principle. It names the blocked axis rather than pasting its whole
+     * blocker sentence: the landing is a ten-second surface, and the sentence is one click away in the topic
+     * detail where it belongs.
+     */
+    const stateWords: AxisState[] = ["blocked", "active", "draft", "parked", "usable"];
+    function currentWorkLine(entry: TopicOverview): string | null {
+      const counts = stateWords
+        .filter((state) => (entry.axisCounts[state] ?? 0) > 0)
+        .map((state) => `${entry.axisCounts[state]} ${state}`);
+      const blockedAxis = blocked.find((row) => row.topicId === entry.topic.id);
+      if (blockedAxis) {
+        counts.push(`blocked on ${blockedAxis.title}`);
+      }
+      return counts.length > 0 ? counts.join(" · ") : null;
+    }
+
+    return (
+      <div className="rd-landing" data-rd-landing={topics.length + repositories.length}>
+        <div className="rd-view-heading" data-rd-view-heading="overview">
+          <h3 className="rd-view-title" data-rd-view-title="overview">
+            Overview
+          </h3>
+          <span className="rd-meta">
+            Both columns come from the same overview read the four views use
+          </span>
+        </div>
+
+        <div className="rd-landing-grid">
+          <section
+            aria-label="Topic activity"
+            className="rd-landing-column"
+            data-rd-landing-column="topics"
+            data-rd-landing-topics={topics.length}
+          >
+            <div className="rd-landing-head">
+              <h4 className="rd-side-title">Topic activity</h4>
+              <span className="rd-meta">Attention order, as the payload sends it</span>
+            </div>
+            {topics.length === 0 ? (
+              <p className="rd-muted" data-rd-landing-empty="topics">
+                No topics recorded yet.
+              </p>
+            ) : null}
+            {topics.map((entry) => {
+              const current = currentWorkLine(entry);
+              return (
+                <article
+                  className="rd-topic-card rd-landing-card"
+                  data-rd-landing-topic={entry.topic.id}
+                  key={entry.topic.id}
+                >
+                  <div className="rd-landing-top">
+                    <h5 className="rd-strong" data-rd-landing-name={entry.topic.id}>
+                      {entry.topic.name}
+                    </h5>
+                    <span className="rd-meta" data-rd-landing-recency={entry.topic.id}>
+                      {describeAge(entry.lastActivityAt)} · last recorded activity
+                    </span>
+                  </div>
+                  {entry.topic.description ? (
+                    <p className="rd-meta" data-rd-landing-description={entry.topic.id}>
+                      {entry.topic.description}
+                    </p>
+                  ) : null}
+                  {current ? (
+                    <p className="rd-current-work" data-rd-landing-current-work={entry.topic.id}>
+                      {current}
+                    </p>
+                  ) : null}
+                  {entry.axes.length > 0 ? (
+                    <div className="rd-landing-pills" data-rd-landing-pills={entry.axes.length}>
+                      {entry.axes.slice(0, 3).map((axis) => (
+                        <span className="rd-tag" data-rd-landing-pill={axis.state} key={axis.id}>
+                          {axis.title} · {axis.state}
+                          {axis.stateConfidence === "confirmed" ? "" : ` (${axis.stateConfidence})`}
+                        </span>
+                      ))}
+                      {entry.axes.length > 3 ? (
+                        <span className="rd-meta">+{entry.axes.length - 3} more</span>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {/* The payload's own window count and last-activity time — the authoritative facts. The
+                      prototype names a single event here; `TopicOverview` carries none, and the only route to
+                      one is the window-wide read F2 retired, so no event title is shown. */}
+                  <p className="rd-meta" data-rd-landing-activity={entry.topic.id}>
+                    {countLabel(entry.activityCount, "event", "events")} in the selected window ·{" "}
+                    {entry.lastActivityAt
+                      ? `last activity ${describeAge(entry.lastActivityAt)}`
+                      : "no activity recorded yet"}
+                  </p>
+                  {entry.people.length > 0 || entry.repositories.length > 0 ? (
+                    <div className="rd-tags" data-rd-landing-chips={entry.topic.id}>
+                      {entry.people.map((person) => (
+                        <EntityTag
+                          compact
+                          id={person.id}
+                          key={person.id}
+                          label={person.displayName}
+                          onOpen={onOpenEntity}
+                          type="person"
+                        />
+                      ))}
+                      {entry.repositories.map((repository) => (
+                        <EntityTag
+                          compact
+                          id={repository.id}
+                          key={repository.id}
+                          label={repository.fullName}
+                          onOpen={onOpenEntity}
+                          type="repository"
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="rd-row">
+                    <Button
+                      data-rd-landing-open="topic"
+                      onClick={() => onOpenEntity("topic", entry.topic.id)}
+                      size="sm"
+                      variant="outline"
+                    >
+                      Open topic →
+                    </Button>
+                  </div>
+                </article>
+              );
+            })}
+          </section>
+
+          <section
+            aria-label="Repository activity"
+            className="rd-landing-column"
+            data-rd-landing-column="repositories"
+            data-rd-landing-repositories={repositories.length}
+          >
+            <div className="rd-landing-head">
+              <h4 className="rd-side-title">Repository activity</h4>
+              <span className="rd-meta">By name, as the payload sends it</span>
+            </div>
+            {repositories.length === 0 ? (
+              <p className="rd-muted" data-rd-landing-empty="repositories">
+                No repositories recorded yet.
+              </p>
+            ) : null}
+            {repositories.map((entry) => {
+              const latest = entry.recentActivity[0] ?? null;
+              return (
+                <article
+                  className="rd-topic-card rd-landing-card"
+                  data-rd-landing-repository={entry.repository.id}
+                  key={entry.repository.id}
+                >
+                  <div className="rd-landing-top">
+                    <h5 className="rd-strong" data-rd-landing-name={entry.repository.id}>
+                      {entry.repository.fullName}
+                    </h5>
+                    <span className="rd-meta" data-rd-landing-recency={entry.repository.id}>
+                      {describeAge(entry.lastActivityAt)} · last recorded activity
+                    </span>
+                  </div>
+                  {entry.repository.description ? (
+                    <p className="rd-meta" data-rd-landing-description={entry.repository.id}>
+                      {entry.repository.description}
+                    </p>
+                  ) : null}
+                  {latest ? (
+                    <p className="rd-meta" data-rd-landing-last-event={entry.repository.id}>
+                      <span className="rd-strong">{latest.summary}</span> ·{" "}
+                      {latest.sourceRef || latest.sourceType} · {describeAge(latest.occurredAt)}
+                    </p>
+                  ) : null}
+                  {entry.topics.length > 0 || entry.axes.length > 0 ? (
+                    <div className="rd-tags" data-rd-landing-chips={entry.repository.id}>
+                      {entry.topics.map((link) => (
+                        <EntityTag
+                          compact
+                          id={link.topic.id}
+                          key={link.topic.id}
+                          label={link.topic.name}
+                          onOpen={onOpenEntity}
+                          type="topic"
+                        />
+                      ))}
+                      {entry.axes.length > 0 ? (
+                        <span className="rd-meta" data-rd-landing-axes={entry.repository.id}>
+                          {countLabel(entry.axes.length, "development axis", "development axes")}
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {/* D4: the prototype's "607 recorded events in the selected window" is **omitted**. The
+                      authoritative window total is not in `RepositoryRollup`, and the length of the capped,
+                      newest-first `recentActivity` list is not that total — the marker records the decision
+                      so the absence is a check rather than an oversight. */}
+                  <div className="rd-row" data-rd-landing-count-omitted="d4">
+                    <Button
+                      data-rd-landing-open="repository"
+                      onClick={() => onOpenEntity("repository", entry.repository.id)}
+                      size="sm"
+                      variant="outline"
+                    >
+                      Expand activity →
+                    </Button>
+                  </div>
+                </article>
+              );
+            })}
+          </section>
+        </div>
+      </div>
+    );
+  }
+
+  /**
    * Repository-first (C6): what each codebase supports, the axes that name it, and the events recorded
    * against it or against one of those axes. The same rules as the person view — factual, never scored.
    */
@@ -3806,7 +4106,13 @@ export function apply(ctx: Context) {
 
   function ResearchPage() {
     const [overview, setOverview] = React.useState<Overview | null>(null);
-    const [view, setView] = React.useState<ViewName>("topics");
+    /**
+     * C3 — the selected view, or `null` for the default landing. `null` is the honest default: the landing
+     * aggregates topics and repositories together, so it is not "the Topics view" and none of the four nav
+     * options is selected while it shows. Choosing a view or following a tag sets one; the shell title
+     * returns here, carrying the current window with it (only the view changes).
+     */
+    const [view, setView] = React.useState<ViewName | null>(null);
     /**
      * The entity a cross-view tag asked for, and how many times it has asked. `seq` is what makes a second
      * click on the same tag land again after the reader selected something else by hand — without it the
@@ -4148,7 +4454,26 @@ export function apply(ctx: Context) {
     return (
       <div className="rd-stack">
         <div className="rd-row" data-rd-topbar="true">
-          <h2 className="rd-page-title">Research overview</h2>
+          {/* C3 — the shell title is also the way home. The ruling allows the aggregation as default
+              landing behaviour but no fifth navigation item, so the title is the only control that returns
+              to it — and it stays a shell affordance: same typography as the heading it replaces, no tab
+              treatment, nothing that reads as a fifth member of Views | People | Repositories | Progress.
+              It is a button only when there is somewhere to return from, so on the landing itself it is
+              the plain heading a reader expects. */}
+          {view === null ? (
+            <h2 className="rd-page-title" data-rd-home="current">
+              Research overview
+            </h2>
+          ) : (
+            <button
+              className="rd-page-title rd-home"
+              data-rd-home="available"
+              onClick={() => setView(null)}
+              type="button"
+            >
+              Research overview
+            </button>
+          )}
           {/* Three groups rather than one strip: what you are looking at, the window you are looking
               at it through, and the actions. The divider between them is the point — without it this
               reads as ten controls of equal weight in a row. */}
@@ -4205,6 +4530,18 @@ export function apply(ctx: Context) {
               : "loading…"}
           </span>
         </div>
+
+        {view === null ? (
+          /* C3 — the default landing. Rendered from the same `overview` payload the views below read, and
+             only while no view is selected: the four views keep their own nav options and their own
+             headings, and nothing here adds a fifth. */
+          <LandingView
+            blocked={overview?.blocked ?? []}
+            onOpenEntity={openEntity}
+            repositories={overview?.repositories ?? []}
+            topics={topics}
+          />
+        ) : null}
 
         {view === "topics" ? (
           <div className="rd-split" data-rd-view="topics">

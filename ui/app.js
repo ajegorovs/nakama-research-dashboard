@@ -96,6 +96,36 @@ var css = `
   --rd-rule: 2px solid var(--border);
 }
 [data-plugin-id="research-dashboard"] .rd-stack { display: grid; gap: var(--rd-gap-block); }
+
+  /* C3 — the default landing. Two columns from one payload. Topic activity is the wider column, the way the
+     prototype has it, and both begin in the first viewport at 1440 and 1280 (the host leaves a 1144px and a
+     984px container at those widths). It collapses to one column only below the narrowest review width, so a
+     single-column read is never confused with the composition being judged. */
+  [data-plugin-id="research-dashboard"] .rd-landing { display: grid; gap: var(--rd-gap-block); }
+  [data-plugin-id="research-dashboard"] .rd-landing-grid {
+    align-items: start;
+    display: grid;
+    gap: var(--rd-gap-block);
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  }
+  [data-plugin-id="research-dashboard"] .rd-landing-column { display: grid; gap: 10px; }
+  [data-plugin-id="research-dashboard"] .rd-landing-head {
+    align-items: baseline; display: flex; gap: 8px; justify-content: space-between;
+  }
+  [data-plugin-id="research-dashboard"] .rd-landing-card { display: grid; gap: 6px; }
+  [data-plugin-id="research-dashboard"] .rd-landing-top {
+    align-items: baseline; display: flex; gap: 8px; justify-content: space-between;
+  }
+  [data-plugin-id="research-dashboard"] .rd-landing-pills { display: flex; flex-wrap: wrap; gap: 4px; }
+  /* The shell title as the way home: the same type as the heading it replaces, with nothing of a tab about
+     it — no border, no fill, no pressed state. It underlines on hover and that is the whole affordance. */
+  [data-plugin-id="research-dashboard"] .rd-home {
+    background: none; border: 0; cursor: pointer; font: inherit; padding: 0; text-align: left;
+  }
+  [data-plugin-id="research-dashboard"] .rd-home:hover { text-decoration: underline; }
+  @media (max-width: 899px) {
+    [data-plugin-id="research-dashboard"] .rd-landing-grid { grid-template-columns: minmax(0, 1fr); }
+  }
 [data-plugin-id="research-dashboard"] .rd-row {
   display: flex;
   align-items: center;
@@ -367,24 +397,45 @@ var css = `
 [data-plugin-id="research-dashboard"] .rd-index-item:hover {
   border-color: var(--border);
 }
-/* The Progress desktop composition: the index, the Problem column and the Activity feed are siblings in one
-   wrapping row, so they keep the contract's semantic order — Problem before Activity — and stack instead of
-   squeezing when the width runs out. The columns are separated by a rule rather than a box each: the contract
-   asks for a composition, not three cards of equal weight. */
+/* The Progress composition, nested the way the prototype nests it: the index, then ONE selected-subject pane
+   holding the header and three grouped rows. Previously the Problem and Activity columns were the index's own
+   siblings in one wrapping row and every lower section was an independent full-width band, so the selected axis
+   never became the subject of the right-hand pane — its identity sat in the index row and was repeated as tags
+   inside the Problem column. The sections inside the pane stay individually conditional, so a subject without a
+   plan or without support material collapses honestly instead of reserving space for it. */
 [data-plugin-id="research-dashboard"] .rd-progress-top > .rd-progress-index {
   flex: 0 1 16rem;
 }
-[data-plugin-id="research-dashboard"] .rd-progress-problem {
-  flex: 2 1 22rem;
-  min-width: 17rem;
-  padding-left: 12px;
+[data-plugin-id="research-dashboard"] .rd-progress-detail {
   border-left: 1px solid var(--border);
+  display: grid;
+  flex: 1 1 34rem;
+  gap: var(--rd-gap-block);
+  min-width: 20rem;
+  padding-left: 12px;
 }
-[data-plugin-id="research-dashboard"] .rd-progress-activity {
-  flex: 1 1 18rem;
-  min-width: 15rem;
-  padding-left: 12px;
-  border-left: 1px solid var(--border);
+/* Row 1 reuses C1's own dominance grid, the same rule the Topics and People panes use: the Problem is the main
+   lane and the Activity its rail at no less than 1.25x. Row 2 and the support band size to how many sections
+   actually rendered — auto-fit gives two and three columns when both or all exist and one when a subject has
+   fewer, so a subject short of material collapses instead of holding a column open for it. */
+[data-plugin-id="research-dashboard"] .rd-progress-row,
+[data-plugin-id="research-dashboard"] .rd-progress-band {
+  border-top: var(--rd-edge);
+  display: grid;
+  gap: var(--rd-gap-block);
+  padding-top: 10px;
+}
+[data-plugin-id="research-dashboard"] .rd-progress-row {
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+}
+[data-plugin-id="research-dashboard"] .rd-progress-band {
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+}
+/* The group owns the rule above it; the sections inside it are columns of that group, not stacked bands. */
+[data-plugin-id="research-dashboard"] .rd-progress-row > section,
+[data-plugin-id="research-dashboard"] .rd-progress-band > section {
+  border-top: none;
+  padding-top: 0;
 }
 [data-plugin-id="research-dashboard"] .rd-problem-card {
   /* The lede of the middle column, not a box beside two other boxes — the columns are already separated by rules. */
@@ -1573,6 +1624,165 @@ function apply(ctx) {
       windowDays
     }) : null);
   }
+  function LandingView({
+    blocked,
+    onOpenEntity,
+    repositories,
+    topics
+  }) {
+    const stateWords = ["blocked", "active", "draft", "parked", "usable"];
+    function currentWorkLine(entry) {
+      const counts = stateWords.filter((state) => (entry.axisCounts[state] ?? 0) > 0).map((state) => `${entry.axisCounts[state]} ${state}`);
+      const blockedAxis = blocked.find((row) => row.topicId === entry.topic.id);
+      if (blockedAxis) {
+        counts.push(`blocked on ${blockedAxis.title}`);
+      }
+      return counts.length > 0 ? counts.join(" · ") : null;
+    }
+    return /* @__PURE__ */ React.createElement("div", {
+      className: "rd-landing",
+      "data-rd-landing": topics.length + repositories.length
+    }, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-view-heading",
+      "data-rd-view-heading": "overview"
+    }, /* @__PURE__ */ React.createElement("h3", {
+      className: "rd-view-title",
+      "data-rd-view-title": "overview"
+    }, "Overview"), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, "Both columns come from the same overview read the four views use")), /* @__PURE__ */ React.createElement("div", {
+      className: "rd-landing-grid"
+    }, /* @__PURE__ */ React.createElement("section", {
+      "aria-label": "Topic activity",
+      className: "rd-landing-column",
+      "data-rd-landing-column": "topics",
+      "data-rd-landing-topics": topics.length
+    }, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-landing-head"
+    }, /* @__PURE__ */ React.createElement("h4", {
+      className: "rd-side-title"
+    }, "Topic activity"), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, "Attention order, as the payload sends it")), topics.length === 0 ? /* @__PURE__ */ React.createElement("p", {
+      className: "rd-muted",
+      "data-rd-landing-empty": "topics"
+    }, "No topics recorded yet.") : null, topics.map((entry) => {
+      const current = currentWorkLine(entry);
+      return /* @__PURE__ */ React.createElement("article", {
+        className: "rd-topic-card rd-landing-card",
+        "data-rd-landing-topic": entry.topic.id,
+        key: entry.topic.id
+      }, /* @__PURE__ */ React.createElement("div", {
+        className: "rd-landing-top"
+      }, /* @__PURE__ */ React.createElement("h5", {
+        className: "rd-strong",
+        "data-rd-landing-name": entry.topic.id
+      }, entry.topic.name), /* @__PURE__ */ React.createElement("span", {
+        className: "rd-meta",
+        "data-rd-landing-recency": entry.topic.id
+      }, describeAge(entry.lastActivityAt), " · last recorded activity")), entry.topic.description ? /* @__PURE__ */ React.createElement("p", {
+        className: "rd-meta",
+        "data-rd-landing-description": entry.topic.id
+      }, entry.topic.description) : null, current ? /* @__PURE__ */ React.createElement("p", {
+        className: "rd-current-work",
+        "data-rd-landing-current-work": entry.topic.id
+      }, current) : null, entry.axes.length > 0 ? /* @__PURE__ */ React.createElement("div", {
+        className: "rd-landing-pills",
+        "data-rd-landing-pills": entry.axes.length
+      }, entry.axes.slice(0, 3).map((axis) => /* @__PURE__ */ React.createElement("span", {
+        className: "rd-tag",
+        "data-rd-landing-pill": axis.state,
+        key: axis.id
+      }, axis.title, " · ", axis.state, axis.stateConfidence === "confirmed" ? "" : ` (${axis.stateConfidence})`)), entry.axes.length > 3 ? /* @__PURE__ */ React.createElement("span", {
+        className: "rd-meta"
+      }, "+", entry.axes.length - 3, " more") : null) : null, /* @__PURE__ */ React.createElement("p", {
+        className: "rd-meta",
+        "data-rd-landing-activity": entry.topic.id
+      }, countLabel(entry.activityCount, "event", "events"), " in the selected window ·", " ", entry.lastActivityAt ? `last activity ${describeAge(entry.lastActivityAt)}` : "no activity recorded yet"), entry.people.length > 0 || entry.repositories.length > 0 ? /* @__PURE__ */ React.createElement("div", {
+        className: "rd-tags",
+        "data-rd-landing-chips": entry.topic.id
+      }, entry.people.map((person) => /* @__PURE__ */ React.createElement(EntityTag, {
+        compact: true,
+        id: person.id,
+        key: person.id,
+        label: person.displayName,
+        onOpen: onOpenEntity,
+        type: "person"
+      })), entry.repositories.map((repository) => /* @__PURE__ */ React.createElement(EntityTag, {
+        compact: true,
+        id: repository.id,
+        key: repository.id,
+        label: repository.fullName,
+        onOpen: onOpenEntity,
+        type: "repository"
+      }))) : null, /* @__PURE__ */ React.createElement("div", {
+        className: "rd-row"
+      }, /* @__PURE__ */ React.createElement(Button, {
+        "data-rd-landing-open": "topic",
+        onClick: () => onOpenEntity("topic", entry.topic.id),
+        size: "sm",
+        variant: "outline"
+      }, "Open topic →")));
+    })), /* @__PURE__ */ React.createElement("section", {
+      "aria-label": "Repository activity",
+      className: "rd-landing-column",
+      "data-rd-landing-column": "repositories",
+      "data-rd-landing-repositories": repositories.length
+    }, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-landing-head"
+    }, /* @__PURE__ */ React.createElement("h4", {
+      className: "rd-side-title"
+    }, "Repository activity"), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, "By name, as the payload sends it")), repositories.length === 0 ? /* @__PURE__ */ React.createElement("p", {
+      className: "rd-muted",
+      "data-rd-landing-empty": "repositories"
+    }, "No repositories recorded yet.") : null, repositories.map((entry) => {
+      const latest = entry.recentActivity[0] ?? null;
+      return /* @__PURE__ */ React.createElement("article", {
+        className: "rd-topic-card rd-landing-card",
+        "data-rd-landing-repository": entry.repository.id,
+        key: entry.repository.id
+      }, /* @__PURE__ */ React.createElement("div", {
+        className: "rd-landing-top"
+      }, /* @__PURE__ */ React.createElement("h5", {
+        className: "rd-strong",
+        "data-rd-landing-name": entry.repository.id
+      }, entry.repository.fullName), /* @__PURE__ */ React.createElement("span", {
+        className: "rd-meta",
+        "data-rd-landing-recency": entry.repository.id
+      }, describeAge(entry.lastActivityAt), " · last recorded activity")), entry.repository.description ? /* @__PURE__ */ React.createElement("p", {
+        className: "rd-meta",
+        "data-rd-landing-description": entry.repository.id
+      }, entry.repository.description) : null, latest ? /* @__PURE__ */ React.createElement("p", {
+        className: "rd-meta",
+        "data-rd-landing-last-event": entry.repository.id
+      }, /* @__PURE__ */ React.createElement("span", {
+        className: "rd-strong"
+      }, latest.summary), " ·", " ", latest.sourceRef || latest.sourceType, " · ", describeAge(latest.occurredAt)) : null, entry.topics.length > 0 || entry.axes.length > 0 ? /* @__PURE__ */ React.createElement("div", {
+        className: "rd-tags",
+        "data-rd-landing-chips": entry.repository.id
+      }, entry.topics.map((link) => /* @__PURE__ */ React.createElement(EntityTag, {
+        compact: true,
+        id: link.topic.id,
+        key: link.topic.id,
+        label: link.topic.name,
+        onOpen: onOpenEntity,
+        type: "topic"
+      })), entry.axes.length > 0 ? /* @__PURE__ */ React.createElement("span", {
+        className: "rd-meta",
+        "data-rd-landing-axes": entry.repository.id
+      }, countLabel(entry.axes.length, "development axis", "development axes")) : null) : null, /* @__PURE__ */ React.createElement("div", {
+        className: "rd-row",
+        "data-rd-landing-count-omitted": "d4"
+      }, /* @__PURE__ */ React.createElement(Button, {
+        "data-rd-landing-open": "repository",
+        onClick: () => onOpenEntity("repository", entry.repository.id),
+        size: "sm",
+        variant: "outline"
+      }, "Expand activity →")));
+    }))));
+  }
   function RepositoriesView({
     onOpenEntity,
     preselect,
@@ -1859,12 +2069,14 @@ function apply(ctx) {
       className: "rd-muted",
       "data-rd-progress-index-empty": "true"
     }, "No axes yet.") : null), /* @__PURE__ */ React.createElement("div", {
-      className: "rd-progress-problem",
-      "data-rd-progress-problem-axis": activeAxis?.id ?? "",
-      "data-rd-progress-problem-mode": indexMode,
-      "data-rd-progress-problem-open": activeAxis?.openProblems ?? 0,
-      "data-rd-progress-problem-shown": shownProblem?.id ?? ""
+      className: "rd-progress-detail",
+      "data-rd-progress-detail": "true",
+      "data-rd-progress-detail-axis": activeAxis?.id ?? ""
     }, /* @__PURE__ */ React.createElement(DetailHeader, {
+      badge: activeAxis ? /* @__PURE__ */ React.createElement(StateBadge, {
+        confidence: activeAxis.stateConfidence,
+        state: activeAxis.state
+      }) : null,
       context: activeAxis ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(EntityTag, {
         id: activeAxis.topicId,
         label: activeAxis.topicName,
@@ -1877,19 +2089,33 @@ function apply(ctx) {
         type: "axis"
       })) : null,
       title: /* @__PURE__ */ React.createElement("h3", {
-        className: "rd-strong"
-      }, problemsMode ? "Problem" : `Open problems (${activeAxis?.openProblems ?? 0})`)
+        className: "rd-strong",
+        "data-rd-progress-detail-title": "true"
+      }, activeAxis?.title ?? "Nothing is selected")
     }, activeAxis ? /* @__PURE__ */ React.createElement("span", {
       className: "rd-cluster",
       "data-rd-progress-recency": "true"
-    }, problemsMode && shownProblem ? /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta"
-    }, problemContext(shownProblem)) : /* @__PURE__ */ React.createElement(RecencyLabel, {
+    }, /* @__PURE__ */ React.createElement(RecencyLabel, {
       at: activeAxis.recencyAt,
       prefix: "last activity "
     }), activeAxis.stale ? /* @__PURE__ */ React.createElement("span", {
       className: "rd-muted"
-    }, "· stale") : null) : null), activeAxis === null && !problemsMode ? /* @__PURE__ */ React.createElement("p", {
+    }, "· stale") : null) : null), /* @__PURE__ */ React.createElement("div", {
+      className: "rd-detail-grid rd-progress-pair",
+      "data-rd-progress-pair": "true"
+    }, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-progress-problem",
+      "data-rd-progress-problem-axis": activeAxis?.id ?? "",
+      "data-rd-progress-problem-mode": indexMode,
+      "data-rd-progress-problem-open": activeAxis?.openProblems ?? 0,
+      "data-rd-progress-problem-shown": shownProblem?.id ?? ""
+    }, /* @__PURE__ */ React.createElement("h3", {
+      className: "rd-strong",
+      "data-rd-progress-problem-heading": "true"
+    }, problemsMode ? "Problem" : `Open problems (${activeAxis?.openProblems ?? 0})`), problemsMode && shownProblem ? /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta",
+      "data-rd-progress-problem-context": "true"
+    }, problemContext(shownProblem)) : null, activeAxis === null && !problemsMode ? /* @__PURE__ */ React.createElement("p", {
       className: "rd-muted",
       "data-rd-progress-problem-empty": "true"
     }, "No axis is selected.") : shownProblem === null ? /* @__PURE__ */ React.createElement("p", {
@@ -1951,7 +2177,10 @@ function apply(ctx) {
         setFeedAllFor(feedAll ? null : activeAxis?.id ?? "");
       },
       variant: "outline"
-    }, feedAll ? "Show fewer" : `Show all ${feed.events.length}`)) : null)), axisPlan ? /* @__PURE__ */ React.createElement("section", {
+    }, feedAll ? "Show fewer" : `Show all ${feed.events.length}`)) : null)), axisPlan !== null || openAxisProblems.length > 0 ? /* @__PURE__ */ React.createElement("div", {
+      className: "rd-progress-row",
+      "data-rd-progress-row": "true"
+    }, axisPlan ? /* @__PURE__ */ React.createElement("section", {
       className: "rd-progress-plan",
       "data-rd-progress-plan": axisPlan.id,
       "data-rd-progress-plan-claims-order": planClaimsOrder,
@@ -2014,7 +2243,10 @@ function apply(ctx) {
     }, problem.statement)), /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta",
       "data-rd-problem-context": "true"
-    }, problemContext(problem))))))) : null, shownProblem && shownProblem.repositories.length > 0 ? /* @__PURE__ */ React.createElement("section", {
+    }, problemContext(problem))))))) : null) : null, (shownProblem?.repositories.length ?? 0) > 0 || (shownProblem?.evidence.length ?? 0) > 0 || problemSteering.length > 0 || axisSteering.length > 0 ? /* @__PURE__ */ React.createElement("div", {
+      className: "rd-progress-band",
+      "data-rd-progress-band": "true"
+    }, shownProblem && shownProblem.repositories.length > 0 ? /* @__PURE__ */ React.createElement("section", {
       className: "rd-progress-repositories",
       "data-rd-progress-repositories": shownProblem.repositories.length
     }, /* @__PURE__ */ React.createElement("span", {
@@ -2081,14 +2313,14 @@ function apply(ctx) {
       className: "rd-meta"
     }, `on the axis · ${claim.authorType} · ${claim.recordedAt.slice(0, 10)}${claim.confidence ? ` · ${claim.confidence}` : ""}`)), /* @__PURE__ */ React.createElement("p", {
       className: "rd-steering-text"
-    }, claim.text)))) : null) : null, /* @__PURE__ */ React.createElement("p", {
+    }, claim.text)))) : null) : null) : null)), /* @__PURE__ */ React.createElement("p", {
       className: "rd-muted",
       "data-rd-progress-summary": "true"
     }, windowDays === 0 ? "All time" : `Last ${countLabel(windowDays, "day", "days")}`, " ", "· ", countLabel(windowEventCount, "event", "events"), " recorded across", " ", countLabel(timeline.length, "topic", "topics"), " in this window — the reading above is the selected ", problemsMode ? "problem" : "axis"));
   }
   function ResearchPage() {
     const [overview, setOverview] = React.useState(null);
-    const [view, setView] = React.useState("topics");
+    const [view, setView] = React.useState(null);
     const [entityTarget, setEntityTarget] = React.useState(null);
     function openEntity(type, id) {
       setEntityTarget({ id, seq: (entityTarget?.seq ?? 0) + 1, type });
@@ -2304,8 +2536,14 @@ function apply(ctx) {
     }, /* @__PURE__ */ React.createElement("div", {
       className: "rd-row",
       "data-rd-topbar": "true"
-    }, /* @__PURE__ */ React.createElement("h2", {
-      className: "rd-page-title"
+    }, view === null ? /* @__PURE__ */ React.createElement("h2", {
+      className: "rd-page-title",
+      "data-rd-home": "current"
+    }, "Research overview") : /* @__PURE__ */ React.createElement("button", {
+      className: "rd-page-title rd-home",
+      "data-rd-home": "available",
+      onClick: () => setView(null),
+      type: "button"
     }, "Research overview"), /* @__PURE__ */ React.createElement("div", {
       className: "rd-toolbar",
       "data-rd-toolbar": "true"
@@ -2354,7 +2592,12 @@ function apply(ctx) {
       countLabel(counts.axes, "axis", "axes"),
       countLabel(counts.people, "person", "people"),
       countLabel(counts.repositories, "repository", "repositories")
-    ].join(" · ") : "loading…")), view === "topics" ? /* @__PURE__ */ React.createElement("div", {
+    ].join(" · ") : "loading…")), view === null ? /* @__PURE__ */ React.createElement(LandingView, {
+      blocked: overview?.blocked ?? [],
+      onOpenEntity: openEntity,
+      repositories: overview?.repositories ?? [],
+      topics
+    }) : null, view === "topics" ? /* @__PURE__ */ React.createElement("div", {
       className: "rd-split",
       "data-rd-view": "topics"
     }, /* @__PURE__ */ React.createElement(ViewHeading, {

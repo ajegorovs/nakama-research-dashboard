@@ -106,6 +106,41 @@ enhancement if the field is still wanted.
    (a title control, not a tab). Flagged because it is a shell control the ruling did not name: if it reads as a
    fifth destination, it should be struck rather than defended.
 
+## Rulings (reviewer, 2026-10-02), recorded as they were given
+
+1. **`view: null` as the landing state is correct** — the Overview composition gets a real default state
+   without creating a fifth navigable tab.
+2. **The shell title as home is acceptable**, given exactly what is implemented: not styled or modelled as a
+   fifth navigation option, no pressed state, it simply returns to the default landing.
+3. **Ordering labels follow payload truth, not prototype copy.** Topics arrive in attention order and
+   repositories by name, so the columns say that; neither is relabelled "Newest activity first" to imitate
+   static mock text.
+4. **The topic activity summary without an event title remains correct** — the payload gives count + last
+   activity, so that is the honest abstraction.
+5. **`recentActivity[0]` as the repository's latest event remains correct**, and the D4 omission marker is the
+   better assertion than a fragile text absence.
+6. **Naming the blocked axis rather than printing blocker prose** is the better ten-second treatment.
+7. **Every view-specific check must navigate to the view it claims to inspect.** The landing exposed an
+   assumption latent since the default was Topics; the correction is required, not optional.
+8. **`entityTarget` sequencing must be shown not to resurface a stale target.** Home should clear only the
+   explicit view selection; if the existing `seq` sequencing already handles it, no new behaviour — but the
+   interaction test must not leave a stale-target surprise unexamined.
+
+## What the landing changed outside the page
+
+Both harnesses held the same latent assumption — that the shell opens on a *view*:
+
+- the **acceptance pass** read `[data-rd-index-topic]` without ever navigating, so it graded the Topics view by
+  inheritance. Every view-specific check now navigates to the view it names, which is also what ruling 7 asks
+  for and what the C8 read already taught in C4;
+- the **fidelity capture** waited for `[data-rd-view="topics"]` as its mount gate, so it refused the page
+  outright once the landing rendered. It waits for the landing now, and the `overview` shot is taken first,
+  refusing if a view container is already on screen — a shot named "overview" that is really another view is
+  worse than no shot.
+
+Neither was a page defect; both were checks that had borrowed the old default. They are recorded here because
+a harness that silently grades a different screen than it names cannot be trusted for the next unit either.
+
 ## Out of scope
 
 No new nav item; no new action, projection, schema or store method; no client-side re-aggregation of events —
@@ -140,5 +175,64 @@ the start rather than at the gate.
 
 ## Records
 
-To be filled by the build: build string and asset digest, both instances on the same version, the pass counts
-for fixture and corpus, and the geometry the checks measured.
+**Built and served as `0.2.0+dev.4dfdb691c706`** (revision 91 on the fixture, revision 495 on the corpus — one
+asset, `sha256 58f01bf1b56c2bf78c78be9096c3462f83be501a7a3923f80bf9915e7c46c554`, served by both). Every run
+below is on that asset, guarded by `served-build-guard.mjs` before it starts.
+
+| Record | Result | Checks |
+|---|---|---|
+| fixture · 1440x900 | `all checks passed; 1 skipped` | 165 |
+| fixture · 1280x800 | `all checks passed; 2 skipped` | 165 |
+| corpus · 1440x900 | `all checks passed; 26 skipped` | 163 |
+| corpus · 1280x800 | `all checks passed; 27 skipped` | 163 |
+| corpus · `--write` | **open — see below** | — |
+| `bun run check` | `126 pass, 0 fail` | — |
+
+Each skip is stated by the pass with the subject this dataset lacks. Both viewports carry the same check count
+per dataset, so nothing is being dropped at the narrower size.
+
+**The checks the unit was chartered on**, passing by name:
+
+- `the shell opens on the default landing, with no view selected — landing=true; view container(s)=0; pressed
+  view option(s)=[]; home=current`
+- `the shell title returns to the landing and carries the window with it — window before 30, after returning
+  home 30`
+- `` `Open topic` lands in the Topics view with that topic selected`` and `` `Expand activity` lands in the
+  Repositories view with that repository selected``
+- `a plain view choice after two card actions lands on the entity asked for last, not a superseded one` —
+  landed on `["Layout fixture — second topic"]`, the topic asked for last. **Ruling 8 is answered by the
+  existing `seq` sequencing, with no new behaviour**, and the check now pins it; it skips on the single-topic
+  corpus with its reason.
+- `the selected index row and the visible detail refer to the same topic` · `opening a topic reads it once, in
+  one get_topic call — 1 load read + 2 selection read(s) over 2 distinct`
+- geometry: the topic column is the wider one (`left 320 w 591`) against the repository column (`left 923`),
+  both beginning in the first viewport
+- D4: `data-rd-landing-count-omitted="d4"` on all 3 repository cards, 0 printing a window count
+- the topic activity line reads the payload's own window count and last activity
+  (`8 events in the selected window · last activity yesterday`), with no event title
+
+**The write record is open, and the cause is instance-level rather than the page.** The write pass creates its
+fixture topic, reloads and reads it back; the reads that follow the write lose the SQLite lock, and the detail
+sits on `Loading this topic` until the pass gives up. The instance log during that run:
+
+```
+21:12:14 SQLiteError: database is locked  → POST 500 (requestId bb37106e-…, durationMs 73)
+21:13:04 SQLiteError: database is locked  → POST 500 (requestId 50b5fff9-…, durationMs 61)
+```
+
+The `reconcile_topic` that creates the topic returns 200 (its check passes) and the store afterwards held
+`topics=2, development_axes=4` — the write landed; the reads are what failed. The page renders **no banner**, so
+its read is pending rather than rejected: the host runs actions as unserialised subprocesses, and the landing
+adds one more read to the window immediately after a write. Recorded with its timestamps, request ids and
+statuses rather than waived by a second green run; the committed `docs/corpus/verify-write.txt` is untouched,
+because the wrapper refuses to record an aborted pass.
+
+Two more harness assumptions the landing exposed, both fixed, both the same class as the read-side correction
+and both worth keeping because each one first presented as a page fault:
+
+1. the write section reloads with `page.goto` and then clicked a rail row — which worked only while a reload
+   landed on *Topics*. The view is chosen after the reload now;
+2. the C3 interaction block handed its successors a window (`14`), a view and a selection that it had invented
+   rather than the ones it read. It restores the window it read, leaves the view the pass reads on its default
+   selection, and never re-clicks a row that is already pressed (that re-click does not hold the selection, and
+   an empty pane aborted the next check on a 30s locator timeout).
