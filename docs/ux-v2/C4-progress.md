@@ -184,10 +184,14 @@ silently dropped, and the pass states that in place.
 line reading *"Last 7 days · 8 events recorded across 2 topics in this window"* — matching the payload. The
 feed's own screenshot now shows the composition alone. `bun run check`: 126 tests, 0 failures.
 
-**Small tidiness left knowingly:** `FilterSelect` is now defined in `ui.tsx` with no caller (its only use was
-the retired bar), and the `.rd-timeline-axis` styles are unused. Neither is visible; removing them is a
-separate tidy-up rather than part of a composition change, and the file already carries one such dead constant
-pair from an earlier pass.
+**Small tidiness — done, in its own commit.** `FilterSelect` had no caller once the filter bar went, the
+`.rd-filters` and `.rd-timeline-axis` rules styled only the retired bar and rails, and the doc comment above
+`ProgressView` still described the feed the page no longer has. All four are gone (`494ad1d`), separately from
+the F2 commit so the evidence-generating change and the tidy-up are reviewable apart. Each removal was
+confirmed unreferenced by grep first, and `bun run check` is green after. The committed records still name
+revision 471 / `0.2.0+dev.868fb861fb39`; HEAD now builds a byte-different bundle, so the served-build guard
+will (correctly) refuse a pass against 471 from this source — the next record cycle picks it up with a fresh
+build.
 
 ## Increment 2a — what the corpus caught (both causes were mine, not the page's)
 
