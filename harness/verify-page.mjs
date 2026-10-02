@@ -123,7 +123,58 @@ const browser = await chromium.launch({
   args: ["--no-sandbox", "--disable-dev-shm-usage"],
 });
 const page = await browser.newPage({ viewport: VIEWPORT });
+// ---- TEMPORARY DIAGNOSTIC (C1 double get_overview) -------------------------------------------
+// Counts how many times a plugin root is inserted into the document, so "two requests" can be told
+// apart from "the component mounted twice". Removed once the cause is established.
+await page.addInitScript(() => {
+  window.__rdMounts = 0;
+  window.__rdMountTraces = [];
+  const observer = new MutationObserver((records) => {
+    for (const record of records) {
+      for (const node of record.addedNodes) {
+        if (node.nodeType !== 1) {
+          continue;
+        }
+        if (
+          node.matches?.("div[data-plugin-id]") ||
+          node.querySelector?.("div[data-plugin-id]")
+        ) {
+          window.__rdMounts += 1;
+          window.__rdMountTraces.push(String(new Error("mount").stack).split("\n").slice(1, 5).join(" | "));
+        }
+      }
+    }
+  });
+  try {
+    observer.observe(document, { childList: true, subtree: true });
+  } catch (error) {
+    window.__rdObsError = String(error);
+  }
+});
+const documentRequests = [];
+page.on("request", (request) => {
+  if (request.resourceType() === "document") {
+    documentRequests.push(`${Date.now()} ${request.url()}`);
+  }
+});
+const cdp = await page.context().newCDPSession(page);
+await cdp.send("Network.enable");
+const initiators = [];
+cdp.on("Network.requestWillBeSent", (event) => {
+  if (!/\/actions\/get_overview/.test(event.request.url)) {
+    return;
+  }
+  const frames = event.initiator?.stack?.callFrames ?? [];
+  initiators.push({
+    at: event.timestamp,
+    stack: frames
+      .slice(0, 30)
+      .map((frame) => `${frame.functionName || "(anonymous)"} @ ${(frame.url || "").split("/").pop()}:${frame.lineNumber + 1}`),
+    type: event.initiator?.type,
+  });
+});
 const consoleIssues = [];
+
 page.on("console", (message) => {
   if (["error", "warning"].includes(message.type())) {
     consoleIssues.push(`${message.type()}: ${message.text().slice(0, 160)}`);
@@ -145,7 +196,7 @@ page.on("request", (request) => {
   } catch {
     input = null;
   }
-  actionCalls.push({ input, key: match[1] });
+  actionCalls.push({ at: Date.now(), input, key: match[1] });
 });
 const callsFor = (key) => actionCalls.filter((call) => call.key === key);
 
@@ -344,10 +395,44 @@ check("overview renders as the default screen", render.heading);
 
 // ------------------------------------------------------------------ C4: the overview shell
 const overviewCalls = callsFor("get_overview");
+if (process.env.RD_DIAG === "1") {
+  const mounts = await page.evaluate(() => window.__rdMounts ?? -1);
+  console.log("DIAG mounts:", mounts);
+  console.log("DIAG document requests:", JSON.stringify(documentRequests, null, 0));
+  console.log("DIAG action call order:", JSON.stringify(actionCalls.map((c) => `${c.key}@${c.at}`)));
+  console.log("DIAG get_overview initiators:", JSON.stringify(initiators, null, 1));
+}
+// ONE logical load. React's *development* runtime mounts passive effects twice — the dev-only StrictMode
+// reconnect pass — so a dev-served bundle issues the same load twice from the same effect. That was
+// established rather than assumed: identical input, an identical stack through `runWithFiberInDEV` to
+// `reconnectPassiveEffects`, one plugin mount, both calls in the same millisecond. The production
+// behaviour is what is asserted — exactly one load. Where the runtime is a dev build (measured from
+// react-dom's own source below, not presumed) the duplicate is tolerated only in its exact form: one
+// distinct input, and the transcript says which runtime it was.
+const devRuntime = await page.evaluate(async () => {
+  const candidates = [
+    ...[...document.querySelectorAll("script")].map((node) => node.src),
+    ...performance.getEntriesByType("resource").map((entry) => entry.name),
+  ].filter((url) => /react-dom/.test(url));
+  if (candidates.length === 0) {
+    return null;
+  }
+  try {
+    const text = await (await fetch(candidates[0])).text();
+    return text.includes("runWithFiberInDEV") || text.includes("reconnectPassiveEffects");
+  } catch {
+    return null;
+  }
+});
+const overviewInputs = [...new Set(overviewCalls.map((call) => JSON.stringify(call.input)))];
 check(
-  "the overview renders from one get_overview call",
-  overviewCalls.length === 1,
-  `saw ${overviewCalls.length}: ${JSON.stringify(overviewCalls.map((c) => c.input))}`
+  "the overview renders from one logical get_overview load",
+  overviewCalls.length >= 1 &&
+    overviewInputs.length === 1 &&
+    (overviewCalls.length === 1 || devRuntime === true),
+  `saw ${overviewCalls.length} call(s) over ${overviewInputs.length} distinct input(s)` +
+    `${overviewCalls.length > 1 ? `; react-dom is a development build: ${devRuntime}` : ""}: ` +
+    `${JSON.stringify(overviewCalls.map((call) => call.input))}`
 );
 check(
   "a get_overview call reads other plugin actions for nothing else on first paint",
@@ -704,6 +789,24 @@ if (anatomy.foldPresent === false) {
     foldOpened === true,
     `open after a click: ${foldOpened}`
   );
+  const foldedRendered = await page.evaluate(
+    (pluginId) =>
+      [
+        ...document.querySelectorAll(
+          `div[data-plugin-id="${pluginId}"] details[data-rd-folded-axes] [data-rd-axis-title]`
+        ),
+      ].map((node) =>
+        ((node.closest(".rd-axis-detail") ?? node).innerText ?? "").replace(/\s+/g, " ")
+      ),
+    PLUGIN_ID
+  );
+  check(
+    "the folded axes render their own text once the fold is open",
+    foldedRendered.length > 0 && foldedRendered.every((text) => text.length > 0),
+    foldedRendered
+      .map((text, index) => `folded axis ${index + 1}: ${text.length} char(s)`)
+      .join("; ") || "no folded axis in this dataset"
+  );
   await root.locator("[data-rd-detail] details[data-rd-folded-axes] summary").first().click();
   await page.waitForTimeout(200);
 }
@@ -915,14 +1018,20 @@ const detail = await page.evaluate(
       // are siblings of it inside the axis block. Anything textual is read from the block — reading it
       // from the marked node alone finds a title and nothing else, which is what the first C1 run did.
       const block = node.closest(".rd-axis-detail, .rd-axis") ?? node;
+      // `textContent` is the content this element owns — it is what makes the metadata assertions true
+      // whether or not the composition is currently rendering the axis (completed work is folded, and a
+      // closed <details> gives `innerText` an empty string). `renderedText` is what a reader can see, and
+      // the separate check below requires it for every axis the reader is meant to read.
       return {
         evidenceCount: block
           .querySelector("[data-rd-evidence-count]")
           ?.getAttribute("data-rd-evidence-count"),
+        folded: block.closest("details[data-rd-folded-axes]") !== null,
         hasEvidence: block
           .querySelector("[data-rd-has-evidence]")
           ?.getAttribute("data-rd-has-evidence"),
-        text: (block.innerText ?? "").replace(/\s+/g, " "),
+        renderedText: (block.innerText ?? "").replace(/\s+/g, " "),
+        text: (block.textContent ?? "").replace(/\s+/g, " "),
         conf: [...block.querySelectorAll("[data-rd-conf]")].map((badge) =>
           badge.getAttribute("data-rd-conf")
         ),
@@ -956,6 +1065,58 @@ check(
     (CORPUS.topicActivityRows === 0 ? detail.topicActivityRows === 0 : detail.topicActivityRows >= 1),
   `topic notes in payload ${CORPUS.topicNotes} → rendered ${detail.noteRows}; activity rows ${detail.topicActivityRows}`
 );
+if (process.env.RD_DIAG === "1") {
+  const axisDiag = await page.evaluate(
+    ([pluginId, topic]) => {
+      const pane = document.querySelector(
+        `div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"]`
+      );
+      const marked = pane?.querySelector("[data-rd-axis-title]");
+      const chain = [];
+      let node = marked;
+      while (node && node !== pane) {
+        chain.push({
+          cls: node.className?.toString().split(" ").slice(0, 3).join("."),
+          hasState: node.textContent.includes("current state"),
+          hasV: /v[0-9]+/.test(node.textContent),
+          len: node.innerText?.length ?? -1,
+          tag: node.tagName.toLowerCase(),
+        });
+        node = node.parentElement;
+      }
+      const tags = [...(pane?.querySelectorAll('[class*="rd-tag"]') ?? [])].map((el) => ({
+        children: [...el.children].map((child) => ({
+          cls: child.className?.toString().split(" ")[0],
+          h: Math.round(child.getBoundingClientRect().height),
+        })),
+        cls: el.className?.toString(),
+        display: getComputedStyle(el).display,
+        h: Math.round(el.getBoundingClientRect().height),
+        parent: el.parentElement?.className?.toString().split(" ")[0],
+        rects: el.getClientRects().length,
+        text: (el.textContent ?? "").slice(0, 40),
+        w: Math.round(el.getBoundingClientRect().width),
+      }));
+      const clauses = [...(pane?.querySelectorAll("[data-rd-axis-title]") ?? [])].map((node) => {
+        const block = node.closest(".rd-axis-detail") ?? node;
+        const text = (block.innerText ?? "").replace(/\s+/g, " ");
+        return {
+          conf: block.querySelectorAll("[data-rd-conf]").length,
+          hasCurrentState: text.includes("current state"),
+          hasEvidenceLine: text.includes("evidence: ") || text.includes("no evidence on record"),
+          textHead: text.slice(0, 110),
+          textLen: text.length,
+          version: /v[0-9]+/.test(text),
+        };
+      });
+      return { chain, clauses, markedCls: marked?.className?.toString(), tags };
+    },
+    [PLUGIN_ID, CORPUS.topic]
+  );
+  console.log("DIAG axis chain:", JSON.stringify(axisDiag.chain));
+  console.log("DIAG axis clauses:", JSON.stringify(axisDiag.clauses, null, 1));
+  console.log("DIAG marked:", axisDiag.markedCls);
+}
 check(
   "each axis shows full metadata with its own state and per-claim confidence",
   detail.axes.every(
@@ -986,6 +1147,14 @@ check(
 // screenshot: `abandoned` is supplied only by the layout fixture (the corpus has no subject for it), and
 // `usable` has no subject anywhere yet, because nothing can legitimately enter it until the transition
 // writer lands (U2/U3).
+check(
+  "every axis the reader is meant to read is rendered, not merely present in the DOM",
+  detail.axes.filter((axis) => !axis.folded).length > 0 &&
+    detail.axes.filter((axis) => !axis.folded).every((axis) => axis.renderedText.length > 0),
+  detail.axes
+    .map((axis) => `${axis.title}: ${axis.folded ? "folded" : `${axis.renderedText.length} rendered char(s)`}`)
+    .join(" | ")
+);
 const unrendered = CORPUS.axes.filter(
   (axis) => !detail.axes.some((rendered) => rendered.title === axis.title && rendered.state === axis.state)
 );
@@ -2980,13 +3149,58 @@ const planOf = (result, axisId) =>
 
   // (3) A topic tag: the canonical view, and the topic actually selected there (its card expanded).
   const { tag: topicTag } = await tagFromProgress("topic");
-  const topicLanding = topicTag === null ? null : await clickTag("topic", topicTag.id);
+  let topicLanding = topicTag === null ? null : await clickTag("topic", topicTag.id);
+  if (topicTag !== null) {
+    // The route switches view and selects asynchronously (entity target -> effect -> get_topic), so wait
+    // on the completion condition itself rather than a sleep: Topics on screen, the intended rail row
+    // pressed, and the pane for that topic rendered.
+    await page
+      .waitForFunction(
+        ([pluginId, label]) => {
+          const scope = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
+          const pane = scope?.querySelector('[data-rd-view="topics"] [data-rd-detail]');
+          const pressed = scope?.querySelector('[data-rd-index-topic][aria-pressed="true"]');
+          return (
+            Boolean(pane) &&
+            pane.getAttribute("data-rd-detail") === label &&
+            pressed?.getAttribute("data-rd-index-topic") === label
+          );
+        },
+        [PLUGIN_ID, topicTag.label],
+        { polling: 50, timeout: 8000 }
+      )
+      .catch(() => {});
+    // `clickTag` reads the landing as part of clicking, which is before the async selection has landed.
+    // Now that the completion condition has been waited on, re-read it: the check is about where the tag
+    // took the reader, and this is that place.
+    topicLanding = await readTags();
+  }
   if (topicTag === null) {
     skip(
       "a topic tag lands in Topics with that topic selected, and the label matches the card it opened",
       "the reading surface shows no topic tag — its axis carries no topic to name"
     );
   } else {
+    if (process.env.RD_DIAG === "1") {
+      const landingDiag = await page.evaluate((pluginId) => {
+        const scope = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
+        return {
+          indexRows: [...(scope?.querySelectorAll("[data-rd-index-topic]") ?? [])].map(
+            (row) => `${row.getAttribute("data-rd-index-topic")}:${row.getAttribute("aria-pressed")}`
+          ),
+          panes: [...(scope?.querySelectorAll("[data-rd-detail]") ?? [])].map((pane) =>
+            pane.getAttribute("data-rd-detail")
+          ),
+          views: [...(scope?.querySelectorAll("[data-rd-view]") ?? [])].map((node) =>
+            node.getAttribute("data-rd-view")
+          ),
+        };
+      }, PLUGIN_ID);
+      console.log(
+        "DIAG landing:",
+        JSON.stringify({ ...landingDiag, tag: topicTag })
+      );
+    }
     check(
       "a topic tag lands in Topics with that topic selected, and the label matches the card it opened",
       topicLanding.view === "topics" &&
@@ -3420,6 +3634,30 @@ if (paletteReachable) {
     const bad = [];
     for (const cluster of clusters) {
       const chips = [...cluster.querySelectorAll(".rd-tag")];
+      if (typeof window !== "undefined") {
+        window.__rdChipDiag = JSON.stringify(
+            chips.map((chip) => ({
+              box: Math.round(chip.getBoundingClientRect().height),
+              children: [...chip.children].map((child) => ({
+                box: Math.round(child.getBoundingClientRect().height),
+                cls: child.className?.toString().split(" ")[0],
+                display: getComputedStyle(child).display,
+              })),
+              cls: chip.className?.toString(),
+              display: getComputedStyle(chip).display,
+              parent: chip.parentElement?.className?.toString(),
+              rects: chip.getClientRects().length,
+              text: (chip.textContent ?? "").trim().slice(0, 30),
+              visibility: getComputedStyle(chip).visibility,
+              w: Math.round(chip.getBoundingClientRect().width),
+            })),
+            null,
+            1
+        );
+        window.__rdChipCluster = `${cluster.className?.toString()} ${Math.round(
+          cluster.getBoundingClientRect().height
+        )}px`;
+      }
       if (chips.length === 0) {
         continue;
       }
@@ -3445,6 +3683,14 @@ if (paletteReachable) {
       tagShape.bad.length === 0,
       tagShape.bad.join("; ") || `${tagShape.clusters} cluster(s), every chip one line`
     );
+    if (process.env.RD_DIAG === "1") {
+      const chipDiag = await page.evaluate(() => ({
+        cluster: window.__rdChipCluster ?? null,
+        chips: window.__rdChipDiag ?? null,
+      }));
+      console.log("DIAG chips: cluster", chipDiag.cluster);
+      console.log("DIAG chips:", chipDiag.chips);
+    }
   }
 
   if (visual.exceptional === "") {
@@ -4067,12 +4313,31 @@ if (WRITE) {
       )
       .first()
       .click();
-    await page.waitForTimeout(400);
+    // The route switches view and selects asynchronously (entity target -> effect -> get_topic), so wait
+    // on the completion condition rather than a sleep: on Topics, this topic's rail row pressed, its pane
+    // up. No arbitrary delay, and nothing read until the page is actually where the tag sent it.
+    await page
+      .waitForFunction(
+        ([pluginId, label]) => {
+          const scope = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
+          const pane = scope?.querySelector('[data-rd-view="topics"] [data-rd-detail]');
+          const pressed = scope?.querySelector('[data-rd-index-topic][aria-pressed="true"]');
+          return (
+            pane?.getAttribute("data-rd-detail") === label &&
+            pressed?.getAttribute("data-rd-index-topic") === label
+          );
+        },
+        [PLUGIN_ID, peopleTag.label],
+        { polling: 50, timeout: 8000 }
+      )
+      .catch(() => {});
     const landed = await page.evaluate(() => {
       const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
-      const card = scope?.querySelector('[data-rd-view="topics"] [data-rd-detail]');
+      const pane = scope?.querySelector('[data-rd-view="topics"] [data-rd-detail]');
       return {
-        name: card?.getAttribute("data-rd-topic") ?? null,
+        // The pane's own name. `data-rd-topic` was the retired card's attribute, and reading it here
+        // reported "opened none" for a topic that was open the whole time.
+        name: pane?.getAttribute("data-rd-detail") ?? null,
         view:
           scope
             ?.querySelector('[data-rd-view-option][aria-pressed="true"]')
