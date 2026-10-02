@@ -396,6 +396,30 @@ does, writes a topic note from the read detail, and then exercises the stale-cor
 an axis — including that the refused correction wrote nothing and kept what was typed. It **mutates the
 dataset** — wipe and re-seed afterwards; the corpus must not carry a `ui-check …` topic.
 
+## Working on this repo
+
+`AGENTS.md` is the guidance for human and AI contributors: layout, tooling, the build → vendor → serve loop, the
+acceptance pass's exit contract, the evidence and public-record rules, the focus rule, and the record/tag
+conventions.
+
+Contributor procedures live in **`.agents/skills/`** — the cross-client Agent Skills layout, versioned with the
+code so a clone carries them:
+
+| Skill | Read it before |
+| --- | --- |
+| `dashboard-build-and-serve/` | changing anything that reaches a served instance |
+| `acceptance-pass/` | taking or re-taking an acceptance record |
+| `public-records-hygiene/` | committing anything a run generated |
+| `keyboard-focus-pass/` | touching focus, the stylesheet or a shared control |
+
+An agent harness that loads `.agents/skills/` on its own needs no setup. **Hermes needs the project trusted once
+per machine**, from the repository root (with no argument the command resolves the working directory itself and
+reports *"Not inside a git checkout"* even when run from here):
+
+```bash
+hermes skills trust "$(git rev-parse --show-toplevel)"   # once per machine
+```
+
 ## Applying a plugin migration
 
 Migrations are declared in `nakama.plugin.json` (`database.migrations`) — a `.sql` file that is not
