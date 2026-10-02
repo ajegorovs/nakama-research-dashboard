@@ -140,7 +140,8 @@ measurement. `docs/ux-v2/fidelity/side-by-side/` was regenerated from the review
 The first recorded corpus 1440×900 attempt **aborted** (exit 2) and left the committed record untouched, which
 is the wrapper working as designed and still a lost record. The cause was not the composition: at
 **22:41:23** the dev instance answered `POST … 500` with `SQLiteError: database is locked`
-(`SQLITE_BUSY_RECOVERY`, requestId `aa21cc5e`) — the store/runtime debt already open in `AGENDA.md` — so
+(`SQLITE_BUSY_RECOVERY`, requestId `aa21cc5e`) — the store/runtime debt already open in the estate's `AGENDA.md`
+(outside this repository) — so
 `get_topic` never landed, the topic detail stayed empty, three axis-hierarchy checks read that emptiness as a
 composition fault, and the block's closing click then waited 30s on a disclosure that did not exist and killed
 the pass.
