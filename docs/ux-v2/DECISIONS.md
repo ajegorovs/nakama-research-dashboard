@@ -15,11 +15,15 @@ was decided, what it supersedes, and where the work lands.
 - **Superseded by this decision:** the `layout-rework-brief.md` toolbar list (which counts `Add topic` among the
   grouped controls) and any interaction-spec language that reads as requiring a broad edit entry point on
   Topics.
-- **Not superseded:** the read/edit **mode** boundary — `Read topic` as the topic-level disclosure control and
-  `Edit fields` as the way into editing, one control per piece of state. That is a separate requirement (D1) and
-  stays.
+- **Not superseded:** the principle behind the read/edit boundary — **one control per piece of state**, never a
+  second way into the same state (D1). What U6 removed is the *edit* half: `Read topic` is now the card's only
+  control and reading its only mode. The principle stays; the `Edit fields` control does not.
 - **Where the work lands:** **U6 (Topics refinement)**. The merged build is a usable UX-v2 baseline; removing
   the broad controls is polish, not a reason to reopen the merge. Raised in the U11 contract audit §10.
+- **Executed in U6** (2026-10-02): the broad `Add topic` and `Edit fields` controls are removed, along with the
+  edit mode and its topic-field/activity editor. What remains on the page is `Read topic` (the card's one
+  disclosure), the inline topic note and the axis correction. Read pass re-recorded from that build — corpus
+  **84 · 0 · 22**, fixture **107 · 0 · 0**; see [`U6-topics.md`](U6-topics.md).
 
 ## 2. Deployment status is stated, not implied (2026-10-02)
 

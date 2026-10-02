@@ -1,6 +1,6 @@
 # harness/read-pass.sh — read pass · dataset corpus · viewport 1280x800
 # dashboard: http://127.0.0.1:3007
-# generated: 2026-10-02T02:53:25+03:00
+# generated: 2026-10-02T10:52:23+03:00
 
 PASS  login — status 200
 identity: expected corpus · 1 topic(s) (0 fixture-named) · 0 of 1 repository(ies) under fixture/ · observed corpus markers (no fixture-named topic or repository)
@@ -11,22 +11,22 @@ PASS  the overview renders from one get_overview call — saw 1: [{"activitySinc
 PASS  a get_overview call reads other plugin actions for nothing else on first paint — list_topics calls: 0
 PASS  the default window is 14 days and is sent as a query parameter — {"activitySinceDays":14}
 PASS  topic cards rendered — 1 cards
-PASS  the header carries the title, window control, archived toggle and count line — {"addTopic":true,"archivedToggle":true,"countsLine":true,"headerText":"Research overview Topics People Repositories Progress 7 days 14 days 30 days All time archived Refresh Add topic 1 topic · 3 axes · 1 person · 1 repository UDV Echo Process active ajegorovs/udv-echo-p","windowButtons":4}
+PASS  the header carries the title, window control, archived toggle and count line, and no create/edit control — {"createControl":false,"editControl":false,"archivedToggle":true,"countsLine":true,"headerText":"Research overview Topics People Repositories Progress 7 days 14 days 30 days All time archived Refresh 1 topic · 3 axes · 1 person · 1 repository UDV Echo Process active ajegorovs/udv-echo-process aje","windowButtons":4}
 PASS  the count line reads correctly when the count is one — 1 repository
 PASS  every topic in the payload has one card, carrying its own axes and none of another topic's — 1 cards for 1 topics; no leaks
 PASS  a topic card leads with people and its state counts — ajegorovs on UDV Echo Process; payload states ["2 active","1 completed"]; card counts ["2 active","1 completed"]
 SKIP  the blocked axis shows its blocker text — no axis in this corpus is blocked
 SKIP  a topic with a blocked axis is visually distinct — no axis in this corpus is blocked, so the attention styling has no subject here
-PASS  each topic card reports its recent-activity summary — Recent: 584 events · last activity 3 days ago 
+PASS  each topic card reports its recent-activity summary — Recent: 560 events · last activity 3 days ago 
 PASS  the window control re-issues get_overview with the new window only — {"activitySinceDays":7}
 PASS  the page still renders after the window change
-PASS  the topic card offers one disclosure control, not two — card buttons ["ajegorovs/udv-echo-process","ajegorovs","Signal analysis — `analysis/`, SA1–SA5, sparse","ajegorovs/udv-echo-process","Docs & agent skills — `docs/`, `.agents/skills`","ajegorovs/udv-echo-process","Acquisition — `acquire/`, DOP3010 rig","ajegorovs/udv-echo-process","Read topic","Edit fields"]
+PASS  the topic card offers one disclosure control, not two — card buttons ["ajegorovs/udv-echo-process","ajegorovs","Signal analysis — `analysis/`, SA1–SA5, sparse","ajegorovs/udv-echo-process","Docs & agent skills — `docs/`, `.agents/skills`","ajegorovs/udv-echo-process","Acquisition — `acquire/`, DOP3010 rig","ajegorovs/udv-echo-process","Read topic"]
 SKIP  a card that hides axes states it rather than offering a second way in — the topic leads with all 3 axes (LEAD_AXES is 3), so none are hidden
 PASS  reading a card shows every axis it holds — 3 axis rows for 3 axes
 PASS  opening a topic reads it once, in one get_topic call — saw 1: [{"topicId":"d8e2525a-22a8-46b9-ac21-d92b47297557"}]
 PASS  reading a topic does not open the editor — mode read, editor rendered false
-PASS  the form appears only from Edit fields — mode edit, editor rendered true
-PASS  finishing an edit returns to reading, with the card still open — mode read, editor rendered false
+PASS  the card offers no broad edit control (D7: Topics is read-first) — edit-open 0, Edit/Done labels 0, editors 0
+PASS  the narrow note affordance is inline, with no mode to enter (D7) — note inputs 1, mode read
 PASS  the toolbar controls form groups rather than one strip — groups ["views","window","actions"], holding 10 controls
 PASS  the expanded card renders the topic detail, one block per axis — 3 axes, detail block: true (payload holds 3)
 PASS  the detail shows the topic's fields, its notes and its activity separately — topic notes in payload 2 → rendered 2; activity rows 25
@@ -48,7 +48,7 @@ people screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/screenshots/
 PASS  the Repositories view is repository-first: the index is the set, and one of them is selected — 1 repositories ["ajegorovs/udv-echo-process"]; panel ajegorovs/udv-echo-process: supports 1, axes ["Signal analysis — `analysis/`, SA1–SA5, sparse","Docs & agent skills — `docs/`, `.agents/skills`","Acquisition — `acquire/`, DOP3010 rig"]
 PASS  a repository that supports work names the topics it supports and the axes happening in it — panel ajegorovs/udv-echo-process: supports 1 of 1, axes 3 of 3
 repositories screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/screenshots/1280x800/research-dashboard-read-repositories.png
-PASS  switching back to Topics restores the topic view, with no residue from the other two — cards 1, form 1, people index 0, repository index 0
+PASS  switching back to Topics restores the topic view, with no residue from the other two, and no create form (D7) — cards 1, create form 0, people index 0, repository index 0
 PASS  the Progress view groups the window by topic → axis instead of one flat log — summary "Last 7 days · 30 events across 1 topic"; topics ["UDV Echo Process"]; rails ["Signal analysis — `analysis/`, SA1–SA5, sparse","Docs & agent skills — `docs/`, `.agents/skills`","Acquisition — `acquire/`, DOP3010 rig"]
 PASS  an event recorded against an axis alone still lands under the right topic and its own axis — rails matched 3/3; looked for a 2026-09-28 event; events ["2026-09-28 Sparse explorer: live-widget read-back closes §SA4, and the gate-selection defe","2026-09-28 data(analysis): republish cross-sitting limitation with amended gate commit · a","2026-09-28 fix(analysis): state amended SA5 repeat-context gate accurately commit · 85e154"]
 progress screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/screenshots/1280x800/research-dashboard-read-progress.png

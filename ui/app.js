@@ -1894,8 +1894,6 @@ function apply(ctx) {
         setExpandedId(entityTarget.id);
       }
     }, [entityTarget?.id, entityTarget?.seq, entityTarget?.type]);
-    const [editing, setEditing] = React.useState(null);
-    const [newName, setNewName] = React.useState("");
     const [detail, setDetail] = React.useState(null);
     const [progress, setProgress] = React.useState(null);
     const [correction, setCorrection] = React.useState(null);
@@ -1985,72 +1983,8 @@ function apply(ctx) {
     }, [expandedId]);
     function toggle(topicId) {
       setExpandedId((current) => current === topicId ? null : topicId);
-      setEditing(null);
       setDetail(null);
       setConflict(null);
-    }
-    function startEditing(entry) {
-      setExpandedId(entry.topic.id);
-      setConflict(null);
-      setEditing({
-        description: entry.topic.description,
-        note: "",
-        status: entry.topic.status,
-        summary: entry.topic.summary,
-        topicId: entry.topic.id
-      });
-    }
-    async function createTopic(event) {
-      const formEvent = event;
-      formEvent.preventDefault();
-      const name = newName.trim();
-      if (!name) {
-        return;
-      }
-      const result = await call("reconcile_topic", { topicName: name });
-      if (result?.topic) {
-        setNewName("");
-        await load(windowDays, includeArchived);
-        startEditing({
-          activityCount: 0,
-          axes: [],
-          axisCounts: {
-            abandoned: 0,
-            active: 0,
-            blocked: 0,
-            completed: 0,
-            draft: 0,
-            parked: 0,
-            usable: 0
-          },
-          lastActivityAt: null,
-          people: [],
-          repositories: [],
-          topic: result.topic
-        });
-      }
-    }
-    async function saveDetails() {
-      if (!(detail && editing)) {
-        return;
-      }
-      const note = editing.note.trim();
-      const result = await call("reconcile_topic", {
-        expectedVersion: detail.topic.version,
-        topic: {
-          description: editing.description,
-          ...editing.status === detail.topic.status ? {} : { status: editing.status },
-          summary: editing.summary
-        },
-        topicId: detail.topic.id,
-        ...note ? { annotations: [{ text: note }] } : {}
-      });
-      if (result) {
-        setEditing(null);
-        setConflict(null);
-        await loadDetail(detail.topic.id);
-        await load(windowDays, includeArchived);
-      }
     }
     async function saveCorrection() {
       if (!(detail && correction)) {
@@ -2184,24 +2118,7 @@ function apply(ctx) {
       role: "alert"
     }, error) : null, /* @__PURE__ */ React.createElement("div", {
       className: "rd-row"
-    }, /* @__PURE__ */ React.createElement("div", {
-      className: "rd-cluster"
-    }, view === "topics" ? /* @__PURE__ */ React.createElement("form", {
-      className: "rd-cluster rd-newtopic",
-      onSubmit: (event) => {
-        createTopic(event);
-      }
-    }, /* @__PURE__ */ React.createElement(Input, {
-      "aria-label": "New topic name",
-      disabled: busy,
-      maxLength: 120,
-      onChange: (event) => setNewName(event.target.value),
-      placeholder: "New topic name",
-      value: newName
-    }), /* @__PURE__ */ React.createElement(Button, {
-      disabled: busy || !newName.trim(),
-      type: "submit"
-    }, "Add topic")) : null), /* @__PURE__ */ React.createElement("span", {
+    }, /* @__PURE__ */ React.createElement("span", {
       className: "rd-muted"
     }, counts ? [
       countLabel(counts.topics, "topic", "topics"),
@@ -2216,12 +2133,11 @@ function apply(ctx) {
       const expanded = entry.topic.id === expandedId;
       const shown = expanded ? entry.axes : entry.axes.slice(0, LEAD_AXES);
       const hidden = entry.axes.length - shown.length;
-      const editingThis = editing?.topicId === entry.topic.id;
       const details = expanded && detail && detail.topic.id === entry.topic.id ? detail : null;
       return /* @__PURE__ */ React.createElement(Card, {
         className: "rd-topic-card",
         "data-rd-blocked": hasBlocked,
-        "data-rd-mode": editingThis ? "edit" : expanded ? "read" : "collapsed",
+        "data-rd-mode": expanded ? "read" : "collapsed",
         "data-rd-topic": entry.topic.name,
         key: entry.topic.id
       }, /* @__PURE__ */ React.createElement(CardHeader, null, /* @__PURE__ */ React.createElement(DetailHeader, {
@@ -2292,7 +2208,6 @@ function apply(ctx) {
         disabled: busy,
         onClick: () => {
           if (expanded) {
-            setEditing(null);
             setExpandedId(null);
           } else {
             toggle(entry.topic.id);
@@ -2300,19 +2215,7 @@ function apply(ctx) {
         },
         size: "sm",
         variant: expanded ? "outline" : "default"
-      }, expanded ? "Close" : "Read topic"), /* @__PURE__ */ React.createElement(Button, {
-        "data-rd-edit-open": editingThis ? "false" : "true",
-        disabled: busy,
-        onClick: () => {
-          if (editingThis) {
-            setEditing(null);
-          } else {
-            startEditing(entry);
-          }
-        },
-        size: "sm",
-        variant: editingThis || !expanded ? "outline" : "default"
-      }, editingThis ? "Done editing" : "Edit fields"))), hidden > 0 && !expanded ? /* @__PURE__ */ React.createElement(Notice, {
+      }, expanded ? "Close" : "Read topic"))), hidden > 0 && !expanded ? /* @__PURE__ */ React.createElement(Notice, {
         attrs: { "data-rd-hidden-axes": String(hidden) },
         kind: "truncated"
       }, shown.length, " of ", entry.axes.length, " axes shown · ", hidden, " ", "more") : null, details ? /* @__PURE__ */ React.createElement("div", {
@@ -2434,60 +2337,7 @@ function apply(ctx) {
       })), /* @__PURE__ */ React.createElement(Button, {
         disabled: busy || !activitySummary.trim(),
         type: "submit"
-      }, "Record activity"))) : null, editingThis && editing ? /* @__PURE__ */ React.createElement("div", {
-        className: "rd-form rd-divider",
-        "data-rd-topic-editor": "true"
-      }, /* @__PURE__ */ React.createElement(Textarea, {
-        "aria-label": "Topic description",
-        disabled: busy,
-        onChange: (event) => setEditing({
-          ...editing,
-          description: event.target.value
-        }),
-        placeholder: "What this topic is",
-        value: editing.description
-      }), /* @__PURE__ */ React.createElement(Textarea, {
-        "aria-label": "Approved summary",
-        disabled: busy,
-        onChange: (event) => setEditing({
-          ...editing,
-          summary: event.target.value
-        }),
-        placeholder: "Approved summary (interpretation, confirmed by a human)",
-        value: editing.summary
-      }), /* @__PURE__ */ React.createElement("div", {
-        className: "rd-row"
-      }, /* @__PURE__ */ React.createElement("div", {
-        className: "rd-cluster"
-      }, /* @__PURE__ */ React.createElement(StatusSelect, {
-        disabled: busy,
-        onChange: (next) => {
-          setEditing({ ...editing, status: next });
-        },
-        value: editing.status
-      }), /* @__PURE__ */ React.createElement("span", {
-        className: "rd-muted"
-      }, editing.status === entry.topic.status ? "unchanged" : `was ${entry.topic.status}`)), /* @__PURE__ */ React.createElement("span", {
-        className: "rd-muted"
-      }, "v", entry.topic.version, " · updated", " ", entry.topic.updatedAt.slice(0, 10))), /* @__PURE__ */ React.createElement(Textarea, {
-        "aria-label": "Note on this change",
-        disabled: busy,
-        onChange: (event) => setEditing({
-          ...editing,
-          note: event.target.value
-        }),
-        placeholder: "Why (optional) — saved with the change as a note on this topic",
-        value: editing.note
-      }), /* @__PURE__ */ React.createElement("div", {
-        className: "rd-cluster"
-      }, /* @__PURE__ */ React.createElement(Button, {
-        disabled: busy || !details,
-        onClick: () => {
-          saveDetails();
-        }
-      }, "Save"), /* @__PURE__ */ React.createElement("span", {
-        className: "rd-muted"
-      }, "The status change and its note land in one call."))) : null)));
+      }, "Record activity"))) : null)));
     })) : null, view === "people" ? /* @__PURE__ */ React.createElement(PeopleView, {
       onOpenEntity: openEntity,
       people: overview?.people ?? [],

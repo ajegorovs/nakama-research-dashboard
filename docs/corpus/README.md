@@ -177,7 +177,9 @@ the same payload the page reads, so it holds for any dataset rather than being a
 capture shows the topic with its **editor open**. A collapsed card offers an expander only when it
 hides axes, and this topic leads with all three, so the read-only expanded state is *unreachable* —
 the only route into a topic's axes is `Edit fields`. Reading a topic and editing it are the same
-screen here, and that image is 4828 px tall, which is also worth a look.
+screen here, and that image is 4828 px tall, which is also worth a look. *(Superseded by **U6**: D7 removed
+the edit control, so Topics is read-first and the axes are read from the card's own expansion — see
+[`../ux-v2/U6-topics.md`](../ux-v2/U6-topics.md).)*
 
 ## What to look at
 

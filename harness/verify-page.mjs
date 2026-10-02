@@ -380,7 +380,8 @@ const header = await page.evaluate((pluginId) => {
   const node = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
   const text = (node?.innerText ?? "").replace(/\s+/g, " ");
   return {
-    addTopic: text.includes("Add topic"),
+    createControl: /Add topic|New topic name/.test(text),
+    editControl: /Edit fields|Done editing/.test(text),
     archivedToggle: text.includes("archived"),
     countsLine: /\d+ topics? · \d+ axes · \d+ (?:person|people) · \d+ repositor(?:y|ies)/.test(text),
     headerText: text.slice(0, 200),
@@ -388,9 +389,12 @@ const header = await page.evaluate((pluginId) => {
   };
 }, PLUGIN_ID);
 check(
-  "the header carries the title, window control, archived toggle and count line",
+  "the header carries the title, window control, archived toggle and count line, and no create/edit control",
+  // D7 (Topics is read-first): the page offers no broad create or edit control, so this asserts their
+  // absence — re-adding one fails here rather than passing quietly.
   header.windowButtons === 4 &&
-    header.addTopic &&
+    !header.createControl &&
+    !header.editControl &&
     header.archivedToggle &&
     header.countsLine,
   JSON.stringify(header)
@@ -584,8 +588,8 @@ if (leadEntry.hidden > 0) {
   );
 }
 
-// The read route into the detail — the only route there is. Opening a topic to read it must not be the
-// same action as entering edit mode; the write pass below drives `Edit fields` instead.
+// The read route into the detail — the only route there is (D7: the page has no edit mode to be confused
+// with, so there is nothing for this route to be mistaken for).
 await detailCard.getByRole("button", { name: "Read topic", exact: true }).click();
 // Ready means the card's own axis rows are in the DOM, which is what the next check reads.
 await settleUntil(
@@ -623,10 +627,9 @@ check(
   `saw ${detailCalls.length}: ${JSON.stringify(detailCalls.map((c) => c.input))}`
 );
 
-// Read mode and edit mode are two modes, not one screen with a form somewhere in it. Asserted as three
-// separate facts so a regression names itself: reading renders no editor, `Edit fields` is what brings
-// the form in, and finishing an edit returns to reading with the card still open (rather than collapsing
-// it, which is what it used to do).
+// Reading is the card's only mode, and the detail it renders has no form in it. Asserted as separate
+// facts so a regression names itself: reading renders no editor, no broad edit control exists anywhere in
+// the card (D7), and the narrow note affordance is inline in the read detail rather than behind a mode.
 const modeOf = () =>
   page.evaluate(
     ([pluginId, topic]) => {
@@ -646,39 +649,71 @@ check(
   readMode.mode === "read" && readMode.editor === false,
   `mode ${readMode.mode}, editor rendered ${readMode.editor}`
 );
-await detailCard.getByRole("button", { name: "Edit fields", exact: true }).click();
-// Ready means the editor element itself is in the DOM — not that 1.4 s have passed.
+// Reading the detail means the card is open, and `Read topic` is the only way in (D7). The checks above
+// only need the card's own axis rows, which a collapsed card renders too, so open it here — deliberately,
+// and waiting on the page's own marker rather than a sleep.
+if ((await modeOf()).mode !== "read") {
+  await detailCard.getByRole("button", { name: "Read topic", exact: true }).click();
+  await settleUntil(
+    ([pluginId, topic]) =>
+      document
+        .querySelector(`div[data-plugin-id="${pluginId}"] [data-rd-topic="${topic}"]`)
+        ?.getAttribute("data-rd-mode") === "read",
+    [PLUGIN_ID, CORPUS.topic],
+    4000
+  );
+}
+// D7 (Topics is read-first): the card has no broad edit control at all, so there is no mode to switch
+// into. Two checks pin that — the absence of a control, and the narrow affordance surviving as an inline
+// part of the read detail rather than behind a mode.
+const noEditControl = await page.evaluate(
+  ([pluginId, topic]) => {
+    const card = document.querySelector(
+      `div[data-plugin-id="${pluginId}"] [data-rd-topic="${topic}"]`
+    );
+    return {
+      editOpen: card?.querySelectorAll("[data-rd-edit-open]").length ?? 0,
+      labels: (card?.innerText ?? "").match(/Done editing|Edit fields/g)?.length ?? 0,
+      editor: card?.querySelectorAll("[data-rd-topic-editor]").length ?? 0,
+    };
+  },
+  [PLUGIN_ID, CORPUS.topic]
+);
+check(
+  "the card offers no broad edit control (D7: Topics is read-first)",
+  noEditControl.editOpen === 0 && noEditControl.labels === 0 && noEditControl.editor === 0,
+  `edit-open ${noEditControl.editOpen}, Edit/Done labels ${noEditControl.labels}, editors ${noEditControl.editor}`
+);
+// …and the narrow affordance D7 keeps is inline: the note form renders inside the read detail, so the
+// capability survives without a mode to enter. Wait for the detail's own marker first — the note field is
+// part of the detail the read action loads, and this check is about the page, not about timing.
 await settleUntil(
   ([pluginId, topic]) =>
     Boolean(
       document.querySelector(
-        `div[data-plugin-id="${pluginId}"] [data-rd-topic="${topic}"] [data-rd-topic-editor]`
+        `div[data-plugin-id="${pluginId}"] [data-rd-topic="${topic}"] [aria-label="Topic note"]`
       )
     ),
   [PLUGIN_ID, CORPUS.topic],
   4000
 );
-const editMode = await modeOf();
-check(
-  "the form appears only from Edit fields",
-  editMode.mode === "edit" && editMode.editor === true,
-  `mode ${editMode.mode}, editor rendered ${editMode.editor}`
+const noteAffordance = await page.evaluate(
+  ([pluginId, topic]) => {
+    const card = document.querySelector(
+      `div[data-plugin-id="${pluginId}"] [data-rd-topic="${topic}"]`
+    );
+    return {
+      noteInput: card?.querySelectorAll('[aria-label="Topic note"]').length ?? 0,
+      // `data-rd-mode` is an attribute of the card itself, not of a descendant.
+      mode: card?.getAttribute("data-rd-mode") ?? null,
+    };
+  },
+  [PLUGIN_ID, CORPUS.topic]
 );
-await detailCard.getByRole("button", { name: "Done editing", exact: true }).click();
-// Ready means the editor is GONE — the read view is the absence of that element.
-await settleUntil(
-  ([pluginId, topic]) =>
-    !document.querySelector(
-      `div[data-plugin-id="${pluginId}"] [data-rd-topic="${topic}"] [data-rd-topic-editor]`
-    ),
-  [PLUGIN_ID, CORPUS.topic],
-  4000
-);
-const afterEdit = await modeOf();
 check(
-  "finishing an edit returns to reading, with the card still open",
-  afterEdit.mode === "read" && afterEdit.editor === false,
-  `mode ${afterEdit.mode}, editor rendered ${afterEdit.editor}`
+  "the narrow note affordance is inline, with no mode to enter (D7)",
+  noteAffordance.noteInput === 1 && noteAffordance.mode === "read",
+  `note inputs ${noteAffordance.noteInput}, mode ${noteAffordance.mode}`
 );
 
 const toolbar = await page.evaluate((pluginId) => {
@@ -1087,18 +1122,20 @@ const backToTopics = await page.evaluate(() => {
   const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
   return {
     cards: scope?.querySelectorAll("[data-rd-topic]").length ?? 0,
-    form: scope?.querySelectorAll(".rd-newtopic").length ?? 0,
+    // D7: the Topics view has no create form — `reconcile_topic` (the librarian) is how a topic is
+    // created, so a non-zero count here would mean the broad control came back.
+    createForm: scope?.querySelectorAll(".rd-newtopic").length ?? 0,
     peopleIndex: scope?.querySelectorAll("[data-rd-people]").length ?? 0,
     repositoryIndex: scope?.querySelectorAll("[data-rd-repositories]").length ?? 0,
   };
 });
 check(
-  "switching back to Topics restores the topic view, with no residue from the other two",
+  "switching back to Topics restores the topic view, with no residue from the other two, and no create form (D7)",
   backToTopics.cards > 0 &&
-    backToTopics.form === 1 &&
+    backToTopics.createForm === 0 &&
     backToTopics.peopleIndex === 0 &&
     backToTopics.repositoryIndex === 0,
-  `cards ${backToTopics.cards}, form ${backToTopics.form}, people index ${backToTopics.peopleIndex}, repository index ${backToTopics.repositoryIndex}`
+  `cards ${backToTopics.cards}, create form ${backToTopics.createForm}, people index ${backToTopics.peopleIndex}, repository index ${backToTopics.repositoryIndex}`
 );
 
 // ------------------------------------------------------------------ C7: the time view
@@ -3039,41 +3076,35 @@ if (WRITE) {
   // Scope every interaction to the plugin's own root: the dashboard chrome has buttons and inputs
   // whose accessible names overlap ("… Activity" titles in the sidebar), and strict mode rejects
   // ambiguous locators.
-  const name = `ui-check ${Date.now().toString().slice(-5)}`;
-  await root.getByLabel("New topic name").fill(name);
-  await root.getByRole("button", { name: "Add topic", exact: true }).click();
-  await page.waitForTimeout(1500);
-  const listed = await page.evaluate(
-    (needle) =>
-      (document.querySelector(`div[data-plugin-id="research-dashboard"]`)?.innerText ?? "").includes(needle),
-    name
-  );
-  check("create a topic through the page (reconcile_topic)", listed, name);
-
-  // Creating a topic opens its editor directly (you just made it — you probably want to fill it in),
-  // so exercise the toggle rather than assuming a collapsed card.
-  const card = root.locator(`[data-rd-topic="${name}"]`);
-  await card.getByRole("button", { name: "Close", exact: true }).click();
-  await page.waitForTimeout(500);
-  const collapsed = await card.getByLabel("Activity", { exact: true }).count();
-  await card.getByRole("button", { name: "Edit fields", exact: true }).click();
-  await page.waitForTimeout(500);
-  const reopened = await card.getByLabel("Activity", { exact: true }).count();
+  //
+  // D7: the page offers no broad create or edit control — topics are created and structured through the
+  // librarian (`reconcile_topic`, covered by the store/action tests), so this pass no longer drives a
+  // create form, a topic-field editor or a page-side activity recorder. What the page still writes is a
+  // **topic note** and an **axis correction**; those two are exercised below. The absence is asserted
+  // first, so re-adding a control fails here rather than quietly widening the surface again.
+  const noControl = await page.evaluate((pluginId) => {
+    const scope = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
+    const text = (scope?.innerText ?? "").replace(/\s+/g, " ");
+    return {
+      createControl: /Add topic|New topic name/.test(text),
+      editControl: /Edit fields|Done editing/.test(text),
+      editors: scope?.querySelectorAll("[data-rd-topic-editor]").length ?? 0,
+      activityRecorder: scope?.querySelectorAll('[aria-label="Activity"]').length ?? 0,
+    };
+  }, PLUGIN_ID);
   check(
-    "the card's editor opens and closes from the overview",
-    collapsed === 0 && reopened === 1,
-    `collapsed: ${collapsed}, reopened: ${reopened}`
+    "the page offers no create or edit control (D7: Topics is read-first)",
+    !noControl.createControl &&
+      !noControl.editControl &&
+      noControl.editors === 0 &&
+      noControl.activityRecorder === 0,
+    JSON.stringify(noControl)
   );
 
-  await card.getByLabel("Activity", { exact: true }).fill("ui verification event");
-  await card.getByRole("button", { name: "Record activity", exact: true }).click();
-  await page.waitForTimeout(1500);
-  const activity = await page.evaluate(
-    (needle) =>
-      (document.querySelector(`div[data-plugin-id="research-dashboard"]`)?.innerText ?? "").includes(needle),
-    "ui verification event"
-  );
-  check("record_activity through the page", activity);
+  // A topic to drive the page's surviving writes on. It is created through the action below, the way the
+  // librarian would, not from the page.
+  const name = `ui-check ${Date.now().toString().slice(-5)}`;
+  const card = root.locator(`[data-rd-topic="${name}"]`);
 
   // ------------------------------------------------------------------ C5 + D8: correcting from the detail
   // A manager's correction, in the place the review asked for it: the expanded detail, with the
@@ -3124,14 +3155,25 @@ if (WRITE) {
     `status ${fixture.status}`
   );
 
-  // Reload so the fixture axis is in the detail, then open it the way a reader would.
+  // Reload so the fixture axis is in the detail, then open it the way a reader would — the page's only
+  // way in is the read disclosure (D7), and the note affordance lives inside that detail.
   await page.goto(`${DASHBOARD}/plugins/${PLUGIN_ID}`, { waitUntil: "networkidle" });
   await root.waitFor({ state: "visible", timeout: 20000 });
-  await root
-    .locator(`[data-rd-topic="${name}"]`)
-    .getByRole("button", { name: "Edit fields", exact: true })
-    .click();
+  await card.getByRole("button", { name: "Read topic", exact: true }).click();
   await page.waitForTimeout(1500);
+
+  // The narrow write the page kept (D7), end to end: the note field is inline in the read detail and its
+  // write lands in the list that detail already renders.
+  const pageNoteText = `ui verification note ${Date.now().toString().slice(-5)}`;
+  await card.getByLabel("Topic note", { exact: true }).fill(pageNoteText);
+  await card.getByRole("button", { name: "Add note", exact: true }).click();
+  await page.waitForTimeout(1500);
+  const noteLanded = await page.evaluate(
+    (needle) =>
+      (document.querySelector(`div[data-plugin-id="research-dashboard"]`)?.innerText ?? "").includes(needle),
+    pageNoteText
+  );
+  check("a topic note written from the read detail renders in Corrections & notes", noteLanded, pageNoteText);
   const axisCard = root.locator(`[data-rd-topic="${name}"] [data-rd-axis-title="${axisTitle}"]`);
   const beforeCorrection = await axisCard
     .locator("[data-rd-has-evidence]")
@@ -3262,47 +3304,13 @@ if (WRITE) {
     `state ${corrected.state}, evidence ${corrected.evidence}, note kept: ${corrected.noteText.includes(noteText)}`
   );
 
-  // Behaviour 1 of the conflict contract: a topic-level refusal reports at topic level, never inside an
-  // axis, keeps the typed rationale, and does not fall through to the ordinary error line.
-  // The topic editor is already open from the activity check above; reopen it only if it is not.
-  if ((await card.getByLabel("Note on this change").count()) === 0) {
-    await card.getByRole("button", { name: "Edit fields", exact: true }).click();
-    await page.waitForTimeout(600);
-  }
-  const topicNote = "reordered the axes after the group call";
-  await card.getByLabel("Note on this change").fill(topicNote);
-  const topicBumped = await callAction("reconcile_topic", {
-    topic: { summary: "bumped by the harness" },
-    topicId,
-  });
-  check(
-    "a concurrent writer bumped the topic",
-    topicBumped.status === 200,
-    `status ${topicBumped.status}`
-  );
-  await card.getByRole("button", { name: "Save", exact: true }).click();
-  await page.waitForTimeout(1500);
-  const topicConflict = await page.evaluate(() => {
-    const scope = document.querySelector(
-      'div[data-plugin-id="research-dashboard"]'
-    );
-    const banner = scope?.querySelector("[data-rd-conflict]");
-    return {
-      banner: banner ? (banner.innerText ?? "").replace(/\s+/g, " ") : "",
-      banners: scope ? scope.querySelectorAll("[data-rd-conflict]").length : -1,
-      error: (scope?.querySelector(".rd-error")?.innerText ?? "").trim(),
-    };
-  });
-  const topicNoteKept = await page.getByLabel("Note on this change").inputValue();
-  check(
-    "a stale topic save reports at topic level (not inside an axis) and keeps the note",
-    topicConflict.banners === 1 &&
-      !topicConflict.banner.includes("This development axis changed") &&
-      topicConflict.banner.includes("conflict:") &&
-      topicConflict.error === "" &&
-      topicNoteKept === topicNote,
-    `banners: ${topicConflict.banners}; text: ${topicConflict.banner.slice(0, 90)}; error: ${topicConflict.error.slice(0, 50)}; note kept: ${topicNoteKept === topicNote}`
-  );
+  // Behaviour 1 of the conflict contract (a topic-level refusal reports at topic level, never inside an
+  // axis, and keeps the typed rationale) had exactly one page-side entry point: the topic-field editor's
+  // save, which D7 removed — the page has no revision-guarded topic-scoped write any more. The contract
+  // behaviour itself is unchanged and stays covered by the store/action tests (H2), so this pass retires
+  // the page check rather than re-pointing it at a write the page no longer offers. The topic-level
+  // banner stays in the UI: it is the refusal surface for any topic-scoped write the page does make
+  // (the note path), and the read pass asserts the axis-level half of the contract stays axis-scoped.
 }
 
   // --------------------------------- C9: one grammar across the four views (U4 step 7, second half)

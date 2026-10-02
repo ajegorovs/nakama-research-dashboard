@@ -945,15 +945,6 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-involvement > ul { margin: 0; }
 `;
 
-type Draft = {
-  description: string;
-  summary: string;
-  /** A manual topic status change carries its rationale (D8) — a note, not a required field. */
-  note: string;
-  status: string;
-  topicId: string;
-};
-
 /**
  * A manager's correction to one axis, held locally until Save. Everything the write needs is here,
  * including the version read from the detail, so a concurrent change surfaces as a conflict instead of
@@ -3494,10 +3485,6 @@ export function apply(ctx: Context) {
         setExpandedId(entityTarget.id);
       }
     }, [entityTarget?.id, entityTarget?.seq, entityTarget?.type]);
-    const [editing, setEditing] = React.useState<
-      (Draft & { topicId: string }) | null
-    >(null);
-    const [newName, setNewName] = React.useState("");
     const [detail, setDetail] = React.useState<TopicDetail | null>(null);
     /**
      * The Progress index, straight from `get_progress`. Held here rather than inside the view for the same
@@ -3627,87 +3614,12 @@ export function apply(ctx: Context) {
 
     function toggle(topicId: string) {
       setExpandedId((current) => (current === topicId ? null : topicId));
-      setEditing(null);
       setDetail(null);
       setConflict(null);
     }
 
-    function startEditing(entry: TopicOverview) {
-      setExpandedId(entry.topic.id);
-      setConflict(null);
-      setEditing({
-        description: entry.topic.description,
-        note: "",
-        status: entry.topic.status,
-        summary: entry.topic.summary,
-        topicId: entry.topic.id,
-      });
-    }
 
-    async function createTopic(event: unknown) {
-      const formEvent = event as { preventDefault(): void };
-      formEvent.preventDefault();
-      const name = newName.trim();
-      if (!name) {
-        return;
-      }
-      // Creating a topic is a reconcile with nothing but its name — the same single write path.
-      const result = await call<{ ok?: boolean; topic: Topic }>(
-        "reconcile_topic",
-        { topicName: name }
-      );
-      if (result?.topic) {
-        setNewName("");
-        await load(windowDays, includeArchived);
-        startEditing({
-          activityCount: 0,
-          axes: [],
-          axisCounts: {
-            abandoned: 0,
-            active: 0,
-            blocked: 0,
-            completed: 0,
-            draft: 0,
-            parked: 0,
-            // A topic that was just created has no axes, so every bucket is 0 — including the state U1 added.
-            usable: 0,
-          },
-          lastActivityAt: null,
-          people: [],
-          repositories: [],
-          topic: result.topic,
-        });
-      }
-    }
 
-    /**
-     * Saving the topic's own fields. The status change rides along with its note (D8): one atomic
-     * reconcile, so the rationale and the change it explains can never be separated.
-     */
-    async function saveDetails() {
-      if (!(detail && editing)) {
-        return;
-      }
-      const note = editing.note.trim();
-      const result = await call("reconcile_topic", {
-        expectedVersion: detail.topic.version,
-        topic: {
-          description: editing.description,
-          ...(editing.status === detail.topic.status
-            ? {}
-            : { status: editing.status }),
-          summary: editing.summary,
-        },
-        topicId: detail.topic.id,
-        ...(note ? { annotations: [{ text: note }] } : {}),
-      });
-      if (result) {
-        setEditing(null);
-        setConflict(null);
-        await loadDetail(detail.topic.id);
-        await load(windowDays, includeArchived);
-      }
-    }
 
     /**
      * A manager's correction to an axis: the claim, its confidence, and optionally why. The note lands
@@ -3870,30 +3782,6 @@ export function apply(ctx: Context) {
         ) : null}
 
         <div className="rd-row">
-          <div className="rd-cluster">
-            {view === "topics" ? (
-              <form
-                className="rd-cluster rd-newtopic"
-                onSubmit={(event) => {
-                  void createTopic(event);
-                }}
-              >
-                <Input
-                  aria-label="New topic name"
-                  disabled={busy}
-                  maxLength={120}
-                  onChange={(event) =>
-                    setNewName((event.target as { value: string }).value)
-                  }
-                  placeholder="New topic name"
-                  value={newName}
-                />
-                <Button disabled={busy || !newName.trim()} type="submit">
-                  Add topic
-                </Button>
-              </form>
-            ) : null}
-          </div>
           <span className="rd-muted">
             {counts
               ? [
@@ -3915,7 +3803,6 @@ export function apply(ctx: Context) {
                 ? entry.axes
                 : entry.axes.slice(0, LEAD_AXES);
               const hidden = entry.axes.length - shown.length;
-              const editingThis = editing?.topicId === entry.topic.id;
               // The expanded card renders from the `get_topic` detail (history, notes and evidence per
               // axis); the collapsed card renders from the overview it already has.
               const details =
@@ -3926,7 +3813,7 @@ export function apply(ctx: Context) {
                 <Card
                   className="rd-topic-card"
                   data-rd-blocked={hasBlocked}
-                  data-rd-mode={editingThis ? "edit" : expanded ? "read" : "collapsed"}
+                  data-rd-mode={expanded ? "read" : "collapsed"}
                   data-rd-topic={entry.topic.name}
                   key={entry.topic.id}
                 >
@@ -4017,17 +3904,16 @@ export function apply(ctx: Context) {
                           )}
                         </span>
                         <div className="rd-cluster">
-                          {/* Reading and editing are two ways into the same card, not one. Reading is
-                              the primary action and renders the detail with no form at all; the form
-                              appears only from `Edit fields`. Closing collapses the card; finishing an
-                              edit returns to reading it, which is why they are different words. */}
+                          {/* One control, one piece of state: `Read topic` is the card's only
+                              disclosure, and reading is the card's only mode. The page offers no broad
+                              create or edit control (D7) — topic structure changes go through the
+                              librarian, and only the narrow note/correction affordances write. */}
                           <Button
                             data-rd-close={expanded ? "true" : "false"}
                             data-rd-read-open={expanded ? "false" : "true"}
                             disabled={busy}
                             onClick={() => {
                               if (expanded) {
-                                setEditing(null);
                                 setExpandedId(null);
                               } else {
                                 toggle(entry.topic.id);
@@ -4037,21 +3923,6 @@ export function apply(ctx: Context) {
                             variant={expanded ? "outline" : "default"}
                           >
                             {expanded ? "Close" : "Read topic"}
-                          </Button>
-                          <Button
-                            data-rd-edit-open={editingThis ? "false" : "true"}
-                            disabled={busy}
-                            onClick={() => {
-                              if (editingThis) {
-                                setEditing(null);
-                              } else {
-                                startEditing(entry);
-                              }
-                            }}
-                            size="sm"
-                            variant={editingThis || !expanded ? "outline" : "default"}
-                          >
-                            {editingThis ? "Done editing" : "Edit fields"}
                           </Button>
                         </div>
                       </div>
@@ -4279,84 +4150,6 @@ export function apply(ctx: Context) {
                         </div>
                       ) : null}
 
-                      {editingThis && editing ? (
-                        <div
-                          className="rd-form rd-divider"
-                          data-rd-topic-editor="true"
-                        >
-                          <Textarea
-                            aria-label="Topic description"
-                            disabled={busy}
-                            onChange={(event) =>
-                              setEditing({
-                                ...editing,
-                                description: (event.target as { value: string })
-                                  .value,
-                              })
-                            }
-                            placeholder="What this topic is"
-                            value={editing.description}
-                          />
-                          <Textarea
-                            aria-label="Approved summary"
-                            disabled={busy}
-                            onChange={(event) =>
-                              setEditing({
-                                ...editing,
-                                summary: (event.target as { value: string })
-                                  .value,
-                              })
-                            }
-                            placeholder="Approved summary (interpretation, confirmed by a human)"
-                            value={editing.summary}
-                          />
-                          <div className="rd-row">
-                            <div className="rd-cluster">
-                              <StatusSelect
-                                disabled={busy}
-                                onChange={(next) => {
-                                  setEditing({ ...editing, status: next });
-                                }}
-                                value={editing.status}
-                              />
-                              <span className="rd-muted">
-                                {editing.status === entry.topic.status
-                                  ? "unchanged"
-                                  : `was ${entry.topic.status}`}
-                              </span>
-                            </div>
-                            <span className="rd-muted">
-                              v{entry.topic.version} · updated{" "}
-                              {entry.topic.updatedAt.slice(0, 10)}
-                            </span>
-                          </div>
-                          <Textarea
-                            aria-label="Note on this change"
-                            disabled={busy}
-                            onChange={(event) =>
-                              setEditing({
-                                ...editing,
-                                note: (event.target as { value: string }).value,
-                              })
-                            }
-                            placeholder="Why (optional) — saved with the change as a note on this topic"
-                            value={editing.note}
-                          />
-                          <div className="rd-cluster">
-                            <Button
-                              disabled={busy || !details}
-                              onClick={() => {
-                                void saveDetails();
-                              }}
-                            >
-                              Save
-                            </Button>
-                            <span className="rd-muted">
-                              The status change and its note land in one call.
-                            </span>
-                          </div>
-                        </div>
-                      ) : null}
                     </div>
                   </CardContent>
                 </Card>
