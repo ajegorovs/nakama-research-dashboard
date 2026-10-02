@@ -3347,6 +3347,134 @@ if (paletteReachable) {
   await page.waitForTimeout(400);
 }
 
+// ---------------------------------- H1: keyboard focus visibility
+// The gap the U11 audit left open, and the reviewer asked for it last on purpose: run against the final
+// polished UI rather than an intermediate one. Two facts, both about what a keyboard user actually gets:
+//
+//   (a) an element that takes keyboard focus renders a *visible* indicator — an outline, a ring, or a border
+//       or background that differs from the same element unfocused, and actually paints something; and
+//   (b) the page's controls are reachable by Tab, in DOM order, without a trap.
+//
+// Measured with real Tab presses, never `element.focus()`: `:focus-visible` deliberately does not match a
+// programmatic focus, so a check that focuses elements from script measures a state no keyboard user sees.
+// The focused elements are kept as live handles on the page so the unfocused style can be read back from the
+// *same* nodes after the traversal — no DOM mutation, and no second guess at what was focused.
+{
+  await page.goto(`${DASHBOARD}/plugins/${PLUGIN_ID}`, { waitUntil: "networkidle" });
+  await root.waitFor({ state: "visible", timeout: 20000 });
+  await page.evaluate(() => {
+    window.__focusHandles = [];
+    window.__focusDescribe = (el) =>
+      `${el.tagName.toLowerCase()}${el.className ? "." + el.className.toString().split(" ")[0] : ""}` +
+      `${el.getAttribute("data-rd-view-option") ? `[view=${el.getAttribute("data-rd-view-option")}]` : ""}` +
+      `${el.getAttribute("data-rd-entity-tag") ? `[tag=${el.getAttribute("data-rd-entity-tag")}]` : ""}` +
+      ` "${(el.textContent ?? "").trim().replace(/\\s+/g, " ").slice(0, 28)}"`;
+    window.__focusStyle = (node) => {
+      const s = getComputedStyle(node);
+      return [
+        `${s.outlineStyle} ${parseFloat(s.outlineWidth)}px ${s.outlineColor}`,
+        s.boxShadow,
+        `${s.borderTopColor} / ${s.borderLeftColor}`,
+        s.backgroundColor,
+      ].join(" | ");
+    };
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+  });
+
+  const pluginVisits = [];
+  for (let step = 0; step < 200 && pluginVisits.length < 24; step += 1) {
+    await page.keyboard.press("Tab");
+    const visit = await page.evaluate(() => {
+      const el = document.activeElement;
+      if (!(el instanceof HTMLElement) || el === document.body) {
+        return { body: true };
+      }
+      const inside = el.closest("div[data-plugin-id]") !== null;
+      const descriptor = window.__focusDescribe(el);
+      const focusedStyle = window.__focusStyle(el);
+      if (inside) {
+        window.__focusHandles.push(el);
+      }
+      return { body: false, inside, descriptor, focusedStyle };
+    });
+    if (visit.body === true) {
+      break;
+    }
+    if (visit.inside === true) {
+      pluginVisits.push({ descriptor: visit.descriptor, focusedStyle: visit.focusedStyle });
+    }
+  }
+
+  /**
+   * A focus indicator is visible when the *rendered* difference is one a person can see. A ring that resolves
+   * to transparent, or an outline with `style: none`, is a difference in the computed style and no difference
+   * on screen — which is how a themed UI loses focus visibility without anyone noticing.
+   */
+  const visibleIndicator = (focused, unfocused) => {
+    const opaque = (value) => !/rgba?\(\s*0,\s*0,\s*0,\s*0\s*\)/.test(value);
+    const [outline, shadow, borderColors, background] = focused.split(" | ");
+    const [, unfocusedShadow, unfocusedBorders, unfocusedBackground] = unfocused.split(" | ");
+    const [outlineStyle, outlineWidth, ...outlineColor] = (outline ?? "").split(" ");
+    if (outlineStyle !== "none" && parseFloat(outlineWidth) > 0 && opaque(outlineColor.join(" "))) {
+      return true;
+    }
+    if (
+      shadow !== "none" &&
+      shadow !== unfocusedShadow &&
+      opaque(shadow) &&
+      !/0px\s+0px\s+0px\s+0px/.test(shadow)
+    ) {
+      return true;
+    }
+    const paints = (value) => value.split(" / ").some((part) => opaque(part));
+    if (borderColors !== unfocusedBorders && paints(borderColors ?? "")) {
+      return true;
+    }
+    return background !== unfocusedBackground && opaque(background ?? "");
+  };
+
+  const unfocusedStyles = await page.evaluate(() => {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    return (window.__focusHandles ?? []).map((node) => window.__focusStyle(node));
+  });
+
+  const noIndicator = pluginVisits.filter(
+    (visit, index) => !visibleIndicator(visit.focusedStyle, unfocusedStyles[index] ?? "")
+  );
+  check(
+    "every control the Tab key reaches inside the page shows a visible focus indicator",
+    pluginVisits.length > 0 && noIndicator.length === 0,
+    noIndicator.length === 0
+      ? `${pluginVisits.length} control(s) reached by keyboard, each with a visible indicator: ${pluginVisits
+          .slice(0, 4)
+          .map((visit) => visit.descriptor)
+          .join(", ")}`
+      : `no visible indicator on: ${noIndicator.map((visit) => visit.descriptor).join(", ")}`
+  );
+
+  // Reachable, in DOM order, no trap: the toolbar is the page's own control order, so its four views must
+  // appear in that order, and no element may be visited twice while tabbing forward.
+  const order = pluginVisits.map((visit) => visit.descriptor);
+  const toolbar = ["[view=topics]", "[view=people]", "[view=repositories]", "[view=progress]"];
+  const positions = toolbar.map((marker) => order.findIndex((entry) => entry.includes(marker)));
+  const inDomOrder = positions.every(
+    (position, index) => position !== -1 && (index === 0 || position > positions[index - 1])
+  );
+  check(
+    "the page's controls are reachable by keyboard in DOM order, without a trap",
+    pluginVisits.length >= 8 && inDomOrder && new Set(order).size === order.length,
+    `${pluginVisits.length} stop(s) inside the page; toolbar at positions ${positions.join("/")}; ${new Set(order).size} distinct`
+  );
+
+  // Leave the page as the rest of the run expects it.
+  await page.goto(`${DASHBOARD}/plugins/${PLUGIN_ID}`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(400);
+}
+
 if (WRITE) {
   // Scope every interaction to the plugin's own root: the dashboard chrome has buttons and inputs
   // whose accessible names overlap ("… Activity" titles in the sidebar), and strict mode rejects
