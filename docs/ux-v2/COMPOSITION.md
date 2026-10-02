@@ -26,6 +26,18 @@ Row-internal grammars the prototypes share: `72–78px 1fr` (a badge/state cell 
 `auto 1fr auto` (a row with right-aligned meta). Detail headers are `title · description · chip row` with
 recency top-right; recency appears as per-row text, never as a count strip.
 
+> **Erratum (2026-10-02, D1).** The Progress row above said the detail split is
+> `(problem + plan + .bottom-grid) | (activity + open problems)` and that `.bottom-grid` is
+> `repeat(3, minmax(0,1fr))` → `Repository threads` / `Evidence` / `Human steering`. **Both halves are wrong**,
+> verified against the markup: `.bottom-grid` is **two** columns (`progress.html:368–370`) holding
+> `Plan / work package` (`:735`) and `Open problems` (`:776`); the three-card band is the separate
+> **`.support-grid`** (`:474–476`, `repeat(3, minmax(0,1fr))`) holding Repository threads (`:822`) /
+> Evidence (`:841`) / Human steering (`:861`); and `Activity` is the **top-grid's second cell** (`:694`, inside
+> `.top-grid` at `:668`, whose columns are `progress.html:273`), not a full-height right column — so
+> `Open problems` is not a right-column card. The corrected structure is
+> `top-grid = Problem | Activity` → `bottom-grid = Plan | Open problems` → `support-grid = the three cards`,
+> all inside the detail panel right of the index. The old statement is kept above as the historical record.
+
 ## 2. Gap per view (evidence in `fidelity/REVIEW.md`)
 
 - **Topics** — app is a single column of full-width cards; each card carries a **count-chip strip**
@@ -34,6 +46,12 @@ recency top-right; recency appears as per-row text, never as a count strip.
   activity/notes column.
 - **People** — same shape; `@handle` + a count line + `TOPICS THEY ARE ON` / `ACTIVITY ATTRIBUTED TO THEM`
   stacked. No index, no role line, no `About`, no `Related repositories` (if present at all, below the fold).
+  > **Erratum (2026-10-02, D1).** "No index" is **false**. People has rendered index + detail since C6:
+  > `PeopleView` renders `rd-split` + `ul.rd-index` + `PersonPanel` (`src/ui.tsx:2313/2315/2336`), and the
+  > capture `fidelity/current-1440x900/people.png` shows the index beside the panel (measured: index 240 px
+  > left of a 684 px detail at 1280×800, tops aligned). What the view genuinely lacks is the detail's **inner**
+  > split, an index **recency** column, and the `About` / `Related repositories` blocks. C2 is therefore
+  > **grammar work, not construction** (§3 C2). The rest of this bullet stands: no person-level role line.
 - **Repositories** — **composition already matches** (index + detail with `SUPPORTS` / `CURRENT WORK` /
   `RECENT ACTIVITY`). Difference is density and row typography, not structure.
 - **Progress** — all content present, grouped differently: three equal columns (index | `Open problems` |
@@ -66,6 +84,15 @@ statement (`.bottom-grid` for the three cards), keep the activity feed as the de
 stays, positioned above the index as the prototype shows. The prototype specifies the **Axes** detail only —
 the `Problems` subview keeps its own shape adapted to the same grammar, and that adaptation is to be
 recorded rather than invented silently.
+
+> **Erratum (2026-10-02, D3).** The paragraph above describes a band the prototype does not have. Read off the
+> markup, C4 is: `top-grid = Problem | Activity` (`progress.html:668`, columns `:273`) →
+> `bottom-grid = Plan / work package | Open problems` (`:733`, two columns `:368–370`) →
+> `support-grid = Repository threads | Evidence | Human steering` (`:819`, three columns `:474–476`), all
+> inside the detail panel. So the three cards go in **`.support-grid`**, not `.bottom-grid`; `Open problems`
+> sits beside the **Plan** (not in a right column); and `Activity` shares the **top row** with the Problem
+> rather than spanning the detail's height. The toggle-above-index and Problems-subview requirements above
+> stand unchanged. Approved by the reviewer as **D3**.
 
 ### C3 — Overview: the aggregation, as the dashboard's default landing
 Build the prototype's two-column `Topic activity` / `Repository activity` composition with its per-card

@@ -23,14 +23,26 @@ owner will confirm access. Everything below is repo-relative.
 ## 2. The finding in one paragraph
 
 The four views do not reproduce the approved prototypes' page composition. `Repositories` matches (density
-aside). `Progress` has all the content grouped differently (three equal columns, with the plan, repository
-threads, evidence and human steering stacked below instead of in the prototype's problem band and
-`.bottom-grid`). `Topics` and `People` are **single-column stacks of full-width cards**, each with a
-count-chip strip — the "counts that restate rows" pattern the pre-pivot brief named — where the prototypes
-show **index + detail** (index ~310–330px, detail carrying a two-column inner split). The prototype's
-`Overview` page (two activity columns) has no counterpart; the landing view is the Topics card list. The
-acceptance checks measured semantics, projections, structure and density; they never measured composition,
-and earlier reports should not have implied they did. The owner's decision: **the prototypes are the target.**
+aside). `Progress` has all the content grouped differently (three near-equal columns, with the plan, repository
+threads, evidence and human steering stacked below rather than in the prototype's own bands). `Topics` **is** a
+**single-column stack of full-width cards** with a count-chip strip — the "counts that restate rows" pattern
+the pre-pivot brief named — where its prototype shows **index + detail** (index ~320px, detail carrying a
+two-column inner split). `People` **already has index + detail** (`.rd-split` + `.rd-index` + `PersonPanel`,
+`src/ui.tsx:2313/2315/2336`); what it lacks is the detail's *inner* split and the prototype's index row
+grammar, so its unit is smaller than this paragraph first implied. The prototype's `Overview` page (two
+activity columns) has no counterpart; the landing view is the Topics card list. The acceptance checks measured
+semantics, projections, structure and density; they never measured composition, and earlier reports should not
+have implied they did. The owner's decision: **the prototypes are the target.**
+
+> **Correction (2026-10-02, D1 — this paragraph was wrong about People).** It read: *"`Topics` and `People`
+> are **single-column stacks of full-width cards**, each with a count-chip strip … where the prototypes show
+> **index + detail**"*, and it attributed the three support cards to `.bottom-grid`. Both were wrong: People has
+> rendered index + detail since C6 (confirmed in this pack's own capture `current-1440x900/people.png` and
+> measured at 240 px index / 684 px detail, tops aligned, at 1280×800), and `.bottom-grid` is the two-column
+> `Plan / Open problems` band while the three cards live in `.support-grid` (`progress.html:368–370`,
+> `:474–476`). The reviewer's strategy inherited the People error and C2 was re-scoped accordingly; the errata
+> are in `COMPOSITION.md` §1/§2/§C4 and `REVIEW.md` §3–§4. The original wording is quoted above and kept in the
+> git history of this file.
 
 ## 3. Constraints any strategy must respect
 

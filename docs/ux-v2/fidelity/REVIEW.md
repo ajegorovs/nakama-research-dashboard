@@ -10,7 +10,7 @@ the current build **does not reproduce the prototypes' page composition** in sev
 
 | | |
 |---|---|
-| Review UI (the owner's URL) | `http://smi-alex-516-pc.tail63f186.ts.net:3003/plugins/research-dashboard` — Vite dev web from `/mnt/otrais/repos/nakama`, bound to the tailnet address, proxying the dev instance |
+| Review UI (the owner's URL) | `http://<box>.<tailnet>.ts.net:3003/plugins/research-dashboard` — Vite dev web from `/mnt/otrais/repos/nakama`, bound to the tailnet address, proxying the dev instance |
 | Its backend | dev Nakama on `127.0.0.1:4399` (data root `/mnt/otrais/data/nakama-dev`) |
 | Documented "Dashboard" in `services/nakama/README.md` | `http://<box>.<tailnet>.ts.net:4310` — the **Docker** instance, which answers **"This plugin isn't available"**: it has never carried this plugin. That README row is wrong for this plugin and is corrected. |
 
@@ -63,9 +63,25 @@ unless the DOM evidence says otherwise.
   person card: name + handle + a **role/description line**, a topic chip row, `CURRENT INVOLVEMENT` blocks
   (topic · recency · bold axis · summary · ref chip), a right column with `Recent activity`, `About` prose and
   `Related repositories`.
+  > **Correction (2026-10-02, D1).** No person-level role exists in the payload to fill that role line
+  > (`Person` carries `notes`, not a role; roles live on the topic link, `PersonTopicInvolvement.role`), and
+  > `Related repositories` is not on `PersonRollup` either — it is derivable in-view from the overview's person
+  > rollups, and only while `peopleTruncated === false`. `About` **is** backed (`Person.notes`). Ruled: omit
+  > the role line, render `About` from `notes`, never synthesize a bio from link roles.
 - **App:** single column of full-width person cards; `@handle`, a count line (`4 active · 1 blocked · 7 axes ·
   3 topics`), then `TOPICS THEY ARE ON` and `ACTIVITY ATTRIBUTED TO THEM` as stacked lists. No index pane; no
   role line; the recency that the prototype puts top-right appears only as per-row text.
+
+> **Correction (2026-10-02, D1 — this paragraph was wrong).** "Single column of full-width person cards … No
+> index pane" is **false**, and it is the sentence the composition strategy's People verdict read off. People
+> has rendered index + detail since C6: `PeopleView` is `rd-split` (`src/ui.tsx:2313`) with `ul.rd-index`
+> (`:2315`) and `PersonPanel` (`:2336`), and this pack's own capture `current-1440x900/people.png` shows the
+> index (ajegorovs / Fixture Zeta) beside the panel. Measured on the review URL: index 240 px left of a 684 px
+> detail at 1280×800 (844 px at 1440×900), **tops aligned at both**. What People genuinely lacks is the
+> detail's **inner** two-column split, an index **recency** column, and `About` / `Related repositories` — so
+> C2 is grammar work, not construction. The paragraph above is kept as the historical record. The two
+> corresponding statements elsewhere in this pack — `REVIEW-PACKET.md` §2 and `COMPOSITION.md` §2 — carry the
+> same correction.
 
 ### Repositories — index/detail **is** present
 - **Prototype:** index of repositories beside a detail card with a header tag row (topic · person · two axis
@@ -84,6 +100,17 @@ unless the DOM evidence says otherwise.
 - **App:** three equal columns — axis index | `Open problems (2)` | `Activity (11)` — with the plan, repository
   threads, evidence and steering stacked **below** rather than grouped in the same band beside the problem.
   Subview toggle present, but inside the global control band rather than above the index.
+
+> **Correction (2026-10-02, D1/D3 — the prototype half of this paragraph was wrong).** The prototype does not
+> put `OPEN PROBLEMS` in a right column, and the three-card band is not the same grid as the plan: read off the
+> markup, `.bottom-grid` is **two** columns (`progress.html:368–370`) holding `Plan / work package` (`:735`) and
+> `Open problems` (`:776`), while the three cards live in the separate `.support-grid` (`:474–476`,
+> `repeat(3, minmax(0,1fr))`) → `Repository threads` (`:822`) / `Evidence` (`:841`) / `Human steering` (`:861`).
+> `ACTIVITY` is the **top-grid's second cell** (`:694`, inside `.top-grid` at `:668`), sharing its row with the
+> Problem card (`:670`) — not a full-height right rail. The App half of the paragraph above stands and is
+> measured: at 1280 the index is 256 px, the Problem 363 px and the Activity rail ≈290 px — near-equal columns,
+> which is exactly why "Problem left of Activity / Activity narrower" cannot be the geometry assertion (both
+> already pass on this build).
 
 ### Overview — not built
 - **Prototype:** `Overview` is its own page: a range control (`7d 14d 30d All`) and a `Refresh` button, then
@@ -107,8 +134,9 @@ unless the DOM evidence says otherwise.
 **No — the running build does not reproduce the approved prototypes' page composition.** The semantics the
 harness proves (states, tags, refs, notes, projections, accessibility of the data) are present in the build;
 the **page composition** the prototypes specify is only partly present: `Repositories` has index+detail, and
-`Progress` has all the content but grouped differently; `Topics` and `People` are single-column card stacks
-with count-chip strips where the prototypes show index+detail; the prototype's `Overview` page has no
+`Progress` has all the content but grouped differently; `Topics` **is** a single-column card stack with a
+count-chip strip where the prototype shows index+detail; `People` has index+detail but lacks the detail's
+inner split (corrected 2026-10-02 — see the correction under §3 People); the prototype's `Overview` page has no
 counterpart.
 
 The acceptance checks measured semantics, structure and density — they were never able to measure this, and
