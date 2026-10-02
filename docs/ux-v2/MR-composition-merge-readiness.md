@@ -48,14 +48,16 @@ to take.
 | Check | Result |
 |---|---|
 | working tree | **clean** at the end of this phase (the phase's own records are committed with it) |
-| ahead / behind `main` | `git rev-list --left-right --count origin/main...HEAD` → **0 behind / 36 ahead** |
-| branch HEAD | `f73e430` when the measurements below were taken; the redaction fix and this record's own corrections make it **36 ahead** |
+| ahead / behind `main` | `git rev-list --left-right --count origin/main...HEAD` → **0 behind / 37 ahead** |
+| branch HEAD | `f73e430` when the measurements below were taken; the merge-readiness record, the redaction fix and #11's own corrections followed it |
 | `main` HEAD | `e09c1d6` |
-| composition commits | 36; implementation commit `c1b2059`, and every commit after it is **documentation-only** |
+| composition commits | 35 at measurement, 37 at this commit; implementation commit `c1b2059`, and every commit after it is **not code** |
 
 **The self-reference, stated rather than left to a reader to notice:** merge-readiness measurements were taken at
-**35 commits ahead**; this record commit made the branch **36 ahead**. `main` remains **0 ahead / no divergence**
-throughout — it is never advanced by this phase.
+**35 commits ahead**; the merge-readiness record commit made the branch **36**, and the redaction fix that
+followed it makes it **37**. The count grows because the branch carries its own record — that is the expected
+self-reference, not drift. `main` remains **0 ahead / no divergence** throughout: it is never advanced by this
+phase, and it was already 0 ahead before either commit.
 
 **The tested bundle and the commit, stated precisely** (the reviewer's housekeeping point): the release digest
 is computed over the manifest's folders (`actions`, `migrations`, `ui`, `skills`), so the bundle under test is
@@ -238,7 +240,8 @@ decision; **no rewrite was performed**, and that choice is left to the reviewer.
 
 1. **The reviewer's word on this fix** — they recorded *"after those docs/redaction-only fixes: merge may proceed
    without rerunning the full acceptance suite."*
-2. **The merge itself**: `main` ← `composition/c1-topics`, now 36 commits, `main` 0 ahead. Not performed.
+2. **The merge itself**: `main` ← `composition/c1-topics` — 35 commits when measured, one more per record commit
+   since (37 at the redaction fix), `main` 0 ahead throughout. Not performed.
 3. **If the history exposure matters** (§11): an explicit decision to rewrite the branch before merging.
 4. H1's focus-visibility validation, after the merge, against the merged composition.
 5. The estate's own reconciliation of these facts (`services/nakama/HANDOFF-UX-V2.md`, `PLAN-UX-V2.md`,
