@@ -362,19 +362,20 @@ check(
   JSON.stringify(overviewInput)
 );
 
-const cards = await page.evaluate((pluginId) => {
+const indexRows = await page.evaluate((pluginId) => {
   const nodes = document.querySelectorAll(
-    `div[data-plugin-id="${pluginId}"] [data-rd-topic]`
+    `div[data-plugin-id="${pluginId}"] [data-rd-index-topic]`
   );
   return [...nodes].map((node) => ({
-    blocked: node.getAttribute("data-rd-blocked"),
-    borderLeft: getComputedStyle(node).borderLeftWidth,
-    borderColor: getComputedStyle(node).borderLeftColor,
-    name: node.getAttribute("data-rd-topic"),
+    count:
+      node.querySelector("[data-rd-index-current]")?.getAttribute("data-rd-index-current") ?? null,
+    name: node.getAttribute("data-rd-index-topic"),
+    pressed: node.getAttribute("aria-pressed"),
+    stale: node.getAttribute("data-rd-topic-stale"),
     text: (node.innerText ?? "").replace(/\s+/g, " "),
   }));
 }, PLUGIN_ID);
-check("topic cards rendered", cards.length > 0, `${cards.length} cards`);
+check("the topic index rendered", indexRows.length > 0, `${indexRows.length} index rows`);
 
 const header = await page.evaluate((pluginId) => {
   const node = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
@@ -407,74 +408,138 @@ check(
   oneRepo
 );
 
-// Axes are grouped under their topic: each card carries the axes it leads with, and none of another
-// topic's. Both halves are read off the payload, so the check holds for one topic or twenty.
-const cardIssues = [];
+// Each topic in the payload has one index row, and the visible detail carries its own topic's axes and
+// none of another topic's. Both halves are read off the payload, so the check holds for one topic or
+// twenty. (C1: this was per-card while every card carried its own axes; the detail shows one topic at a
+// time, so the "own axes" half is now read from the selected detail.)
+// The detail's own content — the claims, the axis rows — arrives with `get_topic`, one tick after the
+// pane exists (the pane is up as soon as the overview names the selected topic). This runs above the
+// `settleUntil` declaration, so it waits directly; a timeout here is not fatal, the assertions below
+// report what they actually found.
+await page
+  .waitForFunction(
+    ([pluginId, topic]) =>
+      document.querySelector(
+        `div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"] [data-rd-claim="summary"]`
+      ) !== null,
+    [PLUGIN_ID, CORPUS.topic],
+    { timeout: 8000, polling: 50 }
+  )
+  .catch(() => {});
+await page.waitForTimeout(50);
+const detailProbe = await page.evaluate(
+  ([pluginId, topic]) => {
+    const pane = document.querySelector(
+      `div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"]`
+    );
+    return {
+      text: (pane?.innerText ?? "").replace(/\s+/g, " "),
+      context: (pane?.querySelector("[data-rd-detail-context]")?.innerText ?? "").replace(
+        /\s+/g,
+        " "
+      ),
+    };
+  },
+  [PLUGIN_ID, CORPUS.topic]
+);
+const rowIssues = [];
 for (const entry of CORPUS.topicAxes) {
-  const card = cards.find((candidate) => candidate.name === entry.topic);
-  if (!card) {
-    cardIssues.push(`${entry.topic}: no card`);
+  if (!indexRows.some((row) => row.name === entry.topic)) {
+    rowIssues.push(`${entry.topic}: no index row`);
+  }
+}
+const ownAxes = CORPUS.topicAxes.find((entry) => entry.topic === CORPUS.topic)?.axes ?? [];
+for (const title of ownAxes) {
+  if (!detailProbe.text.includes(title)) {
+    rowIssues.push(`${CORPUS.topic}: own axis missing (${title})`);
+  }
+}
+for (const entry of CORPUS.topicAxes) {
+  if (entry.topic === CORPUS.topic) {
     continue;
   }
-  for (const title of entry.axes.slice(0, 3)) {
-    if (!card.text.includes(title)) {
-      cardIssues.push(`${entry.topic}: own axis missing (${title})`);
-    }
-  }
-  for (const other of CORPUS.topicAxes) {
-    if (other.topic === entry.topic) {
-      continue;
-    }
-    for (const title of other.axes) {
-      if (card.text.includes(title)) {
-        cardIssues.push(`${entry.topic}: leaked (${title})`);
-      }
+  for (const title of entry.axes) {
+    if (detailProbe.text.includes(title)) {
+      rowIssues.push(`detail leaked ${entry.topic}'s axis (${title})`);
     }
   }
 }
 check(
-  "every topic in the payload has one card, carrying its own axes and none of another topic's",
-  cards.length === CORPUS.topicNames.length && cardIssues.length === 0,
-  `${cards.length} cards for ${CORPUS.topicNames.length} topics; ${cardIssues.length ? cardIssues.join("; ") : "no leaks"}`
+  "every topic in the payload has one index row, and the visible detail carries its own topic's axes and none of another's",
+  indexRows.length === CORPUS.topicNames.length && rowIssues.length === 0,
+  `${indexRows.length} rows for ${CORPUS.topicNames.length} topics; ${rowIssues.length ? rowIssues.join("; ") : "no leaks"}`
 );
 
-const firstCard = cards.find((card) => card.name === CORPUS.topic);
+const pressedRow = indexRows.find((row) => row.pressed === "true");
 const firstPerson = CORPUS.people[0];
-const statePhrases = Object.entries(CORPUS.axisCounts)
-  .filter(([, count]) => count > 0)
-  .map(([state, count]) => `${count} ${state}`);
-// The card that carries this person, which is not necessarily the first card: with more than one topic
-// the payload's first person and the first card are different subjects, and assuming they overlap
-// fails a dataset whose people sit on different topics. The count clause is pattern-based for the same
-// reason — per-topic counts differ from whole-payload counts once there is more than one topic.
-const peopleCard = cards.find((card) => card.text.includes(firstPerson?.name ?? "\u0000"));
-const countPattern = /\b\d+\s+(?:active|draft|blocked|parked|completed|abandoned)\b/;
+const nonTerminal = Object.entries(CORPUS.axisCounts)
+  .filter(([state]) => state !== "completed" && state !== "abandoned")
+  .reduce((sum, [, n]) => sum + n, 0);
 check(
-  "a topic card leads with people and its state counts",
-  firstPerson !== undefined &&
-    Boolean(peopleCard?.text.includes(firstPerson.name)) &&
-    countPattern.test(peopleCard?.text ?? ""),
-  `${firstPerson?.name ?? "no people"} on ${peopleCard?.name ?? "no card"}; ` +
-    `payload states ${JSON.stringify(statePhrases)}; card counts ${JSON.stringify(
-      (peopleCard?.text.match(/\b\d+\s+(?:active|draft|blocked|parked|completed|abandoned)\b/g) ?? []).slice(0, 6)
-    )}`
+  "the selected index row states its current-axis count, and the detail carries its people",
+  pressedRow !== undefined &&
+    /current ax(?:is|es)/.test(pressedRow.text) &&
+    (CORPUS.topicNames.length !== 1 || Number(pressedRow.count) === nonTerminal) &&
+    (firstPerson === undefined || detailProbe.context.includes(firstPerson.name)),
+  `row "${pressedRow?.text}" (data-rd-index-current=${pressedRow?.count}; payload non-terminal ${nonTerminal}); ` +
+    `detail context "${detailProbe.context.slice(0, 140)}"`
+);
+
+const recencyLabels = await page.evaluate(
+  (pluginId) =>
+    document.querySelectorAll(`div[data-plugin-id="${pluginId}"] .rd-topic-index [data-rd-recency]`)
+      .length,
+  PLUGIN_ID
+);
+check(
+  "the index rail reports when each topic last saw activity",
+  recencyLabels === indexRows.length,
+  `${recencyLabels} recency label(s) for ${indexRows.length} index row(s)`
 );
 
 if (CORPUS.blockedEntries.length > 0) {
   const blockedEntry = CORPUS.blockedEntries[0];
-  const blockedCard = cards.find((card) => card.name === blockedEntry.topic);
-  const cleanCard = cards.find((card) => card.name !== blockedEntry.topic);
+  await root.locator(`[data-rd-index-topic="${blockedEntry.topic}"]`).click();
+  await settleUntil(
+    ([pluginId, topic]) =>
+      document.querySelector(
+        `div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"] [data-rd-axis-state="blocked"]`
+      ) !== null,
+    [PLUGIN_ID, blockedEntry.topic],
+    6000
+  );
+  const blockedCard = await page.evaluate(
+    ([pluginId, topic]) => {
+      const node = document.querySelector(
+        `div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"] [data-rd-axis-state="blocked"]`
+      );
+      return {
+        borderLeft: node ? getComputedStyle(node).borderLeftWidth : null,
+        borderColor: node ? getComputedStyle(node).borderLeftColor : null,
+        text: (node?.innerText ?? "").replace(/\s+/g, " "),
+      };
+    },
+    [PLUGIN_ID, blockedEntry.topic]
+  );
   check(
     "the blocked axis shows its blocker text",
-    Boolean(blockedCard?.text.includes(`Blocker: ${blockedEntry.blocker}`)),
-    blockedCard?.text.slice(0, 200)
+    blockedCard.text.includes(`Blocker: ${blockedEntry.blocker}`),
+    blockedCard.text.slice(0, 200)
   );
   check(
     "a topic with a blocked axis is visually distinct",
-    blockedCard?.blocked === "true" &&
-      blockedCard?.borderLeft === "3px" &&
-      (cleanCard === undefined || cleanCard.blocked === "false"),
-    `${blockedEntry.topic}: ${blockedCard?.blocked}/${blockedCard?.borderLeft} ${blockedCard?.borderColor}; ${cleanCard?.name ?? "no second card"}: ${cleanCard?.blocked ?? "n/a"}`
+    blockedCard.borderLeft === "3px",
+    `${blockedCard.borderLeft} / ${blockedCard.borderColor}`
+  );
+  // Back to the topic the checks below read.
+  await root.locator(`[data-rd-index-topic="${CORPUS.topic}"]`).click();
+  await settleUntil(
+    ([pluginId, topic]) =>
+      document.querySelector(
+        `div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"] [data-rd-claim="summary"]`
+      ) !== null,
+    [PLUGIN_ID, CORPUS.topic],
+    6000
   );
 } else {
   skip("the blocked axis shows its blocker text", "no axis in this corpus is blocked");
@@ -483,12 +548,6 @@ if (CORPUS.blockedEntries.length > 0) {
     "no axis in this corpus is blocked, so the attention styling has no subject here"
   );
 }
-
-check(
-  "each topic card reports its recent-activity summary",
-  Boolean(firstCard?.text.includes("Recent:")) && Boolean(firstCard?.text.includes("last activity")),
-  firstCard?.text.match(/Recent:[^·]*·[^A-Z]*/)?.[0] ?? ""
-);
 
 // The window control changes the query and nothing else.
 const sevenDayRequest = page.waitForRequest(
@@ -536,140 +595,252 @@ const refreshed = await page.evaluate(
 );
 check("the page still renders after the window change", refreshed);
 
-// Opening a card's detail. A card leads with LEAD_AXES (3) axes; a topic holding more states how much it
-// is not showing rather than offering a second way to see it, and `Read topic` is the only topic-level
-// disclosure control. One control, one piece of state — the C5 checks below read what it opens.
-const leadEntry = CORPUS.topicAxes.find((entry) => entry.topic === CORPUS.topic) ?? {
-  axes: [],
-  hidden: 0,
-};
-const detailCard = root.locator(`[data-rd-topic="${CORPUS.topic}"]`);
-const collapsed = await page.evaluate(
-  ([pluginId, topic]) => {
-    const node = document.querySelector(
-      `div[data-plugin-id="${pluginId}"] [data-rd-topic="${topic}"]`
-    );
-    const note = node?.querySelector("[data-rd-hidden-axes]");
+// C1 replaced the topic card stack with an index rail and ONE persistent detail. The assertions below are
+// what that composition must be true of. The disclosure they replace (`Read topic` / `Close`), and the
+// truncation notice that went with it, no longer exist to check.
+const anatomy = await page.evaluate(
+  ([pluginId]) => {
+    const scope = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
+    const rows = [...(scope?.querySelectorAll("[data-rd-index-topic]") ?? [])];
+    const panes = [...(scope?.querySelectorAll("[data-rd-detail]") ?? [])];
+    const pane = panes[0] ?? null;
+    const fold = pane?.querySelector("details[data-rd-folded-axes]") ?? null;
+    const currentWork = pane?.querySelector("[data-rd-current-work]") ?? null;
+    const titled = (label) =>
+      [...(pane?.querySelectorAll(".rd-side-title") ?? [])].filter(
+        (node) => (node.innerText ?? "").trim() === label
+      ).length;
     return {
-      axisRows: node?.querySelectorAll("[data-rd-axis-state]").length ?? 0,
-      buttons: [...(node?.querySelectorAll("button") ?? [])]
+      rail: scope?.querySelector(".rd-topic-index") !== null,
+      detail: scope?.querySelector(".rd-topic-detail") !== null,
+      labels: rows.map((row) => row.getAttribute("data-rd-index-topic")),
+      rows: rows.length,
+      panes: panes.length,
+      paneLabel: pane?.getAttribute("data-rd-detail") ?? null,
+      pressed: rows
+        .filter((row) => row.getAttribute("aria-pressed") === "true")
+        .map((row) => row.getAttribute("data-rd-index-topic")),
+      disclosure: [...(scope?.querySelectorAll("button") ?? [])]
         .map((button) => (button.innerText ?? "").replace(/\s+/g, " ").trim())
-        .filter(Boolean),
-      hiddenCount: note?.getAttribute("data-rd-hidden-axes") ?? null,
-      note: (note?.innerText ?? "").replace(/\s+/g, " ").trim(),
+        .filter((label) => label === "Read topic" || label === "Close"),
+      countStrip: pane?.querySelectorAll("[data-rd-detail-counts]").length ?? 0,
+      foldPresent: fold !== null,
+      foldOpen: fold?.hasAttribute("open") ?? null,
+      currentWorkVisible: currentWork !== null && currentWork.getBoundingClientRect().height > 0,
+      sideActivity: titled("Recent activity"),
+      sideNotes: titled("Notes"),
+      sideRepositories: titled("Related repositories"),
+      noteInput: pane?.querySelectorAll('[aria-label="Topic note"]').length ?? 0,
     };
   },
-  [PLUGIN_ID, CORPUS.topic]
+  [PLUGIN_ID]
 );
-const disclosureNames = ["Read topic", "Close"];
-const secondExpanders = collapsed.buttons.filter((label) =>
-  /^(All \d+ axes|Show fewer axes)$/.test(label)
+check("the topic rail exists (.rd-topic-index)", anatomy.rail === true, `rail ${anatomy.rail}`);
+check("the topic detail exists (.rd-topic-detail)", anatomy.detail === true, `detail ${anatomy.detail}`);
+check(
+  "exactly one topic detail pane is present",
+  anatomy.panes === 1,
+  `${anatomy.panes} panes for ${anatomy.rows} index rows`
 );
 check(
-  "the topic card offers one disclosure control, not two",
-  collapsed.buttons.filter((label) => disclosureNames.includes(label)).length === 1 &&
-    secondExpanders.length === 0,
-  `card buttons ${JSON.stringify(collapsed.buttons)}`
+  "the detail is always present, with no interaction needed",
+  anatomy.detail && anatomy.panes === 1 && anatomy.pressed.length === 1,
+  `pressed index rows ${JSON.stringify(anatomy.pressed)}`
 );
-if (leadEntry.hidden > 0) {
-  check(
-    "a card that hides axes states it rather than offering a second way in",
-    collapsed.hiddenCount === String(leadEntry.hidden) &&
-      collapsed.note ===
-        `${leadEntry.axes.length - leadEntry.hidden} of ${leadEntry.axes.length} axes shown · ${leadEntry.hidden} more` &&
-      collapsed.axisRows === leadEntry.axes.length - leadEntry.hidden,
-    `note "${collapsed.note}" (data-rd-hidden-axes=${collapsed.hiddenCount}), ${collapsed.axisRows} rows for ` +
-      `${leadEntry.axes.length} axes, ${leadEntry.hidden} hidden`
+check(
+  "the selected index row and the visible detail refer to the same topic",
+  anatomy.pressed.length === 1 && anatomy.pressed[0] === anatomy.paneLabel,
+  `selected row ${JSON.stringify(anatomy.pressed)}, pane ${anatomy.paneLabel}`
+);
+check(
+  "no Read topic / Close disclosure control exists",
+  anatomy.disclosure.length === 0,
+  `found ${JSON.stringify(anatomy.disclosure)}`
+);
+check(
+  "the state-count strip is gone from the topic detail",
+  anatomy.countStrip === 0,
+  `${anatomy.countStrip} count strip(s) in the detail`
+);
+check(
+  "Current work is visible without a disclosure",
+  anatomy.currentWorkVisible === true,
+  `current-work lane visible: ${anatomy.currentWorkVisible}`
+);
+check(
+  "the side rail carries Recent activity, Notes and Related repositories",
+  anatomy.sideActivity === 1 && anatomy.sideNotes === 1 && anatomy.sideRepositories === 1,
+  `activity ${anatomy.sideActivity}, notes ${anatomy.sideNotes}, repositories ${anatomy.sideRepositories}`
+);
+check(
+  "the narrow note/correction affordance is reachable in the detail",
+  anatomy.noteInput === 1,
+  `${anatomy.noteInput} note input(s)`
+);
+if (anatomy.foldPresent === false) {
+  skip(
+    "completed/abandoned work is folded, closed initially, and opens on demand",
+    `no completed or abandoned axis in this dataset (states: ${JSON.stringify([
+      ...new Set(CORPUS.axes.map((axis) => axis.state)),
+    ])})`
   );
 } else {
-  skip(
-    "a card that hides axes states it rather than offering a second way in",
-    `the topic leads with all ${leadEntry.axes.length} axes (LEAD_AXES is 3), so none are hidden`
+  check(
+    "completed/abandoned work is folded, and the fold is closed initially",
+    anatomy.foldOpen === false,
+    `fold open before any click: ${anatomy.foldOpen}`
   );
+  await root.locator("[data-rd-detail] details[data-rd-folded-axes] summary").first().click();
+  await page.waitForTimeout(300);
+  const foldOpened = await page.evaluate(
+    (pluginId) =>
+      document
+        .querySelector(`div[data-plugin-id="${pluginId}"] details[data-rd-folded-axes]`)
+        ?.hasAttribute("open") ?? false,
+    PLUGIN_ID
+  );
+  check(
+    "the completed/abandoned fold opens on demand",
+    foldOpened === true,
+    `open after a click: ${foldOpened}`
+  );
+  await root.locator("[data-rd-detail] details[data-rd-folded-axes] summary").first().click();
+  await page.waitForTimeout(200);
 }
 
-// The read route into the detail — the only route there is (D7: the page has no edit mode to be confused
-// with, so there is nothing for this route to be mistaken for).
-await detailCard.getByRole("button", { name: "Read topic", exact: true }).click();
-// Ready means the card's own axis rows are in the DOM, which is what the next check reads.
+// Selecting another row changes the detail — and the index must keep the server's order while it does.
+const otherTopic = anatomy.labels.find((label) => label !== anatomy.pressed[0]);
+if (otherTopic === undefined) {
+  skip("selecting another index row changes the detail", "this dataset has a single topic");
+} else {
+  await root.locator(`[data-rd-index-topic="${otherTopic}"]`).click();
+  await settleUntil(
+    ([pluginId, topic]) =>
+      document.querySelector(`div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"]`) !== null,
+    [PLUGIN_ID, otherTopic],
+    6000
+  );
+  const switched = await page.evaluate(
+    (pluginId) => {
+      const scope = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
+      return {
+        labels: [...(scope?.querySelectorAll("[data-rd-index-topic]") ?? [])].map((row) =>
+          row.getAttribute("data-rd-index-topic")
+        ),
+        pane: scope?.querySelector("[data-rd-detail]")?.getAttribute("data-rd-detail") ?? null,
+        pressed:
+          scope
+            ?.querySelector('[data-rd-index-topic][aria-pressed="true"]')
+            ?.getAttribute("data-rd-index-topic") ?? null,
+      };
+    },
+    PLUGIN_ID
+  );
+  check(
+    "selecting another index row changes the detail",
+    switched.pane === otherTopic && switched.pressed === otherTopic,
+    `clicked "${otherTopic}" -> pane "${switched.pane}", pressed "${switched.pressed}"`
+  );
+  check(
+    "changing selection does not reorder the index (server order preserved)",
+    JSON.stringify(switched.labels) === JSON.stringify(anatomy.labels),
+    `before ${JSON.stringify(anatomy.labels)} / after ${JSON.stringify(switched.labels)}`
+  );
+  // Leave the run on the topic the detail checks below read.
+  await root.locator(`[data-rd-index-topic="${CORPUS.topic}"]`).click();
+  await settleUntil(
+    ([pluginId, topic]) =>
+      document.querySelector(`div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"]`) !== null,
+    [PLUGIN_ID, CORPUS.topic],
+    6000
+  );
+}
+// The detail's own content — the claims, the axis rows, the note form — arrives with `get_topic`, one
+// tick after the pane exists (the pane is up as soon as the overview names the selected topic). Every
+// check below reads that content, so wait for a marker only the loaded detail renders.
 await settleUntil(
   ([pluginId, topic]) =>
-    (document.querySelector(`div[data-plugin-id="${pluginId}"] [data-rd-topic="${topic}"]`)
-      ?.querySelectorAll("[data-rd-axis-state]").length ?? 0) > 0,
+    document.querySelector(
+      `div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"] [data-rd-claim="summary"]`
+    ) !== null,
   [PLUGIN_ID, CORPUS.topic],
-  4000
+  8000
 );
-const expanded = await page.evaluate(
+const rendered = await page.evaluate(
   ([pluginId, topic]) => {
-    const node = document.querySelector(
-      `div[data-plugin-id="${pluginId}"] [data-rd-topic="${topic}"]`
+    const pane = document.querySelector(
+      `div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"]`
     );
+    const folded = [
+      ...(pane?.querySelectorAll("details[data-rd-folded-axes] [data-rd-axis-title]") ?? []),
+    ];
+    const all = [...(pane?.querySelectorAll("[data-rd-axis-title]") ?? [])];
     return {
-      axes: node?.querySelectorAll("[data-rd-axis-state]").length ?? 0,
-      text: (node?.innerText ?? "").replace(/\s+/g, " "),
+      current: all
+        .filter((cell) => !folded.includes(cell))
+        .map((cell) => cell.getAttribute("data-rd-axis-title")),
+      folded: folded.map((cell) => cell.getAttribute("data-rd-axis-title")),
+      text: (pane?.innerText ?? "").replace(/\s+/g, " "),
     };
   },
   [PLUGIN_ID, CORPUS.topic]
 );
+const currentInPayload = CORPUS.axes
+  .filter((axis) => axis.state !== "completed" && axis.state !== "abandoned")
+  .map((axis) => axis.title);
+const terminalInPayload = CORPUS.axes
+  .filter((axis) => axis.state === "completed" || axis.state === "abandoned")
+  .map((axis) => axis.title);
 check(
-  "reading a card shows every axis it holds",
-  expanded.axes === leadEntry.axes.length && !expanded.text.includes("axes shown"),
-  `${expanded.axes} axis rows for ${leadEntry.axes.length} axes`
+  "Current work renders every non-terminal axis; the fold holds the terminal ones",
+  currentInPayload.every((title) => rendered.current.includes(title)) &&
+    terminalInPayload.every((title) => rendered.folded.includes(title)) &&
+    !rendered.text.includes("axes shown"),
+  `current ${JSON.stringify(rendered.current)} (payload ${JSON.stringify(currentInPayload)}), ` +
+    `folded ${JSON.stringify(rendered.folded)} (payload ${JSON.stringify(terminalInPayload)})`
 );
-
 // ------------------------------------------------------------------ C5: the topic detail
-// The expanded card IS the detail view. The C4 checks above proved the *collapsed* card adds no reads;
-// these prove opening one is still a single `get_topic` call, and that what comes back is per axis.
+// The detail IS the topic view. What matters is that a topic is fetched ONCE and what comes back is per
+// axis — the invariant is one fetch per topic, not one fetch per run: C1 puts several topics one click
+// apart, and moving between them must add a fetch for the topic you moved to, never a second for one you
+// already have.
 const detailCalls = callsFor("get_topic");
+const detailIds = detailCalls.map((call) => call.input?.topicId);
 check(
   "opening a topic reads it once, in one get_topic call",
-  detailCalls.length === 1,
-  `saw ${detailCalls.length}: ${JSON.stringify(detailCalls.map((c) => c.input))}`
+  detailIds.length > 0 && detailIds.length === new Set(detailIds).size,
+  `saw ${detailIds.length} call(s) over ${new Set(detailIds).size} topic(s): ${JSON.stringify(detailCalls.map((c) => c.input))}`
 );
 
 // Reading is the card's only mode, and the detail it renders has no form in it. Asserted as separate
 // facts so a regression names itself: reading renders no editor, no broad edit control exists anywhere in
 // the card (D7), and the narrow note affordance is inline in the read detail rather than behind a mode.
-const modeOf = () =>
-  page.evaluate(
-    ([pluginId, topic]) => {
-      const card = document.querySelector(
-        `div[data-plugin-id="${pluginId}"] [data-rd-topic="${topic}"]`
-      );
-      return {
-        editor: Boolean(card?.querySelector("[data-rd-topic-editor]")),
-        mode: card?.getAttribute("data-rd-mode") ?? null,
-      };
-    },
-    [PLUGIN_ID, CORPUS.topic]
-  );
-const readMode = await modeOf();
+// Reading is the detail's only mode, and the detail renders no editor. Asserted as separate facts so a
+// regression names itself: the pane is present, and no editor is rendered inside it. (C1 removed the
+// disclosure that used to be the way in — the pane is persistent, so there is nothing to open.)
+const readMode = await page.evaluate(
+  ([pluginId, topic]) => {
+    const pane = document.querySelector(
+      `div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"]`
+    );
+    return {
+      editor: Boolean(pane?.querySelector("[data-rd-topic-editor]")),
+      pane: pane !== null,
+    };
+  },
+  [PLUGIN_ID, CORPUS.topic]
+);
 check(
   "reading a topic does not open the editor",
-  readMode.mode === "read" && readMode.editor === false,
-  `mode ${readMode.mode}, editor rendered ${readMode.editor}`
-);
-// Reading the detail means the card is open, and `Read topic` is the only way in (D7). The checks above
-// only need the card's own axis rows, which a collapsed card renders too, so open it here — deliberately,
-// and waiting on the page's own marker rather than a sleep.
-if ((await modeOf()).mode !== "read") {
-  await detailCard.getByRole("button", { name: "Read topic", exact: true }).click();
-  await settleUntil(
-    ([pluginId, topic]) =>
-      document
-        .querySelector(`div[data-plugin-id="${pluginId}"] [data-rd-topic="${topic}"]`)
-        ?.getAttribute("data-rd-mode") === "read",
-    [PLUGIN_ID, CORPUS.topic],
-    4000
-  );
-}
-// D7 (Topics is read-first): the card has no broad edit control at all, so there is no mode to switch
+  readMode.pane && readMode.editor === false,
+  `pane present ${readMode.pane}, editor rendered ${readMode.editor}`
+);// D7 (Topics is read-first): the card has no broad edit control at all, so there is no mode to switch
 // into. Two checks pin that — the absence of a control, and the narrow affordance surviving as an inline
 // part of the read detail rather than behind a mode.
 const noEditControl = await page.evaluate(
   ([pluginId, topic]) => {
     const card = document.querySelector(
-      `div[data-plugin-id="${pluginId}"] [data-rd-topic="${topic}"]`
+      `div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"]`
     );
     return {
       editOpen: card?.querySelectorAll("[data-rd-edit-open]").length ?? 0,
@@ -680,7 +851,7 @@ const noEditControl = await page.evaluate(
   [PLUGIN_ID, CORPUS.topic]
 );
 check(
-  "the card offers no broad edit control (D7: Topics is read-first)",
+  "the topic detail offers no broad edit control (D7: Topics is read-first)",
   noEditControl.editOpen === 0 && noEditControl.labels === 0 && noEditControl.editor === 0,
   `edit-open ${noEditControl.editOpen}, Edit/Done labels ${noEditControl.labels}, editors ${noEditControl.editor}`
 );
@@ -691,7 +862,7 @@ await settleUntil(
   ([pluginId, topic]) =>
     Boolean(
       document.querySelector(
-        `div[data-plugin-id="${pluginId}"] [data-rd-topic="${topic}"] [aria-label="Topic note"]`
+        `div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"] [aria-label="Topic note"]`
       )
     ),
   [PLUGIN_ID, CORPUS.topic],
@@ -699,23 +870,21 @@ await settleUntil(
 );
 const noteAffordance = await page.evaluate(
   ([pluginId, topic]) => {
-    const card = document.querySelector(
-      `div[data-plugin-id="${pluginId}"] [data-rd-topic="${topic}"]`
+    const pane = document.querySelector(
+      `div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"]`
     );
     return {
-      noteInput: card?.querySelectorAll('[aria-label="Topic note"]').length ?? 0,
-      // `data-rd-mode` is an attribute of the card itself, not of a descendant.
-      mode: card?.getAttribute("data-rd-mode") ?? null,
+      noteInput: pane?.querySelectorAll('[aria-label="Topic note"]').length ?? 0,
+      pane: pane !== null,
     };
   },
   [PLUGIN_ID, CORPUS.topic]
 );
 check(
-  "the narrow note affordance is inline, with no mode to enter (D7)",
-  noteAffordance.noteInput === 1 && noteAffordance.mode === "read",
-  `note inputs ${noteAffordance.noteInput}, mode ${noteAffordance.mode}`
+  "the narrow note affordance is part of the read detail, with no mode to enter (D7)",
+  noteAffordance.noteInput === 1 && noteAffordance.pane === true,
+  `note inputs ${noteAffordance.noteInput}, pane present ${noteAffordance.pane}`
 );
-
 const toolbar = await page.evaluate((pluginId) => {
   const bar = document.querySelector(
     `div[data-plugin-id="${pluginId}"] [data-rd-toolbar]`
@@ -739,28 +908,33 @@ check(
 const detail = await page.evaluate(
   ([pluginId, topic]) => {
     const card = document.querySelector(
-      `div[data-plugin-id="${pluginId}"] [data-rd-topic="${topic}"]`
+      `div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"]`
     );
-    const axes = [...(card?.querySelectorAll("[data-rd-axis-title]") ?? [])].map(
-      (node) => ({
-        evidenceCount: node
+    const axes = [...(card?.querySelectorAll("[data-rd-axis-title]") ?? [])].map((node) => {
+      // `data-rd-axis-title` marks the axis's own row; the claims, the state line and the evidence line
+      // are siblings of it inside the axis block. Anything textual is read from the block — reading it
+      // from the marked node alone finds a title and nothing else, which is what the first C1 run did.
+      const block = node.closest(".rd-axis-detail, .rd-axis") ?? node;
+      return {
+        evidenceCount: block
           .querySelector("[data-rd-evidence-count]")
           ?.getAttribute("data-rd-evidence-count"),
-        hasEvidence: node
+        hasEvidence: block
           .querySelector("[data-rd-has-evidence]")
           ?.getAttribute("data-rd-has-evidence"),
-        text: (node.innerText ?? "").replace(/\s+/g, " "),
-        conf: [...node.querySelectorAll("[data-rd-conf]")].map((badge) =>
+        text: (block.innerText ?? "").replace(/\s+/g, " "),
+        conf: [...block.querySelectorAll("[data-rd-conf]")].map((badge) =>
           badge.getAttribute("data-rd-conf")
         ),
         title: node.getAttribute("data-rd-axis-title"),
         version: node.getAttribute("data-rd-axis-version"),
         state: node.getAttribute("data-rd-axis-state"),
-      })
-    );
+      };
+    });
     return {
       axes,
-      detail: Boolean(card?.querySelector("[data-rd-detail]")),
+      // C1: the pane itself is the detail block; there is no nested detail element to look for.
+      detail: card !== null,
       noteRows: card?.querySelectorAll("[data-rd-topic-notes] li").length ?? 0,
       text: (card?.innerText ?? "").replace(/\s+/g, " "),
       topicActivityRows:
@@ -771,7 +945,7 @@ const detail = await page.evaluate(
 );
 
 check(
-  "the expanded card renders the topic detail, one block per axis",
+  "the topic detail renders one block per axis",
   detail.detail && detail.axes.length === CORPUS.axes.length,
   `${detail.axes.length} axes, detail block: ${detail.detail} (payload holds ${CORPUS.axes.length})`
 );
@@ -854,7 +1028,7 @@ if (bare === undefined) {
 const historyAxisTitle = await page.evaluate(
   ([pluginId, topic]) => {
     const card = document.querySelector(
-      `div[data-plugin-id="${pluginId}"] [data-rd-topic="${topic}"]`
+      `div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"]`
     );
     const axes = [...(card?.querySelectorAll("[data-rd-axis-title]") ?? [])];
     const withNotes = axes.find(
@@ -868,14 +1042,14 @@ if (historyAxisTitle === "") {
   skip("a per-axis history expands inside its own axis", "no axis block rendered");
 } else {
   const historyCard = root.locator(
-    `[data-rd-topic="${CORPUS.topic}"] [data-rd-axis-title="${historyAxisTitle}"]`
+    `[data-rd-detail="${CORPUS.topic}"] [data-rd-axis-title="${historyAxisTitle}"]`
   );
   await historyCard.getByRole("button", { name: /^History \(/ }).click();
   await page.waitForTimeout(500);
   const history = await page.evaluate(
     ([pluginId, topic, title]) => {
       const axis = document.querySelector(
-        `div[data-plugin-id="${pluginId}"] [data-rd-topic="${topic}"] [data-rd-axis-title="${title}"]`
+        `div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"] [data-rd-axis-title="${title}"]`
       );
       const list = axis?.querySelector("[data-rd-history]");
       const notes = axis?.querySelector("[data-rd-axis-notes]");
@@ -1121,7 +1295,7 @@ await page.waitForTimeout(600);
 const backToTopics = await page.evaluate(() => {
   const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
   return {
-    cards: scope?.querySelectorAll("[data-rd-topic]").length ?? 0,
+    topicRows: scope?.querySelectorAll("[data-rd-index-topic]").length ?? 0,
     // D7: the Topics view has no create form — `reconcile_topic` (the librarian) is how a topic is
     // created, so a non-zero count here would mean the broad control came back.
     createForm: scope?.querySelectorAll(".rd-newtopic").length ?? 0,
@@ -1131,11 +1305,11 @@ const backToTopics = await page.evaluate(() => {
 });
 check(
   "switching back to Topics restores the topic view, with no residue from the other two, and no create form (D7)",
-  backToTopics.cards > 0 &&
+  backToTopics.topicRows > 0 &&
     backToTopics.createForm === 0 &&
     backToTopics.peopleIndex === 0 &&
     backToTopics.repositoryIndex === 0,
-  `cards ${backToTopics.cards}, create form ${backToTopics.createForm}, people index ${backToTopics.peopleIndex}, repository index ${backToTopics.repositoryIndex}`
+  `topic rows ${backToTopics.topicRows}, create form ${backToTopics.createForm}, people index ${backToTopics.peopleIndex}, repository index ${backToTopics.repositoryIndex}`
 );
 
 // ------------------------------------------------------------------ C7: the time view
@@ -2572,9 +2746,7 @@ const planOf = (result, axisId) =>
       const index = scope?.querySelector('[data-rd-progress-index="true"]') ?? null;
       const switchGroup = scope?.querySelector("[data-rd-progress-switch]") ?? null;
       const activeAxisRow = index?.querySelector('[data-rd-index-axis][aria-pressed="true"]') ?? null;
-      const topicCard =
-        scope?.querySelector('[data-rd-view="topics"] .rd-topic-card[data-rd-mode="read"]') ??
-        null;
+      const topicCard = scope?.querySelector('[data-rd-view="topics"] [data-rd-detail]') ?? null;
       return {
         /**
          * A status badge is a claim, not a control: nothing inside a badge may be a tag, or a reader would
@@ -2620,7 +2792,7 @@ const planOf = (result, axisId) =>
             ?.getAttribute("data-rd-repository-id") ?? null,
         threads: tagsIn(scope?.querySelector(".rd-progress-repositories")),
         topic: topicCard
-          ? { mode: topicCard.getAttribute("data-rd-mode"), name: topicCard.getAttribute("data-rd-topic") }
+          ? { mode: topicCard.getAttribute("data-rd-detail-mode"), name: topicCard.getAttribute("data-rd-detail") }
           : null,
         view:
           scope
@@ -2818,7 +2990,7 @@ const planOf = (result, axisId) =>
     check(
       "a topic tag lands in Topics with that topic selected, and the label matches the card it opened",
       topicLanding.view === "topics" &&
-        topicLanding.topic?.mode === "read" &&
+        topicLanding.topic?.mode === "persistent" &&
         topicLanding.topic?.name === topicTag.label,
       `view ${topicLanding.view ?? "none"}, card ${topicLanding.topic?.name ?? "none"} (wanted ${topicTag.label})`
     );
@@ -3098,14 +3270,14 @@ const afterProgress = await page.evaluate(() => {
     'div[data-plugin-id="research-dashboard"]'
   );
   return {
-    cards: scope?.querySelectorAll("[data-rd-topic]").length ?? 0,
+    topicRows: scope?.querySelectorAll("[data-rd-index-topic]").length ?? 0,
     progress: scope?.querySelectorAll('[data-rd-view="progress"]').length ?? 0,
   };
 });
 check(
   "leaving the Progress view restores the topic view with no residue",
-  afterProgress.cards > 0 && afterProgress.progress === 0,
-  `cards ${afterProgress.cards}, progress views ${afterProgress.progress}`
+  afterProgress.topicRows > 0 && afterProgress.progress === 0,
+  `topic rows ${afterProgress.topicRows}, progress views ${afterProgress.progress}`
 );
 
 // Navigation route in v0.4.31: plugin pages are NOT in the sidebar — AppSidebar renders only
@@ -3196,7 +3368,7 @@ if (paletteReachable) {
         ".rd-state[data-rd-state=blocked]",
         ".rd-error",
         ".rd-conflict",
-        ".rd-topic-card[data-rd-blocked=true]",
+        ".rd-topic-index [data-rd-topic-stale=true]",
         ".rd-axis[data-rd-axis-state=blocked]",
         ".rd-axis-detail[data-rd-axis-state=blocked]",
       ].join(",");
@@ -3364,22 +3536,32 @@ if (WRITE) {
       createControl: /Add topic|New topic name/.test(text),
       editControl: /Edit fields|Done editing/.test(text),
       editors: scope?.querySelectorAll("[data-rd-topic-editor]").length ?? 0,
-      activityRecorder: scope?.querySelectorAll('[aria-label="Activity"]').length ?? 0,
+            activityRecorder: scope?.querySelectorAll('[aria-label="Activity"]').length ?? 0,
+      // C1 keeps the narrow writes and always renders them (the detail is persistent), so what is
+      // asserted is that they are folded away by default — not that they are gone.
+      writes: scope?.querySelectorAll("details[data-rd-write]").length ?? 0,
+      openWrites: scope?.querySelectorAll("details[data-rd-write][open]").length ?? 0,
+      noteField: scope?.querySelectorAll('[aria-label="Topic note"]').length ?? 0,
     };
   }, PLUGIN_ID);
   check(
-    "the page offers no create or edit control (D7: Topics is read-first)",
-    !noControl.createControl &&
-      !noControl.editControl &&
-      noControl.editors === 0 &&
-      noControl.activityRecorder === 0,
+    "the page offers no broad create or edit control (D7: Topics is read-first)",
+    !noControl.createControl && !noControl.editControl && noControl.editors === 0,
     JSON.stringify(noControl)
   );
-
+  check(
+    "the narrow writes survive the composition, collapsed by default",
+    noControl.noteField === 1 &&
+      noControl.activityRecorder === 1 &&
+      noControl.writes >= 1 &&
+      noControl.openWrites === 0,
+    `note field ${noControl.noteField}, activity recorder ${noControl.activityRecorder}, ` +
+      `collapsed disclosures ${noControl.writes}, open ${noControl.openWrites}`
+  );
   // A topic to drive the page's surviving writes on. It is created through the action below, the way the
   // librarian would, not from the page.
   const name = `ui-check ${Date.now().toString().slice(-5)}`;
-  const card = root.locator(`[data-rd-topic="${name}"]`);
+  const card = root.locator(`[data-rd-detail="${name}"]`);
 
   // ------------------------------------------------------------------ C5 + D8: correcting from the detail
   // A manager's correction, in the place the review asked for it: the expanded detail, with the
@@ -3434,22 +3616,31 @@ if (WRITE) {
   // way in is the read disclosure (D7), and the note affordance lives inside that detail.
   await page.goto(`${DASHBOARD}/plugins/${PLUGIN_ID}`, { waitUntil: "networkidle" });
   await root.waitFor({ state: "visible", timeout: 20000 });
-  await card.getByRole("button", { name: "Read topic", exact: true }).click();
-  await page.waitForTimeout(1500);
+  // The detail is persistent, but this fixture topic is not the server's first: select its rail row.
+  await root.locator(`[data-rd-index-topic="${name}"]`).click();
+  await settleUntil(
+    ([pluginId, topic]) =>
+      document.querySelector(
+        `div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"] [data-rd-claim="summary"]`
+      ) !== null,
+    [PLUGIN_ID, name],
+    6000
+  );
+  await page.waitForTimeout(1000);
 
   // The narrow write the page kept (D7), end to end: the note field is inline in the read detail and its
   // write lands in the list that detail already renders.
   const pageNoteText = `ui verification note ${Date.now().toString().slice(-5)}`;
   await card.getByLabel("Topic note", { exact: true }).fill(pageNoteText);
-  await card.getByRole("button", { name: "Add note", exact: true }).click();
+  await card.getByRole("button", { name: "Add note / correction", exact: true }).click();
   await page.waitForTimeout(1500);
   const noteLanded = await page.evaluate(
     (needle) =>
       (document.querySelector(`div[data-plugin-id="research-dashboard"]`)?.innerText ?? "").includes(needle),
     pageNoteText
   );
-  check("a topic note written from the read detail renders in Corrections & notes", noteLanded, pageNoteText);
-  const axisCard = root.locator(`[data-rd-topic="${name}"] [data-rd-axis-title="${axisTitle}"]`);
+  check("a topic note written from the read detail renders in the Notes card", noteLanded, pageNoteText);
+  const axisCard = root.locator(`[data-rd-detail="${name}"] [data-rd-axis-title="${axisTitle}"]`);
   const beforeCorrection = await axisCard
     .locator("[data-rd-has-evidence]")
     .getAttribute("data-rd-has-evidence");
@@ -3495,7 +3686,7 @@ if (WRITE) {
   const stale = await page.evaluate(
     ([topic, title]) => {
       const axis = document.querySelector(
-        `div[data-plugin-id="research-dashboard"] [data-rd-topic="${topic}"] [data-rd-axis-title="${title}"]`
+        `div[data-plugin-id="research-dashboard"] [data-rd-detail="${topic}"] [data-rd-axis-title="${title}"]`
       );
       const banner = axis?.querySelector("[data-rd-conflict]");
       const page_ = document.querySelector('div[data-plugin-id="research-dashboard"]');
@@ -3559,7 +3750,7 @@ if (WRITE) {
   const corrected = await page.evaluate(
     ([topic, title]) => {
       const axis = document.querySelector(
-        `div[data-plugin-id="research-dashboard"] [data-rd-topic="${topic}"] [data-rd-axis-title="${title}"]`
+        `div[data-plugin-id="research-dashboard"] [data-rd-detail="${topic}"] [data-rd-axis-title="${title}"]`
       );
       return {
         evidence: axis?.querySelector("[data-rd-has-evidence]")?.getAttribute("data-rd-has-evidence"),
@@ -3644,9 +3835,6 @@ if (WRITE) {
           kind: n.getAttribute("data-rd-notice"),
           tags: tagsIn(n).length,
         })),
-        hiddenAxes: [
-          ...(scope?.querySelectorAll("[data-rd-hidden-axes]") ?? []),
-        ].map((n) => Number(n.getAttribute("data-rd-hidden-axes") ?? "0")),
         recency: [...(scope?.querySelectorAll("[data-rd-recency]") ?? [])].map((n) => ({
           at: n.getAttribute("data-rd-recency") ?? "",
           text: (n.textContent ?? "").trim(),
@@ -3754,16 +3942,14 @@ if (WRITE) {
   );
   const wanted = [];
   if (bareRepository) wanted.push("empty");
-  // The collapsed-card case is read from the DOM's own hidden-axis attribute rather than a guessed cap, so
-  // the derivation is the page's claim, not the check's.
-  if (Object.values(snapshots).some((snap) => (snap.hiddenAxes ?? []).some((n) => n > 0))) {
-    wanted.push("truncated");
-  }
+  // C1 removed the truncation notice along with the card stack, so no subject can raise that state any
+  // more: an axis is either in the current-work lane or inside the completed/abandoned fold, and both are
+  // in the DOM. The probe that used to detect it is gone rather than left reporting an empty array.
   const missing = wanted.filter((kind) => !kindsShown.has(kind));
   if (wanted.length === 0) {
     skip(
       "an exceptional state says which one it is, and never navigates",
-      "this dataset renders no exceptional-state subject (no bare repository, no card hiding axes), " +
+      "this dataset renders no exceptional-state subject (no bare repository), " +
         `${notices.length} notice(s) seen: ${[...kindsShown].join(", ") || "none"}`
     );
   } else {
@@ -3884,9 +4070,7 @@ if (WRITE) {
     await page.waitForTimeout(400);
     const landed = await page.evaluate(() => {
       const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
-      const card = scope?.querySelector(
-        '[data-rd-view="topics"] .rd-topic-card[data-rd-mode="read"]'
-      );
+      const card = scope?.querySelector('[data-rd-view="topics"] [data-rd-detail]');
       return {
         name: card?.getAttribute("data-rd-topic") ?? null,
         view:

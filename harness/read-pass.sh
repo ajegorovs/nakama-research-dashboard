@@ -138,6 +138,18 @@ if [[ -z "${PLAYWRIGHT_CORE:-}" && ! -d "$REPO/node_modules/playwright-core" ]];
   exit 2
 fi
 
+# PRECONDITION: the instance must be serving *this* build before a single check is measured. A revision
+# bump proves nothing — the server bundles the plugin from the Nakama checkout, so a reinstall without
+# vendoring serves the previous release while looking like a successful refresh, and the dev version
+# string is commit-derived, so it identifies no build at all. Refusing here (rather than recording) keeps
+# a run against the wrong bytes out of the acceptance record entirely.
+if ! "$RUNNER" "$HERE/served-build-guard.mjs"; then
+  echo "" >&2
+  echo "read-pass: REFUSED — the instance is not serving this build (see served-build-guard above)" >&2
+  echo "read-pass: the committed record at $TRANSCRIPT is untouched; refresh with rebuild -> vendor -> reinstall" >&2
+  exit 3
+fi
+
 mkdir -p "$NAKAMA_SHOT_DIR"
 mkdir -p "$(dirname "$TRANSCRIPT")"
 
