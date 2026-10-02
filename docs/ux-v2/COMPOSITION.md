@@ -74,7 +74,16 @@ actions and reference chips. **Collision to resolve first — see §4.1.**
 ### C5 — Repositories: density and row typography
 Structural parity already holds; this brings rows and chips to the prototype's tighter grammar. Small.
 
-## 4. Collisions that need a ruling before the affected unit starts
+## 4. Collisions — resolved (owner, 2026-10-02, recorded in `DECISIONS.md` §5–§7). C1 is unblocked.
+
+1. **Overview composition** → build the two-column aggregation as the dashboard's **default landing / shell
+   behaviour**, no fifth nav item; four navigable views stay (C3).
+2. **Always-visible detail** → accepted: the detail is always present, U6's substance (read-first, one card
+   control, no broad editor plumbing, narrow note/correction) is unchanged, and the checks naming `Read topic`
+   become coverage moves onto the always-present detail (C1/C2).
+3. **Headings** → keep the shell title "Research overview" and give each view its own heading (C1/C2/C4/C5).
+
+### The original statement of the collisions, for the record
 
 1. **Overview as a destination vs the four-view clarification.** The prototypes have five pages; the
    accepted clarification has four navigable views with "Research overview" as the shell. Proposed

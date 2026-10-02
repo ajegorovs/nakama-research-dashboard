@@ -51,3 +51,44 @@ and the estate's service README so no reader infers a live service from the acce
 - **Where the work lands:** documentation, plus one consequence for the pass — the density checks name the four
   views that exist. An earlier measurement named a fifth and reported the default surface's numbers under it
   (a click with no control to click fails quietly); the instrument was corrected, not the page.
+
+## 4. The prototypes are the target for page composition (2026-10-02)
+
+The fidelity review (`fidelity/REVIEW.md`) found the built pages do not reproduce the approved prototypes'
+composition for Topics, People or Overview (Repositories matches; Progress is grouped differently). Asked
+which composition is the target, the owner decided: **the prototypes are.** Index + detail for Topics and
+People, and the Overview aggregation, are **real layout work, not polish**, scoped in `COMPOSITION.md`
+(units C1–C5) before any of it is executed. The acceptance checks measured semantics, projections, structure
+and density — never page composition — and the earlier reports should not have implied otherwise.
+
+## 5. The Overview composition lands as default-landing/shell behavior (2026-10-02)
+
+> **Post-contract clarification — the Overview composition.** The prototype `overview.html` specifies a
+> two-column `Topic activity` / `Repository activity` composition. It is to be built as the dashboard's
+> **default landing / shell behavior** — the composition, without a fifth navigation item. Four navigable
+> views remain (Topics, People, Repositories, Progress), consistent with §3; this entry does not reopen it.
+
+- **Superseded by this decision:** nothing. It is the composition half of the §3 resolution, whose own wording
+  already allows Overview-specific behavior "described as dashboard-shell / default landing behavior".
+- **Where the work lands:** unit **C3** in `COMPOSITION.md`.
+
+## 6. Always-visible detail replaces the `Read topic` disclosure (2026-10-02)
+
+The prototypes put the detail on screen beside the index, so the `Read topic` disclosure loses its role.
+Accepted consequence, decided by the owner:
+
+> **Post-contract clarification — the detail disclosure.** With index + detail, the detail is always present.
+> **U6's substance is unchanged** — read-first, one card control, no broad editor plumbing, narrow
+> note/correction affordances — and the checks that name `Read topic` become **coverage moves** onto the
+> always-present detail, not deletions.
+
+- **Superseded by this decision:** nothing in §1; the control inventory changes, the ruling does not.
+- **Where the work lands:** units **C1** and **C2**, plus the named checks in the pass.
+
+## 7. Two headings: the shell title stays, each view names itself (2026-10-02)
+
+The prototypes title each page by its view ("Topics", "People", …); the app shows one shell title on every
+view. Decided: **keep "Research overview" as the shell title and give each view its own heading.** This
+contradicts neither §3 nor the prototypes — the shell keeps its title, the page states which view it is.
+
+- **Where the work lands:** units **C1**, **C2**, **C4**, **C5**.
