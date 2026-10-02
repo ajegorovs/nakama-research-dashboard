@@ -32,7 +32,21 @@ bun run build
 step "2/4 vendor into the Nakama checkout"
 bash vendor/vendor-into-nakama.sh "$CHECKOUT"
 
-step "3/4 reinstall onto the running instance"
+step "3/4 restart the dev instance, then reinstall onto it"
+# Observed twice: the plugin's SQLite store stays locked by a process that has already exited, so the
+# reinstall's own plugin action fails with "SQLiteError: database is locked" and the NEW VERSION NEVER
+# GOES LIVE — while still reporting `lifecycleState enabled`. The guard then fails with "the page never
+# fetched a plugin UI asset", which reads like a digest mismatch or a disabled plugin rather than a
+# database lock. Restarting the instance releases the handles; it is the fix, so it belongs in the chain
+# rather than in an operator's memory. Set SKIP_RESTART=1 to leave the instance alone.
+if [ "${SKIP_RESTART:-0}" != "1" ]; then
+  systemctl --user restart nakama-dev-instance.service || true
+  for _ in $(seq 1 30); do
+    [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:4399/ || true)" = "401" ] && break
+    sleep 1
+  done
+  printf 'instance responding again (401 auth gate)\n'
+fi
 set -a
 # shellcheck disable=SC1090
 . "$ENV_FILE"
