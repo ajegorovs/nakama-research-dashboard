@@ -7,10 +7,28 @@ follow-up session.
 
 | aspect | state |
 |---|---|
-| functional composition | **accepted** |
-| write-path acceptance | **accepted** (2026-10-02, follow-up session — see § Write-path acceptance) |
-| visual fidelity | capture fixed, first trustworthy montage taken; **sign-off is the reviewer's** |
-| C2 | unblocked once the reviewer rules on the two items above |
+| functional composition | **accepted — closed by the reviewer** |
+| write-path acceptance | **accepted — closed by the reviewer** (see § Write-path acceptance) |
+| visual fidelity | capture fixed and the montage regenerated from a verified capture; **pending the reviewer's inspection** |
+| C2 | **blocked** pending that verdict — the explicit C1 gate from the start |
+
+## Reviewer rulings — 2026-10-02, after `9545bba`
+
+- **Functional acceptance: closed.** The five green runs on one served build are the evidence.
+- **Write-path acceptance: closed.** "Re-clicking an already-selected topic must be idempotent; clearing
+  `detail` without changing `expandedId` was a genuine C1 product bug."
+- **Visual fidelity: pending inspection, and not to be inferred from the capture pipeline.** A correct
+  capture is a necessary condition, not the verdict; the reviewer judges the prototype-vs-running
+  composition directly from the committed montage.
+- **C2 stays blocked until that verdict.** The rework exists because green semantic acceptance had
+  previously hidden composition drift, so the shared grammar is not propagated into People before the
+  Topics composition is signed off visually.
+- **The corpus counts are re-baselined as a *dataset-enrichment* re-baseline** — not a regression and not
+  a change to the check inventory: corpus **105 · 0 · 23**, write pass **117 · 0 · 23**, fixture
+  **130 · 0 · 0**, at both viewports on revision 410. Earlier numbers stay where they are labelled by era.
+- Secondary calls accepted: the branch is pushed so the evidence is durable; the estate `README` change is
+  committed separately from an unrelated `AGENDA.md` hunk; and the capture tool's fail-closed behaviour is
+  kept as permanent infrastructure rather than treated as throwaway diagnostic code.
 
 ## Accepted functional composition
 
