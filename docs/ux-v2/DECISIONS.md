@@ -190,3 +190,25 @@ from current `main` does not erase history but prevents continued propagation; a
 acceptance table's unlabelled U6 figures are corrected to the current U9 record. The review service is made
 persistent (**as a review/dev service, explicitly not a production deployment**) before per-view sign-off
 begins, since the URL is the human review surface for this phase.
+
+## 9. The C3 acceptance — how those records are to be read (2026-10-02)
+
+C3 (the Overview aggregation as the default landing) was accepted with its write gate closed. Three things about
+reading its records are decisions in their own right; the review trail is
+[`../reviews/2026-10-02-c3-acceptance-record.md`](../reviews/2026-10-02-c3-acceptance-record.md).
+
+- **`3f60da9`'s commit message is superseded, and no history is rewritten.** It says the corpus write item is
+  open, while the green corpus write transcript was committed beside it in that same commit. Published history
+  stays as it is — no force-push, no amended historical commit — and the correction lives in the docs and in the
+  acceptance record.
+- **Instance-state claims are measured, not assumed.** "Corpus: 1 topic / 3 axes / 694 activities" stood in a
+  handoff while the instance was actually **empty**: a wipe aimed at the fixture had hit the dev data root, and
+  the baseline survived only in an older database generation. State an instance's counts only from a measurement
+  taken when writing them, and check which generation is live (`org_plugins.database_generation`) rather than
+  trusting a per-file count.
+- **A dataset identity is not "everything that is not the fixture".** The acceptance gate distinguishes corpus,
+  fixture and the write pass's own `ui-check <digits>` residue — the exact shape, not the prefix — and **an empty
+  store refuses for either dataset**: zero data is never evidence of a clean corpus. The classifier is
+  `harness/dataset-identity.mjs`, asserted by `bun run harness:identity`.
+- **A destructive wipe names its target.** The estate's `wipe-plugin-rows.py` has no default
+  `--data-root`/`--org` any more, after that default emptied the wrong instance.

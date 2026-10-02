@@ -160,7 +160,11 @@ stale against ruling 3 and is corrected above.
    dangerous "anything not named like the fixture must be the corpus", and `wipe-plugin-rows.py` must likewise
    require an explicit target rather than defaulting a destructive wipe to the corpus/dev root.
 
-Both are implemented and asserted; the two items at the end of the records section say how.
+Both are implemented and asserted; the two items at the end of the records section say how. All four follow-up
+calls were **accepted** (reviewer, 2026-10-02): the empty-store refusal, the exact `ui-check <digits>` residue
+shape, the explicit wipe target, and **no history rewrite** for `3f60da9` — whose message says the corpus write
+item is open, while the green transcript was committed beside it in the same commit. The review trail is
+`docs/reviews/2026-10-02-c3-acceptance-record.md`, which carries that supersession note explicitly.
 
 ## What the landing changed outside the page
 
