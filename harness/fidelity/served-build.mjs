@@ -1,0 +1,116 @@
+/**
+ * served-build.mjs — WHICH BUILD does a given service actually render? Read-only.
+ * Logs in on the dashboard origin, opens the plugin page, and reports the markers that distinguish
+ * pre-U6 / pre-U9 / current builds. Never prints credential values, never writes to the instance.
+ *
+ *   cd <plugin repo> && PROBE_ENV_HELPER=$PWD/harness/env-file.mjs \
+ *     bun /path/which-build.mjs --env-file <env> --url http://<host>:3003 --viewport 1440x900 --shots <dir>
+ */
+import { chromium } from "playwright-core";
+import { existsSync, mkdirSync, readdirSync } from "node:fs";
+import path from "node:path";
+
+const args = process.argv.slice(2);
+const flag = (name, fallback) => {
+  const at = args.indexOf(`--${name}`);
+  return at === -1 ? fallback : args[at + 1];
+};
+const { loadEnvFileArg } = await import(process.env.PROBE_ENV_HELPER);
+loadEnvFileArg();
+const TARGET = flag("url", "http://127.0.0.1:3007");
+const VIEWPORT = (flag("viewport", "1440x900")).split("x").map(Number);
+const SHOTS = flag("shots", null);
+// The seeded admin is spelled NAKAMA_SEED_ADMIN_* in a compose env and NAKAMA_EMAIL/PASSWORD in an
+// acceptance env; sending the wrong pair looks exactly like "not permitted".
+const EMAIL =
+  process.env.NAKAMA_DEV_EMAIL ?? process.env.NAKAMA_SEED_ADMIN_EMAIL ?? process.env.NAKAMA_EMAIL ?? "";
+const PASSWORD =
+  process.env.NAKAMA_DEV_PASSWORD ??
+  process.env.NAKAMA_SEED_ADMIN_PASSWORD ??
+  process.env.NAKAMA_PASSWORD ??
+  "";
+
+const cachedChromium = () => {
+  const root = path.join(process.env.HOME ?? "", ".cache", "ms-playwright");
+  if (!existsSync(root)) return null;
+  for (const entry of readdirSync(root)) {
+    if (!entry.startsWith("chromium")) continue;
+    for (const candidate of [
+      path.join(root, entry, "chrome-linux", "chrome"),
+      path.join(root, entry, "chrome-linux", "headless_shell"),
+    ]) {
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+  return null;
+};
+
+const browser = await chromium.launch({ executablePath: cachedChromium() ?? undefined });
+const context = await browser.newContext({ viewport: { width: VIEWPORT[0], height: VIEWPORT[1] } });
+const page = await context.newPage();
+
+const build = {};
+await page.goto(`${TARGET}/`, { waitUntil: "domcontentloaded" });
+build.login = await page.evaluate(
+  async ([email, password]) => {
+    const response = await fetch("/v1/auth/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, password }),
+      credentials: "include",
+    });
+    return response.status;
+  },
+  [EMAIL, PASSWORD]
+);
+build.pluginInstalled = await page.evaluate(async () => {
+  const response = await fetch("/v1/console/plugins", { credentials: "include" });
+  if (!response.ok) return `console/plugins -> ${response.status}`;
+  const body = await response.json().catch(() => null);
+  const rows = body?.plugins ?? body?.data ?? body;
+  if (!Array.isArray(rows)) return "unreadable";
+  return rows
+    .filter((row) => String(JSON.stringify(row)).includes("research-dashboard"))
+    .map((row) => `${row.id ?? row.name ?? "?"} rev=${row.revision ?? "?"} v=${row.version ?? "?"}`)
+    .join(" | ") || "no research-dashboard row";
+});
+
+await page.goto(`${TARGET}/plugins/research-dashboard`, { waitUntil: "networkidle" }).catch(() => {});
+await page.waitForTimeout(2500);
+const markers = await page.evaluate(() => {
+  const scope = document.querySelector("div[data-plugin-id]");
+  if (scope === null) return { mounted: false, body: document.body.innerText.slice(0, 160) };
+  const feed = scope.querySelector("[data-rd-progress-feed]");
+  return {
+    mounted: true,
+    pluginId: scope.getAttribute("data-plugin-id"),
+    views: [...scope.querySelectorAll("[data-rd-view-option]")].map((el) =>
+      el.getAttribute("data-rd-view-option")
+    ),
+    title: (scope.querySelector(".rd-page-title")?.textContent ?? "(no .rd-page-title)").trim(),
+    preU6_broadControls: /Add topic|Edit fields/i.test(scope.textContent ?? ""),
+    u6_singleControl: /Read topic/i.test(scope.textContent ?? ""),
+    u9_feedCap: feed?.getAttribute("data-rd-progress-feed-shown") ?? null,
+    u9_feedNote: feed?.parentElement?.textContent?.match(/\d+ of \d+ shown/)?.[0] ?? null,
+    tagCount: scope.querySelectorAll(".rd-tag").length,
+    cardCount: scope.querySelectorAll("[data-rd-topic-card], .rd-topic-card").length,
+  };
+});
+build.markers = markers;
+
+if (SHOTS !== null) {
+  mkdirSync(SHOTS, { recursive: true });
+  for (const view of ["topics", "people", "repositories", "progress"]) {
+    const control = page.locator(`div[data-plugin-id] [data-rd-view-option="${view}"]`);
+    if ((await control.count()) > 0) {
+      await control.first().click();
+      await page.waitForTimeout(900);
+    }
+    await page.screenshot({
+      path: path.join(SHOTS, `${view}.png`),
+      clip: { x: 0, y: 0, width: VIEWPORT[0], height: VIEWPORT[1] },
+    });
+  }
+}
+console.log(JSON.stringify(build, null, 2));
+await browser.close();
