@@ -110,7 +110,7 @@ viewports, and accepted — verdicts verbatim, the two absence rulings and the h
 [`C5-repositories.md`](C5-repositories.md). **Composition C1–C5 is complete**; the next phase is the
 composition-phase merge-readiness pass ([`MR-composition-merge-readiness.md`](MR-composition-merge-readiness.md)).
 
-### H1 — keyboard focus visibility — **measured, one defect fixed (2026-10-02)**
+### H1 — keyboard focus visibility — **accepted (reviewer, 2026-10-03)**
 Run against the merged `main` (the composition was fast-forwarded the same day), at both reference viewports on
 both datasets. The reviewer scoped it to focus visibility rather than an accessibility redesign, and to **one
 measurement per control class, sampled across views**. Result: every class painted an indicator, none was clipped
@@ -118,8 +118,17 @@ or off-screen, and order and the title/home regression passed — but every indi
 the 3:1 non-text minimum, because the plugin's controls inherited the browser's 1px default in the host's ring
 colour at half alpha. Fixed at the shared-primitive level with one rule (the theme's hue at full strength, 2px,
 offset), which measures 4.61–5.02:1; matrix re-run green (69/0/0 corpus, 65/0/0 fixture per viewport) with a
-negative control proving the measure can see a removed indicator. Method, limits and the trap that cost a
-wrong-instance reinstall: [`H1-focus-visibility.md`](H1-focus-visibility.md).
+negative control proving the measure can see a removed indicator, and the four standard records re-taken on that
+build with **identical check descriptions** (151/0/28, 150/0/29, 180/0/1, 179/0/2). Method, limits, the parked
+attempt it closes and the trap that cost a wrong-instance reinstall: [`H1-focus-visibility.md`](H1-focus-visibility.md);
+verdicts verbatim: [`../reviews/2026-10-03-h1-acceptance-record.md`](../reviews/2026-10-03-h1-acceptance-record.md).
+
+**With H1 accepted, the UX-v2 composition phase is complete** — tagged `ux-v2-composition-complete` on the
+commit that carries this record (the pre-composition accepted baseline stays at the earlier `ux-v2-complete`
+tag, and the composition branch by fast-forward `398dd26`). Two things deliberately stay open and are *not* part
+of this closure: the **shell's own controls** (the host's chrome and icon buttons, outside `[data-plugin-id]`, so
+a host-level item) and the **SQLite `SQLITE_BUSY_RECOVERY` / `database is locked`** runtime/store debt, tracked
+separately in the estate's `AGENDA.md` rather than masked.
 
 ## 4. Collisions — resolved (owner, 2026-10-02, recorded in `DECISIONS.md` §5–§7). C1 is unblocked.
 
