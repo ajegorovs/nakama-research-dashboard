@@ -90,6 +90,16 @@ Do not use for: reading a record (that is `acceptance-pass`), or editing docs on
 6. **A migration the manifest does not declare is never run.** Add it to `nakama.plugin.json` in the same commit.
 7. **The instances are shared with other work.** Reinstalling is safe; wiping a data root is not — that needs the
    destructive script's explicit data root and organisation, and it is never part of this loop.
+8. **A `delete`-mode store makes every action 500 under contention.** The store's constructor switches
+   `journal_mode = WAL` on *every* open (each action is a fresh child process), and that switch needs an exclusive
+   lock. While the host server holds the file, the switch fails **immediately** — the observed errno is
+   `SQLITE_BUSY_RECOVERY`, in tens of milliseconds, because SQLite does **not** route the journal-mode switch
+   through `busy_timeout` (measured: arming the timeout first changes nothing). The action dies, the API answers
+   500, and the page shows "An unexpected server error occurred." Check the mode read-only
+   (`PRAGMA journal_mode` — expect `wal`); if it is `delete`, ensure nothing is writing and let one ordinary open
+   perform the switch, or set it out-of-band, then confirm. A `delete`-mode copy restored over a live store (or a
+   data root built by a root-run restore — these are `root:root 777`) reintroduces it, which is why the fix worth
+   having is that a failed mode switch must not be fatal, not a reordered pragma.
 
 ## Verification
 
