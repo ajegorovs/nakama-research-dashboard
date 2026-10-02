@@ -1031,6 +1031,15 @@ const css = `
   display: grid;
   gap: var(--rd-gap-row);
 }
+/* A write path kept for the composition phase sits behind a disclosure, so the rail reads as activity
+   rather than as a form. The summary is the whole affordance until someone opens it. */
+[data-plugin-id="research-dashboard"] .rd-narrow-write > summary {
+  cursor: pointer;
+  font-size: var(--rd-meta);
+}
+[data-plugin-id="research-dashboard"] .rd-narrow-write[open] > summary {
+  margin-bottom: var(--rd-gap-row);
+}
 
 `;
 
@@ -3947,9 +3956,13 @@ export function apply(ctx: Context) {
               {topics.map((entry) => {
                 const isSelected = entry.topic.id === expandedId;
                 const isStale = entry.topic.status === "stale";
-                const currentCount = entry.axes.filter(
-                  (axis) => axis.state !== "completed" && axis.state !== "abandoned"
-                ).length;
+                // The count is the payload's own: `topicOverviews` groups every row of
+                // `SELECT * FROM development_axes` with no LIMIT and no slice, and counts from that
+                // complete list — so summing the non-terminal states here is the store's number, not a
+                // count of a possibly-bounded subset (D5).
+                const currentCount = Object.entries(entry.axisCounts)
+                  .filter(([state]) => state !== "completed" && state !== "abandoned")
+                  .reduce((sum, [, n]) => sum + n, 0);
                 return (
                   <li key={entry.topic.id}>
                     <button
@@ -4180,48 +4193,54 @@ export function apply(ctx: Context) {
                         ) : null}
                       </ul>
                       {selectedDetails ? (
-                        <form
-                          className="rd-narrow-write"
-                          onSubmit={(event) => {
-                            void addActivity(event);
-                          }}
-                        >
-                          <Textarea
-                            aria-label="Activity"
-                            disabled={busy}
-                            onChange={(event) =>
-                              setActivitySummary((event.target as { value: string }).value)
-                            }
-                            placeholder="One objective event, e.g. PR #72 merged"
-                            value={activitySummary}
-                          />
-                          <div className="rd-row">
-                            <SourceSelect
-                              disabled={busy}
-                              onChange={setActivitySourceType}
-                              value={activitySourceType}
-                            />
-                            <Input
-                              aria-label="Source reference"
-                              disabled={busy}
-                              maxLength={200}
-                              onChange={(event) =>
-                                setActivitySourceRef(
-                                  (event.target as { value: string }).value
-                                )
-                              }
-                              placeholder="Reference (PR #, commit, run id)"
-                              value={activitySourceRef}
-                            />
-                          </div>
-                          <Button
-                            disabled={busy || !activitySummary.trim()}
-                            size="sm"
-                            type="submit"
-                          >
-                            Record activity
-                          </Button>
-                        </form>
+                        // The write path stays (this is a composition-only unit), but it is not the
+                        // rail's lede: it sits behind a compact disclosure so the rail reads as
+                        // activity, not as a form.
+                        <details className="rd-narrow-write" data-rd-write="activity">
+                          <summary>Record activity</summary>
+                            <form
+                              className="rd-narrow-write"
+                              onSubmit={(event) => {
+                                void addActivity(event);
+                              }}
+                            >
+                              <Textarea
+                                aria-label="Activity"
+                                disabled={busy}
+                                onChange={(event) =>
+                                  setActivitySummary((event.target as { value: string }).value)
+                                }
+                                placeholder="One objective event, e.g. PR #72 merged"
+                                value={activitySummary}
+                              />
+                              <div className="rd-row">
+                                <SourceSelect
+                                  disabled={busy}
+                                  onChange={setActivitySourceType}
+                                  value={activitySourceType}
+                                />
+                                <Input
+                                  aria-label="Source reference"
+                                  disabled={busy}
+                                  maxLength={200}
+                                  onChange={(event) =>
+                                    setActivitySourceRef(
+                                      (event.target as { value: string }).value
+                                    )
+                                  }
+                                  placeholder="Reference (PR #, commit, run id)"
+                                  value={activitySourceRef}
+                                />
+                              </div>
+                              <Button
+                                disabled={busy || !activitySummary.trim()}
+                                size="sm"
+                                type="submit"
+                              >
+                                Record activity
+                              </Button>
+                            </form>
+                        </details>
                       ) : null}
                     </section>
 

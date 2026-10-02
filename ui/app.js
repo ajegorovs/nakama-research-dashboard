@@ -511,6 +511,15 @@ var css = `
   display: grid;
   gap: var(--rd-gap-row);
 }
+/* A write path kept for the composition phase sits behind a disclosure, so the rail reads as activity
+   rather than as a form. The summary is the whole affordance until someone opens it. */
+[data-plugin-id="research-dashboard"] .rd-narrow-write > summary {
+  cursor: pointer;
+  font-size: var(--rd-meta);
+}
+[data-plugin-id="research-dashboard"] .rd-narrow-write[open] > summary {
+  margin-bottom: var(--rd-gap-row);
+}
 
 `;
 function draftFrom(axis, note = "") {
@@ -2228,7 +2237,7 @@ function apply(ctx) {
     }, topics.map((entry) => {
       const isSelected = entry.topic.id === expandedId;
       const isStale = entry.topic.status === "stale";
-      const currentCount = entry.axes.filter((axis) => axis.state !== "completed" && axis.state !== "abandoned").length;
+      const currentCount = Object.entries(entry.axisCounts).filter(([state]) => state !== "completed" && state !== "abandoned").reduce((sum, [, n]) => sum + n, 0);
       return /* @__PURE__ */ React.createElement("li", {
         key: entry.topic.id
       }, /* @__PURE__ */ React.createElement("button", {
@@ -2397,7 +2406,10 @@ function apply(ctx) {
       className: "rd-muted"
     }, "No activity recorded yet.") : null, !selectedDetails ? /* @__PURE__ */ React.createElement("li", {
       className: "rd-muted"
-    }, "Loading this topic…") : null), selectedDetails ? /* @__PURE__ */ React.createElement("form", {
+    }, "Loading this topic…") : null), selectedDetails ? /* @__PURE__ */ React.createElement("details", {
+      className: "rd-narrow-write",
+      "data-rd-write": "activity"
+    }, /* @__PURE__ */ React.createElement("summary", null, "Record activity"), /* @__PURE__ */ React.createElement("form", {
       className: "rd-narrow-write",
       onSubmit: (event) => {
         addActivity(event);
@@ -2425,7 +2437,7 @@ function apply(ctx) {
       disabled: busy || !activitySummary.trim(),
       size: "sm",
       type: "submit"
-    }, "Record activity")) : null), /* @__PURE__ */ React.createElement("section", {
+    }, "Record activity"))) : null), /* @__PURE__ */ React.createElement("section", {
       className: "rd-side-card"
     }, /* @__PURE__ */ React.createElement("h3", {
       className: "rd-side-title"
