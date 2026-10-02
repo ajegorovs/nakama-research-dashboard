@@ -261,17 +261,8 @@ var css = `
    the toolbar — the page it governs is the same page in both positions. */
 [data-plugin-id="research-dashboard"] .rd-progress-switch { margin-bottom: 10px; }
 [data-plugin-id="research-dashboard"] .rd-progress-switch [aria-pressed="true"] { font-weight: 600; }
-/* C7: the progress timeline — filters on one line, each axis a labelled rail. */
-[data-plugin-id="research-dashboard"] .rd-filters { flex-wrap: wrap; gap: var(--rd-gap); }
 /* C8: the qualifier on a state is part of the claim, not decoration — quieter, never optional. */
 [data-plugin-id="research-dashboard"] .rd-claim-suffix { font-weight: 400; opacity: var(--rd-quiet); }
-[data-plugin-id="research-dashboard"] .rd-timeline-axis {
-  border-left: var(--rd-rule);
-  display: grid;
-  gap: var(--rd-gap-tight);
-  padding-left: 10px;
-}
-[data-plugin-id="research-dashboard"] .rd-timeline-axis .rd-activity li { display: grid; gap: var(--rd-gap-row); }
 [data-plugin-id="research-dashboard"] .rd-newtopic { flex-wrap: nowrap; }
 [data-plugin-id="research-dashboard"] .rd-newtopic input { width: 18rem; }
 [data-plugin-id="research-dashboard"] .rd-activity { display: grid; gap: var(--rd-gap); margin: 0; padding: 0; list-style: none; }
@@ -1680,26 +1671,6 @@ function apply(ctx) {
     }) : /* @__PURE__ */ React.createElement("span", {
       className: "rd-muted"
     }, "no activity recorded yet"))))) : null);
-  }
-  function FilterSelect({
-    label,
-    onChange,
-    options,
-    value
-  }) {
-    return /* @__PURE__ */ React.createElement(Select, {
-      onValueChange: (next) => {
-        if (next !== null) {
-          onChange(String(next));
-        }
-      },
-      value
-    }, /* @__PURE__ */ React.createElement(SelectTrigger, {
-      "aria-label": label
-    }, /* @__PURE__ */ React.createElement(SelectValue, null, options.find((option) => option.value === value)?.label ?? value)), /* @__PURE__ */ React.createElement(SelectContent, null, options.map((option) => /* @__PURE__ */ React.createElement(SelectItem, {
-      key: option.value,
-      value: option.value
-    }, option.label))));
   }
   function problemCountLine(row) {
     if (row.problems === 0) {
