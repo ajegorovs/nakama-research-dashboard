@@ -1385,6 +1385,19 @@ const readTop = () =>
         axis: feedColumn?.getAttribute("data-rd-progress-feed-axis") ?? null,
         count: Number(feedColumn?.getAttribute("data-rd-progress-feed-count") ?? -1),
         heading: (feedColumn?.querySelector("h3")?.textContent ?? "").trim(),
+        note: (feedColumn?.querySelector("[data-rd-progress-feed-note]")?.textContent ?? "").trim(),
+        // What the page *says* it is showing, and how many it says it is holding back (U9: the feed leads
+        // with the newest events and states the remainder instead of rendering an unbounded column).
+        shown: Number(
+          feedColumn
+            ?.querySelector("[data-rd-progress-feed]")
+            ?.getAttribute("data-rd-progress-feed-shown") ?? -1
+        ),
+        stated: Number(
+          feedColumn
+            ?.querySelector("[data-rd-progress-feed-more]")
+            ?.getAttribute("data-rd-progress-feed-more") ?? -1
+        ),
         rows: [...(feedColumn?.querySelectorAll("[data-rd-feed-event]") ?? [])].map(
           (node) => (node.innerText ?? "").replace(/\s+/g, " ").trim()
         ),
@@ -1532,21 +1545,30 @@ if (problemAxis && problemAxis.rows.length > 0) {
 // section below), so what is asserted here is the card: it is the projection's first open problem, under the
 // projection's count, and the column no longer duplicates the list.
 
-// The Activity feed: the projection's bucket for this axis, same count, same rows, same order.
+// The Activity feed: the projection's bucket for this axis, newest first — rendered as the page's own stated
+// window, with the remainder stated rather than silently dropped. U9 capped the column (one corpus axis
+// carries 43 events, ~10.8k px of column at 1280×800), so the check reads the window the page claims
+// (`shown`), compares *that* against the projection's prefix, and requires the page to say how many it
+// holds back. A cap that went silent — or a page that rendered fewer rows than it claimed — fails here.
 {
   const bucket = firstProjection?.bucket ?? null;
   const rows = top.feed.rows;
   const expected = bucket?.events ?? [];
+  const window = Math.max(0, Math.min(top.feed.shown, expected.length));
   const aligned =
-    rows.length === expected.length &&
-    expected.every((event, position) => rows[position]?.includes(event.summary));
+    rows.length === window && expected.slice(0, window).every((event, position) => rows[position]?.includes(event.summary));
+  const capStated =
+    expected.length <= top.feed.shown
+      ? top.feed.stated === -1 && top.feed.shown === expected.length
+      : top.feed.stated === expected.length - top.feed.shown &&
+        new RegExp(`^${top.feed.shown} of ${expected.length} shown`).test(top.feed.note);
   check(
-    "the Activity feed is the projection's bucket for the selected axis, in the projection's order",
+    "the Activity feed is the projection's bucket for the selected axis, newest first, capped and stating the remainder",
     top.feed.axis === first?.id &&
       top.feed.count === (bucket?.eventCount ?? 0) &&
       top.feed.heading === `Activity (${first?.activityInWindow ?? 0})` &&
-      (expected.length === 0 ? top.feed.rows.length === 0 : aligned),
-    `feed axis ${top.feed.axis?.slice(0, 8)}, count ${top.feed.count} (projection ${bucket?.eventCount ?? 0}), heading "${top.feed.heading}" (index row ${first?.activityInWindow ?? 0}), ${rows.length} rows vs ${expected.length} in the projection`
+      (expected.length === 0 ? top.feed.rows.length === 0 : aligned && capStated),
+    `feed axis ${top.feed.axis?.slice(0, 8)}, count ${top.feed.count} (projection ${bucket?.eventCount ?? 0}), heading "${top.feed.heading}" (index row ${first?.activityInWindow ?? 0}), shown ${top.feed.shown}/${expected.length} (rendered ${rows.length}), holds back ${top.feed.stated}, note "${top.feed.note}"`
   );
 }
 
@@ -1574,7 +1596,10 @@ if (problemAxis && problemAxis.rows.length > 0) {
     const moved = await readTop();
     const expected = projectionFor(allProgress, wanted.id);
     const wantedRows = moved.feed.rows;
-    const wantedEvents = expected.bucket?.events ?? [];
+    const wantedEvents = (expected.bucket?.events ?? []).slice(
+      0,
+      Math.max(0, Math.min(moved.feed.shown, (expected.bucket?.events ?? []).length))
+    );
     check(
       "selecting another axis moves the Problem and Activity columns to that axis",
       moved.problem.axis === wanted.id &&
@@ -2561,6 +2586,12 @@ const planOf = (result, axisId) =>
             ).length
           : -1,
         context: tagsIn(scope?.querySelector("[data-rd-detail-context]")),
+        /** How many feed rows the page states it is showing — the cap the tag checks compare against. */
+        feedShown: Number(
+          scope
+            ?.querySelector("[data-rd-progress-feed]")
+            ?.getAttribute("data-rd-progress-feed-shown") ?? -1
+        ),
         feed: [...(scope?.querySelectorAll("[data-rd-feed-event]") ?? [])].map((row) => ({
           tags: tagsIn(row),
           text: (row.innerText ?? "").replace(/\s+/g, " ").trim(),
@@ -2615,8 +2646,39 @@ const planOf = (result, axisId) =>
    * surface's context line first, then the Activity column). Returns the tag as the page currently renders it,
    * so the click and the assertion that follows describe the same DOM.
    */
+  /**
+   * U9 caps the Activity column, so a tag the projection has an event for may sit outside the shown window
+   * even though the page holds it. The page offers exactly one control for that, so the checks use it — the
+   * reader's own click, not a back door. Every caller leaves the column as it found it; the traversal that
+   * opens it widest collapses it again when it is done, so the checks that measure the default window still
+   * measure the default window.
+   */
+  const expandFeedIfCapped = async () => {
+    const cap = root.locator("[data-rd-progress-feed-more]").first();
+    if ((await cap.count()) === 0) {
+      return;
+    }
+    await cap.locator("button").first().click();
+    await page
+      .waitForFunction(
+        () => {
+          const column = document.querySelector(
+            'div[data-plugin-id=\"research-dashboard\"] [data-rd-progress-feed]'
+          );
+          return (
+            column !== null &&
+            column.getAttribute("data-rd-progress-feed") ===
+              column.getAttribute("data-rd-progress-feed-shown")
+          );
+        },
+        undefined,
+        { timeout: 5000 }
+      )
+      .catch(() => {});
+  };
   const tagFromProgress = async (type) => {
     await showView("progress");
+    await expandFeedIfCapped();
     const state = await readTags();
     const tag =
       state.context.find((entry) => entry.type === type) ??
@@ -2646,6 +2708,8 @@ const planOf = (result, axisId) =>
     }
     await root.locator(`[data-rd-index-axis="${bucket.axisId}"]`).click();
     await page.waitForTimeout(300);
+    // The subject here is a specific event, so the cap has to come off before it can be read.
+    await expandFeedIfCapped();
     const state = await readTags();
     const tag =
       state.feed.flatMap((row) => row.tags).find((entry) => entry.type === kind) ?? null;
@@ -2682,7 +2746,11 @@ const planOf = (result, axisId) =>
   // (2) The Activity column's tags, row by row against the events the projection says are in that bucket: no
   // tag may name something its event did not, and an attributed event must carry its person as a tag.
   const feedBucket = allProgress.activity.byAxis.find((bucket) => bucket.axisId === activeAxis?.id) ?? null;
-  const feedEvents = feedBucket?.events ?? [];
+  // The feed is capped (U9), so the tags are compared over the window the page states it is showing — and
+  // that the rendered rows equal the stated count is itself asserted below, so a page that rendered fewer
+  // rows than it claimed cannot pass by comparing a short list against itself.
+  const feedEvents = (feedBucket?.events ?? []).slice(0, Math.max(0, atProgress.feedShown));
+  const feedRowsMatchStated = atProgress.feed.length === Math.max(0, atProgress.feedShown);
   const feedMismatches = [];
   const unattributed = [];
   for (const [position, event] of feedEvents.entries()) {
@@ -2718,8 +2786,9 @@ const planOf = (result, axisId) =>
   } else {
     check(
       "every tag in the Activity column names an entity its own event carries, and no more",
-      feedMismatches.length === 0,
-      feedMismatches.join("; ") || `${feedEvents.length} event row(s) checked`
+      feedMismatches.length === 0 && feedRowsMatchStated,
+      feedMismatches.join("; ") ||
+        `${feedEvents.length} event row(s) checked, ${atProgress.feed.length} rendered against ${atProgress.feedShown} stated`
     );
     if (unattributed.length === 0 && feedEvents.every((event) => event.person === null)) {
       skip(
@@ -3070,6 +3139,212 @@ if (paletteReachable) {
   await paletteEntry.click();
   await page.waitForURL(new RegExp(`/plugins/${PLUGIN_ID}`), { timeout: 8000 }).catch(() => {});
   check("palette entry navigates to the page", page.url().includes(`/plugins/${PLUGIN_ID}`), page.url());
+}
+
+// ---------------------------------- U9: the density rules the polish is held to
+// The density pass itself is judged by the reviewer, not by this file. What a harness can hold is the part
+// that is a fact about the page: that no boxed block nests inside another boxed block (the "pale box on pale
+// box" complaint), that the exceptional colour is reserved for the exceptional state, and that no view grows
+// without bound. All three are expressed in a way that holds at any width — the budget is in **screens**, so
+// the 1280×800 reference is the shape of the claim, not a magic number baked into the check.
+{
+  // Mount the page deliberately first: the palette checks just above may have left the router mid-navigation,
+  // and a density measurement of a page that is not there measures nothing. `scope === null` is then a
+  // SKIP with a reason rather than a crash (the pass's abort contract exists for real faults, not for a
+  // subject that is missing on a view).
+  await page.goto(`${DASHBOARD}/plugins/${PLUGIN_ID}`, { waitUntil: "networkidle" });
+  await root.waitFor({ state: "visible", timeout: 20000 });
+  const visual = await page.evaluate((pluginId) => {
+    const scope = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
+    if (scope === null) {
+      return { exceptional: "", nested: [], offenders: [], scopeMissing: true };
+    }
+    const isBoxedBlock = (el) => {
+      const s = getComputedStyle(el);
+      const bordered =
+        parseFloat(s.borderTopWidth) > 0 &&
+        parseFloat(s.borderRightWidth) > 0 &&
+        parseFloat(s.borderBottomWidth) > 0 &&
+        parseFloat(s.borderLeftWidth) > 0;
+      const padded = parseFloat(s.paddingTop) >= 6 && parseFloat(s.paddingLeft) >= 6;
+      const holdsABlock = [...el.children].some((child) =>
+        ["DIV", "SECTION", "UL", "ARTICLE"].includes(child.tagName)
+      );
+      return bordered && parseFloat(s.borderRadius) > 0 && padded && holdsABlock;
+    };
+    const nested = [];
+    const walk = (el, host) => {
+      for (const child of el.children) {
+        const boxed = isBoxedBlock(child);
+        if (boxed && host !== null) {
+          nested.push(`${host} > ${child.className.toString().split(" ")[0] || child.tagName}`);
+        }
+        walk(child, boxed ? child.className.toString().split(" ")[0] || child.tagName : host);
+      }
+    };
+    walk(scope, null);
+
+    // The exceptional colour, read off whatever the theme resolves rather than a literal: the one element
+    // entitled to it is a blocked state badge (or a refusal banner). Anything else rendering in that colour
+    // is the over-colouring the polish removed — a count, "no evidence", an uncertain confidence.
+    const entitled = scope?.querySelector(".rd-state[data-rd-state=\"blocked\"]") ?? null;
+    const exceptional = entitled === null ? "" : getComputedStyle(entitled).color;
+    const normalize = (value) => value.replace(/\s+/g, "").toLowerCase();
+    const offenders = [];
+    if (exceptional !== "") {
+      const allowed = [
+        ".rd-state[data-rd-state=blocked]",
+        ".rd-error",
+        ".rd-conflict",
+        ".rd-topic-card[data-rd-blocked=true]",
+        ".rd-axis[data-rd-axis-state=blocked]",
+        ".rd-axis-detail[data-rd-axis-state=blocked]",
+      ].join(",");
+      for (const el of scope.querySelectorAll("*")) {
+        const s = getComputedStyle(el);
+        const painted = [s.color, s.borderTopColor, s.borderLeftColor].map(normalize);
+        if (!painted.includes(normalize(exceptional))) {
+          continue;
+        }
+        if (el.closest(allowed) === null) {
+          offenders.push(
+            `${el.tagName.toLowerCase()}.${el.className.toString().split(" ")[0] || "?"} :: ${(el.textContent ?? "").trim().slice(0, 28)}`
+          );
+        }
+      }
+    }
+    return { exceptional, nested, offenders };
+  }, PLUGIN_ID);
+
+  // A refusal banner is allowed to be a box inside a box: it is transient, it must not be missed, and it is
+  // the one thing on the page whose whole job is to be noticed. Every other nested box is the pale-on-pale
+  // pattern the polish removed.
+  const unjustified = visual.nested.filter((entry) => !/rd-conflict|rd-error/.test(entry));
+  if (visual.scopeMissing === true) {
+    for (const description of [
+      "one surface per level: no boxed block nests inside another, except a refusal banner",
+      "the exceptional colour is used only for the exceptional state",
+      "tags stay chips when they wrap: one height per cluster, one line each",
+    ]) {
+      skip(description, "the plugin page did not mount for this check, so there is nothing to measure");
+    }
+  } else {
+  check(
+    "one surface per level: no boxed block nests inside another, except a refusal banner",
+    unjustified.length === 0,
+    unjustified.slice(0, 3).join("; ") ||
+      `${visual.nested.length} nested box(es) on this view, all refusal banners`
+  );
+
+  /**
+   * Tags stay chips when they wrap. A cluster is a wrapping row of pills whose label is an entity's own
+   * name, so the failure to catch is a long name changing the *shape* of its neighbours — or a chip growing
+   * into two lines and taking the row's rhythm with it. Every cluster is measured in whatever view it is
+   * on, so this holds wherever tags are read.
+   */
+  const tagShape = await page.evaluate((pluginId) => {
+    const scope = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
+    const clusters = [...scope.querySelectorAll(".rd-tags")];
+    const bad = [];
+    for (const cluster of clusters) {
+      const chips = [...cluster.querySelectorAll(".rd-tag")];
+      if (chips.length === 0) {
+        continue;
+      }
+      const heights = chips.map((chip) => Math.round(chip.getBoundingClientRect().height));
+      const shortest = Math.min(...heights);
+      const tallest = Math.max(...heights);
+      if (tallest - shortest > 1) {
+        bad.push(`${chips.length} chip(s) with heights ${shortest}..${tallest}: ${(chips[0]?.textContent ?? "").trim().slice(0, 24)}`);
+      } else if (tallest > 32) {
+        bad.push(`chip ${tallest}px tall (one line is the shape): ${(chips[0]?.textContent ?? "").trim().slice(0, 24)}`);
+      }
+    }
+    return { bad: bad.slice(0, 3), clusters: clusters.length };
+  }, PLUGIN_ID);
+  if (tagShape.clusters === 0) {
+    skip(
+      "tags stay chips when they wrap: one height per cluster, one line each",
+      "this view renders no tag cluster, so there is no chip shape to measure"
+    );
+  } else {
+    check(
+      "tags stay chips when they wrap: one height per cluster, one line each",
+      tagShape.bad.length === 0,
+      tagShape.bad.join("; ") || `${tagShape.clusters} cluster(s), every chip one line`
+    );
+  }
+
+  if (visual.exceptional === "") {
+    skip(
+      "the exceptional colour is used only for the exceptional state",
+      "no blocked state badge is on this view, so the theme's exceptional colour cannot be read off one"
+    );
+  } else {
+    check(
+      "the exceptional colour is used only for the exceptional state",
+      visual.offenders.length === 0,
+      visual.offenders.slice(0, 3).join("; ") ||
+        `nothing else renders in ${visual.exceptional}`
+    );
+  }
+  }
+}
+
+// The density reference, measured the way the U9 acceptance states it: at 1280×800 the glance shows what
+// matters and no view runs away with the scroll. The budget is in screens so it means the same thing at
+// either recorded viewport.
+{
+  // The four views the toolbar actually offers (`VIEW_OPTIONS`); "Research overview" is the page's title on
+  // every view, not a fifth destination. Naming a view that has no control would measure whatever happened
+  // to be on screen under another view's name.
+  const views = ["Topics", "People", "Repositories", "Progress"];
+  const heights = {};
+  for (const view of views) {
+    await root.getByRole("button", { name: view, exact: true }).click();
+    await page.waitForTimeout(700);
+    heights[view] = await page.evaluate((pluginId) => {
+      const scope = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
+      return scope === null ? -1 : scope.scrollHeight;
+    }, PLUGIN_ID);
+  }
+  const screens = (px) => Math.round((px / VIEWPORT.height) * 10) / 10;
+  const worst = Object.entries(heights).sort((a, b) => b[1] - a[1])[0] ?? ["none", -1];
+  check(
+    "no view runs away with the scroll at the reference size (budget: eight screens of content)",
+    worst[1] > 0 && worst[1] <= 8 * VIEWPORT.height,
+    Object.entries(heights)
+      .map(([view, px]) => `${view} ${screens(px)} screen(s)`)
+      .join(", ")
+  );
+
+  // The acceptance's own words: the primary question **and** the latest activity, without pathological
+  // scrolling. Measured where they actually are — the first screen.
+  await root.getByRole("button", { name: "Progress", exact: true }).click();
+  await page.waitForTimeout(700);
+  const glance = await page.evaluate((pluginId) => {
+    const scope = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
+    const problem = scope?.querySelector(".rd-progress-problem")?.getBoundingClientRect() ?? null;
+    const newest =
+      scope
+        ?.querySelector(".rd-progress-activity [data-rd-feed-event]")
+        ?.getBoundingClientRect() ?? null;
+    return {
+      problemTop: problem === null ? null : Math.round(problem.top),
+      newestBottom: newest === null ? null : Math.round(newest.bottom),
+    };
+  }, PLUGIN_ID);
+  check(
+    "the Progress glance — the Problem column and the newest Activity row — is inside the first screen",
+    glance.problemTop !== null &&
+      glance.newestBottom !== null &&
+      glance.problemTop < VIEWPORT.height &&
+      glance.newestBottom <= VIEWPORT.height,
+    `problem top ${glance.problemTop}px, newest activity row bottom ${glance.newestBottom}px, screen ${VIEWPORT.height}px`
+  );
+  // Leave the page where the rest of the run expects it.
+  await root.getByRole("button", { name: "Topics", exact: true }).click();
+  await page.waitForTimeout(400);
 }
 
 if (WRITE) {
@@ -3732,6 +4007,24 @@ if (WRITE) {
       grammarAfter === grammarBaseline.payload ? "identical" : "CHANGED"
     }`
   );
+
+  // Put the Activity column back to the window the page opens with: the traversal above expanded it to reach
+  // a tag the U9 cap was holding back, and the density checks further down measure the default window.
+  {
+    const cap = root.locator("[data-rd-progress-feed-more]").first();
+    const expanded = await page.evaluate(() => {
+      const column = document.querySelector('div[data-plugin-id="research-dashboard"] [data-rd-progress-feed]');
+      return (
+        column !== null &&
+        column.getAttribute("data-rd-progress-feed") ===
+          column.getAttribute("data-rd-progress-feed-shown")
+      );
+    });
+    if (expanded && (await cap.count()) > 0) {
+      await cap.locator("button").first().click();
+      await page.waitForTimeout(300);
+    }
+  }
 
   // Leave the page where the pass found it — the default view is what the final screenshot shows.
   await showView("topics");

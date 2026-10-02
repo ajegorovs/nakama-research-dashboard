@@ -575,18 +575,51 @@ type ProgressIndexMode = (typeof PROGRESS_INDEX_OPTIONS)[number]["value"];
 /** How many axes a collapsed card leads with — "then 2–4 most relevant axes". */
 const LEAD_AXES = 3;
 
+/**
+ * How many events the Progress feed leads with before it states the rest — the density reference is
+ * 1280×800, and one corpus axis carries 43 events (the uncapped column measured ~10.8k px tall, i.e.
+ * thirteen screens of Activity before anything else in the view). Showing the newest and **stating** the
+ * remainder is the same reading decision the axis index already makes (`LEAD_AXES`); nothing is lost,
+ * because the count is the projection's own and the rest is one control away.
+ */
+const FEED_LEAD = 12;
+
 const css = `
-[data-plugin-id="research-dashboard"] .rd-stack { display: grid; gap: 14px; }
+/*
+ * One small vocabulary for type, spacing and quietness. The rules below used to carry ten literal type
+ * sizes, seven gap values and five opacities — which reads as noise rather than hierarchy, and made every
+ * later tweak a new number. Four type steps, three gaps and one quietness are the whole scale: the tier a
+ * thing belongs to is now the thing you read, not the pixel it happens to sit at.
+ *
+ *   --rd-title  the host card's own title (16px, set by CardTitle) — the entity's name
+ *   --rd-body   the line that answers the question
+ *   --rd-meta   supporting text: provenance, dates, counts, secondary lines
+ *   --rd-label  a label for a section or a qualifier — uppercase, tracked, quieter
+ */
+[data-plugin-id="research-dashboard"] {
+  --rd-body: 13px;
+  --rd-meta: 12px;
+  --rd-label: 11px;
+  --rd-quiet: 0.62;
+  --rd-gap-row: 2px;
+  --rd-gap-tight: 4px;
+  --rd-gap: var(--rd-gap);
+  --rd-gap-block: 12px;
+  /* One box edge and one inner line: a surface is a card, and everything inside it is a rule, not a box. */
+  --rd-edge: 1px solid var(--border);
+  --rd-rule: 2px solid var(--border);
+}
+[data-plugin-id="research-dashboard"] .rd-stack { display: grid; gap: var(--rd-gap-block); }
 [data-plugin-id="research-dashboard"] .rd-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--rd-gap);
 }
 [data-plugin-id="research-dashboard"] .rd-cluster {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--rd-gap);
   flex-wrap: wrap;
 }
 /* Grouped controls: a divider between clusters, so the toolbar reads as three things rather than one
@@ -594,13 +627,13 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--rd-gap-block);
   flex-wrap: wrap;
 }
 [data-plugin-id="research-dashboard"] .rd-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--rd-gap);
   min-height: 28px;
   padding-left: 12px;
   border-left: 1px solid rgba(127, 127, 127, 0.35);
@@ -609,21 +642,21 @@ const css = `
   padding-left: 0;
   border-left: 0;
 }
-[data-plugin-id="research-dashboard"] .rd-muted { font-size: 12px; opacity: 0.65; }
-[data-plugin-id="research-dashboard"] .rd-error { color: var(--destructive, #b91c1c); font-size: 13px; }
+[data-plugin-id="research-dashboard"] .rd-muted { font-size: var(--rd-meta); opacity: var(--rd-quiet); }
+[data-plugin-id="research-dashboard"] .rd-error { color: var(--destructive, #b91c1c); font-size: var(--rd-body); }
 [data-plugin-id="research-dashboard"] .rd-meta {
   display: block;
-  font-size: 12px;
-  opacity: 0.65;
+  font-size: var(--rd-meta);
+  opacity: var(--rd-quiet);
   margin-top: 2px;
 }
 [data-plugin-id="research-dashboard"] .rd-topic-card[data-rd-blocked="true"] {
   border-left: 3px solid var(--destructive, #b91c1c);
 }
-[data-plugin-id="research-dashboard"] .rd-axes { display: grid; gap: 10px; margin: 0; padding: 0; }
+[data-plugin-id="research-dashboard"] .rd-axes { display: grid; gap: var(--rd-gap); margin: 0; padding: 0; }
 [data-plugin-id="research-dashboard"] .rd-axis {
   list-style: none;
-  border-left: 2px solid var(--border);
+  border-left: var(--rd-rule);
   padding: 0 0 0 10px;
 }
 [data-plugin-id="research-dashboard"] .rd-axis[data-rd-axis-state="blocked"] {
@@ -636,45 +669,45 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-axis-head {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--rd-gap);
   flex-wrap: wrap;
 }
 [data-plugin-id="research-dashboard"] .rd-axis-kind {
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  opacity: 0.55;
+  font-size: var(--rd-label);
+  letter-spacing: 0.04em;
+  opacity: var(--rd-quiet);
 }
 [data-plugin-id="research-dashboard"] .rd-axis-secondary {
   margin: 2px 0 0;
-  font-size: 12px;
+  font-size: var(--rd-meta);
   line-height: 1.45;
-  opacity: 0.65;
+  opacity: var(--rd-quiet);
 }
 [data-plugin-id="research-dashboard"] .rd-state {
-  font-size: 11px;
+  font-size: var(--rd-label);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   padding: 1px 6px;
   border-radius: 999px;
-  border: 1px solid var(--border);
+  border: var(--rd-edge);
 }
 [data-plugin-id="research-dashboard"] .rd-state[data-rd-state="blocked"] {
   border-color: var(--destructive, #b91c1c);
   color: var(--destructive, #b91c1c);
 }
 [data-plugin-id="research-dashboard"] .rd-count {
-  font-size: 12px;
+  font-size: var(--rd-meta);
   padding: 1px 6px;
   border-radius: 6px;
   background: var(--muted, rgba(127, 127, 127, 0.1));
 }
 [data-plugin-id="research-dashboard"] .rd-count[data-rd-state="blocked"] {
-  color: var(--destructive, #b91c1c);
+  /* The state badge beside it already says blocked; a count is not a louder fact than the thing it counts. */
   font-weight: 600;
 }
-[data-plugin-id="research-dashboard"] .rd-blocker { font-size: 12px; margin-top: 2px; }
+[data-plugin-id="research-dashboard"] .rd-blocker { font-size: var(--rd-meta); margin-top: 2px; }
 [data-plugin-id="research-dashboard"] .rd-blocker[data-rd-strong="true"] {
-  color: var(--destructive, #b91c1c);
+  /* The words say what blocks it ("blocked by …"); the colour would say it twice. */
   font-weight: 600;
 }
 [data-plugin-id="research-dashboard"] .rd-window [aria-pressed="true"] { font-weight: 600; }
@@ -684,74 +717,67 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-progress-switch { margin-bottom: 10px; }
 [data-plugin-id="research-dashboard"] .rd-progress-switch [aria-pressed="true"] { font-weight: 600; }
 /* C7: the progress timeline — filters on one line, each axis a labelled rail. */
-[data-plugin-id="research-dashboard"] .rd-filters { flex-wrap: wrap; gap: 8px; }
+[data-plugin-id="research-dashboard"] .rd-filters { flex-wrap: wrap; gap: var(--rd-gap); }
 /* C8: the qualifier on a state is part of the claim, not decoration — quieter, never optional. */
-[data-plugin-id="research-dashboard"] .rd-claim-suffix { font-weight: 400; opacity: 0.75; }
+[data-plugin-id="research-dashboard"] .rd-claim-suffix { font-weight: 400; opacity: var(--rd-quiet); }
 [data-plugin-id="research-dashboard"] .rd-timeline-axis {
-  border-left: 2px solid var(--border, #e5e7eb);
+  border-left: var(--rd-rule);
   display: grid;
-  gap: 6px;
+  gap: var(--rd-gap-tight);
   padding-left: 10px;
 }
-[data-plugin-id="research-dashboard"] .rd-timeline-axis .rd-activity li { display: grid; gap: 2px; }
+[data-plugin-id="research-dashboard"] .rd-timeline-axis .rd-activity li { display: grid; gap: var(--rd-gap-row); }
 [data-plugin-id="research-dashboard"] .rd-newtopic { flex-wrap: nowrap; }
 [data-plugin-id="research-dashboard"] .rd-newtopic input { width: 18rem; }
-[data-plugin-id="research-dashboard"] .rd-activity { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+[data-plugin-id="research-dashboard"] .rd-activity { display: grid; gap: var(--rd-gap); margin: 0; padding: 0; list-style: none; }
 [data-plugin-id="research-dashboard"] .rd-activity li {
-  border-left: 2px solid var(--border);
+  border-left: var(--rd-rule);
   padding: 0 0 0 10px;
 }
-[data-plugin-id="research-dashboard"] .rd-form { display: grid; gap: 8px; }
+[data-plugin-id="research-dashboard"] .rd-form { display: grid; gap: var(--rd-gap); }
 [data-plugin-id="research-dashboard"] .rd-divider {
-  border-top: 1px solid var(--border);
+  border-top: var(--rd-edge);
   margin: 4px 0 0;
   padding-top: 12px;
 }
-[data-plugin-id="research-dashboard"] .rd-detail { display: grid; gap: 12px; }
+[data-plugin-id="research-dashboard"] .rd-detail { display: grid; gap: var(--rd-gap-block); }
 [data-plugin-id="research-dashboard"] .rd-section {
-  font-size: 11px;
+  font-size: var(--rd-label);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  opacity: 0.6;
+  opacity: var(--rd-quiet);
   font-weight: 600;
 }
 [data-plugin-id="research-dashboard"] .rd-axis-detail {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px;
+  /* An axis inside an open card is not a second card: it takes the same left rule the axis index uses. */
+  border-left: var(--rd-rule);
+  padding: 0 0 0 10px;
   display: grid;
-  gap: 6px;
+  gap: var(--rd-gap-tight);
 }
 [data-plugin-id="research-dashboard"] .rd-axis-detail[data-rd-axis-state="blocked"] {
   border-left: 3px solid var(--destructive, #b91c1c);
 }
-[data-plugin-id="research-dashboard"] .rd-claim { display: grid; gap: 2px; }
-[data-plugin-id="research-dashboard"] .rd-claim-value { font-size: 13px; }
+[data-plugin-id="research-dashboard"] .rd-claim { display: grid; gap: var(--rd-gap-row); }
+[data-plugin-id="research-dashboard"] .rd-claim-value { font-size: var(--rd-body); }
 [data-plugin-id="research-dashboard"] .rd-conf {
-  font-size: 10px;
+  font-size: var(--rd-label);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   padding: 0 5px;
   border-radius: 999px;
   border: 1px dashed var(--border);
-  opacity: 0.8;
+  opacity: var(--rd-quiet);
 }
 [data-plugin-id="research-dashboard"] .rd-conf[data-rd-conf="confirmed"] { border-style: solid; }
-[data-plugin-id="research-dashboard"] .rd-conf[data-rd-conf="uncertain"] {
-  color: var(--destructive, #b91c1c);
-  border-color: var(--destructive, #b91c1c);
-}
-[data-plugin-id="research-dashboard"] .rd-evidence { font-size: 12px; }
-[data-plugin-id="research-dashboard"] .rd-evidence[data-rd-has-evidence="false"] {
-  color: var(--destructive, #b91c1c);
-}
-[data-plugin-id="research-dashboard"] .rd-history { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+[data-plugin-id="research-dashboard"] .rd-evidence { font-size: var(--rd-meta); }
+[data-plugin-id="research-dashboard"] .rd-history { display: grid; gap: var(--rd-gap-tight); margin: 0; padding: 0; list-style: none; }
 [data-plugin-id="research-dashboard"] .rd-history li {
-  border-left: 2px solid var(--border);
+  border-left: var(--rd-rule);
   padding: 0 0 0 8px;
 }
 [data-plugin-id="research-dashboard"] .rd-note { border-left-color: var(--accent, #6366f1) !important; }
-[data-plugin-id="research-dashboard"] .rd-notes { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+[data-plugin-id="research-dashboard"] .rd-notes { display: grid; gap: var(--rd-gap-tight); margin: 0; padding: 0; list-style: none; }
 [data-plugin-id="research-dashboard"] .rd-notes li {
   border-left: 2px solid var(--accent, #6366f1);
   padding: 0 0 0 8px;
@@ -760,11 +786,11 @@ const css = `
   border-top: 1px dashed var(--border);
   padding-top: 10px;
   display: grid;
-  gap: 8px;
+  gap: var(--rd-gap);
 }
 [data-plugin-id="research-dashboard"] .rd-grid2 {
   display: grid;
-  gap: 8px;
+  gap: var(--rd-gap);
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 [data-plugin-id="research-dashboard"] .rd-conflict {
@@ -772,13 +798,13 @@ const css = `
   border-radius: 8px;
   padding: 8px;
   display: grid;
-  gap: 6px;
+  gap: var(--rd-gap-tight);
 }
 /* C6: the index + panel split both rollup views use. The index stays narrow and the panel takes the
    rest; below a reading width the two stack instead of squeezing a table into a phone. */
 [data-plugin-id="research-dashboard"] .rd-split {
   display: flex;
-  gap: 12px;
+  gap: var(--rd-gap-block);
   align-items: flex-start;
   flex-wrap: wrap;
 }
@@ -789,13 +815,13 @@ const css = `
   padding: 0;
   list-style: none;
   display: grid;
-  gap: 2px;
+  gap: var(--rd-gap-row);
 }
 [data-plugin-id="research-dashboard"] .rd-index-item {
   width: 100%;
   text-align: left;
   display: grid;
-  gap: 2px;
+  gap: var(--rd-gap-row);
   background: none;
   border: 1px solid transparent;
   border-radius: 8px;
@@ -825,11 +851,11 @@ const css = `
   border-left: 1px solid var(--border);
 }
 [data-plugin-id="research-dashboard"] .rd-problem-card {
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
+  /* The lede of the middle column, not a box beside two other boxes — the columns are already separated by rules. */
+  border-left: var(--rd-rule);
+  padding: 0 0 0 10px;
   display: grid;
-  gap: 4px;
+  gap: var(--rd-gap-tight);
 }
 [data-plugin-id="research-dashboard"] .rd-problem-card p {
   margin: 0;
@@ -839,19 +865,19 @@ const css = `
   padding: 0;
   list-style: none;
   display: grid;
-  gap: 6px;
+  gap: var(--rd-gap-tight);
 }
 [data-plugin-id="research-dashboard"] .rd-feed > li {
   display: grid;
-  gap: 2px;
+  gap: var(--rd-gap-row);
 }
 /* The plan sits below the composition, separated by a rule rather than boxed: it is a secondary section, and
    the top row is the glance. The step list is a plain list because the markup must not imply an order the
    model may never have claimed — the numbers are rendered per step, only where a step carries a position. */
 [data-plugin-id="research-dashboard"] .rd-progress-plan {
-  border-top: 1px solid var(--border);
+  border-top: var(--rd-edge);
   display: grid;
-  gap: 4px;
+  gap: var(--rd-gap-tight);
   padding-top: 10px;
 }
 [data-plugin-id="research-dashboard"] .rd-progress-plan p {
@@ -859,32 +885,32 @@ const css = `
 }
 [data-plugin-id="research-dashboard"] .rd-plan-steps {
   display: grid;
-  gap: 4px;
+  gap: var(--rd-gap-tight);
   list-style: none;
   margin: 4px 0 0;
   padding: 0;
 }
 [data-plugin-id="research-dashboard"] .rd-plan-step {
   display: grid;
-  gap: 2px;
+  gap: var(--rd-gap-row);
 }
 [data-plugin-id="research-dashboard"] .rd-step-state {
-  border: 1px solid var(--border);
+  border: var(--rd-edge);
   border-radius: 999px;
-  font-size: 0.85em;
+  font-size: var(--rd-meta);
   padding: 0 6px;
 }
 /* The problem inventory is the same kind of secondary section as the plan: a rule above it, quiet rows, and
    each row is a button because picking one drives the card in the middle column. */
 [data-plugin-id="research-dashboard"] .rd-progress-problems {
-  border-top: 1px solid var(--border);
+  border-top: var(--rd-edge);
   display: grid;
-  gap: 4px;
+  gap: var(--rd-gap-tight);
   padding-top: 10px;
 }
 [data-plugin-id="research-dashboard"] .rd-problems {
   display: grid;
-  gap: 4px;
+  gap: var(--rd-gap-tight);
   list-style: none;
   margin: 4px 0 0;
   padding: 0;
@@ -894,36 +920,36 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-progress-repositories,
 [data-plugin-id="research-dashboard"] .rd-progress-evidence,
 [data-plugin-id="research-dashboard"] .rd-progress-steering {
-  border-top: 1px solid var(--border);
+  border-top: var(--rd-edge);
   display: grid;
-  gap: 4px;
+  gap: var(--rd-gap-tight);
   padding-top: 10px;
 }
-[data-plugin-id="research-dashboard"] .rd-tags { gap: 6px; }
+[data-plugin-id="research-dashboard"] .rd-tags { gap: var(--rd-gap-tight); }
 /* An entity tag: navigation, not a filter — it reads as a chip because it goes somewhere. */
 [data-plugin-id="research-dashboard"] .rd-tag {
   background: none;
-  border: 1px solid var(--border);
+  border: var(--rd-edge);
   border-radius: 999px;
   color: inherit;
   cursor: pointer;
   font: inherit;
-  font-size: 0.85em;
+  font-size: var(--rd-meta);
   padding: 1px 8px;
 }
-[data-plugin-id="research-dashboard"] .rd-tag:hover { border-color: inherit; opacity: 0.75; }
+[data-plugin-id="research-dashboard"] .rd-tag:hover { border-color: inherit; opacity: var(--rd-quiet); }
 [data-plugin-id="research-dashboard"] .rd-evidence,
 [data-plugin-id="research-dashboard"] .rd-steering {
   display: grid;
-  gap: 8px;
+  gap: var(--rd-gap);
   list-style: none;
   margin: 4px 0 0;
   padding: 0;
 }
 [data-plugin-id="research-dashboard"] .rd-source {
-  border: 1px solid var(--border);
+  border: var(--rd-edge);
   border-radius: 999px;
-  font-size: 0.85em;
+  font-size: var(--rd-meta);
   padding: 0 6px;
 }
 [data-plugin-id="research-dashboard"] .rd-steering-text { margin: 2px 0 0; }
@@ -935,14 +961,23 @@ const css = `
   flex: 1 1 22rem;
   min-width: 16rem;
 }
-[data-plugin-id="research-dashboard"] .rd-view { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+[data-plugin-id="research-dashboard"] .rd-view { display: grid; gap: var(--rd-gap); margin: 0; padding: 0; list-style: none; }
 [data-plugin-id="research-dashboard"] .rd-involvement {
-  border-left: 2px solid var(--border);
+  border-left: var(--rd-rule);
   padding: 0 0 0 10px;
   display: grid;
-  gap: 6px;
+  gap: var(--rd-gap-tight);
 }
 [data-plugin-id="research-dashboard"] .rd-involvement > ul { margin: 0; }
+/*
+ * The primary line. The rd-strong class carried no rule at all, so the sentence that answers the question — a
+ * problem's statement, an axis's title, a person's name — rendered exactly like the provenance under it,
+ * and the reader had to infer which was which from position. Weight is the cheap half of hierarchy: it
+ * makes the primary line primary without making the page taller.
+ */
+[data-plugin-id="research-dashboard"] .rd-strong { font-weight: 600; }
+/* The one page-level title, which used to be the only inline-styled heading on the page. */
+[data-plugin-id="research-dashboard"] .rd-page-title { font-size: 16px; font-weight: 600; margin: 0; }
 `;
 
 /**
@@ -2563,6 +2598,12 @@ export function apply(ctx: Context) {
      */
     const [indexMode, setIndexMode] = React.useState<ProgressIndexMode>("axes");
     /**
+     * Which axis's feed the reader asked to see in full. Keyed by the axis rather than a boolean, so
+     * switching axes resets the cap by construction: the reader never has to wonder whether "show all"
+     * from the axis they just left is still in force on this one.
+     */
+    const [feedAllFor, setFeedAllFor] = React.useState<string | null>(null);
+    /**
      * Apply an arriving tag once, keyed on `seq` so the same tag asked for twice lands twice. It sets the
      * subview and the selection — nothing else; a tag is navigation, so a reader's own click is never
      * overridden and no request follows from it.
@@ -2679,6 +2720,9 @@ export function apply(ctx: Context) {
       (progress?.activity.byAxis ?? []).find(
         (bucket) => bucket.axisId === activeAxis?.id
       ) ?? null;
+    const feedAll = feedAllFor !== null && feedAllFor === (activeAxis?.id ?? "");
+    const feedShown = feed === null || feedAll ? (feed?.events ?? []) : feed.events.slice(0, FEED_LEAD);
+    const feedHidden = (feed?.events.length ?? 0) - feedShown.length;
     const axisPlan = activeAxis?.plan ?? null;
     // Whether the plan claims an order is read off the projection's own `position` values and nothing else:
     // a step that claims no position is never given one, and a plan whose steps claim none says so rather
@@ -3046,7 +3090,11 @@ export function apply(ctx: Context) {
               Nothing recorded against this axis in this window.
             </p>
           ) : (
-            <ul className="rd-feed" data-rd-progress-feed={feed.events.length}>
+            <ul
+              className="rd-feed"
+              data-rd-progress-feed={feed.events.length}
+              data-rd-progress-feed-shown={feedShown.length}
+            >
               {/*
                * The ActivityFeed's half of the contract, rendered through the one shared event line
                * (component-contract.md § ActivityFeed): the date, the summary, provenance, and a tag for
@@ -3055,7 +3103,7 @@ export function apply(ctx: Context) {
                * account says so in words, and an event naming a problem the projection does not carry gets no
                * tag rather than an unnamed one.
                */}
-              {feed.events.map((event) => (
+              {feedShown.map((event) => (
                 <ActivityLine
                   attrs={{ "data-rd-feed-event": "true" }}
                   axisLabel={
@@ -3079,6 +3127,29 @@ export function apply(ctx: Context) {
               ))}
             </ul>
           )}
+          {feed !== null && (feedHidden > 0 || feedAll) ? (
+            /*
+             * The feed is capped, and says so. This is not a second disclosure for the *axis* — that is
+             * `Read topic`'s job and stays one control — it governs the feed's own window, which is a
+             * different piece of state. The count is the projection's own, so capping what is shown loses
+             * nothing silently: the reader is told how many there are and can have them in one click.
+             */
+            <div className="rd-cluster" data-rd-progress-feed-more={String(feedHidden)}>
+              <span className="rd-meta" data-rd-progress-feed-note="true">
+                {feedAll
+                  ? `all ${feed.events.length} shown, newest first`
+                  : `${feedShown.length} of ${feed.events.length} shown, newest first`}
+              </span>
+              <Button
+                onClick={() => {
+                  setFeedAllFor(feedAll ? null : (activeAxis?.id ?? ""));
+                }}
+                variant="outline"
+              >
+                {feedAll ? "Show fewer" : `Show all ${feed.events.length}`}
+              </Button>
+            </div>
+          ) : null}
         </div>
         </div>
 
@@ -3736,7 +3807,7 @@ export function apply(ctx: Context) {
     return (
       <div className="rd-stack">
         <div className="rd-row" data-rd-topbar="true">
-          <h2 style={{ margin: 0 }}>Research overview</h2>
+          <h2 className="rd-page-title">Research overview</h2>
           {/* Three groups rather than one strip: what you are looking at, the window you are looking
               at it through, and the actions. The divider between them is the point — without it this
               reads as ten controls of equal weight in a row. */}
