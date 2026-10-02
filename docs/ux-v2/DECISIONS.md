@@ -256,7 +256,8 @@ elsewhere" and left it in place, and the reviewer caught it as a privacy regress
 
 - **Any endpoint a harness writes into a committed artifact is redacted** through `harness/redact.mjs`. Loopback
   stays verbatim (no identity, and it is the useful diagnostic later); everything identifying — any literal
-  address, a `.ts.net` / `.local` / `.internal` / `.lan` / `.home` name, or this machine's own hostname — becomes
+  address, a `.ts.net` / `.local` / `.internal` / `.lan` name — **not** `.home`, which would collide with
+  ordinary code such as `process.env.HOME` and `landing.home` — or this machine's own hostname — becomes
   `<box>.<tailnet>.ts.net` with the port and path kept; a **public** host (a GitHub remote, an upstream doc link)
   is untouched, because over-redacting would damage the evidence a record carries.
 - **One definition, both kinds of caller** — `read-pass.sh` through `harness/redact-url.mjs`, `verify-page.mjs`

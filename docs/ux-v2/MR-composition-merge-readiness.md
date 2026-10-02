@@ -48,16 +48,16 @@ to take.
 | Check | Result |
 |---|---|
 | working tree | **clean** at the end of this phase (the phase's own records are committed with it) |
-| ahead / behind `main` | `git rev-list --left-right --count origin/main...HEAD` → **0 behind / 37 ahead** |
-| branch HEAD | `f73e430` when the measurements below were taken; the merge-readiness record, the redaction fix and #11's own corrections followed it |
+| ahead / behind `main` | `git rev-list --left-right --count origin/main...HEAD` → **0 behind / 39 ahead** at this commit |
+| branch HEAD | `f73e430` when the measurements below were taken; the merge-readiness record, the redaction fix, the acceptance record and the `.home` correction followed it |
 | `main` HEAD | `e09c1d6` |
-| composition commits | 35 at measurement, 37 at this commit; implementation commit `c1b2059`, and every commit after it is **not code** |
+| composition commits | 35 at measurement, one more per record commit since (39 here); implementation commit `c1b2059`, and every commit after it is **not code** |
 
 **The self-reference, stated rather than left to a reader to notice:** merge-readiness measurements were taken at
-**35 commits ahead**; the merge-readiness record commit made the branch **36**, and the redaction fix that
-followed it makes it **37**. The count grows because the branch carries its own record — that is the expected
-self-reference, not drift. `main` remains **0 ahead / no divergence** throughout: it is never advanced by this
-phase, and it was already 0 ahead before either commit.
+**35 commits ahead**; the record commits that followed each moved the count by one — 36 for the merge-readiness
+record, 37 for the redaction fix, 39 at the acceptance record. The count grows because the branch carries its own
+record — that is the expected self-reference, not drift. `main` remains **0 ahead / no divergence** throughout: it
+is never advanced by this phase, and it was already 0 ahead before any of these commits.
 
 **The tested bundle and the commit, stated precisely** (the reviewer's housekeeping point): the release digest
 is computed over the manifest's folders (`actions`, `migrations`, `ui`, `skills`), so the bundle under test is
@@ -213,7 +213,8 @@ in bash:
 - **loopback is kept verbatim** (`http://127.0.0.1:3005`) — it identifies nobody, and it is the useful diagnostic
   when a record is read months later;
 - **identity is replaced with `<box>.<tailnet>.ts.net`**, keeping scheme, port and path: a literal address of any
-  kind (tailnet, LAN, public), a private DNS suffix (`.ts.net`, `.local`, `.internal`, `.lan`, `.home`), or this
+  kind (tailnet, LAN, public), a private DNS suffix (`.ts.net`, `.local`, `.internal`, `.lan` — deliberately
+  **not** `.home`, which collides with ordinary code such as `process.env.HOME` and `landing.home`), or this
   machine's own hostname (compared against `os.hostname()`, so no literal name is baked into the source);
 - **a public host is left alone** — the GitHub remote and upstream doc links in these documents are not identity,
   and over-redacting would damage the evidence the records carry.
@@ -238,11 +239,14 @@ decision; **no rewrite was performed**, and that choice is left to the reviewer.
 
 ## 12. What remains
 
-1. **The reviewer's word on this fix** — they recorded *"after those docs/redaction-only fixes: merge may proceed
-   without rerunning the full acceptance suite."*
-2. **The merge itself**: `main` ← `composition/c1-topics` — 35 commits when measured, one more per record commit
-   since (37 at the redaction fix), `main` 0 ahead throughout. Not performed.
-3. **If the history exposure matters** (§11): an explicit decision to rewrite the branch before merging.
-4. H1's focus-visibility validation, after the merge, against the merged composition.
-5. The estate's own reconciliation of these facts (`services/nakama/HANDOFF-UX-V2.md`, `PLAN-UX-V2.md`,
-   `REPOS.md`) — local-only, as the estate has no remote.
+1. ~~The reviewer's word on this fix~~ — **given 2026-10-02: "Merge-readiness: accepted", "Endpoint-redaction
+   blocker: closed", with `main` cleared to fast-forward to this branch** (`docs/reviews/2026-10-02-mr-acceptance-record.md`).
+2. ~~The merge itself~~ — **authorized and taken by fast-forward on this record's tip**: `main` receives this branch
+   unchanged, with no merge commit and no rewrite. `main` and the branch tip are the same tree.
+3. **The history exposure stands by decision** — the reviewer ruled **not** to rewrite it: the value is already in
+   a public branch's history, so a rewrite cannot guarantee erasure from clones, caches or forks, while it would
+   invalidate every commit hash and muddy the evidence trail. The tree, the diff and `main` are clean; that is the
+   artifact, and §11 keeps the general rule (history is reported, never rewritten to satisfy a scrub).
+4. **H1 keyboard-focus visibility validation is the next task**, taken against the **merged** composition rather
+   than this branch, because that is the tree it ships on. It is the last parked item of the composition phase.
+5. The phase's release/tagging decision (and any cleanup of this now-merged branch), after H1.
