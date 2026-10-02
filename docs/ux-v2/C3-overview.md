@@ -211,21 +211,37 @@ per dataset, so nothing is being dropped at the narrower size.
 - the topic activity line reads the payload's own window count and last activity
   (`8 events in the selected window · last activity yesterday`), with no event title
 
-**The write record is open, and the cause is instance-level rather than the page.** The write pass creates its
-fixture topic, reloads and reads it back; the reads that follow the write lose the SQLite lock, and the detail
-sits on `Loading this topic` until the pass gives up. The instance log during that run:
+**The write record: obtained on the fixture, open on the corpus, and the reason is instance-level rather than
+the page.** The corpus write pass creates its fixture topic — the `reconcile_topic` returns 200 and the store
+afterwards held `topics=2, development_axes=4` — reloads, and reads it back; the reads that follow the write
+lose the SQLite lock, the detail sits on `Loading this topic` until the pass gives up, and the page renders **no
+banner** (so its read is pending rather than rejected). The instance log in that window:
 
 ```
 21:12:14 SQLiteError: database is locked  → POST 500 (requestId bb37106e-…, durationMs 73)
 21:13:04 SQLiteError: database is locked  → POST 500 (requestId 50b5fff9-…, durationMs 61)
 ```
 
-The `reconcile_topic` that creates the topic returns 200 (its check passes) and the store afterwards held
-`topics=2, development_axes=4` — the write landed; the reads are what failed. The page renders **no banner**, so
-its read is pending rather than rejected: the host runs actions as unserialised subprocesses, and the landing
-adds one more read to the window immediately after a write. Recorded with its timestamps, request ids and
-statuses rather than waived by a second green run; the committed `docs/corpus/verify-write.txt` is untouched,
-because the wrapper refuses to record an aborted pass.
+The host runs actions as unserialised subprocesses, and the corpus's read volume is what makes the collision
+fatal there. **The same pass on the fixture completes: `write pass: all checks passed; 1 skipped`, 177 checks**
+(`docs/layout-fixtures/verify-fixture-write.txt`), even though the fixture instance logged the same
+`SQLITE_BUSY_RECOVERY` → `POST 500` at 21:20:03 during it. So the write path itself is sound on this build and
+the corpus's record is the one that cannot currently be taken. Not waived by a second green run; the committed
+`docs/corpus/verify-write.txt` is untouched, because the wrapper refuses to record an aborted pass.
+
+**Two things that investigation exposed, both worth keeping:**
+
+1. **The write pass pollutes the dataset identity of the instance it runs on.** It creates a topic named
+   `ui-check <n>`, which does not match the fixture's naming, and the dataset-identity gate reads identity from
+   naming — so after one fixture write run the instance reports *BOTH fixture and corpus markers — a mixed
+   instance* and **refuses every later fixture run** (read or write) at check 2. The fixture record above was
+   therefore taken once, and the fixture had to be re-seeded (`--data-root /mnt/otrais/data/nakama-fixture --org
+   org_706c5500…`) before it would pass again. A `ui-check` topic counting as a corpus marker is a ruling for
+   the reviewer, not something to paper over.
+2. **`wipe-plugin-rows.py` defaults to the dev data root.** With the *fixture* env sourced it still wipes
+   `/mnt/otrais/data/nakama-dev` — the same instance-targeting class as the hardcoded-unit trap already in the
+   unit's history. Pass `--data-root` and `--org` explicitly for the fixture; the fixture condition above was
+   only cleared once that was done.
 
 Two more harness assumptions the landing exposed, both fixed, both the same class as the read-side correction
 and both worth keeping because each one first presented as a page fault:
