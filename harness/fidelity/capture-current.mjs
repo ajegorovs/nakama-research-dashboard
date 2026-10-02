@@ -55,18 +55,27 @@ const VIEWS = ["topics", "people", "repositories", "progress"];
 // held. `refuse` removes it, so a late failure leaves no half-capture behind.
 let scratchDir = null;
 // The durable markers, per view — the same attributes the acceptance pass reads. Each view's own list
-// container is the first thing a half-mounted view does not have, and the topic index's detail pane is
-// the composition's core claim, so it is required there too. A capture that cannot find them is a
-// capture of something else, whatever it looks like.
+// container is the first thing a half-mounted view does not have, the topic index's detail pane is the
+// composition's core claim, and every view now names itself (§7: the shell title stays, the view says which
+// one it is), so a build that lost the heading or the pane cannot be captured under either name.
 const VIEW_MARKERS = {
-  people: ["[data-rd-view=\"people\"]", "[data-rd-people]"],
-  progress: ["[data-rd-view=\"progress\"]", "[data-rd-progress-index]"],
-  repositories: ["[data-rd-view=\"repositories\"]", "[data-rd-repositories]"],
+  people: ['[data-rd-view="people"]', "[data-rd-people]", '[data-rd-view-heading="people"]'],
+  progress: [
+    '[data-rd-view="progress"]',
+    "[data-rd-progress-index]",
+    '[data-rd-view-heading="progress"]',
+  ],
+  repositories: [
+    '[data-rd-view="repositories"]',
+    "[data-rd-repositories]",
+    '[data-rd-view-heading="repositories"]',
+  ],
   topics: [
-    "[data-rd-view=\"topics\"]",
+    '[data-rd-view="topics"]',
     "[data-rd-topic-index]",
     "[data-rd-index-topic]",
     "[data-rd-detail]",
+    '[data-rd-view-heading="topics"]',
   ],
 };
 const PLUGIN_ROOT = 'div[data-plugin-id="research-dashboard"]';

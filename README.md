@@ -311,7 +311,18 @@ and row ids are server-generated); the applier reads the ids back and does the r
 Expected as of U4's step 7, on **separate instances** — a corpus-only one and an isolated fixture-only one:
 corpus **84 pass · 0 fail · 22 skip** and fixture **107 · 0 · 0**, at both viewports (the fixture now records *zero* skips: U10's two seeds gave the repository-tag and exceptional-state checks their subjects).
 
-**Current records (C1, revision 410, one session on one build):** corpus **105 · 0 · 23** at both
+**Current records (C1 refinement pass, revision 442, `0.2.0+dev.aed4d024c37e`):** corpus **115 · 0 · 23** at
+1440×900 and **114 · 0 · 24** at 1280×800, the write pass **127 · 0 · 23** — ten checks more than the
+revision-410 set below, apiece, and all ten are the hierarchy pass's: the per-view heading in all four views,
+the rail's lead / stated remainder / expand / collapse, the three-level axis row with its one disclosure, the
+axis row's reading and detail compared verbatim against `get_topic`, and the rail's three cards beginning in
+the first screen. That last check is asserted at the reference reading size and **skipped elsewhere with its
+reason**, which is why the 1280×800 record reports one skip more than 1440×900 and not a failure. The fixture
+pair was **not** re-run on this build — it needs the second instance's own web origin and the plugin installed
+at this revision there — so the revision-410 fixture records below stand unrepeated, labelled by their build.
+Read a run's own summary line, never a number in this document.
+
+**Historical records (C1, revision 410, one session on one build):** corpus **105 · 0 · 23** at both
 viewports, the write pass **117 · 0 · 23**, fixture **130 · 0 · 0** at both viewports. The corpus skip
 count moved from the 34 this document quoted earlier for a dataset reason, not a check-set one: a corpus
 re-seeded by the current `replay-corpus.mjs` derives **3 problem rows and 3 repository-naming events**

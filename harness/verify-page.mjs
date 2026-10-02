@@ -81,6 +81,14 @@ const VIEWPORT = (() => {
 const PAGE_LABEL = process.env.NAKAMA_PAGE_LABEL ?? "Research";
 const WRITE = process.argv.includes("--write");
 
+/**
+ * The rail's lead, mirroring `RAIL_ACTIVITY_LEAD` in `src/ui.tsx`. The harness states it independently so
+ * the page cannot define its own window into correctness: if the page silently grew the lead to fit a long
+ * topic, this check would fail rather than agree. The corpus topic carries 25 events and the fixture's
+ * sparse one carries none, so both sides of the comparison have a subject.
+ */
+const RAIL_ACTIVITY_LEAD = 4;
+
 const problems = [];
 const skipped = [];
 let passed = 0;
@@ -331,6 +339,7 @@ const CORPUS = await page.evaluate(
         topic: entry.topic.name,
       })),
       topic: topic?.topic?.name ?? "",
+      topicId: topic?.topic?.id ?? "",
       topicNames: all.topics.map((entry) => entry.topic.name),
     };
   },
@@ -726,6 +735,21 @@ const anatomy = await page.evaluate(
       sideNotes: titled("Notes"),
       sideRepositories: titled("Related repositories"),
       noteInput: pane?.querySelectorAll('[aria-label="Topic note"]').length ?? 0,
+      // §7 and the rail's window (C1's hierarchy pass).
+      shellTitle: (scope?.querySelector(".rd-page-title")?.innerText ?? "").trim(),
+      viewHeading: (scope?.querySelector("[data-rd-view-title]")?.innerText ?? "").trim(),
+      viewHeadingView:
+        scope?.querySelector("[data-rd-view-heading]")?.getAttribute("data-rd-view-heading") ?? null,
+      activityShown: Number(
+        pane?.querySelector("[data-rd-topic-activity]")?.getAttribute("data-rd-topic-activity-shown") ?? -1
+      ),
+      activityTotal: Number(
+        pane?.querySelector("[data-rd-topic-activity]")?.getAttribute("data-rd-topic-activity") ?? -1
+      ),
+      activityRemainder: Number(
+        pane?.querySelector("[data-rd-topic-activity-more]")?.getAttribute("data-rd-topic-activity-more") ?? -1
+      ),
+      activityNote: (pane?.querySelector("[data-rd-topic-activity-note]")?.innerText ?? "").trim(),
     };
   },
   [PLUGIN_ID]
@@ -767,6 +791,148 @@ check(
   anatomy.sideActivity === 1 && anatomy.sideNotes === 1 && anatomy.sideRepositories === 1,
   `activity ${anatomy.sideActivity}, notes ${anatomy.sideNotes}, repositories ${anatomy.sideRepositories}`
 );
+// ------------------------------------------------------- §7: the view names itself, the shell title stays
+// The decision is two headings, not one: "Research overview" on the shell, and the view's own name — and
+// its prototype hint — above the layout. Before this, the pressed toolbar button was the only thing on the
+// page saying which view a reader was looking at, which is nothing to arrive at from a tag.
+check(
+  "the view names itself while the shell title stays (§7: two headings, not one)",
+  anatomy.viewHeading === "Topics" &&
+    anatomy.viewHeadingView === "topics" &&
+    anatomy.shellTitle === "Research overview",
+  `view heading ${JSON.stringify(anatomy.viewHeading)} (${anatomy.viewHeadingView}), ` +
+    `shell title ${JSON.stringify(anatomy.shellTitle)}`
+);
+// ------------------------------------- the rail's window: newest few events, remainder stated, not dropped
+// The montage review found the rail running long enough that Notes and Related repositories — the rest of
+// the topic's context — never reached the first screen: the rail read as an activity feed. It now leads
+// with the newest few and states the rest, the same treatment the Progress feed uses. `total` stays the
+// payload's own number, so capping what is *shown* never changes what the page says there *is* (D5).
+//
+// Two rules this block learned the hard way, both from the 1280x800 record:
+//
+//   * read the rail only AFTER its detail has landed. While the pane is up but `get_topic` has not
+//     answered, the total attribute falls back to the index row's own count — 504 on the corpus topic
+//     against the detail's 25 — and a check that reads then reports a composition fault where the truth is
+//     a read that had not arrived. Waiting on the rail's own list (not the pane) is the same discipline the
+//     note affordance below uses.
+//   * a check that CLICKS must assert its control exists first. Clicking a control that is not rendered
+//     does not fail the check, it aborts the whole pass on a 30s locator timeout — and an aborted run is a
+//     lost record, not a verdict.
+//
+// On that 1280x800 record the cause of the missing detail was the instance, not the page: `SQLiteError:
+// database is locked` made the action answer 500 three times, the page rendered its own error banner, and
+// the rail never had data. That is why a load failure here is now ONE failure naming the banner, and the
+// two interaction checks that depend on the list skip with the same reason — never an abort.
+const railProbe = () =>
+  page.evaluate(
+    ([pluginId, topic]) => {
+      const panel = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
+      const pane = panel?.querySelector(`[data-rd-detail="${topic}"]`);
+      const list = pane?.querySelector("[data-rd-topic-activity]");
+      const banners = [...(panel?.querySelectorAll('[role="alert"], .rd-banner, .rd-error') ?? [])]
+        .map((node) => (node.textContent ?? "").trim())
+        .filter((text) => text.length > 0);
+      return {
+        banners,
+        landed:
+          pane !== null && list !== null && !(list.textContent ?? "").includes("Loading this topic"),
+        remainder: Number(
+          pane
+            ?.querySelector("[data-rd-topic-activity-more]")
+            ?.getAttribute("data-rd-topic-activity-more") ?? -1
+        ),
+        note: (pane?.querySelector("[data-rd-topic-activity-note]")?.textContent ?? "").trim(),
+        rows: list?.querySelectorAll("li").length ?? -1,
+        shown: Number(list?.getAttribute("data-rd-topic-activity-shown") ?? -1),
+        total: Number(list?.getAttribute("data-rd-topic-activity") ?? -1),
+      };
+    },
+    [PLUGIN_ID, CORPUS.topic]
+  );
+const railLanded = await page
+  .waitForFunction(
+    ([pluginId, topic]) => {
+      const list = document.querySelector(
+        `div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"] [data-rd-topic-activity]`
+      );
+      return list !== null && !(list.textContent ?? "").includes("Loading this topic");
+    },
+    [PLUGIN_ID, CORPUS.topic],
+    { timeout: 20000 }
+  )
+  .then(() => true)
+  .catch(() => false);
+const rail = await railProbe();
+const railCause =
+  rail.banners.length > 0
+    ? `the page rendered ${JSON.stringify(rail.banners.join(" · "))}`
+    : 'the rail still read "Loading this topic" after 20s';
+const RAIL_LEAD_CHECK = "the rail leads with the newest few events and states the rest, rather than running long";
+const RAIL_EXPAND_CHECK =
+  "the rail's remainder is one control away, and showing it changes only what is shown";
+const RAIL_COLLAPSE_CHECK = "the rail returns to its lead when the reader asks for fewer";
+if (!rail.landed) {
+  check(RAIL_LEAD_CHECK, false, `the topic detail never landed (${railCause})`);
+  skip(RAIL_EXPAND_CHECK, `the topic detail never landed (${railCause}), so the rail has no window to read`);
+  skip(RAIL_COLLAPSE_CHECK, `the topic detail never landed (${railCause}), so there is nothing to collapse`);
+} else if (rail.total <= RAIL_ACTIVITY_LEAD) {
+  skip(
+    RAIL_LEAD_CHECK,
+    `this topic carries ${rail.total} event(s), at or below the rail's lead of ` +
+      `${RAIL_ACTIVITY_LEAD} — the corpus topic carries 25, so that run discriminates`
+  );
+  skip(RAIL_EXPAND_CHECK, `this topic carries ${rail.total} event(s) — nothing is held back to expand to`);
+  skip(RAIL_COLLAPSE_CHECK, `this topic carries ${rail.total} event(s) — the rail leads with all of them`);
+} else {
+  check(
+    RAIL_LEAD_CHECK,
+    rail.shown === RAIL_ACTIVITY_LEAD &&
+      rail.rows === RAIL_ACTIVITY_LEAD &&
+      rail.remainder === rail.total - RAIL_ACTIVITY_LEAD &&
+      /of \d+ shown/.test(rail.note) &&
+      rail.note.includes(String(rail.total)),
+    `${rail.shown} of ${rail.total} shown (remainder attr ${rail.remainder}, rows ${rail.rows}), ` +
+      `note ${JSON.stringify(rail.note)}`
+  );
+  // The rest is one control away, and showing it changes nothing but what is shown: the count the rail
+  // reports is still the payload's own. The control is asserted before it is clicked.
+  const moreControl = root.locator(
+    `[data-rd-detail="${CORPUS.topic}"] [data-rd-topic-activity-more] button`
+  );
+  if ((await moreControl.count()) === 0) {
+    check(
+      RAIL_EXPAND_CHECK,
+      false,
+      `the rail is truncated to ${rail.shown} of ${rail.total} but offers no control for the rest`
+    );
+    skip(RAIL_COLLAPSE_CHECK, "there was no control to expand with, so there is nothing to collapse");
+  } else {
+    const beforeExpand = await railProbe();
+    await moreControl.first().click();
+    await page.waitForTimeout(400);
+    const expanded = await railProbe();
+    check(
+      RAIL_EXPAND_CHECK,
+      beforeExpand.rows === RAIL_ACTIVITY_LEAD &&
+        expanded.rows === expanded.total &&
+        expanded.shown === expanded.total &&
+        expanded.total === beforeExpand.total,
+      `${beforeExpand.rows} row(s) before, ${expanded.rows} after (total ${expanded.total}, ` +
+        `shown attr ${expanded.shown})`
+    );
+    // Put it back, so every later measurement and every screenshot in this run is of the default
+    // composition.
+    await moreControl.first().click();
+    await page.waitForTimeout(400);
+    const collapsedAgain = await railProbe();
+    check(
+      RAIL_COLLAPSE_CHECK,
+      collapsedAgain.rows === RAIL_ACTIVITY_LEAD && collapsedAgain.shown === RAIL_ACTIVITY_LEAD,
+      `${collapsedAgain.rows} row(s) shown again (shown attr ${collapsedAgain.shown})`
+    );
+  }
+}
 // The note affordance lives inside the detail the read action loads, so the pane being up does NOT mean
 // its async detail has landed. Wait on a get_topic-only element — the note input itself — then re-probe,
 // rather than asserting on a probe taken the instant the pane appeared. (This is what made the fixture
@@ -813,6 +979,9 @@ const geometry = await page.evaluate(
       index: box(scope.querySelector(".rd-topic-index")),
       main: box(pane?.querySelector("[data-rd-current-work]") ?? null),
       rail: box(pane?.querySelector(".rd-side-stack") ?? null),
+      sideCards: [...(pane?.querySelectorAll(".rd-side-stack .rd-side-card") ?? [])].map((card) =>
+        box(card)
+      ),
       viewport: { h: window.innerHeight, w: window.innerWidth },
     };
   },
@@ -860,6 +1029,29 @@ if (geometry === null || geometry.index === null || geometry.detail === null) {
       "Current Work is materially wider than the side rail — the detail reads as the work, not as a report with a sidebar",
       g.main.w >= 1.25 * g.rail.w,
       `main ${Math.round(g.main.w)}px / side rail ${Math.round(g.rail.w)}px = ${(g.main.w / g.rail.w).toFixed(2)}x (needs 1.25x)`
+    );
+  }
+  // The rail's three cards must all participate in the first screen. The montage review found the opposite:
+  // long activity subjects filled the rail and pushed Notes and Related repositories below the fold, so the
+  // rail read as an activity feed rather than as the topic's context. Asserted where the decision was taken
+  // (1440×900) and skipped elsewhere with the reason — the rail's budget is not proportional to the viewport,
+  // so a smaller reading size is a different question, not a weaker answer to this one.
+  if (g.sideCards.length < 3) {
+    skip(
+      "the rail's three cards all begin in the first screen",
+      `this dataset renders ${g.sideCards.length} side card(s), so there is no third card to reach`
+    );
+  } else if (g.viewport.h < 900 || g.viewport.w < 1440) {
+    skip(
+      "the rail's three cards all begin in the first screen",
+      `this run is ${g.viewport.w}×${g.viewport.h}; the first-screen budget is a 1440×900 decision, and the rail's start is set by the host chrome rather than by the viewport`
+    );
+  } else {
+    check(
+      "the rail's three cards all begin in the first screen (the activity list does not push them below the fold)",
+      g.sideCards.every((card) => card !== null && card.top < g.viewport.h),
+      `card tops ${g.sideCards.map((card) => (card === null ? "missing" : Math.round(card.top))).join(" / ")} ` +
+        `of ${g.viewport.h}`
     );
   }
 }
@@ -1244,6 +1436,205 @@ if (bare === undefined) {
     !bare.text.includes("no progress note") || bare.conf.length === 1,
     `${bare.title}: says "no progress note", conf [${bare.conf.join(",")}]`
   );
+}
+
+// ------------------------------------------- C1 hierarchy: three levels in the reading surface, not ten
+// The montage review of the first C1 capture found the axis rows exposing ten equal-weight lines at once —
+// the description, a second confidence cluster, the evidence line, a History button and a Correct button —
+// so the lane read as a report rather than as the prototype's axis row. The claim now is that the reader
+// sees the scan line, the reading and one quiet reference line; that the state claim stays visible where it
+// is read (C8); and that *nothing was removed* — the rest is one disclosure away, per axis.
+const hierarchy = await page.evaluate(
+  ([pluginId, topic]) => {
+    const pane = document.querySelector(
+      `div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"]`
+    );
+    const rows = [...(pane?.querySelectorAll("[data-rd-axis-title]") ?? [])]
+      .map((node) => node.closest(".rd-axis-detail"))
+      .filter((block) => block !== null);
+    const shown = (node) => {
+      if (node === null) {
+        return false;
+      }
+      const rect = node.getBoundingClientRect();
+      return rect.height > 0 && rect.width > 0;
+    };
+    return rows.map((block) => {
+      const more = block.querySelector("details[data-rd-axis-more]");
+      const description = block.querySelector("[data-rd-axis-description]");
+      const reading = block.querySelector("[data-rd-axis-reading] .rd-claim-value");
+      const moreRect = more?.getBoundingClientRect() ?? null;
+      const descriptionRect = description?.getBoundingClientRect() ?? null;
+      return {
+        // Completed work is folded; it is still an axis whose words must survive the compression, so it is
+        // read here and excluded from the *reading surface* claims by this flag rather than dropped.
+        folded: block.closest("details[data-rd-folded-axes]") !== null,
+        // What a reader sees at once, as the row's own visible blocks: the scan line, the reading, the
+        // reference line, the disclosure's summary and the controls — five, and a blocker adds a sixth by
+        // design, because a blocker is the thing that needs acting on.
+        blocks: [...block.children].filter(shown).length,
+        blocker: block.querySelector(".rd-blocker") !== null,
+        // Chromium reports a non-zero box for content inside a *closed* <details> (it is content-visibility,
+        // not display:none), so "is it visible" is not answerable from a rect — the first version of this
+        // probe read a closed disclosure as visible. What is answerable, and what the claim actually is:
+        // the description lives *inside* the disclosure, and the collapsed disclosure is as tall as its
+        // summary alone.
+        descriptionCount: block.querySelectorAll("[data-rd-axis-description]").length,
+        descriptionHeight: descriptionRect === null ? 0 : Math.round(descriptionRect.height),
+        descriptionInside: description === null ? true : (more?.contains(description) ?? false),
+        descriptionText: (description?.textContent ?? "").trim(),
+        disclosure: more !== null,
+        disclosureHeight: moreRect === null ? null : Math.round(moreRect.height),
+        evidenceVisible: shown(block.querySelector("[data-rd-evidence-count]")),
+        readingText: (reading?.textContent ?? "").trim(),
+        readingVisible: shown(reading),
+        stateClaimVisible: shown(block.querySelector("[data-rd-state-confidence]")),
+        title: block.getAttribute("data-rd-axis-title"),
+      };
+    });
+  },
+  [PLUGIN_ID, CORPUS.topic]
+);
+// The *reading surface* claims are about the axes a reader is meant to read — completed work is folded, and
+// its rows are read for the payload comparison below instead.
+const readable = hierarchy.filter((axis) => !axis.folded);
+check(
+  "each axis reads in the scan line, the reading and one reference line — not ten equal-weight lines",
+  readable.length > 0 &&
+    readable.every(
+      (axis) =>
+        axis.readingVisible &&
+        axis.evidenceVisible &&
+        axis.stateClaimVisible &&
+        axis.disclosure &&
+        axis.blocks <= (axis.blocker ? 6 : 5)
+    ),
+  readable
+    .map(
+      (axis) =>
+        `${axis.title}: ${axis.blocks} block(s), reading ${axis.readingVisible}, evidence ` +
+        `${axis.evidenceVisible}, claim ${axis.stateClaimVisible}`
+    )
+    .join(" | ")
+);
+check(
+  "the material the reading does not need sits behind one disclosure per axis, not in the reading surface",
+  readable.every(
+    (axis) =>
+      axis.disclosure &&
+      axis.descriptionInside &&
+      axis.descriptionCount <= 1 &&
+      axis.disclosureHeight !== null &&
+      axis.disclosureHeight <= 24
+  ),
+  readable
+    .map(
+      (axis) =>
+        `${axis.title}: disclosure ${axis.disclosureHeight}px, description inside ${axis.descriptionInside}, ` +
+        `copies ${axis.descriptionCount}`
+    )
+    .join(" | ")
+);
+// Nothing was removed, and what the disclosure holds is the payload's own text: the reading line and the
+// description are compared against `get_topic`, not against the page that rendered them. A compressed row
+// that quietly dropped or paraphrased the axis's words would pass every structural check above.
+const detailPayload = await page.evaluate(
+  async ([pluginId, topicId]) => {
+    const cookie = (name) =>
+      document.cookie
+        .split("; ")
+        .find((entry) => entry.startsWith(`${name}=`))
+        ?.slice(name.length + 1) ?? "";
+    const orgs = await fetch("/v1/auth/orgs", { credentials: "include" }).then((r) => r.json());
+    const orgId = orgs.orgs?.[0]?.id ?? "";
+    const response = await fetch(`/v1/plugins/${pluginId}/actions/get_topic`, {
+      body: JSON.stringify({ input: { topicId } }),
+      credentials: "include",
+      headers: {
+        "content-type": "application/json",
+        "x-csrf-token": cookie("nakama_csrf"),
+        "x-org-id": orgId,
+      },
+      method: "POST",
+    });
+    const body = await response.json().catch(() => null);
+    // Plugin actions answer `{ result: <what the action returned> }`.
+    const detail = body?.result ?? {};
+    return {
+      axes: (detail.axes ?? []).map((axis) => ({
+        currentState: String(axis.currentState ?? "").trim(),
+        description: String(axis.description ?? "").trim(),
+        title: String(axis.title ?? ""),
+      })),
+      status: response.status,
+    };
+  },
+  [PLUGIN_ID, CORPUS.topicId]
+);
+if (detailPayload.status !== 200 || detailPayload.axes.length === 0) {
+  skip(
+    "the compressed axis row still carries the payload's own reading and detail",
+    `get_topic returned ${detailPayload.status} with ${detailPayload.axes.length} axis/axes, so there is nothing to compare against`
+  );
+} else {
+  // Whitespace is not content: both sides are compared as one-spaced text, so a newline in the payload
+  // cannot masquerade as a difference and a real difference cannot hide behind one.
+  const norm = (value) => String(value ?? "").replace(/\s+/g, " ").trim();
+  const mismatched = detailPayload.axes
+    .map((axis) => {
+      const rendered = hierarchy.find((row) => row.title === axis.title);
+      if (rendered === undefined) {
+        return `${axis.title}: not rendered`;
+      }
+      const expectedReading =
+        axis.currentState === "" ? "no progress note" : axis.currentState;
+      if (norm(rendered.readingText) !== norm(expectedReading)) {
+        return `${axis.title}: reading ${JSON.stringify(norm(rendered.readingText).slice(0, 60))} vs payload ${JSON.stringify(norm(expectedReading).slice(0, 60))}`;
+      }
+      if (axis.description !== "" && norm(rendered.descriptionText) !== norm(axis.description)) {
+        return `${axis.title}: detail ${JSON.stringify(norm(rendered.descriptionText).slice(0, 60))} vs payload ${JSON.stringify(norm(axis.description).slice(0, 60))}`;
+      }
+      return null;
+    })
+    .filter((entry) => entry !== null);
+  check(
+    "the compressed axis row still carries the payload's own reading and detail",
+    mismatched.length === 0,
+    mismatched.length === 0
+      ? `${detailPayload.axes.length} axis/axes compared against get_topic, all verbatim`
+      : mismatched.join(" | ")
+  );
+  // And the disclosure opens onto that text rather than being a dead control: the collapsed box is its
+  // summary, and opening it grows the box by the description it holds.
+  await root.locator('[data-rd-detail] details[data-rd-axis-more] summary').first().click();
+  await page.waitForTimeout(300);
+  const opened = await page.evaluate(
+    ([pluginId, topic]) => {
+      const pane = document.querySelector(
+        `div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"]`
+      );
+      const first = pane?.querySelector("details[data-rd-axis-more]");
+      const description = first?.querySelector("[data-rd-axis-description]");
+      return {
+        open: first?.hasAttribute("open") ?? null,
+        descriptionHeight: description
+          ? Math.round(description.getBoundingClientRect().height)
+          : 0,
+        disclosureHeight: first ? Math.round(first.getBoundingClientRect().height) : null,
+      };
+    },
+    [PLUGIN_ID, CORPUS.topic]
+  );
+  check(
+    "the axis's fuller detail is one click away, and the disclosure grows to hold it",
+    opened.open === true &&
+      opened.descriptionHeight > 0 &&
+      opened.disclosureHeight !== null &&
+      opened.disclosureHeight >= opened.descriptionHeight + 10,
+    `open ${opened.open}, disclosure ${opened.disclosureHeight}px holding a ${opened.descriptionHeight}px description`
+  );
+  await root.locator('[data-rd-detail] details[data-rd-axis-more] summary').first().click();
+  await page.waitForTimeout(200);
 }
 
 // Per-axis history expands *inside the axis* — never one merged log for the whole topic. Which axis
@@ -3113,7 +3504,12 @@ const planOf = (result, axisId) =>
   };
 
   const baseline = {
+    // Read twice, back to back. The bracket below compares the projection byte-for-byte before and after the
+    // traversal; a projection that cannot be read twice identically cannot be compared at all, and that is a
+    // property of the read rather than of anything the traversal did. When this bracket failed, these two
+    // reads are what said which of the two was responsible.
     payload: JSON.stringify(await apiProgress(windowDaysNow)),
+    payloadAgain: JSON.stringify(await apiProgress(windowDaysNow)),
     writes: writesSoFar(),
   };
 
@@ -3339,12 +3735,36 @@ const planOf = (result, axisId) =>
 
   // (9) The whole traversal, bracketed: no write was called, and the projection is byte-identical to the one
   // read before the first tag was clicked. A tag navigates and selects; if it changed anything, this is where
-  // it would show.
+  // it would show. The detail names the first byte that moved, with its neighbourhood — a bracket that can
+  // only say "CHANGED" cannot say whether the traversal or the read itself is responsible.
+  const firstDifference = (before, after) => {
+    const limit = Math.min(before.length, after.length);
+    let index = 0;
+    while (index < limit && before[index] === after[index]) {
+      index += 1;
+    }
+    if (index === limit && before.length === after.length) {
+      return null;
+    }
+    const from = Math.max(0, index - 60);
+    return (
+      `${index === limit ? `length (${before.length} vs ${after.length} bytes)` : `byte ${index}`}: ` +
+      `${JSON.stringify(before.slice(from, index + 90))} -> ${JSON.stringify(after.slice(from, index + 90))}`
+    );
+  };
   const after = JSON.stringify(await apiProgress(windowDaysNow));
+  const stableRead = baseline.payload === baseline.payloadAgain;
+  const difference = firstDifference(baseline.payload, after);
   check(
     "the tag traversal wrote nothing: no write action was called and the projection is unchanged",
-    writesSoFar() === baseline.writes && after === baseline.payload,
-    `writes ${baseline.writes} -> ${writesSoFar()}; payload ${after === baseline.payload ? "identical" : "CHANGED"}`
+    writesSoFar() === baseline.writes && difference === null,
+    `writes ${baseline.writes} -> ${writesSoFar()}; ` +
+      (difference === null
+        ? `projection identical (the two baseline reads ${stableRead ? "agreed" : "already disagreed"})`
+        : `projection changed at ${difference}; the two baseline reads ` +
+          (stableRead
+            ? "agreed, so the traversal or another writer moved it"
+            : "ALREADY differed, so the projection is not stable across two calls"))
   );
 }
 
@@ -4146,6 +4566,13 @@ if (WRITE) {
           scope
             ?.querySelector('[data-rd-view-option][aria-pressed="true"]')
             ?.getAttribute("data-rd-view-option") ?? null,
+        // §7 — the shell title stays and the view names itself. Read here so the claim is checked in every
+        // view the traversal visits, not only on the one the pass happens to open with.
+        viewHeading: (scope?.querySelector("[data-rd-view-title]")?.textContent ?? "").trim(),
+        viewHeadingView:
+          scope
+            ?.querySelector("[data-rd-view-heading]")
+            ?.getAttribute("data-rd-view-heading") ?? null,
       };
     });
   /** The page's own age vocabulary: the words have to be the age of the timestamp beside them. */
@@ -4178,6 +4605,33 @@ if (WRITE) {
     await showView(view);
     snapshots[view] = await readGrammar();
   }
+
+  // (0) §7 — two headings, not one: the shell keeps "Research overview" and every view names itself. Read
+  // from the same traversal the rest of this section uses, so the heading cannot be true only on the view
+  // the pass happens to open with, and the heading's own marker has to agree with the view it names.
+  const VIEW_NAMES = {
+    people: "People",
+    progress: "Progress",
+    repositories: "Repositories",
+    topics: "Topics",
+  };
+  const unnamed = Object.entries(snapshots).filter(
+    ([view, snap]) => snap.viewHeading !== VIEW_NAMES[view] || snap.viewHeadingView !== view
+  );
+  check(
+    "every view names itself under the shell title (§7), in all four views",
+    unnamed.length === 0,
+    unnamed.length === 0
+      ? Object.entries(snapshots)
+          .map(([view, snap]) => `${view} → ${JSON.stringify(snap.viewHeading)}`)
+          .join(", ")
+      : unnamed
+          .map(
+            ([view, snap]) =>
+              `${view}: heading ${JSON.stringify(snap.viewHeading)} (marker ${snap.viewHeadingView})`
+          )
+          .join(" | ")
+  );
 
   // (1) The state claim always travels with its badge, wherever a state row is rendered.
   const badgedViews = ["topics", "people", "repositories"].filter(

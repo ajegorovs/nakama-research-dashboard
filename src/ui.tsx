@@ -546,6 +546,18 @@ const VIEW_OPTIONS = [
 type ViewName = (typeof VIEW_OPTIONS)[number]["value"];
 
 /**
+ * §7 — the shell title stays and each view names itself. These are the prototypes' own one-line hints,
+ * carried over verbatim so the page and the reference read the same way; a view whose hint is missing says
+ * nothing rather than something invented.
+ */
+const VIEW_HEADINGS: Record<ViewName, string> = {
+  people: "Recent activity is factual, not a workload score",
+  progress: "Problem first; execution detail beneath it",
+  repositories: "Most recently active first",
+  topics: "Most recently active first · primarily read-only",
+};
+
+/**
  * The entity types a tag can name (component-contract.md § EntityTag), and the view each one's canonical home
  * is. Two of them live in Progress — an axis in its `Axes` subview, a problem in its `Problems` subview — which
  * is why the destination is a view *plus* the destination view's own selection, and never a query parameter.
@@ -582,6 +594,17 @@ type ProgressIndexMode = (typeof PROGRESS_INDEX_OPTIONS)[number]["value"];
  * because the count is the projection's own and the rest is one control away.
  */
 const FEED_LEAD = 12;
+
+/**
+ * How many activity events the Topics side rail leads with. The reference reading width is 1440×900, and
+ * the rail is the topic detail's *context*, not its feed: on the corpus's topic (25 events, several of them
+ * long subjects) the uncapped rail is eleven screens of activity and the two cards under it — Notes and
+ * Related repositories — never reach the first screen. Four is what the prototype's rail shows, and the
+ * remainder is **stated** with the rest one control away, exactly as the Progress feed does. Density here
+ * is a composition decision, not a data one: nothing is dropped, and no cap is applied to the count the
+ * store reports (`data-rd-topic-activity` stays the payload's own number).
+ */
+const RAIL_ACTIVITY_LEAD = 4;
 
 const css = `
 /*
@@ -679,6 +702,60 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-axis-kind {
   font-size: var(--rd-label);
   letter-spacing: 0.04em;
+  opacity: var(--rd-quiet);
+}
+/* §7 — the view names itself, under the shell title that stays. Modest on purpose: the shell already
+   carries the page title, so this is the view's identity, not a second banner. The heading takes the whole
+   row: .rd-split is a *wrapping flex* row (not a grid), so the spanning declaration is flex: 0 0 100%
+   — grid-column alone was inert and let the index share the heading's line, which pushed the detail into
+   a second row and broke the "tops aligned" geometry. Both are declared so the rule survives a change of
+   layout mode. */
+[data-plugin-id="research-dashboard"] .rd-view-heading {
+  display: flex;
+  align-items: baseline;
+  flex: 0 0 100%;
+  gap: var(--rd-gap-block);
+  grid-column: 1 / -1;
+}
+[data-plugin-id="research-dashboard"] .rd-view-title {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+/* The axis row in the detail reads in three levels rather than ten (the first C1 montage found ten
+   equal-weight lines, two of them the same fact twice). The reading is clamped so one verbose axis cannot
+   push the rest of the lane off the screen: the text is untouched and still in the DOM, so the pass reads
+   it exactly as before while the reader sees the hierarchy the prototype has. */
+[data-plugin-id="research-dashboard"] .rd-axis-reading {
+  display: grid;
+  gap: var(--rd-gap-tight);
+  margin: 2px 0 0;
+}
+[data-plugin-id="research-dashboard"] .rd-axis-reading .rd-claim-value {
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  display: -webkit-box;
+  overflow: hidden;
+}
+[data-plugin-id="research-dashboard"] .rd-axis-refs {
+  display: grid;
+  gap: var(--rd-gap-tight);
+}
+/* The detail the reading does not need: what the axis is for, and the second half of the state claim.
+   One disclosure per axis, the same shape the rail's own writes use. */
+[data-plugin-id="research-dashboard"] .rd-axis-more > summary {
+  cursor: pointer;
+  font-size: var(--rd-label);
+  opacity: var(--rd-quiet);
+}
+[data-plugin-id="research-dashboard"] .rd-axis-more[open] > summary {
+  margin-bottom: var(--rd-gap-tight);
+}
+/* The controls stay reachable and stop competing with the reading: History and Correct are capabilities,
+   not content, so they read as quiet text until used. */
+[data-plugin-id="research-dashboard"] .rd-axis-controls {
+  font-size: var(--rd-label);
   opacity: var(--rd-quiet);
 }
 [data-plugin-id="research-dashboard"] .rd-axis-secondary {
@@ -1038,6 +1115,21 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-side-card {
   display: grid;
   gap: var(--rd-gap-row);
+}
+/* The rail is context, not a feed. Measured at 1440×900 on the corpus: the rail begins 385px down the page
+   and has ~515px to the fold, while four of the 25 events already occupy 664px (166px per event, because
+   the summary wraps at rail width and every event names its entities). So a count cap alone cannot put
+   Notes and Related repositories in the first screen at any lead that still carries real data. The two
+   lists are therefore *windows*: bounded, scrollable, and with the count and the remainder still stated
+   below each one. Nothing is dropped, nothing is truncated, and the three cards participate in the first
+   screen whatever the data volume. */
+[data-plugin-id="research-dashboard"] .rd-side-card .rd-activity {
+  max-height: 190px;
+  overflow-y: auto;
+}
+[data-plugin-id="research-dashboard"] .rd-side-card .rd-notes {
+  max-height: 120px;
+  overflow-y: auto;
 }
 [data-plugin-id="research-dashboard"] .rd-side-title {
   font-size: var(--rd-meta);
@@ -1662,6 +1754,24 @@ export function apply(ctx: Context) {
   }
 
   /**
+   * §7 — the view names itself, under the shell title that stays. The prototype's heading block, kept
+   * modest: the view's own name and its one-line hint, above the layout it governs. It is a heading, not a
+   * control, and the toolbar's pressed button is no longer the only thing saying which page this is — which
+   * is what a reader arriving from a tag needs.
+   */
+  function ViewHeading({ view }: { view: ViewName }) {
+    const hint = VIEW_HEADINGS[view];
+    return (
+      <div className="rd-view-heading" data-rd-view-heading={view}>
+        <h3 className="rd-view-title" data-rd-view-title={view}>
+          {VIEW_OPTIONS.find((option) => option.value === view)?.label ?? view}
+        </h3>
+        {hint ? <span className="rd-meta">{hint}</span> : null}
+      </div>
+    );
+  }
+
+  /**
    * An exceptional state, said in words (component-contract.md § EntityIndex's "show exceptional state where
    * relevant"): empty, truncated, or filtered. One treatment, because "nothing is recorded here" and
    * "everything is here and none of it matches your filter" must never look the same, and a check should be
@@ -1825,11 +1935,41 @@ export function apply(ctx: Context) {
             {axis.kind} · v{axis.version}
           </span>
         </div>
-        {/* The axis on this card names the repositories it lives in and the people on it, and both are
-            entities with canonical homes — so the line is tags plus the axis's own words, not a string of
-            names that look like they should go somewhere. */}
-        {line || axis.description || axis.people.length > 0 || axis.repositories.length > 0 ? (
-          <p className="rd-axis-secondary">
+        {/* The reading: what this axis says about itself right now, clamped so one verbose axis cannot
+            push the rest of the lane off the screen. Its own confidence travels with it (C8), and a claim
+            nobody stated renders no confidence at all. */}
+        <p className="rd-axis-reading" data-rd-axis-reading={axis.id}>
+          <span className="rd-claim-value" data-rd-claim="current_state">
+            {axis.currentState ? (
+              axis.currentState
+            ) : (
+              <span className="rd-muted">no progress note</span>
+            )}
+          </span>
+          <span className="rd-cluster">
+            <span className="rd-muted">current state</span>
+            <ConfidenceBadge value={axis.currentStateConfidence} />
+          </span>
+        </p>
+
+        {axis.blocker ? (
+          <div className="rd-cluster">
+            <span
+              className="rd-blocker"
+              data-rd-strong={axis.state === "blocked"}
+            >
+              Blocker: {axis.blocker}
+            </span>
+            <ConfidenceBadge value={axis.blockerConfidence} />
+          </div>
+        ) : null}
+
+        {/* One quiet reference line: the entities this axis names — the repositories it lives in and the
+            people on it, both with canonical homes, so they are tags plus the axis's own words — where the
+            work physically lives, and what backs it. The evidence line renders whether or not there is
+            anything to name: "no evidence on record" is a claim, and it is read here. */}
+        <div className="rd-axis-secondary rd-axis-refs">
+          {line || axis.people.length > 0 || axis.repositories.length > 0 ? (
             <span className="rd-cluster rd-tags">
               {axis.repositories.map((repository) => (
                 <EntityTag
@@ -1852,58 +1992,40 @@ export function apply(ctx: Context) {
                 />
               ))}
               {line ? <span className="rd-meta">{line}</span> : null}
-              {axis.description ? (
-                <span className="rd-meta">{axis.description}</span>
-              ) : null}
-            </span>
-          </p>
-        ) : null}
-
-        <div className="rd-claim">
-          <span className="rd-claim-value" data-rd-claim="current_state">
-            {axis.currentState ? (
-              axis.currentState
-            ) : (
-              <span className="rd-muted">no progress note</span>
-            )}
-          </span>
-          <span className="rd-cluster">
-            <span className="rd-muted">current state</span>
-            <ConfidenceBadge value={axis.currentStateConfidence} />
-          </span>
-        </div>
-
-        {axis.blocker ? (
-          <div className="rd-cluster">
-            <span
-              className="rd-blocker"
-              data-rd-strong={axis.state === "blocked"}
-            >
-              Blocker: {axis.blocker}
-            </span>
-            <ConfidenceBadge value={axis.blockerConfidence} />
-          </div>
-        ) : null}
-
-        <div className="rd-cluster">
-          <span className="rd-muted">state</span>
-          <ConfidenceBadge value={axis.stateConfidence} />
-          {axis.lastReviewedAt ? (
-            <span className="rd-muted">
-              last reviewed {axis.lastReviewedAt.slice(0, 10)}
             </span>
           ) : null}
+          <EvidenceLine evidence={axis.evidence} />
         </div>
 
-        <EvidenceLine evidence={axis.evidence} />
+        {/* Everything else about the axis, one disclosure per axis rather than four equal-weight lines in
+            the reading surface: what the axis is for, the second half of the state claim, and when it was
+            last looked at. Nothing here is removed — the reader opens it for detail, the way the rail's own
+            writes sit behind theirs. */}
+        <details className="rd-axis-more" data-rd-axis-more={axis.id}>
+          <summary>More on this axis</summary>
+          {axis.description ? (
+            <p className="rd-axis-secondary" data-rd-axis-description="true">
+              {axis.description}
+            </p>
+          ) : null}
+          <div className="rd-cluster">
+            <span className="rd-muted">state</span>
+            <ConfidenceBadge value={axis.stateConfidence} />
+            {axis.lastReviewedAt ? (
+              <span className="rd-muted">
+                last reviewed {axis.lastReviewedAt.slice(0, 10)}
+              </span>
+            ) : null}
+          </div>
+        </details>
 
-        <div className="rd-cluster">
+        <div className="rd-cluster rd-axis-controls">
           <Button
             data-rd-history-toggle={axis.id}
             disabled={busy}
             onClick={onToggleHistory}
             size="sm"
-            variant="outline"
+            variant="ghost"
           >
             {historyOpen ? "Hide history" : `History (${axis.history.length})`}
           </Button>
@@ -1918,7 +2040,7 @@ export function apply(ctx: Context) {
               onCorrection(draftFrom(axis));
             }}
             size="sm"
-            variant={correcting ? "default" : "outline"}
+            variant={correcting ? "default" : "ghost"}
           >
             {correcting ? "Cancel" : "Correct"}
           </Button>
@@ -2375,6 +2497,7 @@ export function apply(ctx: Context) {
 
     return (
       <div className="rd-split" data-rd-view="people">
+        <ViewHeading view="people" />
         <ul
           className="rd-index"
           data-rd-people={people.length}
@@ -2455,6 +2578,7 @@ export function apply(ctx: Context) {
 
     return (
       <div className="rd-split" data-rd-view="repositories">
+        <ViewHeading view="repositories" />
         <ul
           className="rd-index"
           data-rd-repositories={repositories.length}
@@ -2893,6 +3017,7 @@ export function apply(ctx: Context) {
 
     return (
       <div className="rd-stack" data-rd-view="progress">
+        <ViewHeading view="progress" />
         {/*
          * The desktop composition the contract asks for: the index on the left, the selected axis's Problem in
          * the central column, and its Activity feed beside it — all three visible at once. They are siblings
@@ -3632,6 +3757,12 @@ export function apply(ctx: Context) {
     const [historyAxisId, setHistoryAxisId] = React.useState<string | null>(
       null
     );
+    /**
+     * Which topic's rail activity the reader asked to see in full, by topic id — the same shape the
+     * Progress feed uses (`feedAllFor`). Keyed on the id rather than a boolean, so the rail collapses
+     * again when the reader moves to another topic instead of carrying an expansion across.
+     */
+    const [railAllFor, setRailAllFor] = React.useState<string | null>(null);
     const [topicNote, setTopicNote] = React.useState("");
     const [conflict, setConflict] = React.useState<ConflictState>(null);
     const [activitySummary, setActivitySummary] = React.useState("");
@@ -3898,6 +4029,14 @@ export function apply(ctx: Context) {
       topics.find((entry) => entry.topic.id === expandedId) ?? topics[0] ?? null;
     const selectedDetails =
       selectedEntry && detail && detail.topic.id === selectedEntry.topic.id ? detail : null;
+    // The rail leads with the newest few events and states the rest (RAIL_ACTIVITY_LEAD). Keyed on the
+    // topic id, so switching topics resets the rail rather than carrying one topic's expansion onto the
+    // next; `data-rd-topic-activity` keeps reporting the payload's own count, so capping what is shown
+    // never changes what the page says there is.
+    const railActivity = selectedDetails?.activity ?? [];
+    const railAll = railAllFor !== null && railAllFor === selectedEntry?.topic.id;
+    const railShown = railAll ? railActivity : railActivity.slice(0, RAIL_ACTIVITY_LEAD);
+    const railHidden = railActivity.length - railShown.length;
     // Before the detail lands, the overview's own axes stand in: the pane is never empty, and the
     // current/completed split appears as soon as the detail that can answer it arrives.
     const currentAxes: Array<AxisDetail | AxisOverview> = (
@@ -3973,6 +4112,10 @@ export function apply(ctx: Context) {
 
         {view === "topics" ? (
           <div className="rd-split" data-rd-view="topics">
+            {/* §7 — the shell title stays (the toolbar's "Research overview") and the view names itself:
+                a reader landing here, or arriving from a tag, can see which view this page is without
+                inferring it from which toolbar button is pressed. */}
+            <ViewHeading view="topics" />
             {/* C1 — the prototype's composition: a compact index rail, and ONE persistent detail. The
                 index carries the server's order unreranked; the only client state is which topic is
                 selected. There is no disclosure control, so the detail is never "closed". */}
@@ -4194,8 +4337,9 @@ export function apply(ctx: Context) {
                         data-rd-topic-activity={
                           selectedDetails?.activity.length ?? selectedEntry.activityCount
                         }
+                        data-rd-topic-activity-shown={railShown.length}
                       >
-                        {(selectedDetails?.activity ?? []).map((item) => (
+                        {railShown.map((item) => (
                           <ActivityLine
                             axisLabel={
                               selectedDetails?.axes.find(
@@ -4220,6 +4364,32 @@ export function apply(ctx: Context) {
                           <li className="rd-muted">Loading this topic…</li>
                         ) : null}
                       </ul>
+                      {/* The rail's remainder, stated — the same treatment the Progress feed uses, so the
+                          reader is told how many there are and can have them in one click. It governs the
+                          rail's own window, not the topic: the topic is already open. */}
+                      {railHidden > 0 || railAll ? (
+                        <div
+                          className="rd-cluster"
+                          data-rd-topic-activity-more={String(railHidden)}
+                        >
+                          <span className="rd-meta" data-rd-topic-activity-note="true">
+                            {railAll
+                              ? `all ${railActivity.length} shown, newest first`
+                              : `${railShown.length} of ${railActivity.length} shown, newest first`}
+                          </span>
+                          <Button
+                            onClick={() => {
+                              setRailAllFor(
+                                railAll ? null : (selectedEntry?.topic.id ?? null)
+                              );
+                            }}
+                            size="sm"
+                            variant="ghost"
+                          >
+                            {railAll ? "Show fewer" : `Show all ${railActivity.length}`}
+                          </Button>
+                        </div>
+                      ) : null}
                       {selectedDetails ? (
                         // The write path stays (this is a composition-only unit), but it is not the
                         // rail's lede: it sits behind a compact disclosure so the rail reads as

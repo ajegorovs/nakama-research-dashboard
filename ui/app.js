@@ -51,6 +51,12 @@ var VIEW_OPTIONS = [
   { label: "Repositories", value: "repositories" },
   { label: "Progress", value: "progress" }
 ];
+var VIEW_HEADINGS = {
+  people: "Recent activity is factual, not a workload score",
+  progress: "Problem first; execution detail beneath it",
+  repositories: "Most recently active first",
+  topics: "Most recently active first · primarily read-only"
+};
 var ENTITY_VIEW = {
   axis: "progress",
   person: "people",
@@ -63,6 +69,7 @@ var PROGRESS_INDEX_OPTIONS = [
   { label: "Problems", value: "problems" }
 ];
 var FEED_LEAD = 12;
+var RAIL_ACTIVITY_LEAD = 4;
 var css = `
 /*
  * One small vocabulary for type, spacing and quietness. The rules below used to carry ten literal type
@@ -159,6 +166,60 @@ var css = `
 [data-plugin-id="research-dashboard"] .rd-axis-kind {
   font-size: var(--rd-label);
   letter-spacing: 0.04em;
+  opacity: var(--rd-quiet);
+}
+/* §7 — the view names itself, under the shell title that stays. Modest on purpose: the shell already
+   carries the page title, so this is the view's identity, not a second banner. The heading takes the whole
+   row: .rd-split is a *wrapping flex* row (not a grid), so the spanning declaration is flex: 0 0 100%
+   — grid-column alone was inert and let the index share the heading's line, which pushed the detail into
+   a second row and broke the "tops aligned" geometry. Both are declared so the rule survives a change of
+   layout mode. */
+[data-plugin-id="research-dashboard"] .rd-view-heading {
+  display: flex;
+  align-items: baseline;
+  flex: 0 0 100%;
+  gap: var(--rd-gap-block);
+  grid-column: 1 / -1;
+}
+[data-plugin-id="research-dashboard"] .rd-view-title {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+/* The axis row in the detail reads in three levels rather than ten (the first C1 montage found ten
+   equal-weight lines, two of them the same fact twice). The reading is clamped so one verbose axis cannot
+   push the rest of the lane off the screen: the text is untouched and still in the DOM, so the pass reads
+   it exactly as before while the reader sees the hierarchy the prototype has. */
+[data-plugin-id="research-dashboard"] .rd-axis-reading {
+  display: grid;
+  gap: var(--rd-gap-tight);
+  margin: 2px 0 0;
+}
+[data-plugin-id="research-dashboard"] .rd-axis-reading .rd-claim-value {
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  display: -webkit-box;
+  overflow: hidden;
+}
+[data-plugin-id="research-dashboard"] .rd-axis-refs {
+  display: grid;
+  gap: var(--rd-gap-tight);
+}
+/* The detail the reading does not need: what the axis is for, and the second half of the state claim.
+   One disclosure per axis, the same shape the rail's own writes use. */
+[data-plugin-id="research-dashboard"] .rd-axis-more > summary {
+  cursor: pointer;
+  font-size: var(--rd-label);
+  opacity: var(--rd-quiet);
+}
+[data-plugin-id="research-dashboard"] .rd-axis-more[open] > summary {
+  margin-bottom: var(--rd-gap-tight);
+}
+/* The controls stay reachable and stop competing with the reading: History and Correct are capabilities,
+   not content, so they read as quiet text until used. */
+[data-plugin-id="research-dashboard"] .rd-axis-controls {
+  font-size: var(--rd-label);
   opacity: var(--rd-quiet);
 }
 [data-plugin-id="research-dashboard"] .rd-axis-secondary {
@@ -519,6 +580,21 @@ var css = `
   display: grid;
   gap: var(--rd-gap-row);
 }
+/* The rail is context, not a feed. Measured at 1440×900 on the corpus: the rail begins 385px down the page
+   and has ~515px to the fold, while four of the 25 events already occupy 664px (166px per event, because
+   the summary wraps at rail width and every event names its entities). So a count cap alone cannot put
+   Notes and Related repositories in the first screen at any lead that still carries real data. The two
+   lists are therefore *windows*: bounded, scrollable, and with the count and the remainder still stated
+   below each one. Nothing is dropped, nothing is truncated, and the three cards participate in the first
+   screen whatever the data volume. */
+[data-plugin-id="research-dashboard"] .rd-side-card .rd-activity {
+  max-height: 190px;
+  overflow-y: auto;
+}
+[data-plugin-id="research-dashboard"] .rd-side-card .rd-notes {
+  max-height: 120px;
+  overflow-y: auto;
+}
 [data-plugin-id="research-dashboard"] .rd-side-title {
   font-size: var(--rd-meta);
   font-weight: 600;
@@ -877,6 +953,18 @@ function apply(ctx) {
       type: "problem"
     }) : null));
   }
+  function ViewHeading({ view }) {
+    const hint = VIEW_HEADINGS[view];
+    return /* @__PURE__ */ React.createElement("div", {
+      className: "rd-view-heading",
+      "data-rd-view-heading": view
+    }, /* @__PURE__ */ React.createElement("h3", {
+      className: "rd-view-title",
+      "data-rd-view-title": view
+    }, VIEW_OPTIONS.find((option) => option.value === view)?.label ?? view), hint ? /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, hint) : null);
+  }
   function Notice({
     attrs,
     children,
@@ -969,30 +1057,9 @@ function apply(ctx) {
       type: "axis"
     }), /* @__PURE__ */ React.createElement("span", {
       className: "rd-axis-kind"
-    }, axis.kind, " · v", axis.version)), line || axis.description || axis.people.length > 0 || axis.repositories.length > 0 ? /* @__PURE__ */ React.createElement("p", {
-      className: "rd-axis-secondary"
-    }, /* @__PURE__ */ React.createElement("span", {
-      className: "rd-cluster rd-tags"
-    }, axis.repositories.map((repository) => /* @__PURE__ */ React.createElement(EntityTag, {
-      compact: true,
-      id: repository.id,
-      key: repository.id,
-      label: repository.fullName,
-      onOpen: onOpenEntity,
-      type: "repository"
-    })), axis.people.map((person) => /* @__PURE__ */ React.createElement(EntityTag, {
-      compact: true,
-      id: person.id,
-      key: person.id,
-      label: person.displayName,
-      onOpen: onOpenEntity,
-      type: "person"
-    })), line ? /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta"
-    }, line) : null, axis.description ? /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta"
-    }, axis.description) : null)) : null, /* @__PURE__ */ React.createElement("div", {
-      className: "rd-claim"
+    }, axis.kind, " · v", axis.version)), /* @__PURE__ */ React.createElement("p", {
+      className: "rd-axis-reading",
+      "data-rd-axis-reading": axis.id
     }, /* @__PURE__ */ React.createElement("span", {
       className: "rd-claim-value",
       "data-rd-claim": "current_state"
@@ -1012,6 +1079,34 @@ function apply(ctx) {
     }, "Blocker: ", axis.blocker), /* @__PURE__ */ React.createElement(ConfidenceBadge, {
       value: axis.blockerConfidence
     })) : null, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-axis-secondary rd-axis-refs"
+    }, line || axis.people.length > 0 || axis.repositories.length > 0 ? /* @__PURE__ */ React.createElement("span", {
+      className: "rd-cluster rd-tags"
+    }, axis.repositories.map((repository) => /* @__PURE__ */ React.createElement(EntityTag, {
+      compact: true,
+      id: repository.id,
+      key: repository.id,
+      label: repository.fullName,
+      onOpen: onOpenEntity,
+      type: "repository"
+    })), axis.people.map((person) => /* @__PURE__ */ React.createElement(EntityTag, {
+      compact: true,
+      id: person.id,
+      key: person.id,
+      label: person.displayName,
+      onOpen: onOpenEntity,
+      type: "person"
+    })), line ? /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, line) : null) : null, /* @__PURE__ */ React.createElement(EvidenceLine, {
+      evidence: axis.evidence
+    })), /* @__PURE__ */ React.createElement("details", {
+      className: "rd-axis-more",
+      "data-rd-axis-more": axis.id
+    }, /* @__PURE__ */ React.createElement("summary", null, "More on this axis"), axis.description ? /* @__PURE__ */ React.createElement("p", {
+      className: "rd-axis-secondary",
+      "data-rd-axis-description": "true"
+    }, axis.description) : null, /* @__PURE__ */ React.createElement("div", {
       className: "rd-cluster"
     }, /* @__PURE__ */ React.createElement("span", {
       className: "rd-muted"
@@ -1019,16 +1114,14 @@ function apply(ctx) {
       value: axis.stateConfidence
     }), axis.lastReviewedAt ? /* @__PURE__ */ React.createElement("span", {
       className: "rd-muted"
-    }, "last reviewed ", axis.lastReviewedAt.slice(0, 10)) : null), /* @__PURE__ */ React.createElement(EvidenceLine, {
-      evidence: axis.evidence
-    }), /* @__PURE__ */ React.createElement("div", {
-      className: "rd-cluster"
+    }, "last reviewed ", axis.lastReviewedAt.slice(0, 10)) : null)), /* @__PURE__ */ React.createElement("div", {
+      className: "rd-cluster rd-axis-controls"
     }, /* @__PURE__ */ React.createElement(Button, {
       "data-rd-history-toggle": axis.id,
       disabled: busy,
       onClick: onToggleHistory,
       size: "sm",
-      variant: "outline"
+      variant: "ghost"
     }, historyOpen ? "Hide history" : `History (${axis.history.length})`), /* @__PURE__ */ React.createElement(Button, {
       "data-rd-correct-toggle": axis.id,
       disabled: busy,
@@ -1040,7 +1133,7 @@ function apply(ctx) {
         onCorrection(draftFrom(axis));
       },
       size: "sm",
-      variant: correcting ? "default" : "outline"
+      variant: correcting ? "default" : "ghost"
     }, correcting ? "Cancel" : "Correct")), historyOpen ? /* @__PURE__ */ React.createElement(AxisHistory, {
       axis
     }) : null, correcting && correction ? /* @__PURE__ */ React.createElement("div", {
@@ -1328,7 +1421,9 @@ function apply(ctx) {
     return /* @__PURE__ */ React.createElement("div", {
       className: "rd-split",
       "data-rd-view": "people"
-    }, /* @__PURE__ */ React.createElement("ul", {
+    }, /* @__PURE__ */ React.createElement(ViewHeading, {
+      view: "people"
+    }), /* @__PURE__ */ React.createElement("ul", {
       className: "rd-index",
       "data-rd-people": people.length,
       "data-rd-people-truncated": truncated
@@ -1373,7 +1468,9 @@ function apply(ctx) {
     return /* @__PURE__ */ React.createElement("div", {
       className: "rd-split",
       "data-rd-view": "repositories"
-    }, /* @__PURE__ */ React.createElement("ul", {
+    }, /* @__PURE__ */ React.createElement(ViewHeading, {
+      view: "repositories"
+    }), /* @__PURE__ */ React.createElement("ul", {
       className: "rd-index",
       "data-rd-repositories": repositories.length,
       "data-rd-repositories-truncated": truncated
@@ -1583,7 +1680,9 @@ function apply(ctx) {
     return /* @__PURE__ */ React.createElement("div", {
       className: "rd-stack",
       "data-rd-view": "progress"
-    }, /* @__PURE__ */ React.createElement("div", {
+    }, /* @__PURE__ */ React.createElement(ViewHeading, {
+      view: "progress"
+    }), /* @__PURE__ */ React.createElement("div", {
       "aria-label": "Progress index",
       className: "rd-cluster rd-progress-switch",
       "data-rd-progress-switch": "true",
@@ -2005,6 +2104,7 @@ function apply(ctx) {
     const [progress, setProgress] = React.useState(null);
     const [correction, setCorrection] = React.useState(null);
     const [historyAxisId, setHistoryAxisId] = React.useState(null);
+    const [railAllFor, setRailAllFor] = React.useState(null);
     const [topicNote, setTopicNote] = React.useState("");
     const [conflict, setConflict] = React.useState(null);
     const [activitySummary, setActivitySummary] = React.useState("");
@@ -2191,6 +2291,10 @@ function apply(ctx) {
     }, [topics, expandedId]);
     const selectedEntry = topics.find((entry) => entry.topic.id === expandedId) ?? topics[0] ?? null;
     const selectedDetails = selectedEntry && detail && detail.topic.id === selectedEntry.topic.id ? detail : null;
+    const railActivity = selectedDetails?.activity ?? [];
+    const railAll = railAllFor !== null && railAllFor === selectedEntry?.topic.id;
+    const railShown = railAll ? railActivity : railActivity.slice(0, RAIL_ACTIVITY_LEAD);
+    const railHidden = railActivity.length - railShown.length;
     const currentAxes = (selectedDetails ? selectedDetails.axes : selectedEntry?.axes ?? []).filter((axis) => axis.state !== "completed" && axis.state !== "abandoned");
     const foldedAxes = selectedDetails ? selectedDetails.axes.filter((axis) => axis.state === "completed" || axis.state === "abandoned") : [];
     return /* @__PURE__ */ React.createElement("div", {
@@ -2251,7 +2355,9 @@ function apply(ctx) {
     ].join(" · ") : "loading…")), view === "topics" ? /* @__PURE__ */ React.createElement("div", {
       className: "rd-split",
       "data-rd-view": "topics"
-    }, /* @__PURE__ */ React.createElement("ul", {
+    }, /* @__PURE__ */ React.createElement(ViewHeading, {
+      view: "topics"
+    }), /* @__PURE__ */ React.createElement("ul", {
       "aria-label": "Topics",
       className: "rd-index rd-topic-index",
       "data-rd-topic-index": topics.length
@@ -2415,8 +2521,9 @@ function apply(ctx) {
       className: "rd-side-title"
     }, "Recent activity"), /* @__PURE__ */ React.createElement("ul", {
       className: "rd-activity",
-      "data-rd-topic-activity": selectedDetails?.activity.length ?? selectedEntry.activityCount
-    }, (selectedDetails?.activity ?? []).map((item) => /* @__PURE__ */ React.createElement(ActivityLine, {
+      "data-rd-topic-activity": selectedDetails?.activity.length ?? selectedEntry.activityCount,
+      "data-rd-topic-activity-shown": railShown.length
+    }, railShown.map((item) => /* @__PURE__ */ React.createElement(ActivityLine, {
       axisLabel: selectedDetails?.axes.find((axis) => axis.id === item.axisId)?.title ?? null,
       item,
       key: item.id,
@@ -2427,7 +2534,19 @@ function apply(ctx) {
       className: "rd-muted"
     }, "No activity recorded yet.") : null, !selectedDetails ? /* @__PURE__ */ React.createElement("li", {
       className: "rd-muted"
-    }, "Loading this topic…") : null), selectedDetails ? /* @__PURE__ */ React.createElement("details", {
+    }, "Loading this topic…") : null), railHidden > 0 || railAll ? /* @__PURE__ */ React.createElement("div", {
+      className: "rd-cluster",
+      "data-rd-topic-activity-more": String(railHidden)
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta",
+      "data-rd-topic-activity-note": "true"
+    }, railAll ? `all ${railActivity.length} shown, newest first` : `${railShown.length} of ${railActivity.length} shown, newest first`), /* @__PURE__ */ React.createElement(Button, {
+      onClick: () => {
+        setRailAllFor(railAll ? null : selectedEntry?.topic.id ?? null);
+      },
+      size: "sm",
+      variant: "ghost"
+    }, railAll ? "Show fewer" : `Show all ${railActivity.length}`)) : null, selectedDetails ? /* @__PURE__ */ React.createElement("details", {
       className: "rd-narrow-write",
       "data-rd-write": "activity"
     }, /* @__PURE__ */ React.createElement("summary", null, "Record activity"), /* @__PURE__ */ React.createElement("form", {

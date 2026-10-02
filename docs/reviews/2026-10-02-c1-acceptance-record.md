@@ -118,6 +118,150 @@ nothing, and a missing helper exits 2 with a sentence. The montages in
 `topics.png` is the first one whose bottom half is a real rendering of the running UI. Whether it
 matches the prototype is the reviewer's call, not this record's.
 
+## C1 refinement pass — information hierarchy (2026-10-02)
+
+The reviewer's verdict on the first verified montage: **macro-composition passed** — ignoring the host's
+chrome, the running page reads as *topic index → selected topic detail → Current Work + side rail*, which
+was not true before C1 — with **one narrow refinement required** before the grammar propagates into C2, and
+no redesign: the page's anatomy is correct, and what remained was an information-hierarchy mismatch inside
+the detail. Three items, all in `src/ui.tsx`, no backend change:
+
+1. **a missing per-view heading.** §7 decided on both: the shell title stays *and* each view names itself,
+   and the prototype carries a `Topics` heading with a one-line hint. The running page had only the shell
+   title, leaving the view's identity to the pressed toolbar button.
+2. **Current Work rows too dense at the default reading surface.** The prototype's axis row is state → bold
+   axis name → one concise reading → one quiet reference line; the montage's rows showed ten equal-weight
+   lines, several of them the same fact twice (confidence in the badge *and* in the state cluster, a
+   description *and* a current-state reading competing at the same level).
+3. **the Recent activity rail dominating vertically**, so Notes and Related repositories — the rest of the
+   topic's context — never reached the first screen at the reference reading size: structurally a rail,
+   visually a feed.
+
+### What changed, and what was measured rather than assumed
+
+**§7, in all four views.** Each view renders its own name and the prototype's own hint above the layout it
+governs (`ViewHeading`, `data-rd-view-heading` / `data-rd-view-title`); the shell title is untouched. The
+heading spans its row — and here the layout's actual mode mattered: `.rd-split` is a **wrapping flex row, not
+a grid**, so the `grid-column: 1 / -1` written first was inert, the heading shared the index's line, and the
+detail was pushed into a second row. The existing "tops aligned" geometry check caught it (rail 154, detail
+226); the declaration is `flex: 0 0 100%`, with `grid-column` kept for safety. Both headings then measure as
+intended: the heading occupies 154–175, the index and the detail both top at 187.
+
+**The axis row reads in three levels.** Scan line (state badge + title + kind·v) → the reading, clamped to
+two lines, carrying its own confidence → one quiet reference line (entity tags, where the work lives, the
+evidence line). The description, the second confidence cluster and "last reviewed" sit behind one disclosure
+per axis (`details[data-rd-axis-more]`); History and Correct remain in the row as quiet text controls, so the
+write path is one click away and never hidden. Measured on the running page at 1440×900: **5 rendered blocks
+per axis** — head 22px, reading 62px, reference line 47–88px, disclosure 17px collapsed, controls 28px —
+against the ten equal-weight lines the montage showed. Opening the disclosure grows it from 17px to 74px to
+hold a 35px description, so the collapsed height is the summary and nothing else.
+
+Nothing was removed to achieve that, and the check is what proves it: every axis's rendered reading and its
+disclosure's description are compared **verbatim against `get_topic`'s own response** (whitespace normalised),
+so the screen cannot quietly drift from the payload it claims to show.
+
+**The rail is bounded, and here the reviewer's stated count cap was not sufficient — measured, not argued.**
+The rail now leads with the newest four events and states the rest with the treatment the Progress feed
+already uses ("4 of 25 shown, newest first" + `Show all 25`, and back). But capping the *count* does not bound
+the *height* at this data volume: the corpus's activity rows measure **166px each** (a two-line summary plus a
+two-to-three-line tag row), so four of them occupy **664px** of the rail's **~515px** first-screen budget —
+Notes and Related repositories would still have fallen below the fold, which was the actual goal. The rail's
+two lists are therefore bounded windows (activity 190px, notes 120px, each scrollable, nothing truncated and
+nothing dropped), and the remainder treatment stays as the reader's route to the whole list. Measured result
+at 1440×900: the three cards begin at **385 / 659 / 875 of 900** — activity, Notes whole, Related
+repositories from its title down. If the reviewer prefers the count cap alone, the numbers above are why it
+does not reach the stated goal, and the per-event line — not the cap — is what would have to shrink.
+
+### The claims are executable, not just rendered
+
+Ten checks were added (both read passes and the write pass therefore report ten more apiece):
+
+| check | asserts |
+|---|---|
+| §7, the topics view | view heading `Topics` *and* the shell title `Research overview`, both present |
+| §7, all four views | read from the grammar traversal's own snapshots, so the heading cannot be true only on the view the pass opened with |
+| the rail leads with the newest few | 4 of 25 shown, remainder attribute 21, the note naming the total |
+| the remainder is one control away | 4 rows → 25, and the total the rail reports is unchanged by showing them |
+| the rail returns to its lead | 4 rows shown again, so later measurements and screenshots are of the default |
+| the three cards in the first screen | card tops < the viewport height at 1440×900; **skipped elsewhere with the reason**, which is why the 1280×800 record reports one more skip than 1440×900 |
+| each axis reads in three levels | ≤5 rendered blocks (6 with a blocker), reading, evidence and the state claim all rendered |
+| the rest is behind one disclosure | the description is inside the disclosure, once, and the collapsed box is summary-height |
+| the disclosure opens onto it | `open`, and the box grows by the description it holds |
+| the reading and detail are the payload's words | verbatim against `get_topic`, per axis |
+
+### Records on this build
+
+Revision **442**, `0.2.0+dev.aed4d024c37e`, served asset sha256
+`e289d9d8f4ad3b8cb5ea4fd032f07d2976f37ec23718e03eae888364759e4e76` (= repo `ui/app.js`), one served build
+throughout:
+
+| record | result |
+|---|---|
+| corpus 1440×900 | **115 pass · 0 fail · 23 skip** |
+| corpus 1280×800 | **114 pass · 0 fail · 24 skip** |
+| corpus 1440×900 `--write` | **127 pass · 0 fail · 23 skip** |
+
+The write pass is the one that matters most for this pass's changes, and it holds: *"the correction lands with
+its note, and the note is what backs the claim — state parked, evidence true, note kept: true"* — the
+correction flow still works with the axis row restructured and the controls demoted. Both guards are
+untouched: the render gate at `ui.tsx:3890` and the ≥1.25× main-lane dominance (that geometry check passes
+unchanged).
+
+**The fixture pair was not re-run on this build**, and this record does not claim it. The fixture records need
+the second instance's own web origin (the dashboard on 3003 proxies the corpus on 4399) and the plugin
+installed at this revision into that instance; the pair standing in this document from revision 410 remains
+the fixture evidence, labelled by its build. That is the one gap between this pass and a five-record set.
+
+### Instrument faults these runs found — two of them mine
+
+The first 1280×800 attempt **aborted**, and the cause was not composition:
+
+* **The instance, not the page:** `SQLiteError: database is locked` made the action answer HTTP 500 three
+  times (16:46:59, 16:47:06, 16:48:12 in the instance log). The page rendered its own banner — *"An unexpected
+  server error occurred."* — in its header, `get_topic` never answered, and the detail never landed. The
+  re-run on the same build passed with **114 · 0 · 24**. Reported, not fixed: the plugin host runs actions as
+  subprocesses and the store does not serialise them, and WAL is not enabled on the plugin's SQLite file.
+* **My check read a fallback as if it were the truth.** While the pane is up but its detail has not arrived,
+  the rail's total attribute falls back to the index row's own count — **504** on this topic against the
+  detail's **25** — so a load failure first read here as "0 of 504 shown", a composition fault where the truth
+  was a read that had not arrived. The rail's checks now wait on the rail's own list (not the pane) and read
+  the rail, the same discipline the note affordance's check already used.
+* **My check clicked a control that was not rendered**, and a Playwright click on a missing control does not
+  fail the check — it aborts the whole pass after a 30s locator timeout, which cost a whole run. Every
+  interaction now asserts its control exists first; a truncated rail with no control for the rest is a
+  recorded FAIL, and a detail that never lands is one FAIL naming the banner plus two skips carrying the same
+  reason. An aborted run is a lost record; a named failure is evidence.
+* **Chromium boxes content inside a *closed* `<details>`** (content-visibility, not `display: none`), so a
+  `getBoundingClientRect()` is not a visibility test there. The disclosure check therefore measures the
+  collapsed box against its summary height and asserts DOM containment, instead of testing a rect for zero.
+* **A bracket of mine failed once and has passed three times since** — *"the tag traversal wrote nothing … writes
+  0 -> 0; payload CHANGED"*. It is not isolated: I have no diff from the failing run, only from a probe whose
+  difference was the response envelope's own `invocationId` (which the harness strips, so that probe did not
+  explain the harness's failure). The bracket now reads the projection **twice back to back** at the baseline
+  and reports the **first differing byte with 60 bytes of context** — so a recurrence says whether the
+  traversal or the read itself is responsible. Recorded as an open instrument-stability question, not as a
+  resolved one.
+
+### The montage
+
+The store was wiped to zero rows and the corpus replayed before the capture, because the write pass leaves
+residue that would have made the montage *misleading* rather than merely different: it creates its own topic
+(the store held **2 topics and 4 axes**, not the corpus's 1 and 3) and it corrects an axis, so the Current Work
+lane would have shown a **parked** axis where the composition must show the **inferred active** state — the
+qualification (C8) is part of what the montage is for. `replay-corpus.mjs` refuses to seed a second copy of an
+existing topic by design, which is why the wipe is the documented route (README, "Run the acceptance pass").
+`docs/ux-v2/fidelity/side-by-side/topics.png` and its siblings are regenerated from this capture at revision
+442; the caption names the served revision and version. Whether the refinement closes the fidelity question is
+the reviewer's call, not this record's — and no capture pipeline is evidence of composition on its own.
+
+### Not changed, deliberately
+
+`--rd-gap: var(--rd-gap)` in the theme's spacing vocabulary is self-referential, so every `gap: var(--rd-gap)`
+declaration (about twenty rules) is dropped and those rows sit tighter than designed. Repairing it moves
+spacing page-wide and would move every geometry figure in the accepted C1 records, so it is **reported here,
+not changed** inside this pass; the rules added by this pass use `--rd-gap-block` and `--rd-gap-tight`, which
+resolve.
+
 ## Hygiene
 
 The throwaway `RD_DIAG` instrumentation is **removed** from the tree, not committed: the page-side
