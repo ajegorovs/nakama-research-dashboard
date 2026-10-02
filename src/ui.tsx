@@ -797,17 +797,8 @@ const css = `
    the toolbar — the page it governs is the same page in both positions. */
 [data-plugin-id="research-dashboard"] .rd-progress-switch { margin-bottom: 10px; }
 [data-plugin-id="research-dashboard"] .rd-progress-switch [aria-pressed="true"] { font-weight: 600; }
-/* C7: the progress timeline — filters on one line, each axis a labelled rail. */
-[data-plugin-id="research-dashboard"] .rd-filters { flex-wrap: wrap; gap: var(--rd-gap); }
 /* C8: the qualifier on a state is part of the claim, not decoration — quieter, never optional. */
 [data-plugin-id="research-dashboard"] .rd-claim-suffix { font-weight: 400; opacity: var(--rd-quiet); }
-[data-plugin-id="research-dashboard"] .rd-timeline-axis {
-  border-left: var(--rd-rule);
-  display: grid;
-  gap: var(--rd-gap-tight);
-  padding-left: 10px;
-}
-[data-plugin-id="research-dashboard"] .rd-timeline-axis .rd-activity li { display: grid; gap: var(--rd-gap-row); }
 [data-plugin-id="research-dashboard"] .rd-newtopic { flex-wrap: nowrap; }
 [data-plugin-id="research-dashboard"] .rd-newtopic input { width: 18rem; }
 [data-plugin-id="research-dashboard"] .rd-activity { display: grid; gap: var(--rd-gap); margin: 0; padding: 0; list-style: none; }
@@ -2929,50 +2920,10 @@ export function apply(ctx: Context) {
     );
   }
 
-  /** One filter control. "All …" is the default and means "no filter" — a sentinel, not an empty value. */
-  function FilterSelect({
-    label,
-    onChange,
-    options,
-    value,
-  }: {
-    label: string;
-    onChange: (next: string) => void;
-    options: Array<{ label: string; value: string }>;
-    value: string;
-  }) {
-    return (
-      <Select
-        onValueChange={(next: string | null) => {
-          if (next !== null) {
-            onChange(String(next));
-          }
-        }}
-        value={value}
-      >
-        <SelectTrigger aria-label={label}>
-          <SelectValue>
-            {options.find((option) => option.value === value)?.label ?? value}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent>
-          {options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    );
-  }
-
   /**
-   * The time view (C7): what changed inside the window, grouped topic → axis, newest topic first.
-   *
-   * Grouped rather than one flat log, because "what moved in the last two weeks across six concurrent
-   * axes" is only readable when the events keep their axis. Every filter is applied to the payload the
-   * page already holds — no re-query, no new call — and the two *context* filters (topic, repository)
-   * read the axis, which is exactly how an event that named only its axis still filters correctly.
+   * The progress view: the axis/problem index on the left, the selected subject's own reading on the right —
+   * Problem beside Activity on top, Plan beside Open problems beneath, then the support band. One dominant
+   * interpretation of the selected subject, and the window's totals stated rather than listed beneath it.
    */
   /**
    * The two counts the projection carries, phrased. Not a computation: `problems` and `openProblems` are the
