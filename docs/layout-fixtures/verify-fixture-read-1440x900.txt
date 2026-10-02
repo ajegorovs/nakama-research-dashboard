@@ -1,6 +1,6 @@
 # harness/read-pass.sh — read pass · dataset fixture · viewport 1440x900
 # dashboard: http://127.0.0.1:3005
-# generated: 2026-10-02T18:16:30+03:00
+# generated: 2026-10-02T18:38:13+03:00
 
 PASS  login — status 200
 identity: expected fixture · 2 topic(s) (2 fixture-named) · 3 of 3 repository(ies) under fixture/ · observed fixture markers only
@@ -86,6 +86,9 @@ PASS  switching back to Topics restores the topic view, with no residue from the
 PASS  the Progress view groups the window by topic → axis instead of one flat log — summary "Last 7 days · 8 events across 2 topics"; topics ["Layout fixture — second topic","Layout fixture — crowded card"]; rails ["Fixture: second-topic axis (two people, one unmapped)","Fixture: blocked axis (blocked + blocker text)","Fixture: active axis (with evidence)","Fixture: parked axis (inferred state)","Fixture: completed axis"]
 PASS  an event recorded against an axis alone still lands under the right topic and its own axis — rails matched 5/6; looked for a 2026-10-01 event; events ["2026-10-01 Second topic, so the People view has a person with two involvements. manual not","2026-09-29 Blocked on the vendor's firmware window; nothing to record until it lands. manu","2026-10-01 Fixture E: logged the rig-floor comparison sheet as the artifact both rigs are "]
 progress screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/layout-fixtures/screenshots/1440x900/research-dashboard-read-progress.png
+PASS  C4: every Progress index row states when it was last active, and its recency is the payload's own — 7 axis row(s) — [{"context":"active · Layout fixture — crowded card · 2 open of 3 · last activity today","id":"71aab9cb-ef72-4a5a-943c-2c9480766553","recency":"2026-10-02T15:03:53.314Z","expected":"2026-10-02T15:03:53.314Z"},{"context":"parked · inferred · Layout fixture — crowded card · no problems · last activity today","id":"6387d5be-a930-4776-a896-543c82016ec8","recency":"2026-10-02T15:03:52.192Z","expected":"2026-10-02T15:03:52.192Z"}]
+PASS  C4: the Problems subject states when too — a row's recency is the payload's own — 3 problem row(s) — [{"context":"Fixture: active axis (with evidence) · Layout fixture — crowded card · no repository · 0 events · last activity today","id":"000a174b-5922-4592-af6f-2a59c274e13b","recency":"2026-10-02T15:03:52.623Z","expected":"2026-10-02T15:03:52.623Z"},{"context":"Fixture: active axis (with evidence) · Layout fixture — crowded card · no repository · 0 events · last activity today","id":"0ee250c1-004e-4e79-b2e9-754e86a4243f","recency":"2026-10-02T15:03:52.096Z","expected":"2026-10-02T15:03:52.096Z"}]
+PASS  C4: the subject switch stays client-side, and leaves the index back where it started — mode axes, axes 7 (was 7)
 PASS  the Progress index is the projection for the current window — replaced on change, not extended — matched the projection at 30 and 7 days (7d restored)
 PASS  the get_progress payload carries all three halves the page reads (axes, problems, activity) — 3 halves · axes 7 · problems 3 · activity 5
 PASS  the Progress top area shows the index, the Problem column and the Activity feed side by side — index {"h":756,"w":256,"x":320,"y":181}, problem {"h":165,"w":469,"x":588,"y":181}, feed {"h":542,"w":347,"x":1069,"y":181}

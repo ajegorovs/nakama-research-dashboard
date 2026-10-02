@@ -3325,6 +3325,9 @@ export function apply(ctx: Context) {
                     data-rd-problem-index-axis={problem.axisId}
                     data-rd-problem-index-state={problem.state}
                     data-rd-problem-index-topic={problem.topicName}
+                    /* The raw value the context line phrases — carried so the pass can compare the phrase's
+                       source against `get_progress` instead of trusting the phrase (the C2 technique). */
+                    data-rd-problem-index-recency={problem.recencyAt ?? ""}
                     onClick={() => {
                       setSelectedProblemId(problem.id);
                       setSelectedAxisId(problem.axisId);
@@ -3364,6 +3367,8 @@ export function apply(ctx: Context) {
                   data-rd-index-stale={row.stale}
                   data-rd-index-state={row.state}
                   data-rd-index-topic={row.topicName}
+                  /* As on the problem index: the raw `recencyAt` behind `last activity …`, for the pass. */
+                  data-rd-index-recency={row.recencyAt ?? ""}
                   onClick={() => setSelectedAxisId(row.id)}
                   type="button"
                 >

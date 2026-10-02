@@ -2264,6 +2264,83 @@ const apiProgress = (days) =>
     [PLUGIN_ID, days]
   );
 
+// ---- C4 INCREMENT 1: the Progress index states *when*, in both subjects, and the when is the payload's -----
+// The discipline C2 applied to the person index, applied here: the row carries the raw value its context line
+// phrases, so the check compares the phrase's *source* against the projection the page itself read instead of
+// trusting the phrase. Both subjects are read, because a reader who switches to `Problems` must get the same
+// three answers (which one, what it is on, when it was last active) from a row. The switch is client-side by
+// design — it issues no query — so reading it here cannot disturb the call accounting later in the pass, and
+// the reader's position is put back.
+const readProgressIndexRows = () =>
+  page.evaluate(() => {
+    const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+    const read = (selector, idAttr, recencyAttr) =>
+      [...(scope?.querySelectorAll(selector) ?? [])].map((row) => ({
+        context: (row.querySelector(".rd-meta")?.textContent ?? "").trim(),
+        id: row.getAttribute(idAttr) ?? "",
+        recency: row.getAttribute(recencyAttr) ?? null,
+      }));
+    const index = scope?.querySelector("[data-rd-progress-index]");
+    return {
+      axes: read("[data-rd-index-axis]", "data-rd-index-axis", "data-rd-index-recency"),
+      mode: index?.getAttribute("data-rd-progress-index-mode") ?? "",
+      problems: read("[data-rd-problem-index]", "data-rd-problem-index", "data-rd-problem-index-recency"),
+      window: Number(index?.getAttribute("data-rd-progress-index-window") ?? 0),
+    };
+  });
+const clickProgressSubject = (wanted) =>
+  page.evaluate((mode) => {
+    const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+    const option = scope?.querySelector(`[data-rd-progress-subview-option="${mode}"]`);
+    option?.click();
+    return Boolean(option);
+  }, wanted);
+
+const progressAxesSubject = await readProgressIndexRows();
+const progressProblemsSubject = (await clickProgressSubject("problems"))
+  ? await readProgressIndexRows()
+  : { axes: [], mode: "unavailable", problems: [], window: progressAxesSubject.window };
+const progressBackToAxes = (await clickProgressSubject("axes")) ? await readProgressIndexRows() : null;
+const progressProjection = await apiProgress(progressAxesSubject.window);
+const progressRecency = new Map([
+  ...(progressProjection?.axes?.axes ?? []).map((row) => [`axis:${row.id}`, row.recencyAt ?? ""]),
+  ...(progressProjection?.problems?.problems ?? []).map((row) => [`problem:${row.id}`, row.recencyAt ?? ""]),
+]);
+const progressRowParity = (rows, prefix) =>
+  rows.map((row) => ({ ...row, expected: progressRecency.get(`${prefix}:${row.id}`) ?? null }));
+const axisRowParity = progressRowParity(progressAxesSubject.axes, "axis");
+const problemRowParity = progressRowParity(progressProblemsSubject.problems, "problem");
+/** A row states when, and the when it states is the projection's own `recencyAt`. */
+const progressRowStatesWhen = (row) =>
+  row.context !== "" &&
+  row.context.includes("last activity") &&
+  row.recency !== null &&
+  row.recency === row.expected;
+check(
+  "C4: every Progress index row states when it was last active, and its recency is the payload's own",
+  axisRowParity.length > 0 && axisRowParity.every(progressRowStatesWhen),
+  `${axisRowParity.length} axis row(s) — ${JSON.stringify(axisRowParity.slice(0, 2))}`
+);
+if ((progressProjection?.problems?.problems ?? []).length === 0) {
+  skip(
+    "C4: the Problems subject states when too — a row's recency is the payload's own",
+    "the projection reports no problem in this window, so that subject has no row to state it for"
+  );
+} else {
+  check(
+    "C4: the Problems subject states when too — a row's recency is the payload's own",
+    problemRowParity.length > 0 && problemRowParity.every(progressRowStatesWhen),
+    `${problemRowParity.length} problem row(s) — ${JSON.stringify(problemRowParity.slice(0, 2))}`
+  );
+}
+check(
+  "C4: the subject switch stays client-side, and leaves the index back where it started",
+  progressBackToAxes !== null &&
+    progressBackToAxes.mode === "axes" &&
+    progressBackToAxes.axes.length === progressAxesSubject.axes.length,
+  `mode ${progressBackToAxes?.mode}, axes ${progressBackToAxes?.axes.length} (was ${progressAxesSubject.axes.length})`
+);
+
 /**
  * Any read action, with the same in-page credentials as `apiProgress`. Used where a section must compare the
  * DOM against the **projection the page reads** — the overview's rollups, for instance, which no other helper
