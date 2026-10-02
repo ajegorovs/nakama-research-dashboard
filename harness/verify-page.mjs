@@ -2563,22 +2563,12 @@ const selectAxis = async (axisId) => {
 // the default selection, so it keys on `axes[0]` on purpose — unlike the Problem-column check).
 const firstProjection = first ? projectionFor(allProgress, first.id) : null;
 
-// The composition itself: three regions on one row, in the contract's order, each with a real box.
-{
-  const { index: boxIndex, problem: boxProblem, feed: boxFeed } = top.boxes;
-  const placed = [boxIndex, boxProblem, boxFeed].every(Boolean);
-  const oneRow =
-    placed &&
-    Math.abs(boxIndex.y - boxProblem.y) < 48 &&
-    Math.abs(boxProblem.y - boxFeed.y) < 48 &&
-    boxIndex.x < boxProblem.x &&
-    boxProblem.x < boxFeed.x;
-  check(
-    "the Progress top area shows the index, the Problem column and the Activity feed side by side",
-    oneRow && boxProblem.w > 0 && boxFeed.w > 0 && boxIndex.w > 0,
-    `index ${JSON.stringify(boxIndex)}, problem ${JSON.stringify(boxProblem)}, feed ${JSON.stringify(boxFeed)}`
-  );
-}
+// Retired (C4 increment 2): this check read "the Progress top area shows the index, the Problem column and the
+// Activity feed side by side". It asserted the *previous* outer composition — three sibling columns — which the
+// ruling replaced with the index and ONE pane holding the Problem and its Activity as that pane's row 1. Its
+// subject no longer exists, and its purpose is covered more directly and more strictly by the C4 geometry
+// checks below, which measure the pane's containment, the header's place above both halves, and the Problem's
+// dominance over the Activity as page geometry rather than as a class layout.
 
 // The default selection is the projection's own first row — not a ranking the page invented.
 check(
@@ -2745,7 +2735,9 @@ const readPlan = () =>
 const planOf = (result, axisId) =>
   result.axes.axes.find((row) => row.id === axisId)?.plan ?? null;
 
-// (1) Below the composition, not a fourth column — and still on one row above it.
+// (1) In row 2 inside the pane, below the pair — not a fourth column beside it. Measured against the Problem
+// and the Activity rather than against the whole top row: the index is a column beside the pane, so its bottom
+// says nothing about where the pane's own rows begin.
 {
   const planned = allProgress.axes.axes.find((row) => planOf(allProgress, row.id) !== null) ?? null;
   if (!planned) {
@@ -2757,22 +2749,22 @@ const planOf = (result, axisId) =>
     await selectAxis(planned.id);
     const shown = await readPlan();
     const boxes = (await readTop()).boxes;
-    const rowBottom = Math.max(
-      ...[boxes.index, boxes.problem, boxes.feed].map((box) => (box?.y ?? 0) + (box?.h ?? 0))
+    const pairBottom = Math.max(
+      ...[boxes.problem, boxes.feed].map((box) => (box?.y ?? 0) + (box?.h ?? 0))
     );
     const expected = planOf(allProgress, planned.id);
     const titles = expected.steps.map((step) => step.title);
     check(
-      "the plan renders below the top row, from the projection, with no fourth column",
+      "the plan renders in row 2, below the Problem and the Activity, from the projection",
       shown.present &&
         shown.axis === planned.id &&
         shown.y !== null &&
-        shown.y >= rowBottom &&
+        shown.y >= pairBottom &&
         shown.steps.length === expected.steps.length &&
         shown.steps.every((step, position) => step.title === titles[position]) &&
         shown.summary === expected.summary.trim() &&
         shown.steps.every((step, position) => step.state === expected.steps[position].state),
-      `plan at y=${shown.y} vs row bottom ${rowBottom}; ${shown.steps.length} steps vs ${expected.steps.length}; titles ${JSON.stringify(shown.steps.map((s) => s.title))}`
+      `plan at y=${shown.y} vs the pair's bottom ${pairBottom}; ${shown.steps.length} steps vs ${expected.steps.length}; titles ${JSON.stringify(shown.steps.map((s) => s.title))}`
     );
     // (2) A position is rendered only where a step claims one — here the fixture's plan claims them, so the
     // numbers come from `position` and nothing is derived.
@@ -4066,6 +4058,19 @@ const planOf = (result, axisId) =>
 // A state is a claim, and the record often holds only an inference. Every rendered state must carry
 // its confidence, and one that is not confirmed must say so where it is read — otherwise the temporal
 // view launders an inference into a fact.
+// Read on the view that renders every axis with its own claim. The tag traversal above ends wherever its last
+// tag led, and the Progress index is the one surface that lists all axes — so the check navigates there rather
+// than inheriting whatever the traversal left mounted. That also makes it independent of the traversal's
+// ordering, which it previously was not: it could pass or fail on where an unrelated check happened to leave
+// the page.
+await root.locator('[data-rd-view-option="progress"]').click();
+await page
+  .waitForSelector('div[data-plugin-id] [data-rd-view="progress"] [data-rd-progress-index]', {
+    timeout: 10000,
+  })
+  .catch(() => {});
+await root.locator('[data-rd-progress-subview-option="axes"]').click();
+await page.waitForTimeout(200);
 const stateClaims = await page.evaluate(() => {
   const panel = document.querySelector('div[data-plugin-id="research-dashboard"]');
   const all = [...panel.querySelectorAll(".rd-state")];
@@ -4236,7 +4241,7 @@ const progressOrder = await page.evaluate(() => {
     return node ? Math.round(node.getBoundingClientRect().top) : null;
   };
   return {
-    band: top("[data-rd-progress-repositories]"),
+    band: top("[data-rd-progress-band]"),
     plan: top("[data-rd-progress-plan]"),
     problems: top("[data-rd-progress-problems]"),
     topRow: top("[data-rd-progress-top]"),
@@ -4270,6 +4275,216 @@ check(
       .join(" → ") || "none"
   }`
 );
+
+// ---------------------------------- C4 increment 2: the pane's own structure
+// The ruling on F2's follow-up: Progress must nest the way the prototype nests it — the index, then ONE pane
+// holding the selected subject's header and three grouped rows — rather than the index, the Problem and the
+// Activity standing as three sibling columns with every lower section as an independent full-width band. These
+// checks measure that structure itself: containment, order and relative width, read from the page's geometry
+// rather than from the class names, so a re-nesting that got the classes right and the layout wrong still fails.
+// Every clause about an optional section is conditional, because a subject short of material must collapse
+// honestly; the two that need two or three sections at once say so in the skip when the subject lacks them.
+// The composition is proved on a subject that has something to compose. An axis with no problem, no plan and no
+// support material renders the pane's empty state, and geometry checks run against it would measure nothing —
+// which is exactly how the previous Progress montage proved the wrong thing. Walk the index, count the optional
+// sections each axis renders, and leave the page on the one that renders the most: the same rule the fidelity
+// capture uses, measured from the DOM, so the checks and the montage cannot disagree about the subject.
+const SUPPORT_MARKERS = [
+  "[data-rd-progress-plan]",
+  "[data-rd-progress-problems]",
+  "[data-rd-progress-repositories]",
+  "[data-rd-progress-evidence]",
+  "[data-rd-progress-steering]",
+];
+const selectRichestAxis = async () => {
+  const axisIds = await page.evaluate(() =>
+    [...document.querySelectorAll('div[data-plugin-id="research-dashboard"] [data-rd-index-axis]')].map(
+      (node) => node.getAttribute("data-rd-index-axis")
+    )
+  );
+  let richest = { count: -1, id: null };
+  for (const id of axisIds) {
+    await root.locator(`[data-rd-index-axis="${id}"]`).click();
+    await page
+      .waitForFunction(
+        (axisId) =>
+          document
+            .querySelector('div[data-plugin-id="research-dashboard"] [data-rd-progress-detail]')
+            ?.getAttribute("data-rd-progress-detail-axis") === axisId,
+        id,
+        { timeout: 10000 }
+      )
+      .catch(() => {});
+    const count = await page.evaluate(
+      (markers) =>
+        markers.filter(
+          (marker) =>
+            document.querySelector(`div[data-plugin-id="research-dashboard"] ${marker}`) !== null
+        ).length,
+      SUPPORT_MARKERS
+    );
+    if (count > richest.count) {
+      richest = { count, id };
+    }
+  }
+  if (richest.id !== null) {
+    await root.locator(`[data-rd-index-axis="${richest.id}"]`).click();
+    await page
+      .waitForFunction(
+        (axisId) =>
+          document
+            .querySelector('div[data-plugin-id="research-dashboard"] [data-rd-progress-detail]')
+            ?.getAttribute("data-rd-progress-detail-axis") === axisId,
+        richest.id,
+        { timeout: 10000 }
+      )
+      .catch(() => {});
+  }
+  return richest;
+};
+// The pane is measured with the Axes index showing: the header names the *axis*, and the row it is compared
+// against is the axis index's selected row — neither of which exists while the index is listing problems. The
+// pass's earlier checks switch modes, so this is asserted rather than assumed.
+await root.locator('[data-rd-progress-subview-option="axes"]').click();
+await page.waitForTimeout(200);
+const richestAxis = await selectRichestAxis();
+console.log(
+  `C4 geometry: measured on the richest axis in this dataset — ${richestAxis.count} optional section(s)`
+);
+
+const paneGeometry = await page.evaluate(() => {
+  const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+  const rect = (selector) => {
+    const node = scope?.querySelector(selector) ?? null;
+    if (node === null) {
+      return null;
+    }
+    const box = node.getBoundingClientRect();
+    return {
+      bottom: Math.round(box.bottom),
+      left: Math.round(box.left),
+      top: Math.round(box.top),
+      width: Math.round(box.width),
+    };
+  };
+  const pane = scope?.querySelector("[data-rd-progress-detail]") ?? null;
+  const inPane = (selector) => {
+    const node = scope?.querySelector(selector) ?? null;
+    return node !== null && pane !== null && pane.contains(node);
+  };
+  // Three states per section, so a section that exists *outside* the pane cannot pass as absent: the check
+  // requires every section that rendered to have rendered inside the pane. The two halves of row 1 are addressed
+  // by their class and the grouped sections by their own markers — those are the two things the pane must hold.
+  const SECTIONS = [
+    ".rd-progress-problem",
+    ".rd-progress-activity",
+    "[data-rd-progress-plan]",
+    "[data-rd-progress-problems]",
+    "[data-rd-progress-repositories]",
+    "[data-rd-progress-evidence]",
+    "[data-rd-progress-steering]",
+  ];
+  const placement = SECTIONS.map((selector) => {
+    const anywhere = scope?.querySelector(selector) ?? null;
+    if (anywhere === null) {
+      return { selector, state: "absent" };
+    }
+    return {
+      selector,
+      state: pane !== null && pane.querySelector(selector) !== null ? "in-pane" : "OUTSIDE",
+    };
+  });
+  return {
+    activity: rect(".rd-progress-activity"),
+    band: rect("[data-rd-progress-band]"),
+    bandMembers: ["[data-rd-progress-repositories]", "[data-rd-progress-evidence]", "[data-rd-progress-steering]"]
+      .map((selector) => rect(selector))
+      .filter((box) => box !== null),
+    detailTitle:
+      scope?.querySelector("[data-rd-progress-detail-title]")?.textContent?.trim() ?? "",
+    evidence: rect("[data-rd-progress-evidence]"),
+    head: rect("[data-rd-progress-detail] .rd-detail-head"),
+    index: rect(".rd-progress-index"),
+    pane: rect("[data-rd-progress-detail]"),
+    placement,
+    plan: rect("[data-rd-progress-plan]"),
+    problem: rect(".rd-progress-problem"),
+    problems: rect("[data-rd-progress-problems]"),
+    renderedSections: SECTIONS.filter((selector) => scope?.querySelector(selector) !== null),
+    repositories: rect("[data-rd-progress-repositories]"),
+    row: rect("[data-rd-progress-row]"),
+    selectedRowTitle:
+      scope
+        ?.querySelector('[data-rd-index-axis][aria-pressed="true"] .rd-strong')
+        ?.textContent?.trim() ?? "",
+    steering: rect("[data-rd-progress-steering]"),
+  };
+});
+check(
+  "C4: everything right of the index sits inside ONE detail pane, and the index is left of it",
+  paneGeometry.pane !== null &&
+    paneGeometry.index !== null &&
+    paneGeometry.index.left + paneGeometry.index.width <= paneGeometry.pane.left + 1 &&
+    paneGeometry.placement.filter((entry) => entry.state === "in-pane").length >= 2 &&
+    paneGeometry.placement.every((entry) => entry.state !== "OUTSIDE"),
+  `index ${JSON.stringify(paneGeometry.index)}, pane ${JSON.stringify(paneGeometry.pane)}; ${
+    paneGeometry.placement.map((entry) => `${entry.selector}=${entry.state}`).join(" · ")
+  }`
+);
+check(
+  "C4: the pane is the selected axis — its header names it, above both the Problem and the Activity",
+  paneGeometry.head !== null &&
+    paneGeometry.detailTitle !== "" &&
+    paneGeometry.detailTitle === paneGeometry.selectedRowTitle &&
+    paneGeometry.problem !== null &&
+    paneGeometry.activity !== null &&
+    paneGeometry.head.bottom <= paneGeometry.problem.top + 1 &&
+    paneGeometry.head.bottom <= paneGeometry.activity.top + 1,
+  `header "${paneGeometry.detailTitle}" ${JSON.stringify(paneGeometry.head)}; the selected index row reads "${paneGeometry.selectedRowTitle}"; problem top ${paneGeometry.problem?.top ?? "absent"}, activity top ${paneGeometry.activity?.top ?? "absent"}`
+);
+check(
+  "C4: the Problem is the main lane — left of the Activity and at least 1.25× its width",
+  paneGeometry.problem !== null &&
+    paneGeometry.activity !== null &&
+    paneGeometry.problem.left < paneGeometry.activity.left &&
+    paneGeometry.problem.width >= paneGeometry.activity.width * 1.25,
+  `problem ${paneGeometry.problem?.width ?? 0}px at x=${paneGeometry.problem?.left ?? 0}, activity ${paneGeometry.activity?.width ?? 0}px at x=${paneGeometry.activity?.left ?? 0} — ratio ${(
+    (paneGeometry.problem?.width ?? 0) / Math.max(1, paneGeometry.activity?.width ?? 1)
+  ).toFixed(2)}×`
+);
+if (paneGeometry.plan === null || paneGeometry.problems === null) {
+  skip(
+    "C4: Plan and Open problems share row 2, as two columns of one group",
+    `this subject renders ${paneGeometry.plan === null ? "no plan" : "no open-problems list"} — the row collapses to what exists`
+  );
+} else {
+  check(
+    "C4: Plan and Open problems share row 2, as two columns of one group",
+    paneGeometry.row !== null &&
+      Math.abs(paneGeometry.plan.top - paneGeometry.problems.top) <= 2 &&
+      paneGeometry.plan.left !== paneGeometry.problems.left &&
+      paneGeometry.row.top <= Math.min(paneGeometry.plan.top, paneGeometry.problems.top) &&
+      paneGeometry.row.bottom >= Math.max(paneGeometry.plan.bottom, paneGeometry.problems.bottom),
+    `row ${JSON.stringify(paneGeometry.row)}; plan ${JSON.stringify(paneGeometry.plan)}; problems ${JSON.stringify(paneGeometry.problems)}`
+  );
+}
+const bandBoxes = [paneGeometry.repositories, paneGeometry.evidence, paneGeometry.steering];
+if (bandBoxes.some((box) => box === null)) {
+  skip(
+    "C4: Repository threads, Evidence and Human steering share the support band, as three columns of one group",
+    `this subject renders ${bandBoxes.filter((box) => box !== null).length} of the 3 support cards`
+  );
+} else {
+  check(
+    "C4: Repository threads, Evidence and Human steering share the support band, as three columns of one group",
+    paneGeometry.band !== null &&
+      bandBoxes.every((box) => Math.abs(box.top - bandBoxes[0].top) <= 2) &&
+      new Set(bandBoxes.map((box) => box.left)).size === 3 &&
+      paneGeometry.band.top <= Math.min(...bandBoxes.map((box) => box.top)) &&
+      paneGeometry.band.bottom >= Math.max(...bandBoxes.map((box) => box.bottom)),
+    `band ${JSON.stringify(paneGeometry.band)}; cards ${bandBoxes.map((box) => `${box.width}px@x${box.left},y${box.top}`).join(" · ")}`
+  );
+}
 
 const eventSources = await page.evaluate(() => {
   const panel = document.querySelector('div[data-plugin-id="research-dashboard"]');

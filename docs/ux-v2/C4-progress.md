@@ -236,3 +236,102 @@ Worth stating plainly: **all three failures were in the checks, none in the page
 throughout; what the corpus exercised was my verification, and it found three different ways a check can be
 wrong — an unstated precondition (a section the subject lacks), a premise that cannot hold (a moving window
 compared twice), and a missing readiness wait.
+
+## Increment 2 — the pane: the outer composition, regrouped (landed, verified)
+
+**The ruling.** F2 was accepted, the page's *semantics* were accepted, and the visual fidelity was **not
+accepted**: the running page still used the previous outer composition. The prototype nests the selected
+subject — the index, then one pane whose own interior is `header → Problem | Activity → Plan | Open problems →
+Repository threads | Evidence | Human steering` — while the page still stood the index, the Problem and the
+Activity as three sibling columns and rendered every lower section as an independent full-width band. The axis
+identity lived in the index row and was repeated as tags inside the Problem column, so the axis was never the
+subject of the pane it governed. And because the corpus's default axis has almost no problem, plan or support
+material, the montage that was supposed to show the composition showed its empty state instead. The ruling names
+the sequence: one focused composition increment, projections and semantics untouched, then capture Progress on
+the **fixture's populated axis** for the next visual gate.
+
+**What changed in the product.** One `.rd-progress-detail` holds everything right of the index: the pane header
+(`DetailHeader` — the axis's state badge, its title, its topic tag and its axis tag, its last activity and the
+stale qualifier), then row 1 `.rd-detail-grid rd-progress-pair` (the Problem in the main lane, the Activity in
+the rail — C1's own dominance grid, not a restatement of it), then row 2 `.rd-progress-row` (Plan beside Open
+problems), then `.rd-progress-band` (Repository threads | Evidence | Human steering). Rows 2 and the band use
+`auto-fit` rather than fixed column counts, so a subject short of material collapses to the columns it has
+instead of holding an empty one open. Every section stays individually conditional — no plan is fabricated
+where an axis has none, and no band renders where a subject has no repositories, evidence or steering. The
+Problem column keeps a plain heading (`Problem` / `Open problems (N)`) and the problem's own context line, since
+the axis's identity no longer belongs there. The activity cap stays, the F2 count line stays below the
+composition, and the `Axes | Problems` switch stays above the index.
+
+**Geometry, measured on the fixture's richest axis** (5 optional sections rendered: plan, open problems,
+repository threads, evidence, human steering):
+
+| claim | measured |
+|---|---|
+| index left of one pane | index `x=176 w=256`, pane `x=444 w=828` |
+| header above both halves | header bottom `307`; Problem and Activity tops both `319` |
+| Problem left of Activity, ≥1.25× | Problem `502px @x457`, Activity `301px @x971` — **1.67×** |
+| Plan and Open problems share row 2 | `402px @x457 y904` and `402px @x871 y904`, inside `.rd-progress-row` |
+| the three support cards share the band | `264px @x457`, `@x733`, `@x1008`, all `y1183`, inside `.rd-progress-band` |
+
+**What the header carries, and what it does not.** The topic tag and the axis tag, both navigable — the axis
+tag is the existing navigation contract ("the reading surface names its topic and its axis as tags"), so it
+stays. It carries **no repository or person tag**, because the Progress payload's axis row carries no relation
+at that scope (`ProgressAxisRow` has no `repositories` and no `people`; only `AxisScan` has repositories, and
+that is a different payload). Widening the projection to enrich the header is excluded by this unit's own rule
+— no new semantics, no new projections — so the repository and person context stays where the projection
+actually puts it: the problem card's own facts and the support band's Repository threads. That is a deliberate
+limit, not an omission.
+
+**The harness.** Five geometry checks, all read from page geometry rather than from class names, so a
+re-nesting that got the markup right and the layout wrong still fails: (1) everything right of the index is
+inside one pane and the index is left of it — with a three-state placement map (`in-pane` / `OUTSIDE` /
+`absent`) so a section that exists *outside* the pane cannot pass as absent; (2) the pane's header names the
+axis the index has selected, above both halves; (3) the Problem is left of the Activity and at least 1.25× its
+width; (4) Plan and Open problems share row 2 when both exist; (5) the three support cards share the band when
+all three exist — (4) and (5) skip, with the reason stated, on a subject that lacks the material. One check is
+**retired** with its subject: "the Progress top area shows the index, the Problem column and the Activity feed
+side by side" asserted exactly the composition the ruling replaced, and its purpose is now covered more
+strictly by (1)–(3). Two are **updated** rather than dropped: the plan's position (it is measured against the
+Problem/Activity pair now, because the index is a column beside the pane and its bottom says nothing about
+where the pane's rows begin) and the C8 read of the corpus's inferred states.
+
+**Two things this increment found by taking it seriously.** The pass now measures its geometry on the *richest
+axis in the dataset* rather than on whatever subject happens to be first — the same failure the ruling
+identified in the montage, applied to the checks: an axis with no material would have let a broken pane pass.
+And the C8 corpus check turned out to depend on where the tag traversal left the page; it navigates to the view
+it reads now, which makes it independent of unrelated check ordering — a latent flake removed, not a
+behaviour change.
+
+**A third thing, found by looking at the capture.** The support band belongs to the **problem** on screen, not
+to the axis: the fixture carries a problem with no repository and no artifact on purpose ("this one must still
+render") beside one that has both, and an axis's first open problem is the one the pane shows — so the same
+axis photographed one band card and three, depending on which problem was showing. That is correct behaviour
+(the band is conditional and collapses honestly), and it is exactly the trap the ruling warned about: the first
+fixture capture *did* photograph the deliberate no-support problem, and reported "3 optional section(s)" for a
+subject that has five. The capture now applies the same rule one level down — it walks the axis's own problem
+list and keeps the problem that renders the most — which is what makes the two artifacts below show the
+composition rather than a corner of it. A first version also left the page on the *last* axis it walked rather
+than the one it chose; both are recorded here because a capture is only evidence if you know what it is a
+capture of.
+
+**Records** — revision **83** on the fixture (`0.2.0+dev.0a4c9612b073`, asset sha256
+`68cbab80680865eb522f52428009349dc51252f64777cdd465bc053ffc25cca2`) and revision 487 on the corpus, the same
+version and the same asset hash on both — fixture **1440 all passed · 0 skipped**, **1280 all passed · 1
+skipped**; corpus **25 / 26 / 25 skipped** across read 1440, read 1280 and write; corpus wiped and re-seeded
+after. `bun run check` 126/0. The geometry block reports which subject it measured: **5 optional sections** on
+the fixture at both viewports, 3 on the corpus.
+
+**The artifacts for the visual gate** — both captured on the fixture, on the axis `Fixture: active axis (with
+evidence)` showing the problem that renders all three support cards:
+
+- `docs/ux-v2/fidelity/fixture-tall/side-by-side/progress.png` — the prototype's full page above the running
+  page captured in a **tall viewport (1440×2600)**, so rows 2 and the support band are inside the frame rather
+  than below it. (`--full` does not work here: the host page scrolls an inner container, so a full-page
+  screenshot is still one viewport tall. A tall viewport is what actually shows the composition.)
+- `docs/ux-v2/fidelity/fixture/side-by-side/progress.png` — the same comparison in the established form, first
+  screens at 1440×900, with the corpus montage left in place for the empty-state reading.
+
+The capture also proves the build: the asset it fetched for the fixture hashes to
+`68cbab80…`, the same bytes the served-build guard reports for both instances.
+
+

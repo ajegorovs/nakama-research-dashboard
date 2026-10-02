@@ -903,24 +903,45 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-index-item:hover {
   border-color: var(--border);
 }
-/* The Progress desktop composition: the index, the Problem column and the Activity feed are siblings in one
-   wrapping row, so they keep the contract's semantic order — Problem before Activity — and stack instead of
-   squeezing when the width runs out. The columns are separated by a rule rather than a box each: the contract
-   asks for a composition, not three cards of equal weight. */
+/* The Progress composition, nested the way the prototype nests it: the index, then ONE selected-subject pane
+   holding the header and three grouped rows. Previously the Problem and Activity columns were the index's own
+   siblings in one wrapping row and every lower section was an independent full-width band, so the selected axis
+   never became the subject of the right-hand pane — its identity sat in the index row and was repeated as tags
+   inside the Problem column. The sections inside the pane stay individually conditional, so a subject without a
+   plan or without support material collapses honestly instead of reserving space for it. */
 [data-plugin-id="research-dashboard"] .rd-progress-top > .rd-progress-index {
   flex: 0 1 16rem;
 }
-[data-plugin-id="research-dashboard"] .rd-progress-problem {
-  flex: 2 1 22rem;
-  min-width: 17rem;
-  padding-left: 12px;
+[data-plugin-id="research-dashboard"] .rd-progress-detail {
   border-left: 1px solid var(--border);
+  display: grid;
+  flex: 1 1 34rem;
+  gap: var(--rd-gap-block);
+  min-width: 20rem;
+  padding-left: 12px;
 }
-[data-plugin-id="research-dashboard"] .rd-progress-activity {
-  flex: 1 1 18rem;
-  min-width: 15rem;
-  padding-left: 12px;
-  border-left: 1px solid var(--border);
+/* Row 1 reuses C1's own dominance grid, the same rule the Topics and People panes use: the Problem is the main
+   lane and the Activity its rail at no less than 1.25x. Row 2 and the support band size to how many sections
+   actually rendered — auto-fit gives two and three columns when both or all exist and one when a subject has
+   fewer, so a subject short of material collapses instead of holding a column open for it. */
+[data-plugin-id="research-dashboard"] .rd-progress-row,
+[data-plugin-id="research-dashboard"] .rd-progress-band {
+  border-top: var(--rd-edge);
+  display: grid;
+  gap: var(--rd-gap-block);
+  padding-top: 10px;
+}
+[data-plugin-id="research-dashboard"] .rd-progress-row {
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+}
+[data-plugin-id="research-dashboard"] .rd-progress-band {
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+}
+/* The group owns the rule above it; the sections inside it are columns of that group, not stacked bands. */
+[data-plugin-id="research-dashboard"] .rd-progress-row > section,
+[data-plugin-id="research-dashboard"] .rd-progress-band > section {
+  border-top: none;
+  padding-top: 0;
 }
 [data-plugin-id="research-dashboard"] .rd-problem-card {
   /* The lede of the middle column, not a box beside two other boxes — the columns are already separated by rules. */
@@ -3317,26 +3338,25 @@ export function apply(ctx: Context) {
             </p>
           ) : null}
         </div>
-
-        {/*
-         * The central Problem column — the reading surface, in both index modes, from one set of components.
-         *
-         * `Axes`: the heading's number is the projection's own `openProblems` for this axis, and the card is
-         * the first open problem *in the projection's order* — no recency ranking, no activity-count ranking,
-         * no repository-count ranking — with the remaining ones listed and selectable.
-         *
-         * `Problems`: the card is the problem the index selected, which may be closed out, so a count of open
-         * problems would describe something the card is not showing. The heading names what the card is, and
-         * a context line says where the problem sits.
-         */}
+        {/* ONE pane holds everything right of the index: the selected subject's own header, then the three
+            grouped rows the prototype nests inside it. Before this the Problem and Activity columns were the
+            index's own siblings in one wrapping row and every lower section was an independent full-width
+            band, so the selected axis was never the subject of the pane — its identity sat in the index row
+            and was repeated as tags inside the Problem column. */}
         <div
-          className="rd-progress-problem"
-          data-rd-progress-problem-axis={activeAxis?.id ?? ""}
-          data-rd-progress-problem-mode={indexMode}
-          data-rd-progress-problem-open={activeAxis?.openProblems ?? 0}
-          data-rd-progress-problem-shown={shownProblem?.id ?? ""}
+          className="rd-progress-detail"
+          data-rd-progress-detail="true"
+          data-rd-progress-detail-axis={activeAxis?.id ?? ""}
         >
+          {/* The axis as this pane's subject: its state, its title, the context its projection row carries
+              (the topic and the axis itself, both navigable — the payload carries no repository or person
+              relation at axis scope, and none is invented here), and when it last moved. */}
           <DetailHeader
+            badge={
+              activeAxis ? (
+                <StateBadge confidence={activeAxis.stateConfidence} state={activeAxis.state} />
+              ) : null
+            }
             context={
               activeAxis ? (
                 <>
@@ -3356,364 +3376,407 @@ export function apply(ctx: Context) {
               ) : null
             }
             title={
-              <h3 className="rd-strong">
-                {problemsMode
-                  ? "Problem"
-                  : `Open problems (${activeAxis?.openProblems ?? 0})`}
+              <h3 className="rd-strong" data-rd-progress-detail-title="true">
+                {activeAxis?.title ?? "Nothing is selected"}
               </h3>
             }
           >
             {activeAxis ? (
               <span className="rd-cluster" data-rd-progress-recency="true">
-                {problemsMode && shownProblem ? (
-                  <span className="rd-meta">{problemContext(shownProblem)}</span>
-                ) : (
-                  <RecencyLabel
-                    at={activeAxis.recencyAt}
-                    prefix="last activity "
-                  />
-                )}
-                {activeAxis.stale ? (
-                  <span className="rd-muted">· stale</span>
-                ) : null}
+                <RecencyLabel at={activeAxis.recencyAt} prefix="last activity " />
+                {activeAxis.stale ? <span className="rd-muted">· stale</span> : null}
               </span>
             ) : null}
           </DetailHeader>
-          {activeAxis === null && !problemsMode ? (
-            <p className="rd-muted" data-rd-progress-problem-empty="true">
-              No axis is selected.
-            </p>
-          ) : shownProblem === null ? (
-            <p className="rd-muted" data-rd-progress-problem-empty="true">
-              {problemsMode
-                ? "No problem is recorded yet."
-                : axesModeProblems.length > 0
-                  ? "No open problems on this axis."
-                  : "Nothing is recorded against this axis."}
-            </p>
-          ) : (
-            <div className="rd-problem-card" data-rd-problem={shownProblem.id}>
-              <div className="rd-cluster">
-                <StateBadge
-                  confidence={shownProblem.stateConfidence}
-                  state={shownProblem.state as ProblemState}
-                />
-                <span className="rd-meta">{describeAge(shownProblem.recencyAt)}</span>
-              </div>
-              <p className="rd-strong">{shownProblem.statement}</p>
-              <p className="rd-meta" data-rd-problem-facts="true">
-                {problemFacts(shownProblem)}
-              </p>
-              {shownProblem.people.length > 0 ? (
-                <p className="rd-meta">
-                  {shownProblem.people
-                    .map((person) => person.displayName)
-                    .join(", ")}
-                </p>
-              ) : null}
-            </div>
-          )}
-        </div>
 
-        {/*
-         * The Activity column: the server's bucket for this axis, newest first, rendered with the same line
-         * the grouped view below uses. The count in the heading is the axis row's `activityInWindow`, which
-         * the projection computes from the same predicate as the bucket's `eventCount`.
-         *
-         * In `Problems` the bucket is the problem's **parent axis**, so the column says which axis it is
-         * showing rather than letting the reader assume the feed is the problem's own events. It is the
-         * projection's bucket either way — the markup does not reconstruct what belongs to what.
-         */}
-        <div
-          className="rd-progress-activity"
-          data-rd-progress-feed-axis={activeAxis?.id ?? ""}
-          data-rd-progress-feed-count={feed?.eventCount ?? 0}
-          data-rd-progress-feed-mode={indexMode}
-        >
-          <h3 className="rd-strong">
-            {`Activity (${activeAxis?.activityInWindow ?? 0})`}
-          </h3>
-          {problemsMode && activeAxis ? (
-            <span className="rd-meta" data-rd-progress-feed-parent="true">
-              {`on ${activeAxis.title}`}
-            </span>
-          ) : null}
-          {feed === null || feed.events.length === 0 ? (
-            <p className="rd-muted" data-rd-progress-feed-empty="true">
-              Nothing recorded against this axis in this window.
-            </p>
-          ) : (
-            <ul
-              className="rd-feed"
-              data-rd-progress-feed={feed.events.length}
-              data-rd-progress-feed-shown={feedShown.length}
+          {/* Row 1 — the glimpse: the Problem beside its Activity, on C1's own dominance grid (the Problem the
+              main lane, the Activity its subordinate rail). */}
+          <div className="rd-detail-grid rd-progress-pair" data-rd-progress-pair="true">
+            {/*
+             * The central Problem column — the reading surface, in both index modes, from one set of components.
+             *
+             * `Axes`: the heading's number is the projection's own `openProblems` for this axis, and the card is
+             * the first open problem *in the projection's order* — no recency ranking, no activity-count ranking,
+             * no repository-count ranking — with the remaining ones listed and selectable.
+             *
+             * `Problems`: the card is the problem the index selected, which may be closed out, so a count of open
+             * problems would describe something the card is not showing. The heading names what the card is, and
+             * a context line says where the problem sits.
+             */}
+            <div
+              className="rd-progress-problem"
+              data-rd-progress-problem-axis={activeAxis?.id ?? ""}
+              data-rd-progress-problem-mode={indexMode}
+              data-rd-progress-problem-open={activeAxis?.openProblems ?? 0}
+              data-rd-progress-problem-shown={shownProblem?.id ?? ""}
             >
-              {/*
-               * The ActivityFeed's half of the contract, rendered through the one shared event line
-               * (component-contract.md § ActivityFeed): the date, the summary, provenance, and a tag for
-               * every entity the event names. The repository and problem are resolved from the rollups and
-               * the problem list already in this payload, so a tag costs no call; an event with no mapped
-               * account says so in words, and an event naming a problem the projection does not carry gets no
-               * tag rather than an unnamed one.
-               */}
-              {feedShown.map((event) => (
-                <ActivityLine
-                  attrs={{ "data-rd-feed-event": "true" }}
-                  axisLabel={
-                    event.axisId !== null && event.axisId === activeAxis?.id
-                      ? activeAxis?.title ?? null
-                      : null
-                  }
-                  item={event}
-                  key={event.id}
-                  onOpenEntity={onOpenEntity}
-                  person={event.person}
-                  problemLabel={problemOf(event.problemId)?.statement ?? null}
-                  repositoryLabel={repositoryOf(event.repositoryId)?.fullName ?? null}
-                  topicLabel={
-                    event.topicId !== null && event.topicId === activeAxis?.topicId
-                      ? activeAxis?.topicName ?? null
-                      : null
-                  }
-                  unattributedNote="no account attributed"
-                />
-              ))}
-            </ul>
-          )}
-          {feed !== null && (feedHidden > 0 || feedAll) ? (
-            /*
-             * The feed is capped, and says so. This is not a second disclosure for the *axis* — that is
-             * `Read topic`'s job and stays one control — it governs the feed's own window, which is a
-             * different piece of state. The count is the projection's own, so capping what is shown loses
-             * nothing silently: the reader is told how many there are and can have them in one click.
-             */
-            <div className="rd-cluster" data-rd-progress-feed-more={String(feedHidden)}>
-              <span className="rd-meta" data-rd-progress-feed-note="true">
-                {feedAll
-                  ? `all ${feed.events.length} shown, newest first`
-                  : `${feedShown.length} of ${feed.events.length} shown, newest first`}
-              </span>
-              <Button
-                onClick={() => {
-                  setFeedAllFor(feedAll ? null : (activeAxis?.id ?? ""));
-                }}
-                variant="outline"
-              >
-                {feedAll ? "Show fewer" : `Show all ${feed.events.length}`}
-              </Button>
-            </div>
-          ) : null}
-        </div>
-        </div>
-
-        {/*
-         * The axis's plan, below the top row rather than a fourth column: the composition's glance — which
-         * axis, which problem, what has been happening — is the strongest part of the layout, and a plan
-         * squeezed in beside it would cost that. Optional by construction: an axis with no plan renders
-         * **nothing** here, not an empty shell and not a warning that one is missing.
-         *
-         * The steps are the projection's own list in the projection's own order. A step's number is rendered
-         * only where the step claims a `position`; where the plan claims none, the page says so instead of
-         * letting the list order imply a sequence.
-         */}
-        {axisPlan ? (
-          <section
-            className="rd-progress-plan"
-            data-rd-progress-plan={axisPlan.id}
-            data-rd-progress-plan-claims-order={planClaimsOrder}
-            data-rd-progress-plan-steps={axisPlan.steps.length}
-          >
-            <div className="rd-cluster">
-              <span className="rd-section">
-                {`Plan · ${countLabel(axisPlan.steps.length, "step", "steps")}`}
-              </span>
-              <span className="rd-meta">
-                {`${axisPlan.stepsDone} of ${axisPlan.steps.length} done`}
-              </span>
-              {planClaimsOrder ? null : (
-                <span className="rd-meta" data-rd-progress-plan-unordered="true">
-                  unordered — no step claims a position
+              <h3 className="rd-strong" data-rd-progress-problem-heading="true">
+                {problemsMode
+                  ? "Problem"
+                  : `Open problems (${activeAxis?.openProblems ?? 0})`}
+              </h3>
+              {problemsMode && shownProblem ? (
+                <span className="rd-meta" data-rd-progress-problem-context="true">
+                  {problemContext(shownProblem)}
                 </span>
+              ) : null}
+              {activeAxis === null && !problemsMode ? (
+                <p className="rd-muted" data-rd-progress-problem-empty="true">
+                  No axis is selected.
+                </p>
+              ) : shownProblem === null ? (
+                <p className="rd-muted" data-rd-progress-problem-empty="true">
+                  {problemsMode
+                    ? "No problem is recorded yet."
+                    : axesModeProblems.length > 0
+                      ? "No open problems on this axis."
+                      : "Nothing is recorded against this axis."}
+                </p>
+              ) : (
+                <div className="rd-problem-card" data-rd-problem={shownProblem.id}>
+                  <div className="rd-cluster">
+                    <StateBadge
+                      confidence={shownProblem.stateConfidence}
+                      state={shownProblem.state as ProblemState}
+                    />
+                    <span className="rd-meta">{describeAge(shownProblem.recencyAt)}</span>
+                  </div>
+                  <p className="rd-strong">{shownProblem.statement}</p>
+                  <p className="rd-meta" data-rd-problem-facts="true">
+                    {problemFacts(shownProblem)}
+                  </p>
+                  {shownProblem.people.length > 0 ? (
+                    <p className="rd-meta">
+                      {shownProblem.people
+                        .map((person) => person.displayName)
+                        .join(", ")}
+                    </p>
+                  ) : null}
+                </div>
               )}
             </div>
-            <p className="rd-meta">{axisPlan.summary}</p>
-            <ul className="rd-plan-steps" data-rd-plan-steps={axisPlan.steps.length}>
-              {axisPlan.steps.map((step) => (
-                <li
-                  className="rd-plan-step"
-                  data-rd-plan-step={step.id}
-                  data-rd-plan-step-position={step.position === null ? "" : String(step.position)}
-                  key={step.id}
+            {/*
+             * The Activity column: the server's bucket for this axis, newest first, rendered with the same line
+             * the grouped view below uses. The count in the heading is the axis row's `activityInWindow`, which
+             * the projection computes from the same predicate as the bucket's `eventCount`.
+             *
+             * In `Problems` the bucket is the problem's **parent axis**, so the column says which axis it is
+             * showing rather than letting the reader assume the feed is the problem's own events. It is the
+             * projection's bucket either way — the markup does not reconstruct what belongs to what.
+             */}
+            <div
+              className="rd-progress-activity"
+              data-rd-progress-feed-axis={activeAxis?.id ?? ""}
+              data-rd-progress-feed-count={feed?.eventCount ?? 0}
+              data-rd-progress-feed-mode={indexMode}
+            >
+              <h3 className="rd-strong">
+                {`Activity (${activeAxis?.activityInWindow ?? 0})`}
+              </h3>
+              {problemsMode && activeAxis ? (
+                <span className="rd-meta" data-rd-progress-feed-parent="true">
+                  {`on ${activeAxis.title}`}
+                </span>
+              ) : null}
+              {feed === null || feed.events.length === 0 ? (
+                <p className="rd-muted" data-rd-progress-feed-empty="true">
+                  Nothing recorded against this axis in this window.
+                </p>
+              ) : (
+                <ul
+                  className="rd-feed"
+                  data-rd-progress-feed={feed.events.length}
+                  data-rd-progress-feed-shown={feedShown.length}
                 >
-                  <div className="rd-cluster">
-                    {step.position === null ? null : (
-                      <span className="rd-meta">{`${step.position + 1}.`}</span>
-                    )}
-                    <StateBadge kind="stored" state={step.state} />
-                    <span className="rd-strong">{step.title}</span>
-                  </div>
-                  {step.id === shownProblem?.planStepId ? (
-                    <span className="rd-meta" data-rd-plan-step-shown="true">
-                      the step the problem on screen sits on
-                    </span>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
-
-        {/*
-         * The axis's problem inventory: navigation plus compact context, while the card in the middle column
-         * stays the detailed reading surface. Open problems only — resolved ones are not folded in yet — in
-         * the projection's own order and set, with no ranking, severity or importance of any kind. The list
-         * is *not* "the others": every open problem appears, including the one on screen, which is marked
-         * active so the reader can see which card the list is driving.
-         *
-         * The heading carries no count on purpose: the count is already on the card column's heading, and two
-         * headings asserting the same number would be two sources for one fact. An axis with no open problem
-         * renders nothing here — the axis is meaningful on its own, and a warning about a missing problem
-         * would say otherwise.
-         */}
-        {openAxisProblems.length > 0 ? (
-          <section
-            className="rd-progress-problems"
-            data-rd-progress-problems={openAxisProblems.length}
-            data-rd-progress-problems-axis={activeAxis?.id ?? ""}
-          >
-            <span className="rd-section">Open problems on this axis</span>
-            <ul className="rd-problems" data-rd-problem-list={openAxisProblems.length}>
-              {openAxisProblems.map((problem) => (
-                <li key={problem.id}>
-                  <button
-                    aria-pressed={problem.id === shownProblem?.id}
-                    className="rd-index-item"
-                    data-rd-problem-choice={problem.id}
-                    onClick={() => setSelectedProblemId(problem.id)}
-                    type="button"
-                  >
-                    <div className="rd-cluster">
-                      <StateBadge
-                        confidence={problem.stateConfidence}
-                        state={problem.state as ProblemState}
-                      />
-                      <span className="rd-strong">{problem.statement}</span>
-                    </div>
-                    <span className="rd-meta" data-rd-problem-context="true">
-                      {problemContext(problem)}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
-
-        {/*
-         * Repository threads — where this problem's implementation is happening. The durable relations the
-         * projection carries, in the projection's order, each an `EntityTag`: it navigates to the canonical
-         * Repository view and selects that repository, and it never filters or mutates anything. Nothing here
-         * picks a "primary" repository, because the model does not have one — an implementation link is not a
-         * parentage.
-         */}
-        {shownProblem && shownProblem.repositories.length > 0 ? (
-          <section
-            className="rd-progress-repositories"
-            data-rd-progress-repositories={shownProblem.repositories.length}
-          >
-            <span className="rd-section">Repository threads</span>
-            <div className="rd-cluster rd-tags">
-              {shownProblem.repositories.map((repository) => (
-                <EntityTag
-                  id={repository.id}
-                  key={repository.id}
-                  label={repository.fullName}
-                  onOpen={onOpenEntity}
-                  type="repository"
-                />
-              ))}
-            </div>
-          </section>
-        ) : null}
-
-        {/*
-         * Evidence — what substantiates the reading, kept with its source. These are the same rows the
-         * Activity column shows when they fall in the window, and they are here for a different reason: the
-         * feed is chronological movement, this is support for the problem on screen. The source type is
-         * rendered, never flattened into a generic link.
-         */}
-        {shownProblem && shownProblem.evidence.length > 0 ? (
-          <section
-            className="rd-progress-evidence"
-            data-rd-progress-evidence={shownProblem.evidence.length}
-          >
-            <span className="rd-section">Evidence</span>
-            <ul className="rd-evidence">
-              {shownProblem.evidence.map((item) => (
-                <li data-rd-evidence={item.id} key={item.id}>
-                  <div className="rd-cluster">
-                    <span className="rd-source" data-rd-evidence-source={item.sourceType}>
-                      {describeSource(item.sourceType, item.sourceRef)}
-                    </span>
-                    <span className="rd-strong">{item.summary}</span>
-                    <span className="rd-muted">{item.label}</span>
-                  </div>
-                  <span className="rd-meta">
-                    {`${item.occurredAt.slice(0, 10)}${
-                      item.sourceUrl ? ` · ${item.sourceUrl}` : ""
-                    }`}
+                  {/*
+                   * The ActivityFeed's half of the contract, rendered through the one shared event line
+                   * (component-contract.md § ActivityFeed): the date, the summary, provenance, and a tag for
+                   * every entity the event names. The repository and problem are resolved from the rollups and
+                   * the problem list already in this payload, so a tag costs no call; an event with no mapped
+                   * account says so in words, and an event naming a problem the projection does not carry gets no
+                   * tag rather than an unnamed one.
+                   */}
+                  {feedShown.map((event) => (
+                    <ActivityLine
+                      attrs={{ "data-rd-feed-event": "true" }}
+                      axisLabel={
+                        event.axisId !== null && event.axisId === activeAxis?.id
+                          ? activeAxis?.title ?? null
+                          : null
+                      }
+                      item={event}
+                      key={event.id}
+                      onOpenEntity={onOpenEntity}
+                      person={event.person}
+                      problemLabel={problemOf(event.problemId)?.statement ?? null}
+                      repositoryLabel={repositoryOf(event.repositoryId)?.fullName ?? null}
+                      topicLabel={
+                        event.topicId !== null && event.topicId === activeAxis?.topicId
+                          ? activeAxis?.topicName ?? null
+                          : null
+                      }
+                      unattributedNote="no account attributed"
+                    />
+                  ))}
+                </ul>
+              )}
+              {feed !== null && (feedHidden > 0 || feedAll) ? (
+                /*
+                 * The feed is capped, and says so. This is not a second disclosure for the *axis* — that is
+                 * `Read topic`'s job and stays one control — it governs the feed's own window, which is a
+                 * different piece of state. The count is the projection's own, so capping what is shown loses
+                 * nothing silently: the reader is told how many there are and can have them in one click.
+                 */
+                <div className="rd-cluster" data-rd-progress-feed-more={String(feedHidden)}>
+                  <span className="rd-meta" data-rd-progress-feed-note="true">
+                    {feedAll
+                      ? `all ${feed.events.length} shown, newest first`
+                      : `${feedShown.length} of ${feed.events.length} shown, newest first`}
                   </span>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
+                  <Button
+                    onClick={() => {
+                      setFeedAllFor(feedAll ? null : (activeAxis?.id ?? ""));
+                    }}
+                    variant="outline"
+                  >
+                    {feedAll ? "Show fewer" : `Show all ${feed.events.length}`}
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          </div>
 
-        {/*
-         * Human steering — the constraint a person put on the librarian's reading, and nothing else: not an
-         * ordinary note, not an agent's interpretation (the store excludes both before the page sees them).
-         * The two scopes stay apart and each is labelled: a claim aimed at the axis is the axis context, not a
-         * claim about every problem beneath it.
-         */}
-        {problemSteering.length > 0 || axisSteering.length > 0 ? (
-          <section className="rd-progress-steering" data-rd-progress-steering="true">
-            <span className="rd-section">Human steering</span>
-            {problemSteering.length > 0 ? (
-              <ul className="rd-steering" data-rd-steering-scope="problem">
-                {problemSteering.map((claim) => (
-                  <li data-rd-steering={claim.id} key={claim.id}>
-                    <div className="rd-cluster">
-                      <span className="rd-source">{claim.kind}</span>
+          {/*
+           * Row 2 — the plan beside the axis's problem inventory. Both are optional and each renders only where
+           * the projection carries one, so the row collapses honestly rather than reserving a column for a
+           * section this axis does not have.
+           */}
+          {axisPlan !== null || openAxisProblems.length > 0 ? (
+            <div className="rd-progress-row" data-rd-progress-row="true">
+            {/*
+             * The axis's plan, below the top row rather than a fourth column: the composition's glance — which
+             * axis, which problem, what has been happening — is the strongest part of the layout, and a plan
+             * squeezed in beside it would cost that. Optional by construction: an axis with no plan renders
+             * **nothing** here, not an empty shell and not a warning that one is missing.
+             *
+             * The steps are the projection's own list in the projection's own order. A step's number is rendered
+             * only where the step claims a `position`; where the plan claims none, the page says so instead of
+             * letting the list order imply a sequence.
+             */}
+            {axisPlan ? (
+              <section
+                className="rd-progress-plan"
+                data-rd-progress-plan={axisPlan.id}
+                data-rd-progress-plan-claims-order={planClaimsOrder}
+                data-rd-progress-plan-steps={axisPlan.steps.length}
+              >
+                <div className="rd-cluster">
+                  <span className="rd-section">
+                    {`Plan · ${countLabel(axisPlan.steps.length, "step", "steps")}`}
+                  </span>
+                  <span className="rd-meta">
+                    {`${axisPlan.stepsDone} of ${axisPlan.steps.length} done`}
+                  </span>
+                  {planClaimsOrder ? null : (
+                    <span className="rd-meta" data-rd-progress-plan-unordered="true">
+                      unordered — no step claims a position
+                    </span>
+                  )}
+                </div>
+                <p className="rd-meta">{axisPlan.summary}</p>
+                <ul className="rd-plan-steps" data-rd-plan-steps={axisPlan.steps.length}>
+                  {axisPlan.steps.map((step) => (
+                    <li
+                      className="rd-plan-step"
+                      data-rd-plan-step={step.id}
+                      data-rd-plan-step-position={step.position === null ? "" : String(step.position)}
+                      key={step.id}
+                    >
+                      <div className="rd-cluster">
+                        {step.position === null ? null : (
+                          <span className="rd-meta">{`${step.position + 1}.`}</span>
+                        )}
+                        <StateBadge kind="stored" state={step.state} />
+                        <span className="rd-strong">{step.title}</span>
+                      </div>
+                      {step.id === shownProblem?.planStepId ? (
+                        <span className="rd-meta" data-rd-plan-step-shown="true">
+                          the step the problem on screen sits on
+                        </span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+
+            {/*
+             * The axis's problem inventory: navigation plus compact context, while the card in the middle column
+             * stays the detailed reading surface. Open problems only — resolved ones are not folded in yet — in
+             * the projection's own order and set, with no ranking, severity or importance of any kind. The list
+             * is *not* "the others": every open problem appears, including the one on screen, which is marked
+             * active so the reader can see which card the list is driving.
+             *
+             * The heading carries no count on purpose: the count is already on the card column's heading, and two
+             * headings asserting the same number would be two sources for one fact. An axis with no open problem
+             * renders nothing here — the axis is meaningful on its own, and a warning about a missing problem
+             * would say otherwise.
+             */}
+            {openAxisProblems.length > 0 ? (
+              <section
+                className="rd-progress-problems"
+                data-rd-progress-problems={openAxisProblems.length}
+                data-rd-progress-problems-axis={activeAxis?.id ?? ""}
+              >
+                <span className="rd-section">Open problems on this axis</span>
+                <ul className="rd-problems" data-rd-problem-list={openAxisProblems.length}>
+                  {openAxisProblems.map((problem) => (
+                    <li key={problem.id}>
+                      <button
+                        aria-pressed={problem.id === shownProblem?.id}
+                        className="rd-index-item"
+                        data-rd-problem-choice={problem.id}
+                        onClick={() => setSelectedProblemId(problem.id)}
+                        type="button"
+                      >
+                        <div className="rd-cluster">
+                          <StateBadge
+                            confidence={problem.stateConfidence}
+                            state={problem.state as ProblemState}
+                          />
+                          <span className="rd-strong">{problem.statement}</span>
+                        </div>
+                        <span className="rd-meta" data-rd-problem-context="true">
+                          {problemContext(problem)}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+            </div>
+          ) : null}
+
+          {/*
+           * The support band — repository threads, evidence and human steering, side by side because they
+           * answer three different questions about the same problem. Conditional as a group: a subject with
+           * none of the three renders no band at all.
+           */}
+          {(shownProblem?.repositories.length ?? 0) > 0 ||
+          (shownProblem?.evidence.length ?? 0) > 0 ||
+          problemSteering.length > 0 ||
+          axisSteering.length > 0 ? (
+            <div className="rd-progress-band" data-rd-progress-band="true">
+            {/*
+             * Repository threads — where this problem's implementation is happening. The durable relations the
+             * projection carries, in the projection's order, each an `EntityTag`: it navigates to the canonical
+             * Repository view and selects that repository, and it never filters or mutates anything. Nothing here
+             * picks a "primary" repository, because the model does not have one — an implementation link is not a
+             * parentage.
+             */}
+            {shownProblem && shownProblem.repositories.length > 0 ? (
+              <section
+                className="rd-progress-repositories"
+                data-rd-progress-repositories={shownProblem.repositories.length}
+              >
+                <span className="rd-section">Repository threads</span>
+                <div className="rd-cluster rd-tags">
+                  {shownProblem.repositories.map((repository) => (
+                    <EntityTag
+                      id={repository.id}
+                      key={repository.id}
+                      label={repository.fullName}
+                      onOpen={onOpenEntity}
+                      type="repository"
+                    />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {/*
+             * Evidence — what substantiates the reading, kept with its source. These are the same rows the
+             * Activity column shows when they fall in the window, and they are here for a different reason: the
+             * feed is chronological movement, this is support for the problem on screen. The source type is
+             * rendered, never flattened into a generic link.
+             */}
+            {shownProblem && shownProblem.evidence.length > 0 ? (
+              <section
+                className="rd-progress-evidence"
+                data-rd-progress-evidence={shownProblem.evidence.length}
+              >
+                <span className="rd-section">Evidence</span>
+                <ul className="rd-evidence">
+                  {shownProblem.evidence.map((item) => (
+                    <li data-rd-evidence={item.id} key={item.id}>
+                      <div className="rd-cluster">
+                        <span className="rd-source" data-rd-evidence-source={item.sourceType}>
+                          {describeSource(item.sourceType, item.sourceRef)}
+                        </span>
+                        <span className="rd-strong">{item.summary}</span>
+                        <span className="rd-muted">{item.label}</span>
+                      </div>
                       <span className="rd-meta">
-                        {`${claim.authorType} · ${claim.recordedAt.slice(0, 10)}${
-                          claim.confidence ? ` · ${claim.confidence}` : ""
+                        {`${item.occurredAt.slice(0, 10)}${
+                          item.sourceUrl ? ` · ${item.sourceUrl}` : ""
                         }`}
                       </span>
-                    </div>
-                    <p className="rd-steering-text">{claim.text}</p>
-                  </li>
-                ))}
-              </ul>
+                    </li>
+                  ))}
+                </ul>
+              </section>
             ) : null}
-            {axisSteering.length > 0 ? (
-              <ul className="rd-steering" data-rd-steering-scope="axis">
-                {axisSteering.map((claim) => (
-                  <li data-rd-steering={claim.id} key={claim.id}>
-                    <div className="rd-cluster">
-                      <span className="rd-source">{claim.kind}</span>
-                      <span className="rd-meta">
-                        {`on the axis · ${claim.authorType} · ${claim.recordedAt.slice(0, 10)}${
-                          claim.confidence ? ` · ${claim.confidence}` : ""
-                        }`}
-                      </span>
-                    </div>
-                    <p className="rd-steering-text">{claim.text}</p>
-                  </li>
-                ))}
-              </ul>
+
+            {/*
+             * Human steering — the constraint a person put on the librarian's reading, and nothing else: not an
+             * ordinary note, not an agent's interpretation (the store excludes both before the page sees them).
+             * The two scopes stay apart and each is labelled: a claim aimed at the axis is the axis context, not a
+             * claim about every problem beneath it.
+             */}
+            {problemSteering.length > 0 || axisSteering.length > 0 ? (
+              <section className="rd-progress-steering" data-rd-progress-steering="true">
+                <span className="rd-section">Human steering</span>
+                {problemSteering.length > 0 ? (
+                  <ul className="rd-steering" data-rd-steering-scope="problem">
+                    {problemSteering.map((claim) => (
+                      <li data-rd-steering={claim.id} key={claim.id}>
+                        <div className="rd-cluster">
+                          <span className="rd-source">{claim.kind}</span>
+                          <span className="rd-meta">
+                            {`${claim.authorType} · ${claim.recordedAt.slice(0, 10)}${
+                              claim.confidence ? ` · ${claim.confidence}` : ""
+                            }`}
+                          </span>
+                        </div>
+                        <p className="rd-steering-text">{claim.text}</p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {axisSteering.length > 0 ? (
+                  <ul className="rd-steering" data-rd-steering-scope="axis">
+                    {axisSteering.map((claim) => (
+                      <li data-rd-steering={claim.id} key={claim.id}>
+                        <div className="rd-cluster">
+                          <span className="rd-source">{claim.kind}</span>
+                          <span className="rd-meta">
+                            {`on the axis · ${claim.authorType} · ${claim.recordedAt.slice(0, 10)}${
+                              claim.confidence ? ` · ${claim.confidence}` : ""
+                            }`}
+                          </span>
+                        </div>
+                        <p className="rd-steering-text">{claim.text}</p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </section>
             ) : null}
-          </section>
-        ) : null}
+            </div>
+          ) : null}
+        </div>
+        </div>
 
         {/* The retired feed's one survivor: what this window holds, stated rather than listed. */}
         <p className="rd-muted" data-rd-progress-summary="true">

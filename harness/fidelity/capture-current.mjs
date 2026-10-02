@@ -50,6 +50,9 @@ const TARGET = (flag("url", process.env.NAKAMA_DASHBOARD ?? "http://127.0.0.1:30
 const PAGE_URL = `${TARGET}/plugins/research-dashboard`;
 const VIEWPORT = (flag("viewport", "1440x900")).split("x").map(Number);
 const OUT = flag("out", null);
+// `--full` also writes a full-page PNG beside each viewport clip. Opt-in, because the montage compares first
+// screens and nothing else reads anything but the clip.
+const FULL = args.includes("--full");
 const VIEWS = ["topics", "people", "repositories", "progress"];
 // The capture's own scratch directory, created only once every layer up to the first screenshot has
 // held. `refuse` removes it, so a late failure leaves no half-capture behind.
@@ -63,6 +66,7 @@ const VIEW_MARKERS = {
   progress: [
     '[data-rd-view="progress"]',
     "[data-rd-progress-index]",
+    "[data-rd-progress-detail]",
     '[data-rd-view-heading="progress"]',
   ],
   repositories: [
@@ -202,6 +206,106 @@ try {
     mkdirSync(scratch, { recursive: true });
     scratchDir = scratch;
   }
+  /**
+   * Progress is captured on the subject that actually exercises the composition, not on whichever axis happens
+   * to be first. An axis with no problem, no plan and no support material renders the pane's empty state, which
+   * proves nothing about the grouped rows the prototype is being compared against. This walks the index, counts
+   * the optional sections each axis renders, and leaves the page on the axis that renders the most — measured
+   * from the DOM, so the choice cannot disagree with what the screenshot then shows.
+   */
+  async function selectRichestProgressAxis() {
+    const SECTIONS = [
+      "[data-rd-progress-plan]",
+      "[data-rd-progress-problems]",
+      "[data-rd-progress-repositories]",
+      "[data-rd-progress-evidence]",
+      "[data-rd-progress-steering]",
+    ];
+    const read = () =>
+      page.evaluate(
+        (markers) => {
+          const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+          return {
+            ids: [...(scope?.querySelectorAll("[data-rd-index-axis]") ?? [])].map((node) =>
+              node.getAttribute("data-rd-index-axis")
+            ),
+            sections: markers.filter((marker) => scope?.querySelector(marker) !== null),
+            title:
+              scope
+                ?.querySelector('[data-rd-index-axis][aria-pressed="true"] .rd-strong')
+                ?.textContent?.trim() ?? "",
+          };
+        },
+        SECTIONS
+      );
+    const { ids } = await read();
+    let best = { id: null, sections: [], title: "" };
+    for (const id of ids) {
+      await page.locator(`div[data-plugin-id] [data-rd-index-axis="${id}"]`).click();
+      // Wait for the page to *apply* the selection rather than merely to receive the click: the pane carries
+      // the axis it is showing, and that attribute is what "applied" means here.
+      await page
+        .waitForFunction(
+          (axisId) =>
+            document
+              .querySelector('div[data-plugin-id="research-dashboard"] [data-rd-progress-detail]')
+              ?.getAttribute("data-rd-progress-detail-axis") === axisId,
+          id,
+          { timeout: 10000 }
+        )
+        .catch(() => {});
+      const seen = await read();
+      if (seen.sections.length > best.sections.length) {
+        best = { id, sections: seen.sections, title: seen.title };
+      }
+    }
+    // Leave the page on the axis the walk chose, not on the last one it happened to visit. Without this the
+    // capture photographs whatever the loop ended on — which is how a first version of this produced a montage
+    // of an evidence-free axis in its empty state, reported as "3 optional section(s)" for the wrong subject.
+    if (best.id !== null) {
+      await page.locator(`div[data-plugin-id] [data-rd-index-axis="${best.id}"]`).click();
+      await page
+        .waitForFunction(
+          (axisId) =>
+            document
+              .querySelector('div[data-plugin-id="research-dashboard"] [data-rd-progress-detail]')
+              ?.getAttribute("data-rd-progress-detail-axis") === axisId,
+          best.id,
+          { timeout: 10000 }
+        )
+        .catch(() => {});
+      // The support band belongs to the **problem** on screen, not to the axis: a subject whose axis has several
+      // open problems renders one card or three depending on which of them the pane is showing (the fixture
+      // carries a problem with no repository and no artifact on purpose, next to one with both). So the same
+      // rule is applied one level down — walk the axis's own problem list and keep the problem that renders the
+      // most, which is the subject the composition is being judged on.
+      const problemIds = await page.evaluate(() =>
+        [...document.querySelectorAll('div[data-plugin-id="research-dashboard"] [data-rd-problem-choice]')].map(
+          (node) => node.getAttribute("data-rd-problem-choice")
+        )
+      );
+      for (const problemId of problemIds) {
+        await page
+          .locator(`div[data-plugin-id] [data-rd-problem-choice="${problemId}"]`)
+          .click()
+          .catch(() => {});
+        await page.waitForTimeout(120);
+        const seen = await read();
+        if (seen.sections.length > best.sections.length) {
+          best = { ...best, problemId, sections: seen.sections };
+        }
+      }
+      if (best.problemId !== undefined && best.problemId !== null) {
+        await page
+          .locator(`div[data-plugin-id] [data-rd-problem-choice="${best.problemId}"]`)
+          .click()
+          .catch(() => {});
+        await page.waitForTimeout(120);
+      }
+    }
+    return best;
+  }
+
   const shots = [];
   for (const view of VIEWS) {
     const control = page.locator(`div[data-plugin-id] [data-rd-view-option="${view}"]`);
@@ -228,6 +332,12 @@ try {
     console.log(
       `capture-current: view ${view} — markers ok (${present.length}/${markers.length})`
     );
+    if (view === "progress") {
+      const chosen = await selectRichestProgressAxis();
+      console.log(
+        `capture-current: view progress — captured on "${chosen.title}", which renders ${chosen.sections.length} optional section(s): ${chosen.sections.join(", ") || "none"}`
+      );
+    }
     if (scratch) {
       const file = path.join(scratch, `${view}.png`);
       await page.screenshot({
@@ -235,6 +345,15 @@ try {
         clip: { height: VIEWPORT[1], width: VIEWPORT[0], x: 0, y: 0 },
       });
       shots.push(file);
+      // A full-page capture as well, for the views whose composition runs past the first screen. The montage
+      // keeps using the viewport clip (it compares first screens), but a page like Progress cannot be judged
+      // from 900px: its rows 2 and its support band sit below the fold, and the visual gate is about exactly
+      // those. Written beside the clip rather than instead of it, so nothing that reads the clip changes.
+      if (FULL) {
+        const full = path.join(scratch, `${view}-full.png`);
+        await page.screenshot({ fullPage: true, path: full });
+        shots.push(full);
+      }
     }
   }
 
