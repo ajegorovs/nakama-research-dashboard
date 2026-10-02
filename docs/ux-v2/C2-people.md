@@ -173,14 +173,16 @@ PASS  C2: About's other branch — a person with no note is told so, never given
 PASS  C2: Related repositories are the ones the payload's own axes name — derived, not invented
 ```
 
-The About card has two branches, so the check reads both: it selects the second person and re-reads, which is
-why the six checks run as six and not as five plus an assumption.
+The About card has two branches, so the check reads it twice — it selects the second person and re-reads, which
+is why the six checks run as six and not as five plus an assumption. What that buys is coverage of *the card*,
+not coverage of both of its branches: as the finding below records, no caller can set `Person.notes`, so both
+reads land on the empty branch and the **non-empty branch is unreachable and therefore unexercised**.
 
 ## Found and left open: `Person.notes` cannot be set by any caller
 
 The About card renders `Person.notes`, and the reviewer's charter says to keep it as the factual About content
-— so the fixture was given a real note for one person (and none for the other), to exercise both branches. The
-attempt failed, and the failure is informative:
+— so the fixture was given a real note for one person (and none for the other) in order to exercise both
+branches. That attempt failed, and the failure is informative:
 
 - `harness/apply-layout-fixture.mjs` carrying `notes` on a person entry is rejected by the **host** as
   `HTTP 400 {"error":"invalid_input"}`. Validation is not the plugin's: `src/actions.ts` documents that the host
@@ -197,11 +199,17 @@ attempt failed, and the failure is informative:
   the caller-facing schema.
 
 **Consequence, stated honestly:** on both datasets the About card renders its *empty* branch, because nothing
-can put a note on a person. The check proves what the page does with a note it holds (`""` → the honest
-sentence, and a real note → the note itself, text-compared against the payload), but the non-empty branch is
-currently unreachable in a running instance. Making it reachable needs the host's manifest rules read properly
-— the two constants above are the entry points — and that is a data-surface change, not a composition one, so
-it is reported rather than smuggled into C2.
+can put a note on a person — so the non-empty branch is **unreachable and unexercised**, and both About checks
+read the same branch. The check proves what the page does with a note it *holds* (`""` → the honest sentence,
+and a real note → the note itself, text-compared against the payload); it cannot yet prove the second half
+against a running instance, and this record does not claim it does.
+
+**Docketed as a data/write-contract gap, not a C2 item** (reviewer, 2026-10-02): the page is doing the correct
+thing with the data it can actually receive, and the honest empty About state is the right behaviour. Extending
+the manifest and the action contract merely to make the prototype fixture richer is out of scope for the
+composition phase. If person notes become genuinely useful librarian-managed data, that is a deliberately
+scoped schema + action + manifest change with host-install validation; the two entry points above are where it
+starts.
 
 ## C2 records — one harness, one build (2026-10-02)
 
