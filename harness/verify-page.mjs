@@ -319,6 +319,7 @@ const CORPUS = await page.evaluate(
       people: all.people.map((person) => ({
         attributable: person.attributable,
         axes: person.axes.length,
+        lastActivityAt: person.lastActivityAt ?? null,
         name: person.person.displayName,
         recent: person.recentActivity.length,
         topics: person.topics.length,
@@ -1836,6 +1837,35 @@ check(
     people.duplicated.length === 0 &&
     people.count > 0,
   `index ${people.count}, header ${people.header}, duplicated ${JSON.stringify(people.duplicated)}`
+);
+// C2 increment 1: an index row is identity, then what is on, then *when* — and the when is the payload's
+// own number, not a second opinion about it. `unattributable` is the honest value for a person with no
+// mapped account: their last activity is unknown, which is not the same fact as "none".
+const personIndexRows = await page.evaluate(() => {
+  const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+  return [...(scope?.querySelectorAll("[data-rd-person]") ?? [])].map((row) => ({
+    context: (row.querySelector("[data-rd-person-context]")?.textContent ?? "").trim(),
+    name: row.getAttribute("data-rd-person") ?? "",
+    recency:
+      row.querySelector("[data-rd-person-recency]")?.getAttribute("data-rd-person-recency") ?? null,
+  }));
+});
+const expectedRecency = new Map(
+  CORPUS.people.map((person) => [
+    person.name,
+    person.attributable ? person.lastActivityAt ?? "none" : "unattributable",
+  ])
+);
+check(
+  "every person index row carries its context, and its recency is the payload's own",
+  personIndexRows.length === people.count &&
+    personIndexRows.every(
+      (row) =>
+        row.context !== "" &&
+        row.recency !== null &&
+        row.recency === expectedRecency.get(row.name)
+    ),
+  JSON.stringify({ rows: personIndexRows, expected: [...expectedRecency] })
 );
 check(
   "person-first shows one person at a time, with their involvement grouped underneath",

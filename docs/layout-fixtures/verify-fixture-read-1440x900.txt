@@ -1,6 +1,6 @@
 # harness/read-pass.sh — read pass · dataset fixture · viewport 1440x900
 # dashboard: http://127.0.0.1:3005
-# generated: 2026-10-02T17:36:53+03:00
+# generated: 2026-10-02T17:46:37+03:00
 
 PASS  login — status 200
 identity: expected fixture · 2 topic(s) (2 fixture-named) · 3 of 3 repository(ies) under fixture/ · observed fixture markers only
@@ -66,6 +66,7 @@ PASS  a per-axis history expands inside its own axis — 4 rows for Fixture: act
 PASS  the axis's notes are kept out of its history list — history 4 rows, notes 2 rows, probe "Fixture E evidence link: the rig-floor comparison sheet"
 detail screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/layout-fixtures/screenshots/1440x900/research-dashboard-read-detail.png
 PASS  the People view lists every person once — the header's count, not one row per link — index 2, header 2, duplicated []
+PASS  every person index row carries its context, and its recency is the payload's own — {"rows":[{"context":"2 active · 1 blocked · 4 axes · 2 topics","name":"Fixture Alpha","recency":"2026-10-01T15:25:00+03:00"},{"context":"1 active · 1 axis · 1 topic","name":"Fixture Zeta","recency":"unattributable"}],"expected":[["Fixture Alpha","2026-10-01T15:25:00+03:00"],["Fixture Zeta","unattributable"]]}
 PASS  person-first shows one person at a time, with their involvement grouped underneath — selected 1, panel Fixture Alpha, topics 2, involvements ["Layout fixture — crowded card","Layout fixture — second topic"]
 PASS  the person panel states attribution instead of implying idleness — payload attributable=true; page marker n/a; activity lists 1
 people: Fixture Alpha, Fixture Zeta | selected: Fixture Alpha | involved in: Layout fixture — crowded card, Layout fixture — second topic
@@ -143,7 +144,7 @@ PASS  no view runs away with the scroll at the reference size (budget: eight scr
 PASS  the Progress glance — the Problem column and the newest Activity row — is inside the first screen — problem top 237px, newest activity row bottom 411px, screen 900px
 PASS  every view names itself under the shell title (§7), in all four views — topics → "Topics", people → "People", repositories → "Repositories", progress → "Progress"
 PASS  every state row in every view renders its claim through the one badge — topics: 6 row(s), 0 without a claim; people: 4 row(s), 0 without a claim
-PASS  every recency label's words are the age of the timestamp it carries, in all four views — 5 label(s) across people, progress, repositories, topics; each matches its own timestamp
+PASS  every recency label's words are the age of the timestamp it carries, in all four views — 6 label(s) across people, progress, repositories, topics; each matches its own timestamp
 PASS  an exceptional state says which one it is, and never navigates — 2 notice(s) across the four views: repositories/empty, repositories/empty — every kind this dataset has a subject for is rendered (empty)
 PASS  a person's topic tags are the topics their own rollup links them to, ids and names alike — 7 tag(s) covering 2 link(s); every tag names a linked topic
 PASS  a repository's topic tags are the topics its own rollup links it to, ids and names alike — 6 tag(s) covering 1 link(s) in fixture/crowded-card; every tag names a linked topic
@@ -152,6 +153,6 @@ PASS  an axis tag clicked in Repositories lands in Progress/Axes with that axis 
 PASS  a repository tag clicked in Topics lands in Repositories with that repository selected — view repositories, panel "fixture/crowded-card" (wanted "fixture/crowded-card")
 PASS  the grammar traversal wrote nothing: no write action, and the projection is unchanged — writes 0 -> 0; payload identical
 screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/layout-fixtures/screenshots/1440x900/research-dashboard-read.png
-console issues after login: ["error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)","error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"]
+console issues after login: ["error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"]
 
 read pass: all checks passed; 0 skipped for want of a subject in this corpus

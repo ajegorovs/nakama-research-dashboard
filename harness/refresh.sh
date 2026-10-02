@@ -48,12 +48,18 @@ step "3/4 restart the dev instance, then reinstall onto it"
 # database lock. Restarting the instance releases the handles; it is the fix, so it belongs in the chain
 # rather than in an operator's memory. Set SKIP_RESTART=1 to leave the instance alone.
 if [ "${SKIP_RESTART:-0}" != "1" ]; then
-  systemctl --user restart nakama-dev-instance.service || true
+  # The unit and its port belong to the caller, not to this script: the fixture instance is a *second*
+  # unit on :4400, so restarting the corpus one would leave the fixture serving the previous vendored
+  # bytes while this script reported success — the same silent-stale-build failure the guard exists to
+  # catch, one layer up.
+  UNIT="${NAKAMA_UNIT:-nakama-dev-instance.service}"
+  API="${NAKAMA_URL:-http://127.0.0.1:4399}"
+  systemctl --user restart "$UNIT" || true
   for _ in $(seq 1 30); do
-    [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://127.0.0.1:4399/ || true)" = "401" ] && break
+    [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "$API/" || true)" = "401" ] && break
     sleep 1
   done
-  printf 'instance responding again (401 auth gate)\n'
+  printf '%s responding again (401 auth gate)\n' "$UNIT"
 fi
 set -a
 # shellcheck disable=SC1090

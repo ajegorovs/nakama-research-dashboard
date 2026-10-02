@@ -2514,7 +2514,35 @@ export function apply(ctx: Context) {
                 type="button"
               >
                 <span className="rd-strong">{entry.person.displayName}</span>
-                <span className="rd-meta">{involvementLine(entry)}</span>
+                <span className="rd-meta" data-rd-person-context="true">
+                  {involvementLine(entry)}
+                </span>
+                {/* The row's last segment is *when*, not *how much*: recency here is unwindowed on purpose
+                    (a person whose last event was three weeks ago has not recorded nothing), and a person
+                    with no mapped account gets the missing-link fact instead — "no activity" would be a
+                    different and false claim. `data-rd-person-recency` carries the timestamp, or `none` /
+                    `unattributable`, so a check can compare the row against the payload it came from. */}
+                <span
+                  className="rd-meta"
+                  data-rd-person-recency={
+                    entry.attributable
+                      ? entry.lastActivityAt ?? "none"
+                      : "unattributable"
+                  }
+                >
+                  {entry.attributable ? (
+                    entry.lastActivityAt ? (
+                      <RecencyLabel
+                        at={entry.lastActivityAt}
+                        prefix="last activity "
+                      />
+                    ) : (
+                      "nothing attributed yet"
+                    )
+                  ) : (
+                    "no account mapped"
+                  )}
+                </span>
               </button>
             </li>
           ))}

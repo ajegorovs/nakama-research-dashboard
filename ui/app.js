@@ -1439,8 +1439,15 @@ function apply(ctx) {
     }, /* @__PURE__ */ React.createElement("span", {
       className: "rd-strong"
     }, entry.person.displayName), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta"
-    }, involvementLine(entry)))))), selected ? /* @__PURE__ */ React.createElement(PersonPanel, {
+      className: "rd-meta",
+      "data-rd-person-context": "true"
+    }, involvementLine(entry)), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta",
+      "data-rd-person-recency": entry.attributable ? entry.lastActivityAt ?? "none" : "unattributable"
+    }, entry.attributable ? entry.lastActivityAt ? /* @__PURE__ */ React.createElement(RecencyLabel, {
+      at: entry.lastActivityAt,
+      prefix: "last activity "
+    }) : "nothing attributed yet" : "no account mapped"))))), selected ? /* @__PURE__ */ React.createElement(PersonPanel, {
       entry: selected,
       onOpenEntity,
       windowDays
