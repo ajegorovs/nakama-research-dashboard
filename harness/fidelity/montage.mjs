@@ -22,6 +22,10 @@ const OUT = flag("out", path.join(FID, "side-by-side"));
 // Hygiene). Pass --url-label only for a montage that will not be committed.
 const URL_LABEL = flag("url-label", "<box>.<tailnet>.ts.net:3003");
 const BUILD = flag("build", null);
+// The placeholder is written into HTML, so its angle brackets must be escaped or the browser parses
+// `<box>.<tailnet>` as an element and the caption renders a mangled URL.
+const esc = (value) =>
+  String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
 const cachedChromium = () => {
   const root = path.join(process.env.HOME ?? "", ".cache", "ms-playwright");
@@ -70,7 +74,7 @@ for (const [name, protoStem, currentFile] of PAIRS) {
     <div class="cap"><b>${name} — APPROVED PROTOTYPE</b><span>docs/ux-v2/contract/prototypes/${protoStem}.html</span></div>
     <img src="${abs(proto)}">
     <div class="gap"></div>
-    <div class="cap"><b>${name} — RUNNING REVIEW UI</b><span>http://${URL_LABEL}${BUILD === null ? "" : ` — build ${BUILD}`}</span></div>
+    <div class="cap"><b>${name} — RUNNING REVIEW UI</b><span>http://${esc(URL_LABEL)}${BUILD === null ? "" : ` — build ${esc(BUILD)}`}</span></div>
     <img src="${abs(current)}">
   </body></html>`;
   const file = path.join(OUT, `${name}.html`);
