@@ -96,6 +96,12 @@ brief's toolbar list includes `Add topic` among the grouped controls. So the che
 satisfied while the contract's intent is — the mismatch is *inside* the frozen contract. I did not edit it
 (it is published verbatim); it is the reviewer's wording to settle.
 
+**Resolved (2026-10-02, reviewer ruling):** the later UX review supersedes the earlier language that retained
+broad `Add topic` / `Edit fields` controls — the checklist's wording is the **intended final behavior**, and
+removing the broad controls is a **U6 refinement item**. The frozen contract is not rewritten; the clarification
+lives in `docs/ux-v2/DECISIONS.md` §1 and is registered as **D7** in `docs/ux-v2/README.md`. The two items below
+became hardening items **H1**/**H2** in `STATUS.md`.
+
 **Not confirmed by this audit, and why:** *"Existing structured conflict semantics remain unchanged"* (a store
 property — covered by tests, not the page pass), and *"Keyboard focus and selected-row state remain visible"*,
 for which I found no named check in the records — if it is meant to be machine-checked, it needs one; if it is a

@@ -79,6 +79,8 @@ and item by item as each chunk lands — the list is not restated here.
 | D4 | Reopen matrix | The full set (`usable`/`parked`/`completed` → `active`) |
 | D5 | Reviewability | Everything the reviewer needs is published **in this repo** — contract, mapping, status, baseline and a runnable acceptance pass. The reviewer pulls the repo rather than reaching an instance |
 | D6 | Deployment | Dev instance only until v2 is proven; the Docker deployment is out of scope |
+| D7 | Topics editing controls (post-contract) | **Topics is read-first.** The later UX review supersedes earlier language retaining broad `Add Topic` / `Edit Fields` controls; the acceptance checklist's wording is the intended final behavior, and removing the broad controls is a **U6 refinement item**. See `DECISIONS.md` |
+| D8 | UX-v2 baseline | U11 and the merge are **accepted** on `63e1d4c` / tag `ux-v2-complete`. Open after it: the U5/U6/U8/U9 refinement (incl. D7) and two hardening items from the contract audit — an executable **keyboard-focus visibility** check, and no browser test for structured conflict semantics (the store/action tests cover it) |
 
 ## How to check any claim in this directory
 
