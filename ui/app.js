@@ -45,8 +45,6 @@ var WINDOW_OPTIONS = [
   { days: 30, label: "30 days" },
   { days: 0, label: "All time" }
 ];
-var COUNTED_STATES = ["blocked", "active", "draft", "parked"];
-var OTHER_STATES = ["completed", "abandoned"];
 var VIEW_OPTIONS = [
   { label: "Topics", value: "topics" },
   { label: "People", value: "people" },
@@ -64,7 +62,6 @@ var PROGRESS_INDEX_OPTIONS = [
   { label: "Axes", value: "axes" },
   { label: "Problems", value: "problems" }
 ];
-var LEAD_AXES = 3;
 var FEED_LEAD = 12;
 var css = `
 /*
@@ -460,6 +457,61 @@ var css = `
 [data-plugin-id="research-dashboard"] .rd-strong { font-weight: 600; }
 /* The one page-level title, which used to be the only inline-styled heading on the page. */
 [data-plugin-id="research-dashboard"] .rd-page-title { font-size: 16px; font-weight: 600; margin: 0; }
+/* C1: the Topics composition. The split itself is the .rd-split rule above — this sizes the detail and
+   gives it its own two lanes: the work being done, then a quieter side rail. The rail keeps a rule
+   instead of a box, because the detail is one page, not a dashboard of panels. */
+[data-plugin-id="research-dashboard"] .rd-topic-index {
+  flex: 0 1 15rem;
+}
+[data-plugin-id="research-dashboard"] .rd-topic-detail {
+  flex: 1 1 34rem;
+  min-width: 20rem;
+  display: grid;
+  gap: var(--rd-gap-block);
+}
+[data-plugin-id="research-dashboard"] .rd-detail-head {
+  display: grid;
+  gap: var(--rd-gap-row);
+}
+[data-plugin-id="research-dashboard"] .rd-detail-claims {
+  display: grid;
+  gap: var(--rd-gap-tight);
+}
+[data-plugin-id="research-dashboard"] .rd-detail-grid {
+  display: grid;
+  gap: var(--rd-gap-block);
+  grid-template-columns: minmax(0, 1fr) minmax(14rem, 20rem);
+  align-items: start;
+}
+@media (max-width: 1000px) {
+  [data-plugin-id="research-dashboard"] .rd-detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+[data-plugin-id="research-dashboard"] .rd-current-work {
+  display: grid;
+  gap: var(--rd-gap-row);
+}
+[data-plugin-id="research-dashboard"] .rd-side-stack {
+  display: grid;
+  gap: var(--rd-gap-block);
+  border-left: var(--rd-rule);
+  padding: 0 0 0 12px;
+}
+[data-plugin-id="research-dashboard"] .rd-side-card {
+  display: grid;
+  gap: var(--rd-gap-row);
+}
+[data-plugin-id="research-dashboard"] .rd-side-title {
+  font-size: var(--rd-meta);
+  font-weight: 600;
+  margin: 0;
+}
+[data-plugin-id="research-dashboard"] .rd-narrow-write {
+  display: grid;
+  gap: var(--rd-gap-row);
+}
+
 `;
 function draftFrom(axis, note = "") {
   return {
@@ -597,21 +649,6 @@ function apply(ctx) {
       size: "sm",
       variant: "outline"
     }, option.label)));
-  }
-  function StateCounts({ counts }) {
-    const shown = [...COUNTED_STATES, ...OTHER_STATES].filter((state) => counts[state] > 0);
-    if (shown.length === 0) {
-      return /* @__PURE__ */ React.createElement("span", {
-        className: "rd-muted"
-      }, "no development axes yet");
-    }
-    return /* @__PURE__ */ React.createElement("span", {
-      className: "rd-cluster"
-    }, shown.map((state) => /* @__PURE__ */ React.createElement("span", {
-      className: "rd-count",
-      "data-rd-state": state,
-      key: state
-    }, counts[state], " ", state)));
   }
   function AxisItem({
     axis,
@@ -2024,8 +2061,8 @@ function apply(ctx) {
         active = false;
       };
     }, [expandedId]);
-    function toggle(topicId) {
-      setExpandedId((current) => current === topicId ? null : topicId);
+    function selectTopic(topicId) {
+      setExpandedId(topicId);
       setDetail(null);
       setConflict(null);
     }
@@ -2113,6 +2150,19 @@ function apply(ctx) {
     }
     const topics = overview?.topics ?? [];
     const counts = overview?.counts;
+    React.useEffect(() => {
+      if (topics.length === 0) {
+        return;
+      }
+      if (expandedId && topics.some((entry) => entry.topic.id === expandedId)) {
+        return;
+      }
+      setExpandedId(topics[0].topic.id);
+    }, [topics, expandedId]);
+    const selectedEntry = topics.find((entry) => entry.topic.id === expandedId) ?? topics[0] ?? null;
+    const selectedDetails = selectedEntry && detail && detail.topic.id === selectedEntry.topic.id ? detail : null;
+    const currentAxes = (selectedDetails ? selectedDetails.axes : selectedEntry?.axes ?? []).filter((axis) => axis.state !== "completed" && axis.state !== "abandoned");
+    const foldedAxes = selectedDetails ? selectedDetails.axes.filter((axis) => axis.state === "completed" || axis.state === "abandoned") : [];
     return /* @__PURE__ */ React.createElement("div", {
       className: "rd-stack"
     }, /* @__PURE__ */ React.createElement("div", {
@@ -2169,219 +2219,257 @@ function apply(ctx) {
       countLabel(counts.people, "person", "people"),
       countLabel(counts.repositories, "repository", "repositories")
     ].join(" · ") : "loading…")), view === "topics" ? /* @__PURE__ */ React.createElement("div", {
-      className: "rd-stack",
+      className: "rd-split",
       "data-rd-view": "topics"
+    }, /* @__PURE__ */ React.createElement("ul", {
+      "aria-label": "Topics",
+      className: "rd-index rd-topic-index",
+      "data-rd-topic-index": topics.length
     }, topics.map((entry) => {
-      const hasBlocked = entry.axisCounts.blocked > 0;
-      const expanded = entry.topic.id === expandedId;
-      const shown = expanded ? entry.axes : entry.axes.slice(0, LEAD_AXES);
-      const hidden = entry.axes.length - shown.length;
-      const details = expanded && detail && detail.topic.id === entry.topic.id ? detail : null;
-      return /* @__PURE__ */ React.createElement(Card, {
-        className: "rd-topic-card",
-        "data-rd-blocked": hasBlocked,
-        "data-rd-mode": expanded ? "read" : "collapsed",
-        "data-rd-topic": entry.topic.name,
+      const isSelected = entry.topic.id === expandedId;
+      const isStale = entry.topic.status === "stale";
+      const currentCount = entry.axes.filter((axis) => axis.state !== "completed" && axis.state !== "abandoned").length;
+      return /* @__PURE__ */ React.createElement("li", {
         key: entry.topic.id
-      }, /* @__PURE__ */ React.createElement(CardHeader, null, /* @__PURE__ */ React.createElement(DetailHeader, {
-        badge: /* @__PURE__ */ React.createElement("span", {
-          className: "rd-muted"
-        }, entry.topic.status),
-        context: /* @__PURE__ */ React.createElement(React.Fragment, null, entry.repositories.map((repository) => /* @__PURE__ */ React.createElement(EntityTag, {
-          id: repository.id,
-          key: repository.id,
-          label: repository.fullName,
-          onOpen: openEntity,
-          type: "repository"
-        })), entry.people.map((person) => /* @__PURE__ */ React.createElement(EntityTag, {
-          id: person.id,
-          key: person.id,
-          label: person.displayName,
-          onOpen: openEntity,
-          type: "person"
-        })), entry.repositories.length === 0 && entry.people.length === 0 ? /* @__PURE__ */ React.createElement("span", {
-          className: "rd-meta"
-        }, "nobody tagged yet") : null),
-        title: /* @__PURE__ */ React.createElement(CardTitle, null, entry.topic.name)
-      })), /* @__PURE__ */ React.createElement(CardContent, null, /* @__PURE__ */ React.createElement("div", {
-        className: "rd-form"
-      }, /* @__PURE__ */ React.createElement(StateCounts, {
-        counts: entry.axisCounts
-      }), /* @__PURE__ */ React.createElement("ul", {
-        className: "rd-axes"
-      }, details ? details.axes.map((axis) => /* @__PURE__ */ React.createElement(AxisDetailCard, {
-        axis,
-        busy,
-        conflict,
-        correction,
-        historyOpen: historyAxisId === axis.id,
-        key: axis.id,
-        onCorrection: setCorrection,
-        onOpenEntity: openEntity,
-        onReload: () => {
-          reloadAxis(details.topic.id, axis.id);
-        },
-        onSave: () => {
-          saveCorrection();
-        },
-        onToggleHistory: () => {
-          setHistoryAxisId((current) => current === axis.id ? null : axis.id);
-        }
-      })) : shown.map((axis) => /* @__PURE__ */ React.createElement(AxisItem, {
-        axis,
-        key: axis.id,
-        onOpenEntity: openEntity
-      }))), /* @__PURE__ */ React.createElement("div", {
-        className: "rd-row"
-      }, /* @__PURE__ */ React.createElement("span", {
-        className: "rd-cluster",
-        "data-rd-topic-recent": "true"
-      }, /* @__PURE__ */ React.createElement("span", {
-        className: "rd-meta"
-      }, "Recent: ", countLabel(entry.activityCount, "event", "events")), entry.lastActivityAt ? /* @__PURE__ */ React.createElement(RecencyLabel, {
-        at: entry.lastActivityAt,
-        prefix: "· last activity "
-      }) : /* @__PURE__ */ React.createElement("span", {
-        className: "rd-muted"
-      }, "· no activity yet")), /* @__PURE__ */ React.createElement("div", {
-        className: "rd-cluster"
-      }, /* @__PURE__ */ React.createElement(Button, {
-        "data-rd-close": expanded ? "true" : "false",
-        "data-rd-read-open": expanded ? "false" : "true",
+      }, /* @__PURE__ */ React.createElement("button", {
+        "aria-pressed": isSelected,
+        className: "rd-index-item",
+        "data-rd-index-topic": entry.topic.name,
+        "data-rd-topic-stale": isStale,
         disabled: busy,
-        onClick: () => {
-          if (expanded) {
-            setExpandedId(null);
-          } else {
-            toggle(entry.topic.id);
-          }
-        },
-        size: "sm",
-        variant: expanded ? "outline" : "default"
-      }, expanded ? "Close" : "Read topic"))), hidden > 0 && !expanded ? /* @__PURE__ */ React.createElement(Notice, {
-        attrs: { "data-rd-hidden-axes": String(hidden) },
-        kind: "truncated"
-      }, shown.length, " of ", entry.axes.length, " axes shown · ", hidden, " ", "more") : null, details ? /* @__PURE__ */ React.createElement("div", {
-        className: "rd-detail rd-divider",
-        "data-rd-detail": details.topic.name
+        onClick: () => selectTopic(entry.topic.id),
+        type: "button"
       }, /* @__PURE__ */ React.createElement("span", {
-        className: "rd-section"
-      }, "Topic"), /* @__PURE__ */ React.createElement("div", {
-        className: "rd-claim"
-      }, /* @__PURE__ */ React.createElement("span", {
-        className: "rd-claim-value",
-        "data-rd-claim": "description"
-      }, details.topic.description || /* @__PURE__ */ React.createElement("span", {
-        className: "rd-muted"
-      }, "no description yet")), /* @__PURE__ */ React.createElement("span", {
-        className: "rd-muted"
-      }, "description")), /* @__PURE__ */ React.createElement("div", {
-        className: "rd-claim"
-      }, /* @__PURE__ */ React.createElement("span", {
-        className: "rd-claim-value",
-        "data-rd-claim": "summary"
-      }, details.topic.summary || /* @__PURE__ */ React.createElement("span", {
-        className: "rd-muted"
-      }, "no approved summary")), /* @__PURE__ */ React.createElement("span", {
-        className: "rd-muted"
-      }, "approved summary — a human interpretation, not an agent one")), /* @__PURE__ */ React.createElement("span", {
-        className: "rd-meta",
-        "data-rd-detail-counts": "true"
-      }, [
-        countLabel(details.counts.axes, "axis", "axes"),
-        countLabel(details.counts.activities, "activity", "activities"),
-        countLabel(details.counts.notes, "note", "notes"),
-        `${details.counts.axesWithoutEvidence} without evidence`
-      ].join(" · ")), conflict && !conflict.axisId ? /* @__PURE__ */ React.createElement("div", {
-        className: "rd-conflict",
-        "data-rd-conflict": "true",
-        role: "alert"
+        className: "rd-row"
       }, /* @__PURE__ */ React.createElement("span", {
         className: "rd-strong"
-      }, "This topic changed since you opened it."), /* @__PURE__ */ React.createElement("span", {
-        className: "rd-meta"
-      }, conflict.message), /* @__PURE__ */ React.createElement("div", {
+      }, entry.topic.name), entry.lastActivityAt ? /* @__PURE__ */ React.createElement(RecencyLabel, {
+        at: entry.lastActivityAt
+      }) : null), /* @__PURE__ */ React.createElement("span", {
         className: "rd-cluster"
-      }, /* @__PURE__ */ React.createElement(Button, {
-        disabled: busy,
-        onClick: () => {
-          loadDetail(details.topic.id);
-        },
-        size: "sm",
-        variant: "outline"
-      }, "Reload this topic"), /* @__PURE__ */ React.createElement("span", {
-        className: "rd-muted"
-      }, "Nothing you typed has been thrown away."))) : null, /* @__PURE__ */ React.createElement("span", {
-        className: "rd-section"
-      }, "Corrections & notes · ", details.notes.length), /* @__PURE__ */ React.createElement("ul", {
-        className: "rd-notes",
-        "data-rd-topic-notes": details.notes.length
-      }, details.notes.map((note) => /* @__PURE__ */ React.createElement("li", {
-        key: note.id
-      }, /* @__PURE__ */ React.createElement("div", null, note.text), /* @__PURE__ */ React.createElement("span", {
-        className: "rd-meta"
-      }, note.authorType, " ·", " ", note.createdAt.slice(0, 10)))), details.notes.length === 0 ? /* @__PURE__ */ React.createElement("li", {
-        className: "rd-muted"
-      }, "No notes yet. This is where a correction or a caveat goes — deliberately not in the activity log.") : null), /* @__PURE__ */ React.createElement("form", {
-        className: "rd-cluster",
-        onSubmit: (event) => {
-          addTopicNote(event);
-        }
-      }, /* @__PURE__ */ React.createElement(Input, {
-        "aria-label": "Topic note",
-        disabled: busy,
-        maxLength: 1000,
-        onChange: (event) => setTopicNote(event.target.value),
-        placeholder: "A correction or caveat about this topic",
-        value: topicNote
-      }), /* @__PURE__ */ React.createElement(Button, {
-        disabled: busy || !topicNote.trim(),
-        size: "sm",
-        type: "submit",
-        variant: "outline"
-      }, "Add note")), /* @__PURE__ */ React.createElement(CardTitle, {
-        className: "rd-meta"
-      }, "Activity"), /* @__PURE__ */ React.createElement("ul", {
-        className: "rd-activity",
-        "data-rd-topic-activity": details.activity.length
-      }, details.activity.map((item) => /* @__PURE__ */ React.createElement(ActivityLine, {
-        axisLabel: details.axes.find((axis) => axis.id === item.axisId)?.title ?? null,
-        item,
-        key: item.id,
-        onOpenEntity: openEntity,
-        repositoryLabel: details.repositories.find((repository) => repository.id === item.repositoryId)?.fullName ?? null,
-        topicLabel: details.topic.name
-      })), details.activity.length === 0 ? /* @__PURE__ */ React.createElement("li", {
-        className: "rd-muted"
-      }, "No activity recorded yet.") : null), /* @__PURE__ */ React.createElement("form", {
-        className: "rd-form",
-        onSubmit: (event) => {
-          addActivity(event);
-        }
-      }, /* @__PURE__ */ React.createElement(Textarea, {
-        "aria-label": "Activity",
-        disabled: busy,
-        onChange: (event) => setActivitySummary(event.target.value),
-        placeholder: "One objective event, e.g. PR #72 merged",
-        value: activitySummary
-      }), /* @__PURE__ */ React.createElement("div", {
-        className: "rd-row"
-      }, /* @__PURE__ */ React.createElement(SourceSelect, {
-        disabled: busy,
-        onChange: setActivitySourceType,
-        value: activitySourceType
-      }), /* @__PURE__ */ React.createElement(Input, {
-        "aria-label": "Source reference",
-        disabled: busy,
-        maxLength: 200,
-        onChange: (event) => setActivitySourceRef(event.target.value),
-        placeholder: "Reference (PR #, commit, run id)",
-        value: activitySourceRef
-      })), /* @__PURE__ */ React.createElement(Button, {
-        disabled: busy || !activitySummary.trim(),
-        type: "submit"
-      }, "Record activity"))) : null)));
-    })) : null, view === "people" ? /* @__PURE__ */ React.createElement(PeopleView, {
+      }, /* @__PURE__ */ React.createElement("span", {
+        className: "rd-meta",
+        "data-rd-index-current": currentCount
+      }, countLabel(currentCount, "current axis", "current axes")), isStale ? /* @__PURE__ */ React.createElement("span", {
+        className: "rd-count",
+        "data-rd-index-stale": "true"
+      }, "Stale") : null)));
+    })), selectedEntry ? /* @__PURE__ */ React.createElement("div", {
+      className: "rd-panel rd-topic-detail",
+      "data-rd-detail": selectedEntry.topic.name,
+      "data-rd-detail-mode": "persistent"
+    }, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-detail-head"
+    }, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-row",
+      "data-rd-detail-header": "true"
+    }, /* @__PURE__ */ React.createElement(CardTitle, null, selectedEntry.topic.name), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-muted"
+    }, selectedEntry.topic.status)), /* @__PURE__ */ React.createElement("div", {
+      className: "rd-cluster rd-tags",
+      "data-rd-detail-context": "true"
+    }, (selectedDetails?.repositories ?? selectedEntry.repositories).map((repository) => /* @__PURE__ */ React.createElement(EntityTag, {
+      id: repository.id,
+      key: repository.id,
+      label: repository.fullName,
+      onOpen: openEntity,
+      type: "repository"
+    })), (selectedDetails?.people ?? selectedEntry.people).map((person) => /* @__PURE__ */ React.createElement(EntityTag, {
+      id: person.id,
+      key: person.id,
+      label: person.displayName,
+      onOpen: openEntity,
+      type: "person"
+    })), (selectedDetails?.repositories ?? selectedEntry.repositories).length === 0 && (selectedDetails?.people ?? selectedEntry.people).length === 0 ? /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, "nobody tagged yet") : null), selectedDetails ? /* @__PURE__ */ React.createElement("div", {
+      className: "rd-detail-claims"
+    }, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-claim"
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-claim-value",
+      "data-rd-claim": "description"
+    }, selectedDetails.topic.description || /* @__PURE__ */ React.createElement("span", {
+      className: "rd-muted"
+    }, "no description yet")), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-muted"
+    }, "description")), /* @__PURE__ */ React.createElement("div", {
+      className: "rd-claim"
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-claim-value",
+      "data-rd-claim": "summary"
+    }, selectedDetails.topic.summary || /* @__PURE__ */ React.createElement("span", {
+      className: "rd-muted"
+    }, "no approved summary")), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-muted"
+    }, "approved summary — a human interpretation, not an agent one"))) : null), selectedDetails && conflict && !conflict.axisId ? /* @__PURE__ */ React.createElement("div", {
+      className: "rd-conflict",
+      "data-rd-conflict": "true",
+      role: "alert"
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-strong"
+    }, "This topic changed since you opened it."), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, conflict.message), /* @__PURE__ */ React.createElement("div", {
+      className: "rd-cluster"
+    }, /* @__PURE__ */ React.createElement(Button, {
+      disabled: busy,
+      onClick: () => {
+        loadDetail(selectedDetails.topic.id);
+      },
+      size: "sm",
+      variant: "outline"
+    }, "Reload this topic"), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-muted"
+    }, "Nothing you typed has been thrown away."))) : null, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-detail-grid"
+    }, /* @__PURE__ */ React.createElement("section", {
+      className: "rd-current-work",
+      "data-rd-current-work": currentAxes.length
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-section"
+    }, "Current work"), currentAxes.length === 0 ? /* @__PURE__ */ React.createElement("p", {
+      className: "rd-muted"
+    }, "No current axes on this topic.") : /* @__PURE__ */ React.createElement("ul", {
+      className: "rd-axes"
+    }, currentAxes.map((axis) => selectedDetails ? /* @__PURE__ */ React.createElement(AxisDetailCard, {
+      axis,
+      busy,
+      conflict,
+      correction,
+      historyOpen: historyAxisId === axis.id,
+      key: axis.id,
+      onCorrection: setCorrection,
+      onOpenEntity: openEntity,
+      onReload: () => {
+        reloadAxis(selectedEntry.topic.id, axis.id);
+      },
+      onSave: () => {
+        saveCorrection();
+      },
+      onToggleHistory: () => {
+        setHistoryAxisId((current) => current === axis.id ? null : axis.id);
+      }
+    }) : /* @__PURE__ */ React.createElement(AxisItem, {
+      axis,
+      key: axis.id,
+      onOpenEntity: openEntity
+    }))), foldedAxes.length > 0 ? /* @__PURE__ */ React.createElement("details", {
+      className: "rd-completed-fold",
+      "data-rd-folded-axes": foldedAxes.length
+    }, /* @__PURE__ */ React.createElement("summary", null, "Completed and abandoned work (", foldedAxes.length, ")"), /* @__PURE__ */ React.createElement("ul", {
+      className: "rd-axes"
+    }, foldedAxes.map((axis) => /* @__PURE__ */ React.createElement(AxisDetailCard, {
+      axis,
+      busy,
+      conflict,
+      correction,
+      historyOpen: historyAxisId === axis.id,
+      key: axis.id,
+      onCorrection: setCorrection,
+      onOpenEntity: openEntity,
+      onReload: () => {
+        reloadAxis(selectedEntry.topic.id, axis.id);
+      },
+      onSave: () => {
+        saveCorrection();
+      },
+      onToggleHistory: () => {
+        setHistoryAxisId((current) => current === axis.id ? null : axis.id);
+      }
+    })))) : null), /* @__PURE__ */ React.createElement("aside", {
+      className: "rd-side-stack"
+    }, /* @__PURE__ */ React.createElement("section", {
+      className: "rd-side-card"
+    }, /* @__PURE__ */ React.createElement("h3", {
+      className: "rd-side-title"
+    }, "Recent activity"), /* @__PURE__ */ React.createElement("ul", {
+      className: "rd-activity",
+      "data-rd-topic-activity": selectedDetails?.activity.length ?? selectedEntry.activityCount
+    }, (selectedDetails?.activity ?? []).map((item) => /* @__PURE__ */ React.createElement(ActivityLine, {
+      axisLabel: selectedDetails?.axes.find((axis) => axis.id === item.axisId)?.title ?? null,
+      item,
+      key: item.id,
+      onOpenEntity: openEntity,
+      repositoryLabel: selectedDetails?.repositories.find((repository) => repository.id === item.repositoryId)?.fullName ?? null,
+      topicLabel: selectedEntry.topic.name
+    })), selectedDetails && selectedDetails.activity.length === 0 ? /* @__PURE__ */ React.createElement("li", {
+      className: "rd-muted"
+    }, "No activity recorded yet.") : null, !selectedDetails ? /* @__PURE__ */ React.createElement("li", {
+      className: "rd-muted"
+    }, "Loading this topic…") : null), selectedDetails ? /* @__PURE__ */ React.createElement("form", {
+      className: "rd-narrow-write",
+      onSubmit: (event) => {
+        addActivity(event);
+      }
+    }, /* @__PURE__ */ React.createElement(Textarea, {
+      "aria-label": "Activity",
+      disabled: busy,
+      onChange: (event) => setActivitySummary(event.target.value),
+      placeholder: "One objective event, e.g. PR #72 merged",
+      value: activitySummary
+    }), /* @__PURE__ */ React.createElement("div", {
+      className: "rd-row"
+    }, /* @__PURE__ */ React.createElement(SourceSelect, {
+      disabled: busy,
+      onChange: setActivitySourceType,
+      value: activitySourceType
+    }), /* @__PURE__ */ React.createElement(Input, {
+      "aria-label": "Source reference",
+      disabled: busy,
+      maxLength: 200,
+      onChange: (event) => setActivitySourceRef(event.target.value),
+      placeholder: "Reference (PR #, commit, run id)",
+      value: activitySourceRef
+    })), /* @__PURE__ */ React.createElement(Button, {
+      disabled: busy || !activitySummary.trim(),
+      size: "sm",
+      type: "submit"
+    }, "Record activity")) : null), /* @__PURE__ */ React.createElement("section", {
+      className: "rd-side-card"
+    }, /* @__PURE__ */ React.createElement("h3", {
+      className: "rd-side-title"
+    }, "Notes"), /* @__PURE__ */ React.createElement("ul", {
+      className: "rd-notes",
+      "data-rd-topic-notes": selectedDetails?.notes.length ?? 0
+    }, (selectedDetails?.notes ?? []).map((note) => /* @__PURE__ */ React.createElement("li", {
+      key: note.id
+    }, /* @__PURE__ */ React.createElement("div", null, note.text), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, note.authorType, " · ", note.createdAt.slice(0, 10)))), selectedDetails && selectedDetails.notes.length === 0 ? /* @__PURE__ */ React.createElement("li", {
+      className: "rd-muted"
+    }, "No notes yet. This is where a correction or a caveat goes — deliberately not in the activity log.") : null), selectedDetails ? /* @__PURE__ */ React.createElement("form", {
+      className: "rd-narrow-write",
+      onSubmit: (event) => {
+        addTopicNote(event);
+      }
+    }, /* @__PURE__ */ React.createElement(Input, {
+      "aria-label": "Topic note",
+      disabled: busy,
+      maxLength: 1000,
+      onChange: (event) => setTopicNote(event.target.value),
+      placeholder: "A correction or caveat about this topic",
+      value: topicNote
+    }), /* @__PURE__ */ React.createElement(Button, {
+      disabled: busy || !topicNote.trim(),
+      size: "sm",
+      type: "submit",
+      variant: "outline"
+    }, "Add note / correction")) : null), /* @__PURE__ */ React.createElement("section", {
+      className: "rd-side-card"
+    }, /* @__PURE__ */ React.createElement("h3", {
+      className: "rd-side-title"
+    }, "Related repositories"), /* @__PURE__ */ React.createElement("div", {
+      className: "rd-cluster rd-tags"
+    }, (selectedDetails?.repositories ?? selectedEntry.repositories).map((repository) => /* @__PURE__ */ React.createElement(EntityTag, {
+      id: repository.id,
+      key: repository.id,
+      label: repository.fullName,
+      onOpen: openEntity,
+      type: "repository"
+    })), (selectedDetails?.repositories ?? selectedEntry.repositories).length === 0 ? /* @__PURE__ */ React.createElement("span", {
+      className: "rd-muted"
+    }, "No repository linked yet.") : null))))) : null) : null, view === "people" ? /* @__PURE__ */ React.createElement(PeopleView, {
       onOpenEntity: openEntity,
       people: overview?.people ?? [],
       preselect: entityTarget?.type === "person" ? entityTarget : null,
