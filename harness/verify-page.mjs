@@ -23,6 +23,7 @@
  */
 import { existsSync, readdirSync } from "node:fs";
 import { classifyDataset, fixHint, observedPhrase, verifyDataset } from "./dataset-identity.mjs";
+import { redactEndpoint } from "./redact.mjs";
 
 // playwright-core is a devDependency of this repo, so `bun install` makes the bare specifier
 // resolve; PLAYWRIGHT_CORE can point at any other install instead.
@@ -4911,7 +4912,11 @@ if (paletteReachable) {
   console.log("palette screenshot:", paletteShot);
   await paletteEntry.click();
   await page.waitForURL(new RegExp(`/plugins/${PLUGIN_ID}`), { timeout: 8000 }).catch(() => {});
-  check("palette entry navigates to the page", page.url().includes(`/plugins/${PLUGIN_ID}`), page.url());
+  check(
+    "palette entry navigates to the page",
+    page.url().includes(`/plugins/${PLUGIN_ID}`),
+    redactEndpoint(page.url())
+  );
 }
 
 // ---------------------------------- U9: the density rules the polish is held to

@@ -246,3 +246,26 @@ are read as decisions rather than as omissions.
   verdict. The first corpus 1440×900 attempt for this unit was lost exactly that way, on a
   `500 SQLiteError: database is locked` from the dev instance (22:41:23, requestId `aa21cc5e`) that left
   `get_topic`'s pane empty while the checks read it.
+
+## 11. A public artifact carries labels, never live endpoints (2026-10-02)
+
+The acceptance records, the montages and the fidelity captions are committed to a **public** repository, and the
+instance addresses are not public information. The rule is recorded here because it was learned the hard way: the
+first version of the merge-readiness doc argued that the tailnet address in the record headers was "governed
+elsewhere" and left it in place, and the reviewer caught it as a privacy regression against the earlier scrub.
+
+- **Any endpoint a harness writes into a committed artifact is redacted** through `harness/redact.mjs`. Loopback
+  stays verbatim (no identity, and it is the useful diagnostic later); everything identifying — any literal
+  address, a `.ts.net` / `.local` / `.internal` / `.lan` / `.home` name, or this machine's own hostname — becomes
+  `<box>.<tailnet>.ts.net` with the port and path kept; a **public** host (a GitHub remote, an upstream doc link)
+  is untouched, because over-redacting would damage the evidence a record carries.
+- **One definition, both kinds of caller** — `read-pass.sh` through `harness/redact-url.mjs`, `verify-page.mjs`
+  through the import. A rule with a bash copy and a JS copy is two rules that will drift.
+- **The guard is part of the suite**: `bun run harness:records` (`harness/test-redact.mjs`) asserts the rule's
+  cases and scans every committed text artifact under `docs/` for what the rule would redact. A record carrying a
+  live endpoint fails the check that has to pass before the next handoff.
+- **The real endpoint stays in the estate** — compose env files and runtime config, which are git-local by design
+  and are not the public artifact.
+- **History is not rewritten to satisfy this rule.** The scrub applies to the tree and the diff; where a leak
+  exists in already-published history it is *reported* with its commit count, and the decision to rewrite is
+  explicit — never implicit, never a force-push.

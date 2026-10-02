@@ -1,5 +1,5 @@
 # harness/read-pass.sh — write pass · dataset corpus · viewport 1440x900
-# dashboard: http://100.122.4.42:3003
+# dashboard: http://<box>.<tailnet>.ts.net:3003  [endpoint redacted]
 # generated: 2026-10-02T17:24:52+03:00
 
 PASS  login — status 200
@@ -133,7 +133,7 @@ SKIP  a person filter that matches nothing attributable says so, and shows no un
 PASS  leaving the Progress view restores the topic view with no residue — topic rows 1, progress views 0
 PASS  command palette lists the plugin page
 palette screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/screenshots/research-dashboard-write-palette.png
-PASS  palette entry navigates to the page — http://100.122.4.42:3003/plugins/research-dashboard
+PASS  palette entry navigates to the page — http://<box>.<tailnet>.ts.net:3003/plugins/research-dashboard
 PASS  one surface per level: no boxed block nests inside another, except a refusal banner — 0 nested box(es) on this view, all refusal banners
 PASS  tags stay chips when they wrap: one height per cluster, one line each — 9 cluster(s), every chip one line
 SKIP  the exceptional colour is used only for the exceptional state — no blocked state badge is on this view, so the theme's exceptional colour cannot be read off one

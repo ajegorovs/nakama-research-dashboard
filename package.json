@@ -17,6 +17,7 @@
     "harness:reinstall": "bun harness/reinstall-plugin.mjs",
     "harness:update": "bun harness/update-plugin.mjs",
     "harness:test": "bun harness/test-004.mjs",
+    "harness:records": "bun harness/test-redact.mjs",
     "harness:identity": "bun harness/test-dataset-identity.mjs",
     "harness:write": "bash harness/read-pass.sh --write"
   },

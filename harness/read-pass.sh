@@ -15,6 +15,11 @@
 # (`bun install`) and a chromium — see README § "Run the acceptance pass". Credentials come from the
 # environment or --env-file (`NAKAMA_EMAIL` / `NAKAMA_PASSWORD`; the older `NAKAMA_DEV_*` spelling is
 # accepted too), never from an argument, so they do not end up in shell history or a committed file.
+#
+# **The transcript is a public artifact, so the endpoint in it is a label, not an address.** The header goes
+# through `harness/redact.mjs` (via `redact-url.mjs`): a loopback dashboard stays verbatim (no identity, and
+# useful when reading a record later), anything else becomes `<box>.<tailnet>.ts.net` with the port and path
+# kept. `harness/test-redact.mjs` scans the committed records for anything the rule would have caught.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -166,7 +171,7 @@ SCRATCH_TRANSCRIPT="$(mktemp "${TMPDIR:-/tmp}/nakama-read-pass-XXXXXX.txt")"
 set +e
 {
   echo "# harness/read-pass.sh — $PASS pass · dataset $DATASET · viewport $VIEWPORT"
-  echo "# dashboard: $NAKAMA_DASHBOARD"
+  echo "# dashboard: $("$RUNNER" "$HERE/redact-url.mjs" "$NAKAMA_DASHBOARD")"
   echo "# generated: $(date -Is)"
   echo
   "$RUNNER" "$HERE/verify-page.mjs" "${ARGS[@]+"${ARGS[@]}"}"

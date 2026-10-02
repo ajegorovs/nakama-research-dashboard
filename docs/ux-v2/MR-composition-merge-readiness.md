@@ -48,10 +48,14 @@ to take.
 | Check | Result |
 |---|---|
 | working tree | **clean** at the end of this phase (the phase's own records are committed with it) |
-| ahead / behind `main` | `git rev-list --left-right --count origin/main...HEAD` → **0 behind / 35 ahead** |
-| branch HEAD | `f73e430` (== `origin/composition/c1-topics`) |
+| ahead / behind `main` | `git rev-list --left-right --count origin/main...HEAD` → **0 behind / 36 ahead** |
+| branch HEAD | `f73e430` when the measurements below were taken; the redaction fix and this record's own corrections make it **36 ahead** |
 | `main` HEAD | `e09c1d6` |
-| composition commits | 35; implementation commit `c1b2059`, and `f73e430` on top is **documentation-only** |
+| composition commits | 36; implementation commit `c1b2059`, and every commit after it is **documentation-only** |
+
+**The self-reference, stated rather than left to a reader to notice:** merge-readiness measurements were taken at
+**35 commits ahead**; this record commit made the branch **36 ahead**. `main` remains **0 ahead / no divergence**
+throughout — it is never advanced by this phase.
 
 **The tested bundle and the commit, stated precisely** (the reviewer's housekeeping point): the release digest
 is computed over the manifest's folders (`actions`, `migrations`, `ui`, `skills`), so the bundle under test is
@@ -74,7 +78,7 @@ merge base).
 | `bun run harness:identity` | **82 / 82** |
 | committed bundle == source | after `bun run check` (which builds) the worktree shows **no** modification to `ui/app.js` or `actions/actions.js` — the committed build output is exactly what the sources produce; independently re-verified in the clean clone (§9) |
 | doc hygiene (estate) | `python3 scripts/doc-hygiene-check.py` → **137 files, 0 violations** |
-| doc hygiene (this repo) | every changed file scanned for `/home/<user>/`, hostnames, account emails and tailnet names → **no hit**; the only identifier class present is the tailnet IP inside record headers, which the estate's *Endpoint addressing & IP storage* item governs and which is deliberately not hand-fixed |
+| doc hygiene (this repo) | every changed file scanned for `/home/<user>/`, hostnames, account emails and tailnet names → **no hit** — and the one identifier class that *was* present, the live tailnet endpoint inside record headers, is fixed in §11, with a guard that scans every committed artifact instead of relying on a reader to notice |
 
 ## 4. The diff, inspected
 
@@ -190,11 +194,52 @@ Cloned from the **public GitHub remote** (the reviewer's own path), not from the
 parking reason (focus visibility is to be validated against the *final* composition) is stated in
 `docs/ux-v2/fidelity/REVIEW-PACKET.md` §6 and in the H1 commit message. Parked, not omitted.
 
-## 11. What remains
+## 11. The redaction fix — the reviewer's blocker, closed
 
-1. **The reviewer's verdict on this phase** — the evidence above is the deliverable.
-2. **The merge itself** (`main` ← `composition/c1-topics`, 35 commits, fast-forwardable in the sense that
-   `main` is 0 ahead): not performed, and not this phase's to take.
-3. H1's focus-visibility validation, after the merge, against the merged composition.
-4. The estate's own reconciliation of the same facts (`services/nakama/HANDOFF-UX-V2.md`,
-   `PLAN-UX-V2.md`, `REPOS.md`) — the estate has no remote by design, so those edits are local-only.
+The reviewer found that the pushed records still carried the **live tailnet endpoint in committed transcript
+headers** — a corpus record began `# dashboard: ` followed by the live `http://` origin (quoted here in its
+redacted form: `http://<box>.<tailnet>.ts.net:3003`), which conflicts with the privacy scrub that had already
+parameterized the fidelity captions. This section previously argued the
+address was "governed elsewhere"; that was the wrong call — **a private-range address committed to a public
+repository is identity, not an estate-configuration question**, and it is fixed now.
+
+**Two emitters, one rule.** The header came from `read-pass.sh` (echoing `$NAKAMA_DASHBOARD`) and the palette
+check's PASS line from `verify-page.mjs` (printing `page.url()`). Both now go through `harness/redact.mjs` — the
+shell via `harness/redact-url.mjs`, the check via an import — so the rule has one definition and no second copy
+in bash:
+
+- **loopback is kept verbatim** (`http://127.0.0.1:3005`) — it identifies nobody, and it is the useful diagnostic
+  when a record is read months later;
+- **identity is replaced with `<box>.<tailnet>.ts.net`**, keeping scheme, port and path: a literal address of any
+  kind (tailnet, LAN, public), a private DNS suffix (`.ts.net`, `.local`, `.internal`, `.lan`, `.home`), or this
+  machine's own hostname (compared against `os.hostname()`, so no literal name is baked into the source);
+- **a public host is left alone** — the GitHub remote and upstream doc links in these documents are not identity,
+  and over-redacting would damage the evidence the records carry.
+
+**The records themselves** — redacted in place, presentation only, no measured value changed and **no acceptance
+re-run** (the reviewer's allowance): 16 occurrences across 8 committed files (`docs/corpus/verify-read*.txt`,
+`verify-write*.txt` and the three `.revision-442` predecessors, plus the two `.revision-410` fixture
+predecessors), with the header now reading
+`# dashboard: http://<box>.<tailnet>.ts.net:3003  [endpoint redacted]`.
+
+**The guard, so the next pass cannot reintroduce it:** `bun run harness:records` (`harness/test-redact.mjs`) asserts
+the rule's cases *and* scans every committed text artifact under `docs/` — **101 files, 0 offences**. Evidence that
+the generator itself is fixed: a corpus read pass re-run on the same build with the new code writes
+`# dashboard: http://<box>.<tailnet>.ts.net:3003` into its transcript and carries no live endpoint anywhere,
+palette line included.
+
+**History, stated plainly rather than left implicit.** The current tree and the branch diff carry nothing; `main`
+never did (`origin/main` has 0 hits for the address, the tailnet suffix or any device hostname). The string does
+remain in **12 commits of this branch's history**, including the earlier *"privacy scrub — parameterize the montage
+caption"* commit. Removing it from history requires a rewrite, which the standing rule forbids without an explicit
+decision; **no rewrite was performed**, and that choice is left to the reviewer.
+
+## 12. What remains
+
+1. **The reviewer's word on this fix** — they recorded *"after those docs/redaction-only fixes: merge may proceed
+   without rerunning the full acceptance suite."*
+2. **The merge itself**: `main` ← `composition/c1-topics`, now 36 commits, `main` 0 ahead. Not performed.
+3. **If the history exposure matters** (§11): an explicit decision to rewrite the branch before merging.
+4. H1's focus-visibility validation, after the merge, against the merged composition.
+5. The estate's own reconciliation of these facts (`services/nakama/HANDOFF-UX-V2.md`, `PLAN-UX-V2.md`,
+   `REPOS.md`) — local-only, as the estate has no remote.
