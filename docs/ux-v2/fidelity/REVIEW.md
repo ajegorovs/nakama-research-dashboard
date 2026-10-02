@@ -26,8 +26,10 @@ is served from the installed copy too (`/v1/plugins/ui/{orgId}/{pluginId}/{path}
 **What was changed, exactly:**
 
 1. stopped the stale server (`pid 492453` on `:4399`, started Wed Sep 30 18:36), started a fresh one as a
-   transient user unit **`nakama-dev-instance.service`** (so it survives this session; Vite untouched, still
-   tailnet-bound, so remote access is unchanged);
+   user unit **`nakama-dev-instance.service`** (Vite untouched, still tailnet-bound, so remote access is
+   unchanged). *Updated 2026-10-02:* both processes are now **permanent, enable-on-boot user units** with
+   `Restart=always` — `nakama-dev-instance.service` and `nakama-review-web.service` — so the review URL
+   survives a host reboot. Units and commands: `services/nakama/README.md` → "The dashboard review surface";
 2. `bun harness/install-plugin.mjs --reinstall` against `:4399` — **`0.2.0+dev.f3eff70d4eae` rev 321 →
    `0.2.0+dev.ae3049008d5f` rev 329**, `lifecycleState=enabled`, organization data preserved. `--reinstall` is
    a new opt-in flag on that script: the default stays "report only", because an acceptance run must never
