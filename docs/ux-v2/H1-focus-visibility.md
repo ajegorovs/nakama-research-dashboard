@@ -174,6 +174,30 @@ dataset-derived, so it tracks the reseed and the clock rather than this rule. (M
 each file's committed predecessor; the bboxes are in the run notes.) Nothing in the composition *geometry* moved,
 and the checks that assert it are unchanged.
 
+## Relation to the parked H1 attempt (`c6852df`)
+
+An earlier H1 check was written against an **intermediate** composition and parked for exactly that reason; it
+reported two findings, and this pass either closes or re-scopes both rather than ignoring them:
+
+- *"No visible focus indicator under real Tab on the read-detail control and on an icon button in the shell — the
+  theme's focus ring resolves transparent, so the difference is computed but nothing appears."* Same defect class
+  as measured here, and closed for everything the page draws: the merged page's controls all paint an indicator,
+  and after the fix they paint one at 4.61–5.02:1. Two qualifications the record owes the reader: the **shell's
+  own** controls (its icon buttons and chrome) are outside this rule's reach — `[data-plugin-id]` scopes the
+  plugin's subtree only, so a host-level icon button remains a host-level item, not something a plugin can fix;
+  and the **read-detail control no longer exists** — the composition made the detail persistent (`data-rd-detail-mode="persistent"`,
+  the D7 ruling), so the finding is retired *with its subject* rather than silently dropped. The closest surviving
+  control, the narrow note/correction disclosure, is measured (`summary(in .rd-narrow-write)`).
+- *"The check's own repeat/trap inference is too crude — a wrap-around or a re-rendered node looks identical to a
+  repeated stop, so 'N stops / M distinct' cannot assert a trap."* Accepted, and **not** resurrected: this pass
+  asserts nothing about traps. It checks forward order pairwise (`compareDocumentPosition`, backwards = defect,
+  predecessor gone = re-render, counted), and it asserts class coverage rather than instance arithmetic — which is
+  the same insight, applied instead of patched.
+
+The parked additions to `harness/verify-page.mjs` were not merged or copied: this pass is its own module
+(`harness/focus-matrix.mjs`) with its own wrapper, so a reader can see what the focus checks are without reading a
+2 000-line acceptance file, and `read-pass.sh` gains no focus checks it would have to re-gate.
+
 ## Limits, stated
 
 - **The host's translucent ring still paints underneath.** The plugin's outline is drawn over/in the same band as
