@@ -99,13 +99,16 @@ recorded rather than invented silently.
 two-column `Topic activity` / `Repository activity` composition with its per-card actions and reference chips.
 **Collision to resolve first — see §4.1.**
 
-### C5 — Repositories convergence (built; awaiting the reviewer's verdict)
+### C5 — Repositories convergence — **accepted (reviewer, 2026-10-02)**
 The reviewer narrowed C5 on 2026-10-02 to a **final fidelity/convergence pass, not another structural
 redesign**: retain the index/detail macro-layout; improve index-row grammar and recency/context; make the
 repository's current supported work the dominant detail lane; bound Recent activity; keep Topics / Axes /
 People contextual and subordinate; invent nothing the rollup does not carry; preserve repository tag
-navigation and preselection; take a populated fixture montage. Built and verified on both datasets at both
-viewports — see [`C5-repositories.md`](C5-repositories.md).
+navigation and preselection; take a populated fixture montage. Built, verified on both datasets at both
+viewports, and accepted — verdicts verbatim, the two absence rulings and the heading ruling in
+[`../reviews/2026-10-02-c5-acceptance-record.md`](../reviews/2026-10-02-c5-acceptance-record.md); the unit doc is
+[`C5-repositories.md`](C5-repositories.md). **Composition C1–C5 is complete**; the next phase is the
+composition-phase merge-readiness pass ([`MR-composition-merge-readiness.md`](MR-composition-merge-readiness.md)).
 
 ## 4. Collisions — resolved (owner, 2026-10-02, recorded in `DECISIONS.md` §5–§7). C1 is unblocked.
 
