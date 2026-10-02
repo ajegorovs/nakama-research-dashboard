@@ -2189,28 +2189,13 @@ const progress = await page.evaluate(() => {
     view: scope?.querySelector('[data-rd-view="progress"]') ? 1 : 0,
   };
 });
-check(
-  "the Progress view groups the window by topic → axis instead of one flat log",
-  progress.view === 1 &&
-    progress.topics.length > 0 &&
-    progress.rails.length >= progress.topics.length &&
-    progress.events.length > 0,
-  `summary "${progress.summary}"; topics ${JSON.stringify(progress.topics)}; rails ${JSON.stringify(progress.rails)}`
-);
-// The rails are the payload's own axis titles, and the date probe is a date the payload actually
-// carries (this corpus's newest event is 2026-09-28) rather than a fixture date.
-const expectedRails = CORPUS.timeline.flatMap((group) => group.axes);
-const railMatches = expectedRails.filter((title) => progress.rails.includes(title));
-const newestEventDate = CORPUS.eventDates.at(-1) ?? "";
-check(
-  "an event recorded against an axis alone still lands under the right topic and its own axis",
-  railMatches.length > 0 &&
-    newestEventDate !== "" &&
-    progress.events.some((line) => line.includes(newestEventDate)),
-  `rails matched ${railMatches.length}/${expectedRails.length}; looked for a ${newestEventDate} event; events ${JSON.stringify(progress.events.slice(0, 3))}`
-);
+// The two checks that stood here asserted the window-wide feed's grouping — topic cards → axis rails →
+// events, with the axis-alone event landing under its own axis. That surface is retired (C4/F2), so the
+// checks retire with it; what replaces them is asserted where the payload is available in full: the feed's
+// absence, the count it left behind, and that exactly one activity reading remains (see the C4/F2 block below,
+// beside the source-line check the composition's own rows are read by).
 
-// The grouped view is the one worth showing: newest topic first, each axis keeping its own events.
+// The screenshot shows the composition without the retired feed — the composition is the whole page now.
 const progressShot = `${OUT}/research-dashboard-${WRITE ? "write" : "read"}-progress.png`;
 await root.screenshot({ path: progressShot });
 console.log("progress screenshot:", progressShot);
@@ -4126,9 +4111,169 @@ if (inferredInCorpus.length > 0) {
 // The evidence line belongs to the expanded detail card, so its wording is asserted where that card is
 // open — in the write pass, on the fixture axis that has nothing behind it yet.
 
+// ---- C4/F2: the duplicate window-wide feed is retired; the composition is the one reading -----------------
+// Progress carried a second, unbounded grouping of the same window below the composition — topic cards →
+// axis rails → their events, plus four filters. The ruling retired it: the page keeps one dominant reading of
+// the selected subject, with the count it reported kept as the summary line so nothing disappears silently.
+// These checks prove the duplicate is *gone* rather than moved, and that the surviving count is the payload's
+// own number rather than a client recount.
+const retiredFeed = await page.evaluate(() => {
+  const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+  const count = (selector) => scope?.querySelectorAll(selector).length ?? 0;
+  return {
+    empty: count("[data-rd-progress-empty]"),
+    eventLists: count("[data-rd-progress-events]"),
+    eventRows: count("[data-rd-progress-event]"),
+    feedEmpty: count("[data-rd-progress-feed-empty]"),
+    feeds: count("[data-rd-progress-feed]"),
+    filters: count("[data-rd-progress-filters]"),
+    rails: count("[data-rd-progress-axis]"),
+    summary: (scope?.querySelector("[data-rd-progress-summary]")?.textContent ?? "")
+      .replace(/\s+/g, " ")
+      .trim(),
+    topicCards: count("[data-rd-progress-topic]"),
+    window: Number(
+      scope
+        ?.querySelector("[data-rd-progress-index]")
+        ?.getAttribute("data-rd-progress-index-window") ?? -1
+    ),
+  };
+});
+check(
+  "C4: the retired window-wide feed is gone — not moved, and with nothing of it left behind",
+  retiredFeed.topicCards === 0 &&
+    retiredFeed.rails === 0 &&
+    retiredFeed.eventLists === 0 &&
+    retiredFeed.eventRows === 0 &&
+    retiredFeed.empty === 0 &&
+    retiredFeed.filters === 0,
+  JSON.stringify(retiredFeed)
+);
+check(
+  "C4: Progress shows exactly one activity reading — the composition's own scoped one",
+  retiredFeed.feeds === 1 || retiredFeed.feedEmpty === 1,
+  `feed lists ${retiredFeed.feeds}, empty state ${retiredFeed.feedEmpty}`
+);
+// The count line's number must be the payload's own — and it is compared at **All time**, because a live
+// window such as "last 7 days" moves while the pass runs: an event sitting on the boundary can legitimately
+// leave the window between the page's load and this fetch. A first version of this check compared at the
+// page's own 7-day window and caught exactly that as a one-event disagreement, which would have become a
+// standing flake. All time has no boundary to move, so the comparison is exact.
+const windowLabel = (days) => (days === 0 ? "All time" : `${days} days`);
+const previousWindow = retiredFeed.window;
+const allTimeRequest = page.waitForRequest(
+  (request) =>
+    request.url().includes("/actions/get_overview") &&
+    (request.postData() ?? "").includes('"activitySinceDays":0'),
+  { timeout: 10000 }
+);
+await root.getByRole("button", { name: "All time", exact: true }).click();
+await allTimeRequest.catch(() => null);
+// Wait for the page to *apply* the response, not merely to send the request. `load()` awaits `get_overview`,
+// sets the overview, then awaits `get_progress` and sets the index — so the index's window attribute reaching
+// 0 is a true readiness signal for both. Reading the summary after the request alone raced that update and
+// compared the new window's label against the previous window's timeline: 8 events at "All time" on a fixture
+// holding 9, and 142 against 143 on the corpus. This is the harness's own documented rule — wait for the DOM
+// to say what "ready" means rather than for a fixed sleep.
+await settleUntil(
+  (pluginId) =>
+    document
+      .querySelector(`div[data-plugin-id="${pluginId}"]`)
+      ?.querySelector("[data-rd-progress-index]")
+      ?.getAttribute("data-rd-progress-index-window") === "0",
+  PLUGIN_ID,
+  5000
+);
+const allTimeSummary = await page.evaluate(() => {
+  const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+  return {
+    summary: (scope?.querySelector("[data-rd-progress-summary]")?.textContent ?? "")
+      .replace(/\s+/g, " ")
+      .trim(),
+    window: Number(
+      scope
+        ?.querySelector("[data-rd-progress-index]")
+        ?.getAttribute("data-rd-progress-index-window") ?? -1
+    ),
+  };
+});
+const allTimeOverview = await apiAction("get_overview", { activitySinceDays: 0 });
+const allTimeTopics = allTimeOverview?.timeline ?? [];
+const allTimeEventTotal = allTimeTopics.reduce(
+  (total, group) => total + (group.eventCount ?? 0),
+  0
+);
+check(
+  "C4: the surviving count line states the window's own total — the payload's number, not a client recount",
+  allTimeSummary.window === 0 &&
+    allTimeSummary.summary.includes(String(allTimeEventTotal)) &&
+    allTimeSummary.summary.includes(String(allTimeTopics.length)) &&
+    allTimeSummary.summary.includes("in this window") &&
+    allTimeSummary.summary.includes("the reading above is the selected"),
+  `summary "${allTimeSummary.summary}"; payload ${allTimeEventTotal} event(s) across ${allTimeTopics.length} topic(s) at All time`
+);
+// The window control is put back where the reader had it, so nothing later in the pass inherits this probe's
+// view of the page — and the wait is on the same readiness signal, not a sleep.
+await root.getByRole("button", { name: windowLabel(previousWindow), exact: true }).click();
+await settleUntil(
+  (expected) =>
+    document
+      .querySelector(`div[data-plugin-id="${expected.pluginId}"]`)
+      ?.querySelector("[data-rd-progress-index]")
+      ?.getAttribute("data-rd-progress-index-window") === String(expected.days),
+  { days: previousWindow, pluginId: PLUGIN_ID },
+  5000
+);
+
+// The composition's own order, asserted rather than assumed: the top row first, then Plan beside Open
+// problems, then the three-card support band. Measured as positions on the page, because "below" is the
+// claim — a selector existing says nothing about where it sits. The plan is optional by construction (an
+// axis with no plan renders nothing), so its clause is stated conditionally rather than skipped.
+const progressOrder = await page.evaluate(() => {
+  const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+  const top = (selector) => {
+    const node = scope?.querySelector(selector);
+    return node ? Math.round(node.getBoundingClientRect().top) : null;
+  };
+  return {
+    band: top("[data-rd-progress-repositories]"),
+    plan: top("[data-rd-progress-plan]"),
+    problems: top("[data-rd-progress-problems]"),
+    topRow: top("[data-rd-progress-top]"),
+  };
+});
+// Each of these sections is conditional by construction: a plan renders only where the axis has one, the Open
+// problems list only where the axis has open problems, and the support band's cards only where the selected
+// problem has repositories, evidence or steering. The corpus holds no problem at all, so requiring the Open
+// problems section would fail on correct behaviour — the order is asserted over the sections that *do* render,
+// with the top row always required, and the detail names which ones those were.
+const middleTop =
+  [progressOrder.plan, progressOrder.problems]
+    .filter((value) => value !== null)
+    .sort((left, right) => left - right)[0] ?? null;
+const orderedPositions = [progressOrder.topRow, middleTop, progressOrder.band].filter(
+  (value) => value !== null
+);
+check(
+  "C4: the composition reads top row → Plan/Open problems → the support band, in the order that holds",
+  progressOrder.topRow !== null &&
+    orderedPositions.every(
+      (value, index) => index === 0 || orderedPositions[index - 1] <= value
+    ),
+  `${JSON.stringify(progressOrder)}; sections present: ${
+    [
+      progressOrder.topRow !== null ? "top row" : null,
+      middleTop !== null ? "Plan/Open problems" : null,
+      progressOrder.band !== null ? "support band" : null,
+    ]
+      .filter(Boolean)
+      .join(" → ") || "none"
+  }`
+);
+
 const eventSources = await page.evaluate(() => {
   const panel = document.querySelector('div[data-plugin-id="research-dashboard"]');
-  return [...panel.querySelectorAll("[data-rd-progress-events] li .rd-meta")]
+  return [...panel.querySelectorAll("[data-rd-feed-event] .rd-meta")]
     .map((el) => (el.innerText ?? "").replace(/\s+/g, " ").trim())
     // The date is not a source; the source line is the one that names where the event came from.
     .filter((line) => !/^\d{4}-\d{2}-\d{2}$/.test(line));
@@ -4141,104 +4286,12 @@ check(
   `sample ${JSON.stringify(eventSources.slice(0, 2))}`
 );
 
-// The context filters read the axis, so a repository filter keeps the axes that name that repository.
-// Choose the subject by PROPERTY, not by position: a repository may legitimately support no axis (the
-// fixture's bare one exists exactly to exercise that), so the first row is not the right subject for a
-// check about filtering to a repository's axes.
-const filterSubject = CORPUS.repositories.find(
-  (repository) => (repository.axes ?? []).length > 0
-);
-const filterRepo = filterSubject?.fullName ?? "";
-const repoAxes = filterSubject?.axes ?? [];
-if (filterRepo === "") {
-  skip(
-    "filtering by a repository keeps only the axes that name it, and says it is filtered",
-    "the corpus records no repository"
-  );
-} else {
-  await root.getByLabel("Filter by repository").click();
-  await page.getByRole("option", { name: filterRepo, exact: true }).click();
-  await page.waitForTimeout(400);
-  const byRepository = await page.evaluate(() => {
-    const scope = document.querySelector(
-      'div[data-plugin-id="research-dashboard"]'
-    );
-    return {
-      rails: [...(scope?.querySelectorAll("[data-rd-progress-axis]") ?? [])].map(
-        (node) => node.getAttribute("data-rd-progress-axis")
-      ),
-      summary: (
-        scope?.querySelector("[data-rd-progress-summary]")?.textContent ?? ""
-      )
-        .replace(/\s+/g, " ")
-        .trim(),
-      topics: [
-        ...(scope?.querySelectorAll("[data-rd-progress-topic]") ?? []),
-      ].map((node) => node.getAttribute("data-rd-progress-topic")),
-    };
-  });
-  // How many rails survive depends on which axes have events in the window; that any rail survives,
-  // that every rail names this repository, and that the summary admits it is filtered, do not.
-  //
-  // The topics are derived from the projection, not from the page's default selection (`CORPUS.topic`) —
-  // that is a *default selection*, and on an instance whose first card is another dataset's topic it is the
-  // wrong expectation, which is how this check failed while the filter itself worked. Deriving is also
-  // strictly stronger: it asserts the rendered topics are exactly the topics the surviving rails belong to.
-  //
-  // The axis row's topic field is `topicName` (the projection has no `topic` on a row), and a field name the
-  // row does not have yields `null` for every rail rather than an error — the expectation collapses to an
-  // empty list and the check goes red on *every* dataset, which is how it read until the corpus re-run.
-  const topicOfAxis = (title) =>
-    allProgress.axes.axes.find((row) => row.title === title)?.topicName ?? null;
-  const expectedTopics = [...new Set(byRepository.rails.map(topicOfAxis).filter(Boolean))];
-  const strayTopics = byRepository.topics.filter((topic) => !expectedTopics.includes(topic));
-  const strayRails = byRepository.rails.filter((rail) => !repoAxes.includes(rail));
-  check(
-    "filtering by a repository keeps only the axes that name it, and says it is filtered",
-    byRepository.rails.length >= 1 &&
-      strayRails.length === 0 &&
-      byRepository.topics.length === expectedTopics.length &&
-      strayTopics.length === 0 &&
-      byRepository.summary.includes("(filtered)"),
-    `topics ${JSON.stringify(byRepository.topics)} (expected ${JSON.stringify(expectedTopics)}); ` +
-      `rails ${JSON.stringify(byRepository.rails)} (stray ${JSON.stringify(strayRails)} of ${JSON.stringify(repoAxes)}); ` +
-      `summary "${byRepository.summary}"`
-  );
-}
-
-// A person filter with nothing attributable says so instead of showing everything. This corpus maps
-// its only person to an account, so the unattributable case has no subject here — reported, not passed.
-const unmappedPerson = CORPUS.people.find((person) => !person.attributable);
-if (unmappedPerson === undefined) {
-  skip(
-    "a person filter that matches nothing attributable says so, and shows no unrelated events",
-    "every person in this corpus maps to a platform account, so the unattributable case has no subject"
-  );
-} else {
-  await root.getByLabel("Filter by person").click();
-  await page.getByRole("option", { name: unmappedPerson.name, exact: true }).click();
-  await page.waitForTimeout(400);
-  const byPerson = await page.evaluate(() => {
-    const scope = document.querySelector(
-      'div[data-plugin-id="research-dashboard"]'
-    );
-    return {
-      empty:
-        (scope?.querySelector("[data-rd-progress-empty]")?.innerText ?? "")
-          .replace(/\s+/g, " ")
-          .trim()
-          .slice(0, 80),
-      events: [
-        ...(scope?.querySelectorAll("[data-rd-progress-event]") ?? []),
-      ].length,
-    };
-  });
-  check(
-    "a person filter that matches nothing attributable says so, and shows no unrelated events",
-    byPerson.events === 0 && byPerson.empty.length > 0,
-    `events ${byPerson.events}; empty card "${byPerson.empty}"`
-  );
-}
+// Two checks stood here: one asserting the repository filter kept only the axes that name that repository,
+// one that a person filter matching nothing attributable said so. Both controls retired with the feed they
+// filtered (C4/F2 — the composition is selection-driven, and the toolbar's window control is the only control
+// it needs), so the checks retire with them rather than being rewritten against a control that no longer
+// exists. Nothing a reader relied on disappears: the index still carries every axis's topic and counts, and
+// the selected axis's own `Activity` box states its total and how much of it is shown.
 
 // Back to the topics view, with the filters gone with their view.
 await root.getByRole("button", { name: "Topics", exact: true }).click();

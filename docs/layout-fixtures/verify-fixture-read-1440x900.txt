@@ -1,6 +1,6 @@
 # harness/read-pass.sh — read pass · dataset fixture · viewport 1440x900
 # dashboard: http://127.0.0.1:3005
-# generated: 2026-10-02T18:38:13+03:00
+# generated: 2026-10-02T19:05:32+03:00
 
 PASS  login — status 200
 identity: expected fixture · 2 topic(s) (2 fixture-named) · 3 of 3 repository(ies) under fixture/ · observed fixture markers only
@@ -83,8 +83,6 @@ PASS  the Repositories view is repository-first: the index is the set, and one o
 PASS  a repository that supports work names the topics it supports and the axes happening in it — panel fixture/crowded-card: supports 1 of 1, axes 6 of 6
 repositories screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/layout-fixtures/screenshots/1440x900/research-dashboard-read-repositories.png
 PASS  switching back to Topics restores the topic view, with no residue from the other two, and no create form (D7) — topic rows 2, create form 0, people index 0, repository index 0
-PASS  the Progress view groups the window by topic → axis instead of one flat log — summary "Last 7 days · 8 events across 2 topics"; topics ["Layout fixture — second topic","Layout fixture — crowded card"]; rails ["Fixture: second-topic axis (two people, one unmapped)","Fixture: blocked axis (blocked + blocker text)","Fixture: active axis (with evidence)","Fixture: parked axis (inferred state)","Fixture: completed axis"]
-PASS  an event recorded against an axis alone still lands under the right topic and its own axis — rails matched 5/6; looked for a 2026-10-01 event; events ["2026-10-01 Second topic, so the People view has a person with two involvements. manual not","2026-09-29 Blocked on the vendor's firmware window; nothing to record until it lands. manu","2026-10-01 Fixture E: logged the rig-floor comparison sheet as the artifact both rigs are "]
 progress screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/layout-fixtures/screenshots/1440x900/research-dashboard-read-progress.png
 PASS  C4: every Progress index row states when it was last active, and its recency is the payload's own — 7 axis row(s) — [{"context":"active · Layout fixture — crowded card · 2 open of 3 · last activity today","id":"71aab9cb-ef72-4a5a-943c-2c9480766553","recency":"2026-10-02T15:03:53.314Z","expected":"2026-10-02T15:03:53.314Z"},{"context":"parked · inferred · Layout fixture — crowded card · no problems · last activity today","id":"6387d5be-a930-4776-a896-543c82016ec8","recency":"2026-10-02T15:03:52.192Z","expected":"2026-10-02T15:03:52.192Z"}]
 PASS  C4: the Problems subject states when too — a row's recency is the payload's own — 3 problem row(s) — [{"context":"Fixture: active axis (with evidence) · Layout fixture — crowded card · no repository · 0 events · last activity today","id":"000a174b-5922-4592-af6f-2a59c274e13b","recency":"2026-10-02T15:03:52.623Z","expected":"2026-10-02T15:03:52.623Z"},{"context":"Fixture: active axis (with evidence) · Layout fixture — crowded card · no repository · 0 events · last activity today","id":"0ee250c1-004e-4e79-b2e9-754e86a4243f","recency":"2026-10-02T15:03:52.096Z","expected":"2026-10-02T15:03:52.096Z"}]
@@ -137,11 +135,13 @@ PASS  a problem tag lands in Progress/Problems with that problem selected — th
 PASS  an axis tag lands in Progress/Axes with that axis selected, whichever subview it was clicked from — from problems: subview axes, active Fixture: active axis (with evidence) (wanted Fixture: active axis (with evidence))
 PASS  no status badge is a tag — reading a state never navigates — 0 tag(s) inside a badge
 PASS  the tag traversal wrote nothing: no write action was called and the projection is unchanged — writes 0 -> 0; projection identical (the two baseline reads agreed)
-PASS  every rendered state carries its claim, and one that is not confirmed says so (C8) — states 15, carrying a claim 15, not confirmed 3 but unqualified 0; sample ["PARKED · INFERRED","DRAFT · INFERRED"]
-PASS  the corpus's inferred states reach the view as unconfirmed, not laundered into facts (C8) — 2 of 6 axes are unconfirmed in the payload (Fixture: evidence-free axis (inferred, nothing behind it)=inferred, Fixture: parked axis (inferred state)=inferred); the view rendered 3 unconfirmed states
-PASS  a recorded event names its source the way it is reported, not the way the menu offers it (C8) — sample ["manual note · fixture-activity-5 · Fixture Alpha","manual note · fixture-activity-1 · Fixture Alpha"]
-PASS  filtering by a repository keeps only the axes that name it, and says it is filtered — topics ["Layout fixture — crowded card"] (expected ["Layout fixture — crowded card"]); rails ["Fixture: blocked axis (blocked + blocker text)","Fixture: active axis (with evidence)","Fixture: parked axis (inferred state)","Fixture: completed axis"] (stray [] of ["Fixture: blocked axis (blocked + blocker text)","Fixture: active axis (with evidence)","Fixture: evidence-free axis (inferred, nothing behind it)","Fixture: parked axis (inferred state)","Fixture: completed axis","Fixture: abandoned axis (given up on deliberately)"]); summary "Last 7 days · 7 events across 1 topic (filtered)"
-PASS  a person filter that matches nothing attributable says so, and shows no unrelated events — events 0; empty card "Nothing matches these filters in this window."
+PASS  every rendered state carries its claim, and one that is not confirmed says so (C8) — states 10, carrying a claim 10, not confirmed 2 but unqualified 0; sample ["PARKED · INFERRED","DRAFT · INFERRED"]
+PASS  the corpus's inferred states reach the view as unconfirmed, not laundered into facts (C8) — 2 of 6 axes are unconfirmed in the payload (Fixture: evidence-free axis (inferred, nothing behind it)=inferred, Fixture: parked axis (inferred state)=inferred); the view rendered 2 unconfirmed states
+PASS  C4: the retired window-wide feed is gone — not moved, and with nothing of it left behind — {"empty":0,"eventLists":0,"eventRows":0,"feedEmpty":0,"feeds":1,"filters":0,"rails":0,"summary":"Last 7 days · 8 events recorded across 2 topics in this window — the reading above is the selected axis","topicCards":0,"window":7}
+PASS  C4: Progress shows exactly one activity reading — the composition's own scoped one — feed lists 1, empty state 0
+PASS  C4: the surviving count line states the window's own total — the payload's number, not a client recount — summary "All time · 9 events recorded across 2 topics in this window — the reading above is the selected axis"; payload 9 event(s) across 2 topic(s) at All time
+PASS  C4: the composition reads top row → Plan/Open problems → the support band, in the order that holds — {"band":1324,"plan":1005,"problems":1152,"topRow":237}; sections present: top row → Plan/Open problems → support band
+PASS  a recorded event names its source the way it is reported, not the way the menu offers it (C8) — sample ["document · fixture-evidence-1","experiment · fixture-activity-7"]
 PASS  leaving the Progress view restores the topic view with no residue — topic rows 2, progress views 0
 PASS  command palette lists the plugin page
 palette screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/layout-fixtures/screenshots/1440x900/research-dashboard-read-palette.png
@@ -149,7 +149,7 @@ PASS  palette entry navigates to the page — http://127.0.0.1:3005/plugins/rese
 PASS  one surface per level: no boxed block nests inside another, except a refusal banner — 0 nested box(es) on this view, all refusal banners
 PASS  tags stay chips when they wrap: one height per cluster, one line each — 12 cluster(s), every chip one line
 PASS  the exceptional colour is used only for the exceptional state — nothing else renders in oklch(0.577 0.245 27.325)
-PASS  no view runs away with the scroll at the reference size (budget: eight screens of content) — Topics 1.2 screen(s), People 0.9 screen(s), Repositories 0.9 screen(s), Progress 2.5 screen(s)
+PASS  no view runs away with the scroll at the reference size (budget: eight screens of content) — Topics 1.2 screen(s), People 0.9 screen(s), Repositories 0.9 screen(s), Progress 1.5 screen(s)
 PASS  the Progress glance — the Problem column and the newest Activity row — is inside the first screen — problem top 237px, newest activity row bottom 411px, screen 900px
 PASS  every view names itself under the shell title (§7), in all four views — topics → "Topics", people → "People", repositories → "Repositories", progress → "Progress"
 PASS  every state row in every view renders its claim through the one badge — topics: 6 row(s), 0 without a claim; people: 4 row(s), 0 without a claim
@@ -162,6 +162,6 @@ PASS  an axis tag clicked in Repositories lands in Progress/Axes with that axis 
 PASS  a repository tag clicked in Topics lands in Repositories with that repository selected — view repositories, panel "fixture/crowded-card" (wanted "fixture/crowded-card")
 PASS  the grammar traversal wrote nothing: no write action, and the projection is unchanged — writes 0 -> 0; payload identical
 screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/layout-fixtures/screenshots/1440x900/research-dashboard-read.png
-console issues after login: []
+console issues after login: ["error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"]
 
 read pass: all checks passed; 0 skipped for want of a subject in this corpus

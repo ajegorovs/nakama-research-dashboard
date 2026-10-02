@@ -1732,19 +1732,7 @@ function apply(ctx) {
         setSelectedProblemId(preselect.id);
       }
     }, [preselect?.id, preselect?.seq, preselect?.type]);
-    const [topicFilter, setTopicFilter] = React.useState("all");
-    const [personFilter, setPersonFilter] = React.useState("all");
-    const [repositoryFilter, setRepositoryFilter] = React.useState("all");
-    const [stateFilter, setStateFilter] = React.useState("all");
-    const groups = timeline.filter((group) => topicFilter === "all" || group.topic.id === topicFilter).map((group) => {
-      const axes = group.axes.filter((bucket) => stateFilter === "all" || bucket.axis?.state === stateFilter).filter((bucket) => repositoryFilter === "all" || (bucket.axis?.repositories ?? []).some((repository) => repository.id === repositoryFilter)).map((bucket) => ({
-        ...bucket,
-        events: bucket.events.filter((event) => personFilter === "all" || event.person?.id === personFilter)
-      })).filter((bucket) => bucket.events.length > 0);
-      return { ...group, axes };
-    }).filter((group) => group.axes.length > 0);
-    const eventCount = groups.reduce((total, group) => total + group.axes.reduce((sum, bucket) => sum + bucket.events.length, 0), 0);
-    const filtered = topicFilter !== "all" || personFilter !== "all" || repositoryFilter !== "all" || stateFilter !== "all";
+    const windowEventCount = timeline.reduce((total, group) => total + group.eventCount, 0);
     const axisRows = progress?.axes.axes ?? [];
     const problemRows = progress?.problems.problems ?? [];
     const problemsMode = indexMode === "problems";
@@ -2122,105 +2110,10 @@ function apply(ctx) {
       className: "rd-meta"
     }, `on the axis · ${claim.authorType} · ${claim.recordedAt.slice(0, 10)}${claim.confidence ? ` · ${claim.confidence}` : ""}`)), /* @__PURE__ */ React.createElement("p", {
       className: "rd-steering-text"
-    }, claim.text)))) : null) : null, /* @__PURE__ */ React.createElement("div", {
-      className: "rd-cluster rd-filters"
-    }, /* @__PURE__ */ React.createElement(FilterSelect, {
-      label: "Filter by topic",
-      onChange: setTopicFilter,
-      options: [
-        { label: "All topics", value: "all" },
-        ...timeline.map((group) => ({
-          label: group.topic.name,
-          value: group.topic.id
-        }))
-      ],
-      value: topicFilter
-    }), /* @__PURE__ */ React.createElement(FilterSelect, {
-      label: "Filter by person",
-      onChange: setPersonFilter,
-      options: [
-        { label: "Anyone (incl. unattributed)", value: "all" },
-        ...people.map((entry) => ({
-          label: entry.person.displayName,
-          value: entry.person.id
-        }))
-      ],
-      value: personFilter
-    }), /* @__PURE__ */ React.createElement(FilterSelect, {
-      label: "Filter by repository",
-      onChange: setRepositoryFilter,
-      options: [
-        { label: "All repositories", value: "all" },
-        ...repositories.map((entry) => ({
-          label: entry.repository.fullName,
-          value: entry.repository.id
-        }))
-      ],
-      value: repositoryFilter
-    }), /* @__PURE__ */ React.createElement(FilterSelect, {
-      label: "Filter by axis state",
-      onChange: setStateFilter,
-      options: [
-        { label: "All states", value: "all" },
-        ...STATE_OPTIONS.map((option) => ({
-          label: option.label,
-          value: option.value
-        }))
-      ],
-      value: stateFilter
-    })), /* @__PURE__ */ React.createElement("span", {
+    }, claim.text)))) : null) : null, /* @__PURE__ */ React.createElement("p", {
       className: "rd-muted",
       "data-rd-progress-summary": "true"
-    }, windowDays === 0 ? "All time" : `Last ${countLabel(windowDays, "day", "days")}`, " ", "· ", countLabel(eventCount, "event", "events"), " across", " ", countLabel(groups.length, "topic", "topics"), filtered ? " (filtered)" : ""), groups.length === 0 ? /* @__PURE__ */ React.createElement(Card, {
-      "data-rd-progress-empty": "true"
-    }, /* @__PURE__ */ React.createElement(CardContent, null, /* @__PURE__ */ React.createElement("p", {
-      className: "rd-muted"
-    }, filtered ? "Nothing matches these filters in this window." : "Nothing was recorded in this window yet."))) : null, groups.map((group) => /* @__PURE__ */ React.createElement(Card, {
-      "data-rd-progress-topic": group.topic.name,
-      key: group.topic.id
-    }, /* @__PURE__ */ React.createElement(CardHeader, null, /* @__PURE__ */ React.createElement("div", {
-      className: "rd-row"
-    }, /* @__PURE__ */ React.createElement(CardTitle, null, group.topic.name), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-muted"
-    }, countLabel(group.eventCount, "event", "events"), " ·", " ", describeAge(group.lastActivityAt)))), /* @__PURE__ */ React.createElement(CardContent, null, /* @__PURE__ */ React.createElement("div", {
-      className: "rd-stack"
-    }, group.axes.map((bucket) => /* @__PURE__ */ React.createElement("div", {
-      className: "rd-timeline-axis",
-      "data-rd-progress-axis": bucket.axis?.title ?? "topic-level",
-      key: bucket.axis?.id ?? "topic-level"
-    }, /* @__PURE__ */ React.createElement("div", {
-      className: "rd-row"
-    }, /* @__PURE__ */ React.createElement("span", {
-      className: "rd-cluster"
-    }, bucket.axis ? /* @__PURE__ */ React.createElement(StateBadge, {
-      confidence: bucket.axis.stateConfidence,
-      state: bucket.axis.state
-    }) : null, /* @__PURE__ */ React.createElement("span", {
-      className: "rd-strong"
-    }, bucket.axis?.title ?? "topic-level")), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta"
-    }, [
-      bucket.axis?.kind ?? "",
-      (bucket.axis?.repositories ?? []).map((repository) => repository.fullName).join(", "),
-      bucket.axis?.branch ?? "",
-      bucket.axis?.prNumber === null || bucket.axis?.prNumber === undefined ? "" : `PR #${bucket.axis.prNumber}`
-    ].filter((value) => value !== "").join(" · "))), /* @__PURE__ */ React.createElement("ul", {
-      className: "rd-activity",
-      "data-rd-progress-events": bucket.events.length
-    }, bucket.events.map((event) => /* @__PURE__ */ React.createElement("li", {
-      "data-rd-progress-event": "true",
-      key: event.id
-    }, /* @__PURE__ */ React.createElement("div", {
-      className: "rd-cluster"
-    }, /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta"
-    }, event.occurredAt.slice(0, 10)), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-strong"
-    }, event.summary)), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta"
-    }, describeSource(event.sourceType, event.sourceRef), " ", "·", " ", event.person ? event.person.displayName : "no account attributed"))), bucket.eventCount > bucket.events.length ? /* @__PURE__ */ React.createElement("li", {
-      className: "rd-muted"
-    }, bucket.eventCount - bucket.events.length, " older here — open the topic for the full history") : null))))))));
+    }, windowDays === 0 ? "All time" : `Last ${countLabel(windowDays, "day", "days")}`, " ", "· ", countLabel(windowEventCount, "event", "events"), " recorded across", " ", countLabel(timeline.length, "topic", "topics"), " in this window — the reading above is the selected ", problemsMode ? "problem" : "axis"));
   }
   function ResearchPage() {
     const [overview, setOverview] = React.useState(null);

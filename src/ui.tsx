@@ -3045,51 +3045,22 @@ export function apply(ctx: Context) {
         setSelectedProblemId(preselect.id);
       }
     }, [preselect?.id, preselect?.seq, preselect?.type]);
-    const [topicFilter, setTopicFilter] = React.useState("all");
-    const [personFilter, setPersonFilter] = React.useState("all");
-    const [repositoryFilter, setRepositoryFilter] = React.useState("all");
-    const [stateFilter, setStateFilter] = React.useState("all");
-
-    const groups = timeline
-      .filter(
-        (group) => topicFilter === "all" || group.topic.id === topicFilter
-      )
-      .map((group) => {
-        const axes = group.axes
-          .filter(
-            (bucket) =>
-              stateFilter === "all" || bucket.axis?.state === stateFilter
-          )
-          .filter(
-            (bucket) =>
-              repositoryFilter === "all" ||
-              (bucket.axis?.repositories ?? []).some(
-                (repository) => repository.id === repositoryFilter
-              )
-          )
-          .map((bucket) => ({
-            ...bucket,
-            events: bucket.events.filter(
-              (event) =>
-                personFilter === "all" || event.person?.id === personFilter
-            ),
-          }))
-          .filter((bucket) => bucket.events.length > 0);
-        return { ...group, axes };
-      })
-      .filter((group) => group.axes.length > 0);
-
-    const eventCount = groups.reduce(
-      (total, group) =>
-        total +
-        group.axes.reduce((sum, bucket) => sum + bucket.events.length, 0),
+    /*
+     * The window's own total — the one thing kept from the second reading that used to sit below the
+     * composition.
+     *
+     * That was a four-filter, topic-bucketed event feed over the same window, and it is retired (C4/F2,
+     * reviewer-ruled): an unbounded second grouping of the same events is the report/dump shape C1 and C2
+     * removed, and it competed with the composition's one dominant reading of the selected subject. Its count
+     * stays, so nothing disappears silently — scoped to the *same* window the composition's boxes are scoped
+     * to, because `load()` issues `get_overview` (this timeline) and `get_progress` (the index and its detail)
+     * with one `activitySinceDays`. A window-wide audit is a separate product surface if it is ever wanted; it
+     * does not belong underneath Progress as a second reading.
+     */
+    const windowEventCount = timeline.reduce(
+      (total, group) => total + group.eventCount,
       0
     );
-    const filtered =
-      topicFilter !== "all" ||
-      personFilter !== "all" ||
-      repositoryFilter !== "all" ||
-      stateFilter !== "all";
 
     // ---- the index's subject, and the two columns that follow it ---------------------------------------
     // One payload, two indexes. Row sets, order, states, counts and staleness all come from the server in
@@ -3793,159 +3764,28 @@ export function apply(ctx: Context) {
           </section>
         ) : null}
 
-        <div className="rd-cluster rd-filters">
-          <FilterSelect
-            label="Filter by topic"
-            onChange={setTopicFilter}
-            options={[
-              { label: "All topics", value: "all" },
-              ...timeline.map((group) => ({
-                label: group.topic.name,
-                value: group.topic.id,
-              })),
-            ]}
-            value={topicFilter}
-          />
-          <FilterSelect
-            label="Filter by person"
-            onChange={setPersonFilter}
-            options={[
-              { label: "Anyone (incl. unattributed)", value: "all" },
-              ...people.map((entry) => ({
-                label: entry.person.displayName,
-                value: entry.person.id,
-              })),
-            ]}
-            value={personFilter}
-          />
-          <FilterSelect
-            label="Filter by repository"
-            onChange={setRepositoryFilter}
-            options={[
-              { label: "All repositories", value: "all" },
-              ...repositories.map((entry) => ({
-                label: entry.repository.fullName,
-                value: entry.repository.id,
-              })),
-            ]}
-            value={repositoryFilter}
-          />
-          <FilterSelect
-            label="Filter by axis state"
-            onChange={setStateFilter}
-            options={[
-              { label: "All states", value: "all" },
-              ...STATE_OPTIONS.map((option) => ({
-                label: option.label,
-                value: option.value,
-              })),
-            ]}
-            value={stateFilter}
-          />
-        </div>
-
-        <span className="rd-muted" data-rd-progress-summary="true">
+        {/* The retired feed's one survivor: what this window holds, stated rather than listed. */}
+        <p className="rd-muted" data-rd-progress-summary="true">
           {windowDays === 0
             ? "All time"
             : `Last ${countLabel(windowDays, "day", "days")}`}{" "}
-          · {countLabel(eventCount, "event", "events")} across{" "}
-          {countLabel(groups.length, "topic", "topics")}
-          {filtered ? " (filtered)" : ""}
-        </span>
+          · {countLabel(windowEventCount, "event", "events")} recorded across{" "}
+          {countLabel(timeline.length, "topic", "topics")} in this window — the reading above is the
+          selected {problemsMode ? "problem" : "axis"}
+        </p>
 
-        {groups.length === 0 ? (
-          <Card data-rd-progress-empty="true">
-            <CardContent>
-              <p className="rd-muted">
-                {filtered
-                  ? "Nothing matches these filters in this window."
-                  : "Nothing was recorded in this window yet."}
-              </p>
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {groups.map((group) => (
-          <Card data-rd-progress-topic={group.topic.name} key={group.topic.id}>
-            <CardHeader>
-              <div className="rd-row">
-                <CardTitle>{group.topic.name}</CardTitle>
-                <span className="rd-muted">
-                  {countLabel(group.eventCount, "event", "events")} ·{" "}
-                  {describeAge(group.lastActivityAt)}
-                </span>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="rd-stack">
-                {group.axes.map((bucket) => (
-                  <div
-                    className="rd-timeline-axis"
-                    data-rd-progress-axis={bucket.axis?.title ?? "topic-level"}
-                    key={bucket.axis?.id ?? "topic-level"}
-                  >
-                    <div className="rd-row">
-                      <span className="rd-cluster">
-                        {bucket.axis ? (
-                          <StateBadge
-                            confidence={bucket.axis.stateConfidence}
-                            state={bucket.axis.state}
-                          />
-                        ) : null}
-                        <span className="rd-strong">
-                          {bucket.axis?.title ?? "topic-level"}
-                        </span>
-                      </span>
-                      <span className="rd-meta">
-                        {[
-                          bucket.axis?.kind ?? "",
-                          (bucket.axis?.repositories ?? [])
-                            .map((repository) => repository.fullName)
-                            .join(", "),
-                          bucket.axis?.branch ?? "",
-                          bucket.axis?.prNumber === null ||
-                          bucket.axis?.prNumber === undefined
-                            ? ""
-                            : `PR #${bucket.axis.prNumber}`,
-                        ]
-                          .filter((value) => value !== "")
-                          .join(" · ")}
-                      </span>
-                    </div>
-                    <ul
-                      className="rd-activity"
-                      data-rd-progress-events={bucket.events.length}
-                    >
-                      {bucket.events.map((event) => (
-                        <li data-rd-progress-event="true" key={event.id}>
-                          <div className="rd-cluster">
-                            <span className="rd-meta">
-                              {event.occurredAt.slice(0, 10)}
-                            </span>
-                            <span className="rd-strong">{event.summary}</span>
-                          </div>
-                          <span className="rd-meta">
-                            {describeSource(event.sourceType, event.sourceRef)}{" "}
-                            ·{" "}
-                            {event.person
-                              ? event.person.displayName
-                              : "no account attributed"}
-                          </span>
-                        </li>
-                      ))}
-                      {bucket.eventCount > bucket.events.length ? (
-                        <li className="rd-muted">
-                          {bucket.eventCount - bucket.events.length} older here
-                          — open the topic for the full history
-                        </li>
-                      ) : null}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+        {/*
+         * The topic-bucketed event feed used to stand here: every topic in the window, each with its axis
+         * rails and their events, filterable without a re-query. It is retired (C4/F2) — the same window's
+         * events were being read twice, once inside the composition's scoped `Activity` box and once here
+         * unbounded, and the unbounded copy is what would grow back into a dump. What it reported survives as
+         * the count line above, and anything a reader needs per axis is in the composition: the selected
+         * axis's `Activity` box already states the axis's own total and how much of it it is showing.
+         *
+         * The markers it carried (`data-rd-progress-topic`, `data-rd-progress-axis`,
+         * `data-rd-progress-events`, `data-rd-progress-event`, `data-rd-progress-empty`, `data-rd-progress-filters`)
+         * are gone with it, and the pass asserts their absence rather than merely not looking for them.
+         */}
       </div>
     );
   }

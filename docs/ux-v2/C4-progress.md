@@ -124,11 +124,111 @@ both viewports — 7 axis rows and 3 problem rows, every recency matching the pr
 
 **One transient, recorded rather than smoothed over.** The first 1440×900 run failed two C1-era Topics checks:
 the topic detail stayed on "Loading this topic" past its 20s wait, so two of that topic's own axes read as
-missing. The immediate re-run passed at both viewports, and the second run is what the records hold. The log
-carried no `database is locked` and no HTTP 500, so this is the known dev-instance degradation surfacing as a
-stalled *read* rather than a reported error. Worth knowing: a stalled read looks exactly like a composition
-regression when it lands on a check, so a fixture failure needs a re-run before it is believed.
+missing. The log carried no `database is locked` and no HTTP 500, so this is the known dev-instance degradation
+surfacing as a stalled *read* rather than a reported error, and the re-run after it passed both viewports.
+
+**What the re-run is and is not** (reviewer, 2026-10-02): re-running is an *investigative* step, never part of
+acceptance. "Rerun once before believing a failure" is not institutionalized here and must not become
+acceptance logic — it can hide real flakes. If the stall recurs, it gets recorded as an infrastructure/runtime
+flake with its own timing and request evidence (when it happened, which action stalled, for how long, what the
+instance was doing), and the second green run is not by itself proof that the first red one was benign.
 
 **Still open in C4:** F2 (the parallel window-wide feed below the composition — absorb it or bound it), the
 geometry assertions, the concision and honesty checks, and the one-build record set plus a fresh Progress
 montage.
+
+## Increment 2 — F2: the duplicate feed is retired (landed, verified)
+
+**The ruling (reviewer, 2026-10-02):** keep the window/count information; keep any controls still necessary for
+the selected composition; retire the duplicate topic-bucketed event feed from the default page; preserve its
+total so nothing disappears silently; and **do not** invent a new "audit" mode as part of C4. A window-wide
+audit, if it is ever wanted, is a separate product surface — never a second competing reading underneath
+Progress.
+
+**What was removed** (`src/ui.tsx`, `ProgressView`): the four-filter bar (topic / person / repository / axis
+state), the topic-bucketed feed itself — every topic card, its axis rails and their event lists, with their
+"older here" trailers — and the feed's own empty card. Their state went with them: `topicFilter`,
+`personFilter`, `repositoryFilter`, `stateFilter`, the `groups` derivation and the `filtered` flag are gone
+rather than left dead, and the view keeps `timeline` only for the count.
+
+**What was kept, and where it comes from.** One muted line: *"Last N days · X events recorded across Y topics
+in this window — the reading above is the selected axis"*, still marked `data-rd-progress-summary`. Its numbers
+are the payload's, not a recount: `load()` issues `get_overview` (whose `timeline` carries this total) and
+`get_progress` (the index and its detail) with **one** `activitySinceDays`, so the surviving count is scoped to
+exactly the window the composition reads. The toolbar's window control is the only control the composition
+needs, and it stays.
+
+**The five checks that prove the duplicate is gone rather than moved** (`harness/verify-page.mjs`), all
+against the live payload:
+
+1. every axis index row still states its context, and its recency is the projection's own — unchanged,
+   re-verified in both subjects;
+2. **the retired surface is absent**: 0 topic cards, 0 rails, 0 event lists, 0 event rows, 0 filter bars,
+   0 of the retired empty cards — asserted positively, so the markers' absence is a check rather than an
+   omission from the pass;
+3. **exactly one activity reading** remains (the composition's scoped `Activity` box, or its honest empty
+   state) — one reading, not two;
+4. **the surviving count line equals the payload's own window total**, compared against a live `get_overview`
+   for the window on screen (and it must say "in this window" and name the selected subject, so a reader can
+   tell what it is counting);
+5. **the composition's order holds** — top row → Plan / Open problems → the three-card support band, measured
+   as positions on the page; the plan's clause is conditional because an axis with no plan renders nothing,
+   and the first-screen check for the Progress glance already exists and still passes.
+
+**Two checks retired with the controls they read** — one that a repository filter kept only the axes naming
+that repository, one that a person filter matching nothing attributable said so. They are replaced above, not
+silently dropped, and the pass states that in place.
+
+**Result (fixture, both viewports, all checks).** The retirement is visible in the check's own evidence:
+`{"empty":0,"eventLists":0,"eventRows":0,"filters":0,"rails":0,"topicCards":0,"feeds":1}` with the surviving
+line reading *"Last 7 days · 8 events recorded across 2 topics in this window"* — matching the payload. The
+feed's own screenshot now shows the composition alone. `bun run check`: 126 tests, 0 failures.
+
+**Small tidiness left knowingly:** `FilterSelect` is now defined in `ui.tsx` with no caller (its only use was
+the retired bar), and the `.rd-timeline-axis` styles are unused. Neither is visible; removing them is a
+separate tidy-up rather than part of a composition change, and the file already carries one such dead constant
+pair from an earlier pass.
+
+## Increment 2a — what the corpus caught (both causes were mine, not the page's)
+
+Taking the record set on the corpus failed three checks across the three passes, and **both causes were in the
+checks I had just written**, not in the page:
+
+1. **The order check required sections the subject legitimately does not have.** It demanded the Open problems
+   section unconditionally; the corpus holds no problem at all, so that section correctly renders nothing and
+   the check went red on correct behaviour (`{"plan":null,"problems":null,"band":1137}`). Fixed: the order is
+   asserted over the sections that *do* render, with the top row still always required, and the detail naming
+   which sections were present. Same class of mistake as the About branch in C2, caught the same way — by
+   running it on a dataset whose subject is absent.
+2. **The count check compared a moving window twice.** It read the page's 7-day total (computed at page load)
+   and compared it against a fresh `get_overview` for "last 7 days" fetched minutes later: 143 against 142. An
+   event sitting on the boundary can legitimately leave the window in between, so the check as written was a
+   standing flake — it would have gone red at random for the rest of the project's life, which is exactly the
+   kind of thing the reviewer warned against institutionalizing. Fixed: parity is taken at **All time**, which
+   has no boundary to move, the window control is restored afterwards, and the check confirms the page really
+   did move to All time so the comparison cannot pass by reading a stale DOM.
+
+Both fixes are **harness-only** — no product change — so the build under test is unchanged and the montage
+taken in the same run remains that build's artifact.
+
+**One thing about the record trail.** A read pass is a *verdict*: exit 1 replaces the record, so the failing
+runs briefly stood in `docs/corpus/verify-*.txt`. The re-taken records replace them, and this section is why
+they failed — the trail is the record plus this note, not a silent overwrite. The fixture never failed: it
+carries the problems and the plan the corpus lacks, which is why the two mistakes only appeared on the corpus.
+
+**Cause 3, and the one that took the longest to see — a race in the check itself.** The count check clicked
+"All time" and waited for the *request*, then read the summary. But `load()` awaits `get_overview`, sets the
+overview, then awaits `get_progress` and sets the index: at the moment of the read the summary's **label** had
+already changed to "All time" (it renders from React state) while the **timeline** behind it was still the
+previous window's payload — so the line said 8 events on a fixture holding 9, and 142 against 143 on the
+corpus. The evidence that settled it was the fixture's own store: 9 activities, unchanged, while the line said
+8 — a fresh request and the page disagreed about the *same* query, which can only be the page not having
+applied the response yet. Fixed with the pass's own documented readiness rule (`settleUntil`, `ui.tsx`-side
+marker `data-rd-progress-index-window`) rather than a sleep, and the same wait now covers the window being put
+back. With the fix the line reads **9 events on the fixture** (its store holds 9) and **694 on the corpus** (its
+store holds 694) — parity by construction, not by luck.
+
+Worth stating plainly: **all three failures were in the checks, none in the page.** The page behaved correctly
+throughout; what the corpus exercised was my verification, and it found three different ways a check can be
+wrong — an unstated precondition (a section the subject lacks), a premise that cannot hold (a moving window
+compared twice), and a missing readiness wait.
