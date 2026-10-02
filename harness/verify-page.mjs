@@ -22,6 +22,7 @@
  * topic, and a topic carrying a blocked axis is visually distinct.
  */
 import { existsSync, readdirSync } from "node:fs";
+import { classifyDataset, fixHint, observedPhrase, verifyDataset } from "./dataset-identity.mjs";
 
 // playwright-core is a devDependency of this repo, so `bun install` makes the bare specifier
 // resolve; PLAYWRIGHT_CORE can point at any other install instead.
@@ -363,46 +364,38 @@ const CORPUS = await page.evaluate(
   [PLUGIN_ID, 14]
 );
 // ------------------------------------------------------------------ dataset identity: refuse, do not guess
-// A verifier must not emit an acceptance verdict for a dataset it was not pointed at, and a *mixed* instance
-// (the fixture applied on top of the corpus) is what has already corrupted attribution and verdicts. The
-// identity is read from durable markers, never from whatever renders first: the fixture's own naming (topics
-// "Layout fixture …", repositories under "fixture/"), and the corpus's, which is the *absence* of it. With
-// `--dataset` the wrapper exports NAKAMA_EXPECT_DATASET, so a mismatch is refused here, before any check
-// runs, and the run exits 3 — a code the wrapper refuses to record, so the committed transcript survives.
+// A verifier must not emit an acceptance verdict for a dataset it was not pointed at. The identity is read
+// from durable names, never from whatever renders first, and it distinguishes THREE things rather than two
+// (reviewer ruling, C3): the corpus, the fixture, and the *write residue* a `--write` pass leaves behind
+// (`ui-check <n>`) — which is neither dataset and used to be misread as a corpus marker, turning a
+// contaminated fixture into "a mixed instance" and refusing every later fixture run with the wrong
+// diagnosis. All of it lives in `harness/dataset-identity.mjs` so the rule is testable without a browser
+// (`bun harness/test-dataset-identity.mjs`); a mismatch is refused here, before any check runs, and the run
+// exits 3 — a code the wrapper refuses to record, so the committed transcript survives.
 const EXPECTED_DATASET = process.env.NAKAMA_EXPECT_DATASET ?? "";
 if (["corpus", "fixture"].includes(EXPECTED_DATASET)) {
-  const isFixtureTopic = (name) => /^layout fixture/i.test(name ?? "");
-  const isFixtureRepo = (name) => /^fixture\//i.test(name ?? "");
-  const topicNames = CORPUS.topicNames ?? [];
-  const repoNames = (CORPUS.repositories ?? []).map((row) => row.fullName);
-  const fixtureTopics = topicNames.filter(isFixtureTopic);
-  const fixtureRepos = repoNames.filter(isFixtureRepo);
-  const showsFixture = fixtureTopics.length > 0 || fixtureRepos.length > 0;
-  const pureFixture =
-    topicNames.length > 0 && fixtureTopics.length === topicNames.length && fixtureRepos.length > 0;
-  const observed = !showsFixture
-    ? "corpus markers (no fixture-named topic or repository)"
-    : pureFixture
-      ? "fixture markers only"
-      : "BOTH fixture and corpus markers — a mixed instance";
-  const identityOk = EXPECTED_DATASET === "fixture" ? pureFixture : !showsFixture;
+  const identity = classifyDataset({
+    repositoryNames: (CORPUS.repositories ?? []).map((row) => row.fullName),
+    topicNames: CORPUS.topicNames ?? [],
+  });
+  const observed = observedPhrase(identity);
   console.log(
-    `identity: expected ${EXPECTED_DATASET} · ${topicNames.length} topic(s) ` +
-      `(${fixtureTopics.length} fixture-named) · ${fixtureRepos.length} of ${repoNames.length} ` +
-      `repository(ies) under fixture/ · observed ${observed}`
+    `identity: expected ${EXPECTED_DATASET} · ${identity.counts.topics} topic(s) ` +
+      `(${identity.counts.fixtureTopics} fixture-named, ${identity.counts.residueTopics} write residue) · ` +
+      `${identity.counts.fixtureRepositories} of ${identity.counts.repositories} repository(ies) under ` +
+      `fixture/ · observed ${observed}`
   );
-  if (!identityOk) {
+  const verdict = verifyDataset(EXPECTED_DATASET, identity);
+  if (!verdict.ok) {
     console.log(
       `FAIL  the instance holds the dataset this run asked for — requested ${EXPECTED_DATASET}, instance ` +
-        `shows ${observed}`
+        `shows ${verdict.reason}`
     );
     console.log(
-      `REFUSED  no verdict: the pass will not measure ${EXPECTED_DATASET} against an instance that is ${observed}`
+      `REFUSED  no verdict: the pass will not measure ${EXPECTED_DATASET} against an instance that holds ` +
+        `${verdict.reason}`
     );
-    console.log(
-      "REFUSED  apply the dataset you mean to measure to an instance of its own " +
-        "(harness/apply-layout-fixture.mjs, or the corpus seed), then re-run"
-    );
+    console.log(`REFUSED  ${fixHint(identity)}`);
     console.log("read pass: REFUSED — no verdict, no record");
     await browser.close();
     process.exit(3);

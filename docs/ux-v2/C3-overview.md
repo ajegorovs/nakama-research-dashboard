@@ -1,7 +1,9 @@
 # C3 — Overview: the aggregation, as the dashboard's default landing
 
-**Status: open, unblocked** (reviewer, 2026-10-02, on accepting C4). Charter written before the build, from the
-prototype markup and the payload that exists — not from memory of either.
+**Status: accepted** (reviewer, 2026-10-02). Functional acceptance, geometry/interaction acceptance and visual
+fidelity are all closed — on the fixture landing montage and the records below — and **C5 is unblocked**.
+Charter written before the build, from the prototype markup and the payload that exists — not from memory of
+either.
 
 ## What this unit is
 
@@ -126,6 +128,40 @@ enhancement if the field is still wanted.
    explicit view selection; if the existing `seq` sequencing already handles it, no new behaviour — but the
    interaction test must not leave a stale-target surprise unexamined.
 
+## Accepted (reviewer, 2026-10-02) — the three verdicts on the fixture landing montage
+
+> **C3 functional acceptance: closed.** **C3 geometry/interaction acceptance: closed.** **C3 visual fidelity:
+> closed.** **C3: accepted.**
+
+The reviewer read the pushed fixture Overview montage and recorded that the landing now reads as the prototype's
+intended ten-second aggregation rather than as a disguised Topics page: `Topic activity` is the wider left
+column, `Repository activity` the narrower right one, both starting together, with cards carrying concise
+movement/context plus a clear drill-in action; the absent fifth nav item is visually coherent, with `Overview` as
+the landing heading and the four real destinations the only nav choices. The payload-driven differences were
+accepted as right rather than as drift — the topic card's honest activity count/recency instead of an invented
+latest-event title, the repository card's real newest event, the absent repository window count, and ordering
+labels that describe the payload rather than copying the prototype's static "Newest activity first" — with the
+explicit note that no data should be added merely to make the two columns symmetrical. The review also caught
+this document's own acceptance criteria still saying "newest activity first / same ordering rule"; that was
+stale against ruling 3 and is corrected above.
+
+## Ruled on after the build (reviewer, 2026-10-02) — the two items left open
+
+1. **The corpus `--write` record counts; the C3 write gate is closed, not open.** The 21:12:17 record is the
+   canonical write item and is not superseded: the transcript demonstrates the behaviour the post-reload
+   correction introduced, and the earlier aborts are consistent with the defect that correction fixed. No
+   bounded settle is needed, and the fixture write record does not substitute for it — it stands beside it as
+   corroborating cross-dataset evidence. What *was* stale is the prose committed alongside the green record
+   (this document, the session handoff, and `3f60da9`'s own message, which cannot be corrected without
+   rewriting published history). The SQLite lock/500 observations remain their own runtime-reliability item.
+2. **A `ui-check <n>` topic must not count as a corpus marker** — and must not be ignored either. Three concepts
+   instead of two: corpus identity, fixture identity, and acceptance-write residue, so a contaminated instance
+   refuses with a truthful diagnosis while the fail-closed behaviour is preserved. The rule to avoid is the
+   dangerous "anything not named like the fixture must be the corpus", and `wipe-plugin-rows.py` must likewise
+   require an explicit target rather than defaulting a destructive wipe to the corpus/dev root.
+
+Both are implemented and asserted; the two items at the end of the records section say how.
+
 ## What the landing changed outside the page
 
 Both harnesses held the same latent assumption — that the shell opens on a *view*:
@@ -152,11 +188,13 @@ Semantics, each asserted positively rather than by omission:
 
 1. the default landing renders **both** columns, from one `get_overview` payload — with no second read path and
    no event list of its own;
-2. every topic the payload returns appears exactly once, newest activity first, with identity, description,
-   recency, axis pills and the payload's own **activity summary** (count in the window + last activity) — and
-   **no event title**, per the gap above;
-3. every repository the payload returns appears exactly once, same ordering rule, with identity, recency, latest
-   event and its axes chip;
+2. every topic the payload returns appears exactly once, **in the payload's own order — attention order** —
+   which is what the column label states, never the prototype's static "Newest activity first" (ruling 3);
+   with identity, description, recency, axis pills and the payload's own **activity summary** (count in the
+   window + last activity) — and **no event title**, per the gap above;
+3. every repository the payload returns appears exactly once, **in the payload's own order — by name** —
+   labelled as such rather than sharing the topics' rule (ruling 3), with identity, recency, latest event and
+   its axes chip;
 4. the repository card's footer carries **no window count** (D4) — the assertion is an absence with its reason,
    not a missing check;
 5. `Open topic →` lands in Topics with that topic selected, and `Expand activity →` lands in Repositories with
@@ -183,13 +221,16 @@ below is on that asset, guarded by `served-build-guard.mjs` before it starts.
 |---|---|---|
 | fixture · 1440x900 | `all checks passed; 1 skipped` | 165 |
 | fixture · 1280x800 | `all checks passed; 2 skipped` | 165 |
+| fixture · `--write` | `all checks passed; 1 skipped` | 177 |
 | corpus · 1440x900 | `all checks passed; 26 skipped` | 163 |
 | corpus · 1280x800 | `all checks passed; 27 skipped` | 163 |
-| corpus · `--write` | **open — see below** | — |
+| corpus · `--write` | `all checks passed; 26 skipped` | 175 |
 | `bun run check` | `126 pass, 0 fail` | — |
 
 Each skip is stated by the pass with the subject this dataset lacks. Both viewports carry the same check count
-per dataset, so nothing is being dropped at the narrower size.
+per dataset, so nothing is being dropped at the narrower size. **The corpus write record is the canonical write
+item and the fixture's is its cross-dataset corroboration on the same asset** — see below for why the earlier
+corpus write runs did not produce it, and for the SQLite locking that stays a runtime debt rather than a gate.
 
 **The checks the unit was chartered on**, passing by name:
 
@@ -211,37 +252,53 @@ per dataset, so nothing is being dropped at the narrower size.
 - the topic activity line reads the payload's own window count and last activity
   (`8 events in the selected window · last activity yesterday`), with no event title
 
-**The write record: obtained on the fixture, open on the corpus, and the reason is instance-level rather than
-the page.** The corpus write pass creates its fixture topic — the `reconcile_topic` returns 200 and the store
-afterwards held `topics=2, development_axes=4` — reloads, and reads it back; the reads that follow the write
-lose the SQLite lock, the detail sits on `Loading this topic` until the pass gives up, and the page renders **no
-banner** (so its read is pending rather than rejected). The instance log in that window:
+**The write record: taken on the corpus, corroborated on the fixture.** `docs/corpus/verify-write.txt` is the
+canonical write item: generated 2026-10-02 21:12:17 on this asset, **175 checks, `all checks passed`, 26
+skipped**. It proves the C3 landing first (the transcript shows the shell opening on the default landing) and
+then the whole narrow-write sequence end to end — the topic created, the `ui-check` topic selected, the note
+field writable, the note landing, a stale correction refused, "wrote nothing" verified, the reload, and the
+corrected write landing.
+
+Three earlier corpus write runs (21:01:46, 21:06:30 after 156 checks, 21:10:28 after 66) **ABORTED on
+`locator.click: Timeout 30000ms exceeded`** — the harness-navigation defect, not the page: after C3 a reload
+lands on the landing, so the write section's rail-row click had no index to find. The transcript demonstrates
+the behaviour the correction introduced, which is why the green record is the one that counts; the correction
+is in `3f60da9`, committed four minutes after the run.
+
+The fixture write pass is the same measurement on the other dataset, same asset: `write pass: all checks passed;
+1 skipped`, 177 checks, `docs/layout-fixtures/verify-fixture-write.txt`.
+
+**The SQLite lock is a runtime debt, not a C3 acceptance gate — and no settle delay was added to hide it.** The
+corpus instance logs `database is locked` → `POST 500` in and around the write runs:
 
 ```
 21:12:14 SQLiteError: database is locked  → POST 500 (requestId bb37106e-…, durationMs 73)
 21:13:04 SQLiteError: database is locked  → POST 500 (requestId 50b5fff9-…, durationMs 61)
 ```
 
-The host runs actions as unserialised subprocesses, and the corpus's read volume is what makes the collision
-fatal there. **The same pass on the fixture completes: `write pass: all checks passed; 1 skipped`, 177 checks**
-(`docs/layout-fixtures/verify-fixture-write.txt`), even though the fixture instance logged the same
-`SQLITE_BUSY_RECOVERY` → `POST 500` at 21:20:03 during it. So the write path itself is sound on this build and
-the corpus's record is the one that cannot currently be taken. Not waived by a second green run; the committed
-`docs/corpus/verify-write.txt` is untouched, because the wrapper refuses to record an aborted pass.
+The green transcript itself records a console 500, and the fixture logged the same `SQLITE_BUSY_RECOVERY` →
+`POST 500` at 21:20:03 inside its own green run. The host runs actions as unserialised subprocesses, so
+concurrent page loads can lose the lock and an ordinary read loses its turn — an HTTP 500 followed by a UI on
+`Loading this topic` is bad operational behaviour and worth fixing, but it is not a composition defect and it
+did not stop the write semantics from being verified. Tracked as its own item in the estate's `AGENDA.md`.
 
-**Two things that investigation exposed, both worth keeping:**
+**Two things that investigation exposed, both ruled on the same day (reviewer, 2026-10-02):**
 
-1. **The write pass pollutes the dataset identity of the instance it runs on.** It creates a topic named
-   `ui-check <n>`, which does not match the fixture's naming, and the dataset-identity gate reads identity from
-   naming — so after one fixture write run the instance reports *BOTH fixture and corpus markers — a mixed
-   instance* and **refuses every later fixture run** (read or write) at check 2. The fixture record above was
-   therefore taken once, and the fixture had to be re-seeded (`--data-root /mnt/otrais/data/nakama-fixture --org
-   org_706c5500…`) before it would pass again. A `ui-check` topic counting as a corpus marker is a ruling for
-   the reviewer, not something to paper over.
-2. **`wipe-plugin-rows.py` defaults to the dev data root.** With the *fixture* env sourced it still wipes
-   `/mnt/otrais/data/nakama-dev` — the same instance-targeting class as the hardcoded-unit trap already in the
-   unit's history. Pass `--data-root` and `--org` explicitly for the fixture; the fixture condition above was
-   only cleared once that was done.
+1. **A `ui-check <n>` topic is acceptance-write *residue*, not a corpus marker.** The write pass's own subject
+   is neither dataset, and the gate now distinguishes three things rather than two, so one fixture write run
+   diagnoses as *"the fixture plus acceptance-write residue (ui-check …)"* and refuses with a re-seed hint —
+   instead of the old *"BOTH fixture and corpus markers — a mixed instance"*, a wrong diagnosis of a known
+   cause. Residue refuses in either direction, and an **empty** instance refuses too: a store with no dataset is
+   not a clean corpus. The rule lives in `harness/dataset-identity.mjs`, asserted by `bun run harness:identity`
+   (82 checks) — including the boundary that a genuine topic called "ui-check policy review" is corpus data,
+   not residue — and the wired pass was exercised by injecting the residue through `reconcile_topic` on the
+   fixture: a fixture run then exits 3, `REFUSED`, with the committed record untouched. The write pass itself
+   still creates and operates on its own subject; the gate runs before it writes.
+2. **`wipe-plugin-rows.py` has no default target any more.** `--data-root` and `--org` are required, so the
+   instance-targeting mistake cannot recur silently. It already had: with the *fixture* env sourced the script
+   emptied `/mnt/otrais/data/nakama-dev` anyway, and the fixture re-seed that followed restored only the
+   fixture — the corpus stayed wiped until it was replayed through `harness/replay-corpus.mjs` (695 calls, then
+   `1 topic / 3 axes / 1 person / 1 repository / 694 activities`).
 
 Two more harness assumptions the landing exposed, both fixed, both the same class as the read-side correction
 and both worth keeping because each one first presented as a page fault:

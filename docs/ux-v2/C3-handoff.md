@@ -1,82 +1,103 @@
-# C3 handoff — session state at 2026-10-02, ~21:30 EEST
+# C3 handoff — C3 accepted 2026-10-02; state at the close of the unit
 
 For whoever picks up next (agent or reviewer). Everything below was verified on this build, not carried over
 from an earlier session's notes.
 
 ## Where C3 stands
 
-**Built, committed, pushed.** Branch `composition/c1-topics`, commit `3f60da9`
-(`75fb1d3..3f60da9`) on `origin`; estate docs committed locally as `746e3f4` (the estate repo has no remote).
+**Accepted.** The reviewer closed functional acceptance, geometry/interaction acceptance and visual fidelity on
+the pushed fixture landing montage: **C3: accepted**, and **C5 is unblocked** (not started). The verdict, the
+eight rulings, the two later rulings and the full record are in `docs/ux-v2/C3-overview.md`.
 
 **Build under test: revision 91 / `0.2.0+dev.4dfdb691c706`**, one asset, sha256
-`58f01bf1b56c2bf78c78be9096c3462f83be501a7a3923f80bf9915e7c46c554`, served by both instances (the corpus
-reports revision 495 serving the *same* bytes). The served-build guard runs before every pass.
+`58f01bf1b56c2bf78c78be9096c3462f83be501a7a3923f80bf9915e7c46c554`. Both instances serve those exact bytes —
+re-verified at the close of this session by hashing the asset each one actually returns (the fixture reports
+revision 91, the corpus revision 495; one asset, two instance counters).
 
 | Record | Result | Checks |
 |---|---|---|
 | fixture · 1440x900 | `all checks passed; 1 skipped` | 165 |
 | fixture · 1280x800 | `all checks passed; 2 skipped` | 165 |
+| fixture · `--write` | `all checks passed; 1 skipped` | 177 |
 | corpus · 1440x900 | `all checks passed; 26 skipped` | 163 |
 | corpus · 1280x800 | `all checks passed; 27 skipped` | 163 |
-| fixture · `--write` | `all checks passed; 1 skipped` | 177 |
-| corpus · `--write` | **open — instance-level, see below** | — |
+| corpus · `--write` | `all checks passed; 26 skipped` | 175 |
 | `bun run check` | `126 pass, 0 fail` | — |
 
-Charter, field mapping, the three payload gaps, the reviewer's eight rulings and the full record:
-`docs/ux-v2/C3-overview.md`. The reviewer's rulings were implemented as given; ruling 8 (stale target) turned
-out to need no new behaviour — the existing `seq` sequencing already lands on the entity asked for last, and a
-check now pins it (it skips on the single-topic corpus with its reason).
+The corpus write record is the canonical write item (`docs/corpus/verify-write.txt`, generated 21:12:17 on this
+asset); the fixture write record corroborates it on the other dataset, same asset. The earlier corpus write runs
+aborted on a harness-navigation defect, not on the page — the write section's rail-row click had no index to find
+once a reload lands on the landing — and `3f60da9` carries the correction. **A commit message from that session
+says the corpus write item is open; the record committed beside it is green.** Git history is not rewritten to
+fix prose, so the correction lives here and in `C3-overview.md`.
 
-## What is open
+## What the closure changed
 
-1. **The corpus `--write` record.** The write itself returns 200 (store afterwards: `topics=2,
-   development_axes=4`); the reads that follow it lose the SQLite lock, and the detail stays on
-   `Loading this topic` with no banner. Instance log in that window: `SQLiteError: database is locked` →
-   `POST 500` at 21:12:14 (`requestId bb37106e-…`, 73ms) and 21:13:04 (`requestId 50b5fff9-…`, 61ms). The
-   fixture write pass completes on the same host despite logging the same `SQLITE_BUSY_RECOVERY` →
-   `POST 500` at 21:20:03, so this is about the corpus's read volume against unserialised action subprocesses.
-   **Awaiting the reviewer's ruling**: accept the fixture write record as the gate's write item, or ask for
-   something else. Do not waive it by re-running until green.
-2. **The visual gate.** Subject: `docs/ux-v2/fidelity/fixture-tall/side-by-side/overview.png` (tall viewport,
-   whole composition) and `docs/ux-v2/fidelity/fixture/side-by-side/overview.png`. Captured against this build.
-3. **A ruling on dataset identity vs. the write pass.** The write pass creates a topic named `ui-check <n>`,
-   which does not match the fixture's naming; the identity gate reads identity from naming, so one fixture write
-   run makes that instance report *BOTH fixture and corpus markers* and refuses every later fixture run at check
-   2. The fixture record above was taken once and the instance had to be re-seeded afterwards.
-4. **C5 (Repositories convergence) has not been started.**
+1. **`harness/dataset-identity.mjs` (new) + `harness/test-dataset-identity.mjs` (new).** The identity rule used
+   to be inline in a 5,900-line browser script, so the behaviour that protects every record could only be
+   exercised by mutating an instance. It now distinguishes **three** things — corpus, fixture, and the
+   acceptance-write residue a `--write` pass leaves (`ui-check <n>`) — and the pass refuses with a truthful
+   diagnosis plus a re-seed hint. Residue refuses in either direction; an **empty** store refuses too. Asserted
+   by `bun run harness:identity` (82 checks) and exercised end to end by injecting residue through
+   `reconcile_topic` on the fixture (fixture run → exit 3, `REFUSED`, committed record untouched).
+2. **`wipe-plugin-rows.py` requires an explicit target.** `--data-root` and `--org` have no defaults. The
+   instance-targeting mistake it was built to survive had already happened: with the *fixture* env sourced it
+   emptied the **corpus** data root, and the fixture re-seed that followed restored only the fixture.
+3. **The corpus was replayed.** It had been left empty by that wipe and was restored this session through
+   `harness/replay-corpus.mjs` (695/695 calls accepted, 70.5 s) and asserted at the documented baseline.
 
-## Traps that cost time in this session, so they do not cost it again
+## Current instance state (verified, not assumed)
+
+- **Corpus** `127.0.0.1:4399` / Vite `:3003`: `1 topic / 3 axes / 1 person / 1 repository / 694 activities`
+  (`UDV Echo Process`), replayed this session. A clean corpus read pass on this state: `all checks passed;
+  26 skipped`, identity `observed corpus markers …`.
+- **Fixture** `127.0.0.1:4400` / Vite `:3005`: `2 topics / 7 axes / 2 people / 3 repositories / 9 activities`,
+  re-seeded after the residue injection. A clean fixture read pass: `all checks passed; 1 skipped`, identity
+  `observed fixture markers only`.
+- Both verification reads ran with `--transcript`/`--shots` pointed at scratch, so **no committed record was
+  touched**: `git status` on `docs/` is clean.
+
+## Traps that cost time, so they do not cost it again
 
 - **The shell opens on the landing now (C3), not on Topics.** Every check and every capture must navigate
-  explicitly. Two harness paths had the old assumption: the read pass graded Topics by inheritance, and the
-  write section reloads with `page.goto` and then clicked a rail row. Both fixed. A harness that grades a
-  screen it did not ask for is not trustworthy for the next unit either.
-- **A block that moves shared state must restore the value it read.** The C3 interaction block moves the window,
+  explicitly. Two harness paths had the old assumption (the read pass graded Topics by inheritance; the write
+  section reloads and then clicked a rail row) — both fixed, and the fix is what the aborted corpus write runs
+  were waiting for.
+- **A block that moves shared state must restore the value it read.** The interaction block moves the window,
   the view and the selection. A hard-coded restore of `14` against the pass's `30` had every later check reading
-  the topic through a narrower window — the frames still rendered, so it presented as a content fault. It also
-  must not re-click the row that is already pressed: that re-click does not hold the selection here, and the
-  empty pane aborted the next check on a 30s timeout.
-- **Never kill a harness chain that ends in wipe → replay.** A stop in that tail leaves the corpus empty or
-  half-seeded (once 134 activities of 694), which reads as a corpus of missing subjects and skips checks that
-  would have run. If a kill does land there: wipe, replay, then assert the counts against the documented
-  baseline — corpus 1 topic / 3 axes / 1 person / 1 repository / 694 activities.
-- **`wipe-plugin-rows.py` defaults to `/mnt/otrais/data/nakama-dev`.** With the *fixture* env sourced it still
-  wipes the dev root. Pass `--data-root /mnt/otrais/data/nakama-fixture --org
-  org_706c5500c03644d29e0a6e22b8865066` explicitly.
+  the topic through a narrower window and presented as a content fault; and it must not re-click the row that is
+  already pressed, which does not hold the selection here and leaves an empty pane that aborts the next check on
+  a 30 s locator timeout.
+- **Never kill a harness chain that ends in wipe → replay.** A stop in that tail leaves the instance empty or
+  half-seeded, which reads as a dataset of missing subjects and skips checks that would have run. Restore by
+  wipe → replay → assert (`corpus 1 topic / 3 axes / 1 person / 1 repository / 694 activities`). **To see which
+  store an instance is actually serving, read `org_plugins.database_generation`** in
+  `<data-root>/data/sqlite/nakama.sqlite` and match it to the `g*.sqlite` under `orgs/<org>/plugins/<plugin>/db/`
+  — a data root holds several generations, and the active one is not the one with the rows just because an older
+  file has them. That is how the empty corpus was found this session: the documented baseline sat in an older
+  generation file while the active one held nothing, so the instance looked healthy and was empty.
+- **`wipe-plugin-rows.py` now has no default target.** Always pass `--data-root` and `--org` — corpus
+  `…/nakama-dev` + `org_1c8fcc96…`, fixture `…/nakama-fixture` + `org_706c5500…`. It prints the target it
+  resolved, and the dry run lists every count it would zero.
+- **The served-build guard wants the Vite origin, not the API origin.** Pointed at `:4399`/`:4400` it reports
+  *"the page never fetched a plugin UI asset — is the plugin enabled?"*, which reads like a disabled plugin or a
+  digest mismatch. The corpus target is `http://$(tailscale ip -4 | head -1):3003`; the fixture's is
+  `http://127.0.0.1:3005` (its Vite is loopback-only). Credentials come from each instance's own env file —
+  `compose/nakama/.env`, `compose/nakama/.env.fixture` — and are never printed.
+- **A dataset identity is not "everything that is not the fixture".** Three kinds, one gate, and the write
+  pass's own `ui-check <n>` subject is residue rather than a corpus marker — see `harness/dataset-identity.mjs`.
+  A name that merely starts with `ui-check` (say "ui-check policy review") is corpus data; the test pins that
+  boundary.
 - **`.env` vs `tailscale ip -4`.** The corpus dashboard is reached at `http://$(tailscale ip -4 | head -1):3003`
-  in the pass commands; the `.env` value does not answer for the capture from this host.
-
-## Current instance state
-
-Corpus: 1 topic / 3 axes / 1 person / 1 repository / 694 activities (documented baseline). Fixture: 2 topics /
-7 axes / 2 people / 3 repositories / 9 activities (the documented fixture), re-seeded and green at 1440 after
-the identity condition above was cleared.
+  in the pass commands; the `.env` value does not answer for a capture from this host.
 
 ## Files worth opening first
 
-- `docs/ux-v2/C3-overview.md` — charter, gaps, rulings, records, the evidence for everything above.
-- `harness/verify-page.mjs` — the acceptance pass; the C3 block, the interaction block, and the two navigation
+- `docs/ux-v2/C3-overview.md` — charter, gaps, the eight rulings, the two later rulings, the records table, the
+  acceptance verdicts and the write-record evidence.
+- `harness/dataset-identity.mjs` + `harness/test-dataset-identity.mjs` — the identity rule and its cases.
+- `harness/verify-page.mjs` — the acceptance pass; the C3 block, the interaction block and the two navigation
   fixes are all commented with why.
-- `harness/fidelity/capture-current.mjs` / `montage.mjs` — the landing capture (mount gate waits on the
-  landing; refuses if a view container is already on screen) and the overview montage pair.
-- `docs/layout-fixtures/verify-fixture-write.txt` — the fixture write record.
+- `harness/fidelity/capture-current.mjs` / `montage.mjs` — the landing capture (mount gate waits on the landing;
+  refuses if a view container is already on screen) and the overview montage pair the visual gate read.
+- `docs/corpus/verify-write.txt`, `docs/layout-fixtures/verify-fixture-write.txt` — the write records.

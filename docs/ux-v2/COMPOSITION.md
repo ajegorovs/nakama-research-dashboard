@@ -95,8 +95,9 @@ recorded rather than invented silently.
 > stand unchanged. Approved by the reviewer as **D3**.
 
 ### C3 — Overview: the aggregation, as the dashboard's default landing
-Build the prototype's two-column `Topic activity` / `Repository activity` composition with its per-card
-actions and reference chips. **Collision to resolve first — see §4.1.**
+**Accepted (reviewer, 2026-10-02) — the record and the rulings are in `C3-overview.md`.** Build the prototype's
+two-column `Topic activity` / `Repository activity` composition with its per-card actions and reference chips.
+**Collision to resolve first — see §4.1.**
 
 ### C5 — Repositories: density and row typography
 Structural parity already holds; this brings rows and chips to the prototype's tighter grammar. Small.
