@@ -1000,7 +1000,12 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-detail-grid {
   display: grid;
   gap: var(--rd-gap-block);
-  grid-template-columns: minmax(0, 1fr) minmax(14rem, 20rem);
+  /* The side rail is proportional, not a fixed 20rem column: at a narrow container a fixed 320px
+     rail squeezed Current Work to 1.10x its width, which reads as two near-equal columns rather
+     than as the work with a rail beside it. A 0.6fr rail against 1fr keeps it near its current
+     ~320px at 1440 while letting it shrink to a 250px floor at 1280, so the main lane stays
+     visibly dominant (at least 1.25x) at both. It never stacks below the work at desktop widths. */
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 0.6fr);
   align-items: start;
 }
 @media (max-width: 1000px) {

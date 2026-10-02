@@ -3949,12 +3949,31 @@ if (WRITE) {
     [PLUGIN_ID, name],
     6000
   );
-  await page.waitForTimeout(1000);
+  // C1 keeps the narrow writes — the topic note and the axis correction — but folds them away by
+  // default. Driving the page means opening what the page folded, not asserting the fold away: this is
+  // the one place the pass writes, so it opens the write disclosures the way a reader does and then
+  // asserts the field is actually writable. (The earlier abort here was a 30s locator timeout on a
+  // hidden input: the field was in the DOM and inside a closed fold.)
+  for (const summary of await root
+    .locator(`[data-rd-detail="${name}"] details[data-rd-write]:not([open]) summary`)
+    .all()) {
+    await summary.click().catch(() => {});
+  }
+  const noteField = root.locator(`[data-rd-detail="${name}"] [aria-label="Topic note"]`).first();
+  const noteFieldVisible = await noteField
+    .waitFor({ state: "visible", timeout: 6000 })
+    .then(() => true)
+    .catch(() => false);
+  check(
+    "the folded write affordances open and the note field becomes writable in the detail",
+    noteFieldVisible,
+    `note field visible under [data-rd-detail="${name}"]: ${noteFieldVisible}`
+  );
 
   // The narrow write the page kept (D7), end to end: the note field is inline in the read detail and its
   // write lands in the list that detail already renders.
   const pageNoteText = `ui verification note ${Date.now().toString().slice(-5)}`;
-  await card.getByLabel("Topic note", { exact: true }).fill(pageNoteText);
+  await noteField.fill(pageNoteText);
   await card.getByRole("button", { name: "Add note / correction", exact: true }).click();
   await page.waitForTimeout(1500);
   const noteLanded = await page.evaluate(

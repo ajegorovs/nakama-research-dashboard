@@ -26,7 +26,10 @@ const BUILD = path.resolve(
   process.env.NAKAMA_BUILD_FILE ?? path.join("ui", "app.js")
 );
 
-const DASHBOARD = (process.env.NAKAMA_DASHBOARD ?? "http://127.0.0.1:3003").replace(/\/+$/, "");
+// The acceptance instance is the dev instance (the built bundle), not the Vite dev server: defaulting to
+// :3003 made this guard fail with ERR_CONNECTION_REFUSED on a loopback-only acceptance host, which looks
+// like a digest failure but is a wrong target.
+const DASHBOARD = (process.env.NAKAMA_DASHBOARD ?? "http://127.0.0.1:4399").replace(/\/+$/, "");
 const PLUGIN_ID = process.env.NAKAMA_PLUGIN_ID ?? "research-dashboard";
 const EMAIL = process.env.NAKAMA_DEV_EMAIL ?? process.env.NAKAMA_EMAIL ?? "";
 const PASSWORD = process.env.NAKAMA_DEV_PASSWORD ?? process.env.NAKAMA_PASSWORD ?? "";
