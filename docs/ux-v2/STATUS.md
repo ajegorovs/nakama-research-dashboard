@@ -37,7 +37,19 @@ two audit gaps became hardening items:
 |---|---|---|
 | H1 | **Keyboard focus visibility** — an explicit browser check in the pass. It is genuinely UI behavior, so it deserves executable coverage rather than a visual assumption | open — for U5/U6/U8/U9/U10 territory: needs a defensible assertion (focus a control, compare its rendered focus style against its unfocused style) rather than a check written to pass |
 | H2 | **Structured conflict semantics** — no browser test. The store/action tests are sufficient unless the UI itself grows a conflicting-edit workflow | closed by decision (reviewer: *"no need to invent a browser test merely to duplicate store evidence"*) |
-| H3 | **Deployment wording** — keep saying plainly that there is no always-on deployed dashboard service; the project is merged and installable, not production-deployed | recorded (`DECISIONS.md` §2, `services/nakama/HANDOFF-UX-V2.md`) | estate wiring verified (the plugin is served from the vendored folder in the Nakama checkout + the acceptance instances; the estate's always-on Nakama on `4310` is the *vendor's* test instance and never carried it), exact-build identity established (clone build == vendored bytes == served bytes), the merge diff inspected file by file, a **clean-clone reproduction** run, `README.md` reconciled with the exit-code contract / the identity guard / the known time-relative drift, and the merge path defined (fast-forward `ux-v2` → `main`, both from `9b48f99`). See `docs/ux-v2/U11-merge-readiness.md` | — |
+### Next, in the reviewer's order (2026-10-02)
+
+1. **U6 control cleanup** — remove the broad `Add topic` and `Edit fields` controls from the Topics UI (D7); the
+   narrow note/correction affordance stays, re-homed out of the editor that currently hosts it. Recon in
+   progress: the editor is the *host* of `Add note` and the correction path, so removal is a small restructure,
+   not a deletion.
+2. **Visual-density / emphasis polish** — the remaining U5/U6/U8/U9 refinement (the density and
+   restated-count concerns the pre-pivot brief measured, now against the v2 grammar).
+3. **H1 focus coverage** — the executable keyboard-focus-visibility check.
+
+Architecture and model questions are **not** reopened unless refinement turns up a concrete problem (reviewer).
+
+| # | Item | State | — keep saying plainly that there is no always-on deployed dashboard service; the project is merged and installable, not production-deployed | recorded (`DECISIONS.md` §2, `services/nakama/HANDOFF-UX-V2.md`) | estate wiring verified (the plugin is served from the vendored folder in the Nakama checkout + the acceptance instances; the estate's always-on Nakama on `4310` is the *vendor's* test instance and never carried it), exact-build identity established (clone build == vendored bytes == served bytes), the merge diff inspected file by file, a **clean-clone reproduction** run, `README.md` reconciled with the exit-code contract / the identity guard / the known time-relative drift, and the merge path defined (fast-forward `ux-v2` → `main`, both from `9b48f99`). See `docs/ux-v2/U11-merge-readiness.md` | — |
 
 ## U1 in one screen
 
