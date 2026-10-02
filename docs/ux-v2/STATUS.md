@@ -3,14 +3,29 @@
 **Live page.** Updated as each chunk lands; every number is a run's own summary line, and every claim
 here should be checkable with `README.md` § "Run the acceptance pass".
 
-Last updated in **U9** (2026-10-02): **U0–U4 complete, U10/U11 closed, UX-v2 merged** (`63e1d4c`, tag
-`ux-v2-complete`); U6 carries the **executed D7 control cleanup**, and U9 now carries the **executed density
-and emphasis pass** — one type/spacing/quietness scale, one surface per level, the exceptional colour
-reserved for exceptional states, the primary line finally weighted, and the Activity column capped at its
-newest rows with the remainder stated (Progress at 1280×800: **13,071px → 4,363px**). The read pass has been
-re-recorded from this build: **88 · 0 · 23** corpus, **112 · 0 · 0** fixture, both viewports, separate
-instances. What remains is **H1 keyboard-focus coverage** — hardening, not proving the product concept.
-Details: `U6-topics.md`, `U9-density.md`.
+Last updated after the **visual-fidelity verification** (2026-10-02): **U0–U4 complete, U10/U11 closed, UX-v2
+merged** (`63e1d4c`, tag `ux-v2-complete`); U6 carries the **executed D7 control cleanup**, U9 the **executed
+density and emphasis pass** (one type/spacing/quietness scale, one surface per level, the exceptional colour
+reserved, the primary line weighted, the Activity column capped with the remainder stated — Progress at
+1280×800: **13,071px → 4,363px**), with the read pass recorded from that build as **88 · 0 · 23** corpus /
+**112 · 0 · 0** fixture, both viewports, separate instances.
+
+**Then the owner asked which build the review UI was serving, and whether it matched the prototypes.**
+Answer, in `fidelity/REVIEW.md` with side-by-side montages: the review surface (`:3003`, proxying the dev
+instance on `:4399`) was serving a **pre-U6** build (`0.2.0+dev.f3eff70d4eae` rev 321) — plugins are installed
+into the instance's config dir, so neither the checkout nor a restart updates it (the new
+`install-plugin.mjs --reinstall` does, preserving organization data). Refreshed to
+`0.2.0+dev.ae3049008d5f` rev 329 and verified through the owner's own URL. **Then the composition verdict:**
+the build reproduces the prototypes only for **Repositories** (density aside), partially for **Progress**, and
+**not at all for Topics, People or the prototype's Overview** — single-column card stacks with count-chip
+strips where the prototypes show index + detail. The acceptance checks never measured page composition and
+should not have implied they did.
+
+**Owner's decision: the prototypes are the target** — index+detail for Topics/People and the Overview
+aggregation are real layout work, scoped in [`COMPOSITION.md`](COMPOSITION.md) (units C1–C5) with three
+collisions needing a ruling before their units start. **H1 keyboard-focus coverage stays parked** until the
+composition settles (its check is in the working tree, uncommitted, currently failing on two findings).
+Details: `U6-topics.md`, `U9-density.md`, `COMPOSITION.md`, `fidelity/REVIEW.md`.
 
 ## Where things stand
 
