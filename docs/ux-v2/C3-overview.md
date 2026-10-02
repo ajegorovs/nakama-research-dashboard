@@ -62,6 +62,37 @@ chip) · a footer holding the window event count and `Expand activity →`.
 (`DECISIONS.md` §8.4). It is omitted, not faked, and the omission is what D4 dockets for a later projection
 enhancement if the field is still wanted.
 
+## The field mapping, so the build is mechanical
+
+| Card field (prototype) | Payload field it will read |
+|---|---|
+| topic title / description | `TopicOverview.topic.name` / `.description` |
+| topic age block | `TopicOverview.lastActivityAt` via `describeAge` (`src/ui.tsx:1214`) |
+| topic "current-work" line | `TopicOverview.axisCounts` (the counts line the front page and both C6 rollups share, `src/store.ts:682`) + the topic's own `blocked[].blocker` sentence when one exists |
+| topic axis pills | `TopicOverview.axes` → `{title} · {state}` with the state's `stateConfidence` marked when it is not `confirmed` |
+| topic activity summary | `TopicOverview.activityCount` + `lastActivityAt` — the payload's own window count, never a list length |
+| topic reference chips | `TopicOverview.people` (person tags), `TopicOverview.repositories` (repository tags) |
+| repository title / description | `RepositoryRollup.repository.name` / `.description` |
+| repository age block | `RepositoryRollup.lastActivityAt` |
+| repository "last event" | `RepositoryRollup.recentActivity[0]` — the newest of a **capped, newest-first** list, used as *an event*, never as a count |
+| repository chips | `RepositoryRollup.topics` (topic tag + `relationship`), `.axes.length` for the `N development axes` chip |
+| repository footer count | **absent by ruling** (D4) — omitted, with the omission asserted |
+| both card actions | `onOpenEntity("topic" \| "repository", id)` — the existing navigation contract, which already sets the view and preselects (`src/ui.tsx:3828`) |
+
+## The payload gaps this unit must not paper over
+
+1. **The repository window count** — the prototype prints `607 recorded events in the selected window`; the
+   authoritative total is not in `RepositoryRollup`. **Omitted by D4**, not faked from the capped list's length.
+2. **The topic's latest *event*** — the prototype's topic card names one event (title, axis, repository,
+   reference); `TopicOverview` carries only `activityCount` and `lastActivityAt`, and no per-topic event. The
+   only existing route to an event title is a window-wide activity read, which is the duplicate reading this
+   phase exists to remove (F2). So the topic card shows the **payload's own activity summary** (count in the
+   window + when it last moved) and **not** an event title. Raising this here rather than inventing a line:
+   if the event title is wanted, it is a projection enhancement to docket beside D4's, not something to
+   reconstruct in the view.
+3. **The repository card does** get a genuine `Last event` line from `RepositoryRollup.recentActivity[0]` — the
+   asymmetry between the two columns follows the payload, and the card will not pretend otherwise.
+
 ## The two judgement calls, stated up front
 
 1. **The current-work line must be composed from payload facts, not written.** The prototype's line is
@@ -87,7 +118,8 @@ Semantics, each asserted positively rather than by omission:
 1. the default landing renders **both** columns, from one `get_overview` payload — with no second read path and
    no event list of its own;
 2. every topic the payload returns appears exactly once, newest activity first, with identity, description,
-   recency, axis pills and a latest-event line;
+   recency, axis pills and the payload's own **activity summary** (count in the window + last activity) — and
+   **no event title**, per the gap above;
 3. every repository the payload returns appears exactly once, same ordering rule, with identity, recency, latest
    event and its axes chip;
 4. the repository card's footer carries **no window count** (D4) — the assertion is an absence with its reason,
