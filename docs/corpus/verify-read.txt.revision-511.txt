@@ -1,6 +1,6 @@
 # harness/read-pass.sh — read pass · dataset corpus · viewport 1440x900
-# dashboard: http://<box>.<tailnet>.ts.net:3003
-# generated: 2026-10-03T00:21:36+03:00
+# dashboard: http://<box>.<tailnet>.ts.net:3003  [endpoint redacted]
+# generated: 2026-10-02T22:47:12+03:00
 
 PASS  login — status 200
 identity: expected corpus · 1 topic(s) (0 fixture-named, 0 write residue) · 0 of 1 repository(ies) under fixture/ · observed corpus markers (no fixture-named topic or repository, no write residue)
@@ -15,10 +15,10 @@ PASS  the landing shows both aggregation columns — topic column=yes; repositor
 PASS  every topic in the payload appears on the landing exactly once, in the payload's own order — rendered ["a167ef65-3c0c-492a-ad9e-f2a8256707c1"] vs payload ["a167ef65-3c0c-492a-ad9e-f2a8256707c1"]
 PASS  every repository in the payload appears on the landing exactly once, in the payload's own order — rendered ["3a0a24fe-4fe4-4091-b3e4-e5a557ad68e4"] vs payload ["3a0a24fe-4fe4-4091-b3e4-e5a557ad68e4"]
 PASS  the repository cards state the omitted window count instead of printing a capped list length (D4) — omission markers 1 for 1 repository card(s); cards printing a window count: 0
-PASS  each topic card's activity line is the payload's own count for that topic, with no event title — a167ef65-3c0c-492a-ad9e-f2a8256707c1: "437 events in the selected window · last activity 4 days ago" (payload 437)
-PASS  the two columns sit side by side with the topic column wider, both beginning in the first viewport — topics {"height":299,"left":320,"top":187,"width":591} vs repositories {"height":209,"left":923,"top":187,"width":493} in {"height":900,"width":1440}
+PASS  each topic card's activity line is the payload's own count for that topic, with no event title — a167ef65-3c0c-492a-ad9e-f2a8256707c1: "451 events in the selected window · last activity 4 days ago" (payload 451)
+PASS  the two columns sit side by side with the topic column wider, both beginning in the first viewport — topics {"height":299,"left":320,"top":219,"width":591} vs repositories {"height":209,"left":923,"top":219,"width":493} in {"height":900,"width":1440}
 PASS  the topic index rendered — 1 index rows
-PASS  the header carries the title, window control, archived toggle and count line, and no create/edit control — {"createControl":false,"editControl":false,"archivedToggle":true,"countsLine":true,"headerText":"Research overview Topics People Repositories Progress 7 days 14 days 30 days All time archived Refresh 1 topic · 3 axes · 1 person · 1 repository Topics Most recently active first · primarily read-onl","windowButtons":4}
+PASS  the header carries the title, window control, archived toggle and count line, and no create/edit control — {"createControl":false,"editControl":false,"archivedToggle":true,"countsLine":true,"headerText":"Research overview Topics People Repositories Progress 7 days 14 days 30 days All time archived Refresh An unexpected server error occurred. 1 topic · 3 axes · 1 person · 1 repository Topics Most recen","windowButtons":4}
 PASS  the count line reads correctly when the count is one — 1 repository
 PASS  every topic in the payload has one index row, and the visible detail carries its own topic's axes and none of another's — 1 rows for 1 topics; 3 own axis(es), 1 folded and counted; no leaks
 PASS  the selected index row states its current-axis count, and the detail carries its people — row "UDV Echo Process 4 days ago 2 current axes" (data-rd-index-current=2; payload non-terminal 2); detail context "ajegorovs/udv-echo-process ajegorovs"
@@ -163,8 +163,8 @@ PASS  palette entry navigates to the page — http://<box>.<tailnet>.ts.net:3003
 PASS  one surface per level: no boxed block nests inside another, except a refusal banner — 0 nested box(es) on this view, all refusal banners
 PASS  tags stay chips when they wrap: one height per cluster, one line each — 2 cluster(s), every chip one line
 SKIP  the exceptional colour is used only for the exceptional state — no blocked state badge is on this view, so the theme's exceptional colour cannot be read off one
-PASS  no view runs away with the scroll at the reference size (budget: eight screens of content) — Topics 1 screen(s), People 0.9 screen(s), Repositories 0.9 screen(s), Progress 2.6 screen(s)
-PASS  the Progress glance — the Problem column and the newest Activity row — is inside the first screen — problem top 319px, newest activity row bottom 517px, screen 900px
+PASS  no view runs away with the scroll at the reference size (budget: eight screens of content) — Topics 1 screen(s), People 0.9 screen(s), Repositories 0.9 screen(s), Progress 2.7 screen(s)
+PASS  the Progress glance — the Problem column and the newest Activity row — is inside the first screen — problem top 351px, newest activity row bottom 549px, screen 900px
 PASS  every view names itself under the shell title (§7), in all four views — topics → "Topics", people → "People", repositories → "Repositories", progress → "Progress"
 PASS  every state row in every view renders its claim through the one badge — topics: 3 row(s), 0 without a claim; people: 3 row(s), 0 without a claim; repositories: 3 row(s), 0 without a claim
 PASS  every recency label's words are the age of the timestamp it carries, in all four views — 6 label(s) across people, progress, repositories, topics; each matches its own timestamp
@@ -180,7 +180,7 @@ PASS  the repositories heading states the order the rollup is actually in — by
 PASS  every repository row states the age of its own last activity, from its own timestamp — 1 dated row(s), 0 said "never"
 PASS  every repository row's second line is the rollup's own numbers, on the lane's own current/terminal split — supports 1 topic · 2 current axes
 SKIP  a repository with nothing current says so, instead of filing stopped work under the lane's heading — this dataset has no repository with neither a topic link nor a current axis
-PASS  the repository's current work is the dominant lane: at least 1.25x the rail, beside it, not stacked under it — lane 489px at x=597, rail 293px at x=1098 (1.67x), tops 278/278
+PASS  the repository's current work is the dominant lane: at least 1.25x the rail, beside it, not stacked under it — lane 489px at x=597, rail 293px at x=1098 (1.67x), tops 310/310
 PASS  the lane holds exactly the rollup's current axes, states that count, and holds no stopped work — lane states 2, holds 2 (Docs & agent skills — `docs/`, `.agents/skills`, Signal analysis — `analysis/`, SA1–SA5, sparse) — projection's current: Docs & agent skills — `docs/`, `.agents/skills`, Signal analysis — `analysis/`, SA1–SA5, sparse
 PASS  stopped work is folded with its own count, and the fold holds exactly the rollup's terminal axes — fold states 1, holds 1 (Acquisition — `acquire/`, DOP3010 rig) — summary "Completed and abandoned work (1)"
 PASS  the split does not lose the repository's own axis count — counts on the page [3,3], projection 3
@@ -192,7 +192,7 @@ PASS  the rail's remainder is one control away, and showing it changes only what
 PASS  expanding and collapsing the rail's window is composition only — no write action fires — window back to 4; non-read action calls 0 -> 0
 SKIP  a repository whose whole activity fits the lead states no remainder — every repository here has either no events or more than 4, so the case is absent
 screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/screenshots/research-dashboard-read.png
-console issues after login: []
+console issues after login: ["error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)","error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"]
 
 read pass: all checks passed; 28 skipped for want of a subject in this corpus
 skipped (each with its reason):

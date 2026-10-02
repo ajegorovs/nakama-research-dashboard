@@ -293,8 +293,11 @@ prints the exact resume command, and resuming is safe in the sense that it is *a
 before that point were already accepted and are not re-sent. A dataset seeded by two overlapping runs is
 the one thing the guard cannot see, so use `--force` only to resume.
 
-**Two suites run beside the pass, and both gate a handoff.** `bun run harness:identity` asserts the
-dataset-identity classifier (corpus / fixture / acceptance-write residue). `bun run harness:records` asserts that
+**Three suites run beside the pass, and each gates a handoff.** `bun run harness:identity` asserts the
+dataset-identity classifier (corpus / fixture / acceptance-write residue). `bun run harness:focus`
+(`harness/focus-pass.sh`) measures keyboard focus visibility — one measurement per control class, sampled across
+views, judged against the 3:1 non-text minimum, with a served-build precondition that refuses rather than
+records; its `--negative-control` mode proves the measure can see a removed indicator. `bun run harness:records` asserts that
 no committed artifact carries a **live endpoint**: what `read-pass.sh` writes into a transcript header and what
 the palette check prints for its PASS line both go through `harness/redact.mjs` — loopback verbatim, anything
 identifying (`http://100.x`, a MagicDNS name, `.local`, this machine's hostname) replaced by

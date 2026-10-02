@@ -270,3 +270,33 @@ elsewhere" and left it in place, and the reviewer caught it as a privacy regress
 - **History is not rewritten to satisfy this rule.** The scrub applies to the tree and the diff; where a leak
   exists in already-published history it is *reported* with its commit count, and the decision to rewrite is
   explicit — never implicit, never a force-push.
+
+## 12. Keyboard focus: one indicator, and the 3:1 minimum as the standard (2026-10-02, H1)
+
+Focus visibility is a property of the **shared primitives**, so it is fixed and measured there, once per class,
+rather than per instance or per view.
+
+- **The standard is the visible outcome, not a token.** A class is measured by comparing its own focused render
+  with its own unfocused render, and the indicator that render actually paints is judged against the WCAG 2.1
+  non-text ratio of **3:1** against the surface it is drawn on — the number behind "not effectively invisible",
+  not a colour the plugin picked. The style sheet's own tokens are an implementation detail; the record quotes
+  the measured ratio.
+- **The theme's hue at full strength, in one rule.** The host paints its ring at 50 % alpha (`ring-ring/50`);
+  the plugin asks for the same hue at full alpha, 2px wide, offset clear of the control's own edge, from a single
+  rule scoped to the plugin root. One rule covers tags, index rows, disclosures, folds, rails and toolbar
+  controls — a per-component set of rules is how these drift apart.
+- **Measure the settled render.** Tailwind's `transition-colors` includes `outline-color`, so a computed style
+  read immediately after focus can be a mid-transition value: one control measured 2.04:1 mid-transition and
+  4.61:1 once its own animations had finished. Wait on the element's animations (a frame after they end) —
+  never a blanket delay, which this project forbids for state reads.
+- **A skip must name itself.** Whether a scroll container is in the tab order depends on whether it currently
+  overflows, and the topics pane re-renders while a walk passes through it, so instance-level control counts are
+  *reported* per view with the page's own reason per unreached element, while **class coverage is asserted** —
+  every class the page exposes is reached and measured at least once.
+- **The measure must be able to fail.** The focus pass ships a negative control (`--negative-control`) that
+  injects CSS removing every focus indication and requires the per-class checks to fail; a suite that cannot see a
+  removed indicator proves nothing by passing.
+- **Which instance is measured is decided by the pass, not by the caller's shell.** The corpus env file carries no
+  `NAKAMA_URL`, so an inherited value silently redirected a "corpus" reinstall to the fixture — reported success,
+  new version, previous bytes still served. The wrapper resolves the URL from `--dataset`/`--url` and exports it
+  explicitly, and the served-build guard runs as a precondition that REFUSES (exit 3) rather than recording.

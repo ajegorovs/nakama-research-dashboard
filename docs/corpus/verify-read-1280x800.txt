@@ -1,6 +1,6 @@
 # harness/read-pass.sh — read pass · dataset corpus · viewport 1280x800
-# dashboard: http://<box>.<tailnet>.ts.net:3003  [endpoint redacted]
-# generated: 2026-10-02T22:42:50+03:00
+# dashboard: http://<box>.<tailnet>.ts.net:3003
+# generated: 2026-10-03T00:22:50+03:00
 
 PASS  login — status 200
 identity: expected corpus · 1 topic(s) (0 fixture-named, 0 write residue) · 0 of 1 repository(ies) under fixture/ · observed corpus markers (no fixture-named topic or repository, no write residue)
@@ -15,7 +15,7 @@ PASS  the landing shows both aggregation columns — topic column=yes; repositor
 PASS  every topic in the payload appears on the landing exactly once, in the payload's own order — rendered ["a167ef65-3c0c-492a-ad9e-f2a8256707c1"] vs payload ["a167ef65-3c0c-492a-ad9e-f2a8256707c1"]
 PASS  every repository in the payload appears on the landing exactly once, in the payload's own order — rendered ["3a0a24fe-4fe4-4091-b3e4-e5a557ad68e4"] vs payload ["3a0a24fe-4fe4-4091-b3e4-e5a557ad68e4"]
 PASS  the repository cards state the omitted window count instead of printing a capped list length (D4) — omission markers 1 for 1 repository card(s); cards printing a window count: 0
-PASS  each topic card's activity line is the payload's own count for that topic, with no event title — a167ef65-3c0c-492a-ad9e-f2a8256707c1: "451 events in the selected window · last activity 4 days ago" (payload 451)
+PASS  each topic card's activity line is the payload's own count for that topic, with no event title — a167ef65-3c0c-492a-ad9e-f2a8256707c1: "437 events in the selected window · last activity 4 days ago" (payload 437)
 PASS  the two columns sit side by side with the topic column wider, both beginning in the first viewport — topics {"height":317,"left":320,"top":187,"width":504} vs repositories {"height":227,"left":836,"top":187,"width":420} in {"height":800,"width":1280}
 PASS  the topic index rendered — 1 index rows
 PASS  the header carries the title, window control, archived toggle and count line, and no create/edit control — {"createControl":false,"editControl":false,"archivedToggle":true,"countsLine":true,"headerText":"Research overview Topics People Repositories Progress 7 days 14 days 30 days All time archived Refresh 1 topic · 3 axes · 1 person · 1 repository Topics Most recently active first · primarily read-onl","windowButtons":4}
@@ -192,7 +192,7 @@ PASS  the rail's remainder is one control away, and showing it changes only what
 PASS  expanding and collapsing the rail's window is composition only — no write action fires — window back to 4; non-read action calls 0 -> 0
 SKIP  a repository whose whole activity fits the lead states no remainder — every repository here has either no events or more than 4, so the case is absent
 screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/screenshots/1280x800/research-dashboard-read.png
-console issues after login: ["error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"]
+console issues after login: []
 
 read pass: all checks passed; 29 skipped for want of a subject in this corpus
 skipped (each with its reason):

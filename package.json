@@ -18,6 +18,7 @@
     "harness:update": "bun harness/update-plugin.mjs",
     "harness:test": "bun harness/test-004.mjs",
     "harness:records": "bun harness/test-redact.mjs",
+    "harness:focus": "bash harness/focus-pass.sh",
     "harness:identity": "bun harness/test-dataset-identity.mjs",
     "harness:write": "bash harness/read-pass.sh --write"
   },

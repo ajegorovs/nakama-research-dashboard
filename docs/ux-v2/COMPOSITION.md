@@ -110,6 +110,17 @@ viewports, and accepted — verdicts verbatim, the two absence rulings and the h
 [`C5-repositories.md`](C5-repositories.md). **Composition C1–C5 is complete**; the next phase is the
 composition-phase merge-readiness pass ([`MR-composition-merge-readiness.md`](MR-composition-merge-readiness.md)).
 
+### H1 — keyboard focus visibility — **measured, one defect fixed (2026-10-02)**
+Run against the merged `main` (the composition was fast-forwarded the same day), at both reference viewports on
+both datasets. The reviewer scoped it to focus visibility rather than an accessibility redesign, and to **one
+measurement per control class, sampled across views**. Result: every class painted an indicator, none was clipped
+or off-screen, and order and the title/home regression passed — but every indicator measured 2.04–2.11:1, below
+the 3:1 non-text minimum, because the plugin's controls inherited the browser's 1px default in the host's ring
+colour at half alpha. Fixed at the shared-primitive level with one rule (the theme's hue at full strength, 2px,
+offset), which measures 4.61–5.02:1; matrix re-run green (69/0/0 corpus, 65/0/0 fixture per viewport) with a
+negative control proving the measure can see a removed indicator. Method, limits and the trap that cost a
+wrong-instance reinstall: [`H1-focus-visibility.md`](H1-focus-visibility.md).
+
 ## 4. Collisions — resolved (owner, 2026-10-02, recorded in `DECISIONS.md` §5–§7). C1 is unblocked.
 
 1. **Overview composition** → build the two-column aggregation as the dashboard's **default landing / shell

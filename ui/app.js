@@ -96,6 +96,26 @@ var css = `
   /* One box edge and one inner line: a surface is a card, and everything inside it is a rule, not a box. */
   --rd-edge: 1px solid var(--border);
   --rd-rule: 2px solid var(--border);
+  /* H1 — keyboard focus, one rule for every control this page draws. The host paints its ring at half alpha
+     (Tailwind's ring-ring/50), which measures about 2:1 on the surfaces this page sits on: a reader can see it,
+     but it is under the 3:1 that non-text contrast asks for. The plugin asks for the same hue at full strength,
+     2px wide and offset clear of the control's own edge, so tags, index rows, disclosure summaries, folds,
+     rails and the window controls all take their indicator from this one place rather than from the browser's
+     one-pixel default. The fallback is the theme's own accent at full strength, for a host that sets no --ring. */
+  --rd-focus: var(--ring, oklch(0.55 0.15 65));
+  --rd-focus-width: 2px;
+  --rd-focus-offset: 2px;
+}
+/*
+ * The doubled :focus-visible is deliberate: the host stylesheet declares its ring colour as an
+ * outline-color longhand *after* this sheet, so at equal specificity it wins the colour while these
+ * declarations win the width and offset — which measured as a 2px outline in the host's half-alpha ring
+ * colour, i.e. the very defect this rule exists to fix. One extra pseudo-class settles it without
+ * !important, and the measurement states the result rather than assuming it.
+ */
+[data-plugin-id="research-dashboard"] :focus-visible:focus-visible {
+  outline: var(--rd-focus-width) solid var(--rd-focus);
+  outline-offset: var(--rd-focus-offset);
 }
 [data-plugin-id="research-dashboard"] .rd-stack { display: grid; gap: var(--rd-gap-block); }
 
