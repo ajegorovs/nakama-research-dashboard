@@ -658,8 +658,13 @@ const css = `
   border-left: var(--rd-rule);
   padding: 0 0 0 10px;
 }
+/* Blocked is an exceptional state and must be legible before its badge is read: it keeps the narrow
+   left rule every axis has, but the rule thickens and takes the exceptional colour. The blocked
+   .rd-axis-detail rule below states the same accent for the detail element, so the axis reads as
+   blocked on whichever element owns it, and a normal axis is untouched (U9: exceptional colour only
+   for exceptional state). No box, no background, no new treatment. */
 [data-plugin-id="research-dashboard"] .rd-axis[data-rd-axis-state="blocked"] {
-  border-left-color: var(--destructive, #b91c1c);
+  border-left: 3px solid var(--destructive, #b91c1c);
 }
 [data-plugin-id="research-dashboard"] .rd-axis-title { font-weight: 600; }
 /* Step 3: one primary row per axis (state claim + name, kind receding), one subordinate line for where
@@ -934,7 +939,14 @@ const css = `
   cursor: pointer;
   font: inherit;
   font-size: var(--rd-meta);
+  /* An entity tag is ONE line: a long repository or topic name must not wrap it into a two-line chip,
+     which breaks a cluster's baseline and the rail's rhythm. It truncates instead, and the full label
+     stays available on the element (title + the accessible name). No font-size games. */
+  max-width: 100%;
+  overflow: hidden;
   padding: 1px 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 [data-plugin-id="research-dashboard"] .rd-tag:hover { border-color: inherit; opacity: var(--rd-quiet); }
 [data-plugin-id="research-dashboard"] .rd-evidence,
@@ -1471,6 +1483,7 @@ export function apply(ctx: Context) {
         data-rd-tag-compact={compact}
         data-rd-tag-label={label}
         onClick={() => onOpen(type, id)}
+        title={label}
         type="button"
       >
         {label}

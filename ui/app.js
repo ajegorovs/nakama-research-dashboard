@@ -414,7 +414,14 @@ var css = `
   cursor: pointer;
   font: inherit;
   font-size: var(--rd-meta);
+  /* An entity tag is ONE line: a long repository or topic name must not wrap it into a two-line chip,
+     which breaks a cluster's baseline and the rail's rhythm. It truncates instead, and the full label
+     stays available on the element (title + the accessible name). No font-size games. */
+  max-width: 100%;
+  overflow: hidden;
   padding: 1px 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 [data-plugin-id="research-dashboard"] .rd-tag:hover { border-color: inherit; opacity: var(--rd-quiet); }
 [data-plugin-id="research-dashboard"] .rd-evidence,
@@ -774,6 +781,7 @@ function apply(ctx) {
       "data-rd-tag-compact": compact,
       "data-rd-tag-label": label,
       onClick: () => onOpen(type, id),
+      title: label,
       type: "button"
     }, label);
   }

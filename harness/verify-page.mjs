@@ -756,10 +756,43 @@ check(
   anatomy.sideActivity === 1 && anatomy.sideNotes === 1 && anatomy.sideRepositories === 1,
   `activity ${anatomy.sideActivity}, notes ${anatomy.sideNotes}, repositories ${anatomy.sideRepositories}`
 );
+// The note affordance lives inside the detail the read action loads, so the pane being up does NOT mean
+// its async detail has landed. Wait on a get_topic-only element — the note input itself — then re-probe,
+// rather than asserting on a probe taken the instant the pane appeared. (This is what made the fixture
+// fail and the corpus pass: same code, different read latency.)
+// The affordance belongs to the pane that is SELECTED, which in a multi-topic fixture is not the topic
+// the probe names up front. Targeting by name asserted against a pane that does not exist (0 inputs, at
+// both viewports, while the corpus's single topic passed) — a targeting fault, not latency and not the
+// product. So: read the selected pane's own name from the DOM, wait on that pane's note input, and assert
+// the affordance there.
+const noteProbe = await page
+  .waitForFunction(
+    (pluginId) => {
+      const scope = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
+      const pressed = scope?.querySelector('[data-rd-view="topics"] [aria-pressed="true"]');
+      const name = pressed?.getAttribute("data-rd-index-topic");
+      if (!name) {
+        return false;
+      }
+      return scope.querySelector(`[data-rd-detail="${name}"] [aria-label="Topic note"]`) !== null;
+    },
+    PLUGIN_ID,
+    { polling: 100, timeout: 8000 }
+  )
+  .then(() => true)
+  .catch(() => false);
+const noteInputs = await page.evaluate((pluginId) => {
+  const scope = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
+  const pressed = scope?.querySelector('[data-rd-view="topics"] [aria-pressed="true"]');
+  const name = pressed?.getAttribute("data-rd-index-topic") ?? null;
+  const pane = name === null ? null : scope.querySelector(`[data-rd-detail="${name}"]`);
+  return { count: pane?.querySelectorAll('[aria-label="Topic note"]').length ?? 0, name };
+}, PLUGIN_ID);
 check(
-  "the narrow note/correction affordance is reachable in the detail",
-  anatomy.noteInput === 1,
-  `${anatomy.noteInput} note input(s)`
+  "the narrow note/correction affordance is reachable in the selected detail",
+  noteInputs.count === 1,
+  `${noteInputs.count} note input(s) under the selected pane "${noteInputs.name}" ` +
+    `(wait ${noteProbe}; the unselected probe saw ${anatomy.noteInput})`
 );
 
 // ------------------------------------------------------------------ C1 geometry (container-relative)
@@ -986,10 +1019,16 @@ check(
 // already have.
 const detailCalls = callsFor("get_topic");
 const detailIds = detailCalls.map((call) => call.input?.topicId);
+// The page reads one topic on load — its initial automatic selection. That is the baseline, not a
+// selection: the invariant is one read per topic the READER selects, so the baseline read is taken out
+// before counting. (The previous form failed on a legitimate 3 reads / 2 topics: load read, then a click
+// on that same topic, then another topic.)
+const selectionReads = detailIds.slice(1);
 check(
   "opening a topic reads it once, in one get_topic call",
-  detailIds.length > 0 && detailIds.length === new Set(detailIds).size,
-  `saw ${detailIds.length} call(s) over ${new Set(detailIds).size} topic(s): ${JSON.stringify(detailCalls.map((c) => c.input))}`
+  detailIds.length > 0 && selectionReads.length === new Set(selectionReads).size,
+  `saw ${detailIds.length} call(s) over ${new Set(detailIds).size} topic(s) — 1 load read + ` +
+    `${selectionReads.length} selection read(s) over ${new Set(selectionReads).size} distinct: ${JSON.stringify(detailCalls.map((c) => c.input))}`
 );
 
 // Reading is the card's only mode, and the detail it renders has no form in it. Asserted as separate
@@ -3941,6 +3980,12 @@ if (WRITE) {
   await root.waitFor({ state: "visible", timeout: 20000 });
   // The detail is persistent, but this fixture topic is not the server's first: select its rail row.
   await root.locator(`[data-rd-index-topic="${name}"]`).click();
+  // Confirm the click actually selected the row before asserting anything about its pane: without this
+  // the pass typed into a pane that was still the default selection.
+  await root
+    .locator(`[data-rd-index-topic="${name}"][aria-pressed="true"]`)
+    .waitFor({ state: "visible", timeout: 8000 })
+    .catch(() => {});
   await settleUntil(
     ([pluginId, topic]) =>
       document.querySelector(
