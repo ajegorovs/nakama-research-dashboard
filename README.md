@@ -318,9 +318,13 @@ the rail's lead / stated remainder / expand / collapse, the three-level axis row
 axis row's reading and detail compared verbatim against `get_topic`, and the rail's three cards beginning in
 the first screen. That last check is asserted at the reference reading size and **skipped elsewhere with its
 reason**, which is why the 1280×800 record reports one skip more than 1440×900 and not a failure. The fixture
-pair was **not** re-run on this build — it needs the second instance's own web origin and the plugin installed
-at this revision there — so the revision-410 fixture records below stand unrepeated, labelled by their build.
-Read a run's own summary line, never a number in this document.
+pair **is** re-run on this build — on the second instance's own web origin with its own seed admin, addressed
+through its own env file (`compose/nakama/.env.fixture`): fixture **140 · 0 · 0** at 1440×900 and
+**139 · 0 · 1** at 1280×800, the skip being the same first-screen check at a non-reference viewport with its
+reason — ten checks more than the revision-410 fixture pair as well. That run is also what caught the two
+fixture-only failures this build's records come from; the finding and its diagnosis are in
+`docs/reviews/2026-10-02-c1-acceptance-record.md` § Fixture pair on the final build. Read a run's own summary
+line, never a number in this document.
 
 **Historical records (C1, revision 410, one session on one build):** corpus **105 · 0 · 23** at both
 viewports, the write pass **117 · 0 · 23**, fixture **130 · 0 · 0** at both viewports. The corpus skip

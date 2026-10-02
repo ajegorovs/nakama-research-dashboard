@@ -547,6 +547,39 @@ const detailProbe = await page.evaluate(
   },
   [PLUGIN_ID, CORPUS.topic]
 );
+// The claim is about what the detail carries, not only about what is painted. Reading the pane's
+// rendered text alone cannot see inside a closed <details>, and the C1 rework folds completed/abandoned
+// axes exactly that way — on a dataset that has terminal axes (the fixture does, the corpus does not)
+// the old text-only reading reported the folded axes as missing from a pane that was rendering them
+// correctly, and would equally have missed a leak hidden inside a fold. So the DOM is the evidence:
+// every own axis must be present as a card, an axis that is not in the rendered text must be accounted
+// for by the fold, the fold's stated count must match what it holds, and no other topic's axis may
+// appear at all.
+const detailAxes = await page.evaluate(
+  ([pluginId, topic]) => {
+    const pane = document.querySelector(
+      `div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"]`
+    );
+    const cards = [...(pane?.querySelectorAll("[data-rd-axis-title]") ?? [])].map((node) => ({
+      folded: node.closest("details[data-rd-folded-axes]") !== null,
+      title: node.getAttribute("data-rd-axis-title"),
+    }));
+    const fold = pane?.querySelector("details[data-rd-folded-axes]");
+    const foldedCount = fold ? Number(fold.getAttribute("data-rd-folded-axes")) : 0;
+    const foldedSummary = (fold?.querySelector("summary")?.textContent ?? "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const stated = /\((\d+)\)/.exec(foldedSummary);
+    return {
+      cards,
+      foldedCount,
+      foldedStated: stated === null ? null : Number(stated[1]),
+      foldedSummary,
+      rendered: (pane?.innerText ?? "").replace(/\s+/g, " "),
+    };
+  },
+  [PLUGIN_ID, CORPUS.topic]
+);
 const rowIssues = [];
 for (const entry of CORPUS.topicAxes) {
   if (!indexRows.some((row) => row.name === entry.topic)) {
@@ -555,16 +588,28 @@ for (const entry of CORPUS.topicAxes) {
 }
 const ownAxes = CORPUS.topicAxes.find((entry) => entry.topic === CORPUS.topic)?.axes ?? [];
 for (const title of ownAxes) {
-  if (!detailProbe.text.includes(title)) {
-    rowIssues.push(`${CORPUS.topic}: own axis missing (${title})`);
+  const card = detailAxes.cards.find((entry) => entry.title === title);
+  if (card === undefined) {
+    rowIssues.push(`${CORPUS.topic}: own axis missing from the detail (${title})`);
+  } else if (!card.folded && !detailAxes.rendered.includes(title)) {
+    rowIssues.push(`${CORPUS.topic}: own axis neither rendered nor folded (${title})`);
   }
+}
+const foldedCards = detailAxes.cards.filter((entry) => entry.folded).length;
+if (foldedCards !== detailAxes.foldedCount) {
+  rowIssues.push(`the fold holds ${foldedCards} axis(es) but states ${detailAxes.foldedCount}`);
+}
+if (foldedCards > 0 && detailAxes.foldedStated !== foldedCards) {
+  rowIssues.push(
+    `the fold's summary (${JSON.stringify(detailAxes.foldedSummary)}) does not state its ${foldedCards} axis(es)`
+  );
 }
 for (const entry of CORPUS.topicAxes) {
   if (entry.topic === CORPUS.topic) {
     continue;
   }
   for (const title of entry.axes) {
-    if (detailProbe.text.includes(title)) {
+    if (detailAxes.cards.some((card) => card.title === title)) {
       rowIssues.push(`detail leaked ${entry.topic}'s axis (${title})`);
     }
   }
@@ -572,9 +617,8 @@ for (const entry of CORPUS.topicAxes) {
 check(
   "every topic in the payload has one index row, and the visible detail carries its own topic's axes and none of another's",
   indexRows.length === CORPUS.topicNames.length && rowIssues.length === 0,
-  `${indexRows.length} rows for ${CORPUS.topicNames.length} topics; ${rowIssues.length ? rowIssues.join("; ") : "no leaks"}`
+  `${indexRows.length} rows for ${CORPUS.topicNames.length} topics; ${ownAxes.length} own axis(es), ${foldedCards} folded and counted; ${rowIssues.length ? rowIssues.join("; ") : "no leaks"}`
 );
-
 const pressedRow = indexRows.find((row) => row.pressed === "true");
 const firstPerson = CORPUS.people[0];
 const nonTerminal = Object.entries(CORPUS.axisCounts)
@@ -1604,34 +1648,63 @@ if (detailPayload.status !== 200 || detailPayload.axes.length === 0) {
       ? `${detailPayload.axes.length} axis/axes compared against get_topic, all verbatim`
       : mismatched.join(" | ")
   );
-  // And the disclosure opens onto that text rather than being a dead control: the collapsed box is its
-  // summary, and opening it grows the box by the description it holds.
-  await root.locator('[data-rd-detail] details[data-rd-axis-more] summary').first().click();
-  await page.waitForTimeout(300);
-  const opened = await page.evaluate(
-    ([pluginId, topic]) => {
-      const pane = document.querySelector(
-        `div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"]`
-      );
-      const first = pane?.querySelector("details[data-rd-axis-more]");
-      const description = first?.querySelector("[data-rd-axis-description]");
-      return {
-        open: first?.hasAttribute("open") ?? null,
-        descriptionHeight: description
-          ? Math.round(description.getBoundingClientRect().height)
-          : 0,
-        disclosureHeight: first ? Math.round(first.getBoundingClientRect().height) : null,
-      };
-    },
-    [PLUGIN_ID, CORPUS.topic]
-  );
+  // And the disclosure opens onto that text rather than being a dead control. Two measurements, because
+  // the collapsed box IS its summary: closed, the box is the summary's height; opened, it is the summary
+  // plus what it holds. Growth is measured that way rather than against the description, because a
+  // dataset may legitimately carry axes with no description at all — the fixture's axes have none, and
+  // demanding a >0px description there read as a dead control when the control worked. (Chromium gives
+  // content inside a *closed* `<details>` a box, so "nonzero rect" is not the test; the summary is.)
+  const measureDisclosure = (click) =>
+    page.evaluate(
+      async ([pluginId, topic, shouldClick]) => {
+        const pane = document.querySelector(
+          `div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"]`
+        );
+        const first = pane?.querySelector("details[data-rd-axis-more]");
+        if (!first) {
+          return null;
+        }
+        if (shouldClick) {
+          first.querySelector("summary")?.click();
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+        const height = (node) => (node ? Math.round(node.getBoundingClientRect().height) : 0);
+        const summary = first.querySelector("summary");
+        const description = first.querySelector("[data-rd-axis-description]");
+        return {
+          boxHeight: height(first),
+          descriptionHeight: height(description),
+          descriptionInside: description !== null,
+          open: first.hasAttribute("open"),
+          summaryHeight: height(summary),
+          title: first.closest("[data-rd-axis-title]")?.getAttribute("data-rd-axis-title") ?? null,
+        };
+      },
+      [PLUGIN_ID, CORPUS.topic, click]
+    );
+  const closed = await measureDisclosure(false);
+  const opened = closed === null ? null : await measureDisclosure(true);
+  // The description is rendered only when the axis has one (`{axis.description ? … : null}`), so whether
+  // it must be inside the disclosure is a question about THIS axis, answered by the payload — not a
+  // property of the control.
+  const clickedAxis = detailPayload.axes.find((axis) => axis.title === opened?.title) ?? null;
+  const expectsDescription = (clickedAxis?.description ?? "") !== "";
   check(
     "the axis's fuller detail is one click away, and the disclosure grows to hold it",
-    opened.open === true &&
-      opened.descriptionHeight > 0 &&
-      opened.disclosureHeight !== null &&
-      opened.disclosureHeight >= opened.descriptionHeight + 10,
-    `open ${opened.open}, disclosure ${opened.disclosureHeight}px holding a ${opened.descriptionHeight}px description`
+    closed !== null &&
+      opened !== null &&
+      closed.open === false &&
+      opened.open === true &&
+      opened.boxHeight > closed.boxHeight &&
+      opened.boxHeight - opened.summaryHeight > 0 &&
+      (!expectsDescription || (opened.descriptionInside && opened.descriptionHeight > 0)),
+    closed === null
+      ? "no axis disclosure on this view"
+      : `"${opened.title}": collapsed ${closed.boxHeight}px (summary ${closed.summaryHeight}px) -> open ${opened.boxHeight}px holding ${opened.boxHeight - opened.summaryHeight}px of detail; ${
+          expectsDescription
+            ? `the payload's description is inside it, ${opened.descriptionHeight}px`
+            : `this axis carries no description in the payload, so the box holds the confidence cluster alone (${opened.descriptionInside ? "a description element at 0px" : "no description element"})`
+        }`,
   );
   await root.locator('[data-rd-detail] details[data-rd-axis-more] summary').first().click();
   await page.waitForTimeout(200);

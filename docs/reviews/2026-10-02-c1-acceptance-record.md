@@ -1,7 +1,7 @@
 # C1 acceptance record — 2026-10-02
 
 Status recorded at the reviewer's direction, and updated when the two open items were closed in the
-follow-up session.
+follow-up session, and again when the regenerated montage was accepted.
 
 ## Classification
 
@@ -9,8 +9,39 @@ follow-up session.
 |---|---|
 | functional composition | **accepted — closed by the reviewer** |
 | write-path acceptance | **accepted — closed by the reviewer** (see § Write-path acceptance) |
-| visual fidelity | capture fixed and the montage regenerated from a verified capture; **pending the reviewer's inspection** |
-| C2 | **blocked** pending that verdict — the explicit C1 gate from the start |
+| visual fidelity | **accepted — closed by the reviewer**, from the montage of revision 442 on the pushed branch |
+| C1 | **accepted** |
+| C2 | **unblocked** — People composition refinement on the C1 master/detail grammar rather than a rebuild |
+
+## Reviewer acceptance — visual fidelity, after `73261e0`
+
+**C1 is accepted.** The reviewer inspected `docs/ux-v2/fidelity/side-by-side/topics.png` from
+`origin/composition/c1-topics` (revision 442, `0.2.0+dev.aed4d024c37e`) and ruled:
+
+> C1 functional composition: closed. C1 write-path acceptance: closed. C1 visual fidelity: closed.
+> **C1: accepted. C2: unblocked.**
+
+All three findings from the previous round were confirmed resolved, as facts visible in the capture
+rather than as implemented intentions: the per-view `Topics` heading beneath the shell title with the
+recency/read-only hint; the Current Work hierarchy, with history, evidence and correction demoted
+behind `More on this axis`; and the bounded rail, which lets Notes and Related repositories participate
+in the same first-screen composition as Current Work and Recent activity. The residual differences —
+longer real descriptions, host chrome width, the proportional side rail, the 3px blocked accent,
+one-line ellipsized tags — were ruled consequences of real data and the host environment: explicitly
+**not** composition drift, and explicitly **not** to be compressed toward the prototype pixel-for-pixel.
+
+The corpus 1280×800 result `114 · 0 · 24` was accepted as documented: the extra skip is
+viewport-specific and tied to the first-screen assertion at the reference reading size, not a missing
+subject and not a regression.
+
+Two carry-forwards were kept, both outside the fidelity verdict:
+
+- **Merge hygiene, not fidelity.** The fixture pair still records revision 410, so it must be re-run at
+  both viewports on the final build before the branch is treated as final merge evidence — to cover
+  fixture-only subjects (blocked-state treatment, the bare repository, long tags) against the CSS and
+  hierarchy changes. § Fixture pair on the final build records the outcome.
+- **Two debts stay outside C1 and do not delay C2** unless the locking starts making the composition
+  work unreliable: the `--rd-gap` self-reference and the `SQLiteError: database is locked` behaviour.
 
 ## Reviewer rulings — 2026-10-02, after `9545bba`
 
@@ -276,3 +307,70 @@ scraps. `docs/corpus/transcript/actions.jsonl` is the corpus record those runs w
 a regeneration of the same 695 calls (identical `(action, input)` sequence against the previously
 committed one, all HTTP 200 — results differ only by server-minted ids and timestamps). The two
 protected invariants — the render gate and the ≥1.25× geometry check — are untouched.
+
+## Fixture pair on the final build (2026-10-02) — merge hygiene, and what it caught
+
+The reviewer kept this outside the fidelity verdict and asked for it before the branch is treated as
+final merge evidence: the fixture pair still recorded revision 410, so fixture-only subjects
+(blocked-state treatment, the bare repository, long tags) had never been measured against the C1
+rework's own CSS and hierarchy. It was the right call — the first run failed two checks, at both
+viewports.
+
+**Neither failure was a page defect, and neither could be seen on the corpus.** The corpus has one
+topic with three non-terminal axes; the fixture has two topics, six axes on the dense one and two
+terminal ones, and it is the only dataset that exercises `completed`/`abandoned` rendering, the bare
+repository and the blocked-state colour.
+
+1. `the visible detail carries its own topic's axes and none of another's` failed with the two terminal
+   axes reported as missing. The payload carries all six and the pane renders all six: the two sit
+   inside the C1 rework's own fold, `<details class="rd-completed-fold">` — **"Completed and abandoned
+   work (2)"** — which is collapsed by default, and Chromium hides a closed `<details>`'s content from
+   `innerText` (and from a screenshot). The check read rendered text, so it could not see them, and it
+   was equally blind to a leak hidden inside a fold. The fold arrived with the C1 rework (`241e28b`),
+   *after* the revision-410 evidence — so this was **not** a regression from the hierarchy pass: it is
+   the fixture pair never having been run against the rework's own structure.
+2. `the axis's fuller detail is one click away, and the disclosure grows to hold it` failed as
+   `disclosure 39px holding a 0px description`. That check was added by the hierarchy pass, and its
+   assumption was wrong, not the control: every fixture axis carries `description: ''`, and the page
+   renders the description element only when there is one (`{axis.description ? … : null}`), so the
+   disclosure correctly held the confidence cluster alone. The corpus's non-empty descriptions are
+   exactly what made the first version look right.
+
+Both were fixed in the harness, not in the page — no product change was needed or made:
+
+- the axis-presence check reads the DOM now (each card's own `data-rd-axis-title`), requires every own
+  axis to be present as a card *or* rendered, requires the fold's stated count to equal the number of
+  cards it holds, and detects another topic's axis by DOM presence — so a fold can hide neither a
+  missing axis nor a leak;
+- the disclosure check measures growth against the **summary** — the collapsed box *is* its summary, so
+  `box(closed) == summary(closed)` and `box(open) − summary(open) > 0` — and requires the description
+  to be inside only when the payload's own axis has one.
+
+**Result: the fixture pair is green on the final build, and all five records now come from one harness
+on one build.**
+
+| record | result on revision 442 |
+|---|---|
+| fixture 1440×900 | **140 · 0 · 0** (was 130 · 0 · 0 at revision 410 — the ten checks the hierarchy pass added) |
+| fixture 1280×800 | **139 · 0 · 1** — the skip is the first-screen rail check at a non-reference viewport, with its reason |
+| corpus 1440×900 | **115 · 0 · 23** |
+| corpus 1280×800 | **114 · 0 · 24** |
+| corpus 1440×900 `--write` | **127 · 0 · 23** |
+
+Both instances were verified to serve the same bytes before these runs: corpus revision 442 and fixture
+revision 28, both `0.2.0+dev.aed4d024c37e`, asset sha256
+`e289d9d8f4ad3b8cb5ea4fd032f07d2976f37ec23718e03eae888364759e4e76`. The fixture instance had to be given
+the build — it was serving `0.2.0+dev.ae3049008d5f` (revision 20) — and the earlier reading that it was
+"already serving this build" was an artifact of a guard invocation that sourced the corpus env file
+*after* `NAKAMA_URL` had been exported, which silently retargeted the corpus instance. The fixture
+instance has its own env file and its own seed admin, so that env file is the way it is addressed.
+
+The revision-410 fixture records are kept beside the new ones as
+`docs/layout-fixtures/verify-fixture-read-*.revision-410.txt`: the failing run overwrote the canonical
+paths, so both eras are on disk rather than only the newer one.
+
+**One design question this raised, left with the reviewer rather than decided here:** on a topic that
+has terminal axes, that fold is closed by default. No corpus could show it, so the macro-composition
+review could not have seen it. The fold serves the "one dominant reading surface" goal and states its
+count honestly; making terminal work visible by default is a one-line change, and the harness now
+asserts the fold's honesty either way.
