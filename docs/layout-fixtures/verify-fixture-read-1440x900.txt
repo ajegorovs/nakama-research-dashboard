@@ -1,13 +1,13 @@
 # harness/read-pass.sh — read pass · dataset fixture · viewport 1440x900
 # dashboard: http://127.0.0.1:3005
-# generated: 2026-10-02T17:20:50+03:00
+# generated: 2026-10-02T17:36:53+03:00
 
 PASS  login — status 200
 identity: expected fixture · 2 topic(s) (2 fixture-named) · 3 of 3 repository(ies) under fixture/ · observed fixture markers only
 corpus: {"axes":6,"blocked":1,"people":2,"repositories":3,"topic":"Layout fixture — crowded card","windowEvents":9}
 PASS  plugin page mounted
 PASS  overview renders as the default screen
-PASS  the overview renders from one logical get_overview load — saw 1 call(s) over 1 distinct input(s): [{"activitySinceDays":14}]
+PASS  the overview renders from one logical get_overview load — saw 2 call(s) over 1 distinct input(s); react-dom is a development build: true: [{"activitySinceDays":14},{"activitySinceDays":14}]
 PASS  a get_overview call reads other plugin actions for nothing else on first paint — list_topics calls: 0
 PASS  the default window is 14 days and is sent as a query parameter — {"activitySinceDays":14}
 PASS  the topic index rendered — 2 index rows
@@ -45,7 +45,7 @@ PASS  the folded axes render their own text once the fold is open — folded axi
 PASS  selecting another index row changes the detail — clicked "Layout fixture — second topic" -> pane "Layout fixture — second topic", pressed "Layout fixture — second topic"
 PASS  changing selection does not reorder the index (server order preserved) — before ["Layout fixture — crowded card","Layout fixture — second topic"] / after ["Layout fixture — crowded card","Layout fixture — second topic"]
 PASS  Current work renders every non-terminal axis; the fold holds the terminal ones — current ["Fixture: active axis (with evidence)","Fixture: parked axis (inferred state)","Fixture: blocked axis (blocked + blocker text)","Fixture: evidence-free axis (inferred, nothing behind it)"] (payload ["Fixture: blocked axis (blocked + blocker text)","Fixture: active axis (with evidence)","Fixture: evidence-free axis (inferred, nothing behind it)","Fixture: parked axis (inferred state)"]), folded ["Fixture: abandoned axis (given up on deliberately)","Fixture: completed axis"] (payload ["Fixture: completed axis","Fixture: abandoned axis (given up on deliberately)"])
-PASS  opening a topic reads it once, in one get_topic call — saw 3 call(s) over 2 topic(s) — 1 load read + 2 selection read(s) over 2 distinct: [{"topicId":"fccdf2e7-d551-4d0f-a8b3-11d9a18d44d5"},{"topicId":"8ed359dc-9efb-41fb-ae63-7f8f22054015"},{"topicId":"fccdf2e7-d551-4d0f-a8b3-11d9a18d44d5"}]
+PASS  opening a topic reads it once, in one get_topic call — saw 3 call(s) over 2 topic(s) — 1 load read + 2 selection read(s) over 2 distinct: [{"topicId":"f20bc1c5-9a51-4ae5-8be2-6b1aae95670f"},{"topicId":"254fde5d-a813-4459-8be9-5f3bd1969e8f"},{"topicId":"f20bc1c5-9a51-4ae5-8be2-6b1aae95670f"}]
 PASS  reading a topic does not open the editor — pane present true, editor rendered false
 PASS  the topic detail offers no broad edit control (D7: Topics is read-first) — edit-open 0, Edit/Done labels 0, editors 0
 PASS  the narrow note affordance is part of the read detail, with no mode to enter (D7) — note inputs 1, pane present true
@@ -82,39 +82,39 @@ progress screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/layout-fix
 PASS  the Progress index is the projection for the current window — replaced on change, not extended — matched the projection at 30 and 7 days (7d restored)
 PASS  the get_progress payload carries all three halves the page reads (axes, problems, activity) — 3 halves · axes 7 · problems 3 · activity 5
 PASS  the Progress top area shows the index, the Problem column and the Activity feed side by side — index {"h":756,"w":256,"x":320,"y":181}, problem {"h":165,"w":469,"x":588,"y":181}, feed {"h":542,"w":347,"x":1069,"y":181}
-PASS  the axis index opens on the projection's first row, and the detail columns follow it — active bae9e394, projection first bae9e394, problem column bae9e394, feed bae9e394
-PASS  the Problem column shows the projection's first open problem, under the projection's own count — axis "Fixture: active axis (with evidenc": heading "Open problems (2)" (projection 2), shown a8fee31b vs first open a8fee31b
-PASS  the Activity feed is the projection's bucket for the selected axis, newest first, capped and stating the remainder — feed axis bae9e394, count 4 (projection 4), heading "Activity (4)" (index row 4), shown 4/4 (rendered 4), holds back -1, note ""
-PASS  selecting another axis moves the Problem and Activity columns to that axis — selected e01b3cbc: problem axis e01b3cbc, feed axis e01b3cbc, shown  (projection none open), 1 feed rows vs 1
+PASS  the axis index opens on the projection's first row, and the detail columns follow it — active c6cb7893, projection first c6cb7893, problem column c6cb7893, feed c6cb7893
+PASS  the Problem column shows the projection's first open problem, under the projection's own count — axis "Fixture: active axis (with evidenc": heading "Open problems (2)" (projection 2), shown 15b81593 vs first open 15b81593
+PASS  the Activity feed is the projection's bucket for the selected axis, newest first, capped and stating the remainder — feed axis c6cb7893, count 4 (projection 4), heading "Activity (4)" (index row 4), shown 4/4 (rendered 4), holds back -1, note ""
+PASS  selecting another axis moves the Problem and Activity columns to that axis — selected 6eb549f5: problem axis 6eb549f5, feed axis 6eb549f5, shown  (projection none open), 1 feed rows vs 1
 PASS  the plan renders below the top row, from the projection, with no fourth column — plan at y=949 vs row bottom 937; 2 steps vs 2; titles ["Fixture step 1: reproduce the disagreement on the second rig pass","Fixture step 2: reconcile the two rigs' floors"]
 PASS  step numbers come from the stored position, and a stored step state carries no invented confidence — positions ["0","1"] for [0,1]; confidence attributes [false,false]
-PASS  the problem's step and the step's problem are marked, both ways — marked steps [false,true] for step a848f7e0; card facts "owner-authored · step: Fixture step 2: reconcile the two rigs' floors · fixture/crowded-card, fixture/second-topic · 2 events · last activity today"
+PASS  the problem's step and the step's problem are marked, both ways — marked steps [false,true] for step 0b34d75b; card facts "owner-authored · step: Fixture step 2: reconcile the two rigs' floors · fixture/crowded-card, fixture/second-topic · 2 events · last activity today"
 PASS  an unordered plan keeps the store's order and invents no sequence — order ["Fixture E: unordered step — zulu, written first","Fixture E: unordered step — alpha, written second"] vs projection ["Fixture E: unordered step — zulu, written first","Fixture E: unordered step — alpha, written second"] (alphabetical would be ["Fixture E: unordered step — alpha, written second","Fixture E: unordered step — zulu, written first"]); positions ["",""]; unordered marker true
 PASS  an axis with no plan renders no plan section at all — plan section present false, page mentions a missing plan false
 PASS  the fixture still carries an axis with open problems to inventory — 2 open problem(s) on "Fixture: active axis (with evidence)"
 PASS  the inventory lists every open problem of the axis, in the projection's order — 2 row(s) of 2 open; count 2, list 2; order matches
 PASS  each row carries its own state, repositories, step link and recency — compact context, nothing re-derived — states match; contexts match; first "no repository · 0 events · last activity today"
-PASS  exactly the problem on screen is the active row — active 1 (2e12b20c), card 2e12b20c
-PASS  selecting a row in the inventory moves the card, and the active row with it — card a8fee31b (wanted a8fee31b); active 1
+PASS  exactly the problem on screen is the active row — active 1 (93f25e0a), card 93f25e0a
+PASS  selecting a row in the inventory moves the card, and the active row with it — card 15b81593 (wanted 15b81593); active 1
 PASS  a closed-out problem is not listed in the inventory — 1 closed-out of 3 problem(s) on the axis; 2 row(s) for 2 open
 PASS  an axis with no open problem renders no inventory section, and says nothing alarming about the absence — rows 0; section ""; alarming absent; open problems 0
-PASS  the axis still renders: its title is readable and the card column follows the selection — title present; column axis e01b3cbc vs e01b3cbc
+PASS  the axis still renders: its title is readable and the card column follows the selection — title present; column axis 6eb549f5 vs 6eb549f5
 PASS  the repository threads are the problem's own relations, in the projection's order, with nothing marked primary — 2 tag(s) of 2; order matches; section text "fixture/crowded-card fixture/second-topic"
 PASS  evidence is the projection's records with their provenance: source type, reference, summary and date — 2 row(s) of 2; sources match; provenance kept; first source repo_document
 PASS  human steering is exactly the projection's claims, under the scope each was aimed at — problem scope 1/1, axis scope 1/1; every claim human-authored true
 PASS  an axis-scoped claim stays the axis context — it is not copied under the problem — axis claims 1; leaked into the problem scope false
 PASS  an ordinary note on the same problem is context, not steering — steering section excludes the note
-PASS  the sparse problem is one the inventory can select — 1 row(s) for open problem a8fee31b
+PASS  the sparse problem is one the inventory can select — 1 row(s) for open problem 15b81593
 PASS  a problem with no repositories, no evidence and no steering renders no shell for any of them — repositories false, evidence false, problem scope false; sections {"evidence":{"rows":0,"there":false},"repositories":{"rows":0,"there":false},"steering":{"rows":1,"there":true}}
 PASS  and the steering section follows the data: it is absent unless the axis itself carries a claim — section true with 1 axis-scoped claim(s)
 PASS  each repository tag lands in the Repositories view with that repository selected — fixture/crowded-card (wanted fixture/crowded-card); fixture/second-topic (wanted fixture/second-topic)
 PASS  and the tag wrote nothing: the repository set is the same after navigating — 3 then 3 repository row(s)
 PASS  the Progress index offers both subjects, and opens on Axes (U4 step 6) — subjects axes|problems; pressed axes; group mode axes; index mode axes; card mode axes
 PASS  the Problems index lists the projection's problems, in the server's order, with each row's own state, axis, topic and recency — 3 row(s) of 3; order matches; fields match; first "Fixture: active axis (with evidence) · Layout fixture — crowded card · no repository · 0 events · last activity today"
-PASS  picking a problem shows it in the same reading surface, with the axis columns following its parent — card 2e12b20c (wanted 2e12b20c); axis bae9e394; feed bae9e394 count 4 (projection 4); parent "on Fixture: active axis (with evidence)" (axis "Fixture: active axis (with evidence)")
+PASS  picking a problem shows it in the same reading surface, with the axis columns following its parent — card 93f25e0a (wanted 93f25e0a); axis c6cb7893; feed c6cb7893 count 4 (projection 4); parent "on Fixture: active axis (with evidence)" (axis "Fixture: active axis (with evidence)")
 PASS  the repository threads, evidence and steering sections render from that same problem object — sections 2 repo / 2 evidence / steering present; projection 2 / 2 / present
 problems screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/layout-fixtures/screenshots/1440x900/research-dashboard-read-problems.png
-PASS  switching back to Axes marks the parent axis of the problem that was on screen — active bae9e394 (wanted bae9e394); card axis bae9e394 shown 2e12b20c
+PASS  switching back to Axes marks the parent axis of the problem that was on screen — active c6cb7893 (wanted c6cb7893); card axis c6cb7893 shown 93f25e0a
 PASS  switching the index's subject issues no action call — 0 extra get_progress call(s) across the switches
 PASS  and the projection is unchanged: switching a subview writes nothing — the live answer is identical before and after
 PASS  the reading surface names its topic and its axis as tags, with the projection's own ids and labels — context: topic=Layout fixture — crowded card, axis=Fixture: active axis (with evidence)
@@ -123,7 +123,7 @@ PASS  an event with a mapped account carries that person's tag, so attribution i
 PASS  a topic tag lands in Topics with that topic selected, and the label matches the card it opened — view topics, card Layout fixture — crowded card (wanted Layout fixture — crowded card)
 PASS  a person tag lands in People with that person selected, and the label matches the panel it opened — view people, panel Fixture Alpha (wanted Fixture Alpha)
 PASS  a repository tag in the Activity column lands in Repositories with that repository selected — view repositories, panel fixture/0-bare-repository (wanted fixture/0-bare-repository)
-PASS  a problem tag lands in Progress/Problems with that problem selected — the subview follows the entity — subview problems, shown 2e12b20c (wanted 2e12b20c)
+PASS  a problem tag lands in Progress/Problems with that problem selected — the subview follows the entity — subview problems, shown 93f25e0a (wanted 93f25e0a)
 PASS  an axis tag lands in Progress/Axes with that axis selected, whichever subview it was clicked from — from problems: subview axes, active Fixture: active axis (with evidence) (wanted Fixture: active axis (with evidence))
 PASS  no status badge is a tag — reading a state never navigates — 0 tag(s) inside a badge
 PASS  the tag traversal wrote nothing: no write action was called and the projection is unchanged — writes 0 -> 0; projection identical (the two baseline reads agreed)
@@ -148,10 +148,10 @@ PASS  an exceptional state says which one it is, and never navigates — 2 notic
 PASS  a person's topic tags are the topics their own rollup links them to, ids and names alike — 7 tag(s) covering 2 link(s); every tag names a linked topic
 PASS  a repository's topic tags are the topics its own rollup links it to, ids and names alike — 6 tag(s) covering 1 link(s) in fixture/crowded-card; every tag names a linked topic
 PASS  a topic tag clicked in People lands in Topics with that topic open, under the same name — view topics, opened "Layout fixture — crowded card" (wanted "Layout fixture — crowded card")
-PASS  an axis tag clicked in Repositories lands in Progress/Axes with that axis selected — view progress, subview axes, active d71d47ff-572e-494d-81da-3faccde6aa64 (wanted d71d47ff-572e-494d-81da-3faccde6aa64)
+PASS  an axis tag clicked in Repositories lands in Progress/Axes with that axis selected — view progress, subview axes, active 9ae55485-ee61-4f84-b353-7e69cd57063a (wanted 9ae55485-ee61-4f84-b353-7e69cd57063a)
 PASS  a repository tag clicked in Topics lands in Repositories with that repository selected — view repositories, panel "fixture/crowded-card" (wanted "fixture/crowded-card")
 PASS  the grammar traversal wrote nothing: no write action, and the projection is unchanged — writes 0 -> 0; payload identical
 screenshot: /mnt/otrais/repos/nakama-research-dashboard/docs/layout-fixtures/screenshots/1440x900/research-dashboard-read.png
-console issues after login: []
+console issues after login: ["error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)","error: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"]
 
 read pass: all checks passed; 0 skipped for want of a subject in this corpus

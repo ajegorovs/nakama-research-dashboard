@@ -369,8 +369,33 @@ The revision-410 fixture records are kept beside the new ones as
 `docs/layout-fixtures/verify-fixture-read-*.revision-410.txt`: the failing run overwrote the canonical
 paths, so both eras are on disk rather than only the newer one.
 
-**One design question this raised, left with the reviewer rather than decided here:** on a topic that
-has terminal axes, that fold is closed by default. No corpus could show it, so the macro-composition
-review could not have seen it. The fold serves the "one dominant reading surface" goal and states its
-count honestly; making terminal work visible by default is a one-line change, and the harness now
-asserts the fold's honesty either way.
+**The fold question was put to the reviewer and ruled on: keep terminal axes folded closed by default.**
+That matches the intended reading hierarchy — current work dominates, completed/abandoned work is still
+explicitly present with an honest count and one-click access — so no product change was made. The harness
+asserts the fold's count and its contents, which is what makes that choice checkable rather than merely
+stated.
+
+## Infrastructure closure — the fixture pair is durable (2026-10-02)
+
+Asked for before C2 goes far, and as infrastructure work only: the acceptance process now depends on corpus
+and fixture being equally reproducible, and the fixture was neither.
+
+- **The instance is a user unit.** `nakama-fixture-instance.service` (authoritative copy in the estate repo,
+  `services/nakama/systemd/`) starts the same `run-dev-instance.sh` the corpus uses, with
+  `NAKAMA_DEV_DATA=/mnt/otrais/data/nakama-fixture`, `NAKAMA_DEV_PORT=4400` and
+  `NAKAMA_ENV_FILE=compose/nakama/.env.fixture`; its review surface is `nakama-fixture-web.service` on
+  `:3005`. Both are `Restart=always` and enabled on boot, logs through the user service manager. Before this
+  the instance was launched by a session's scratch script from a data root inside the pruned Hermes scratch
+  directory — which is exactly how it came to be serving a build older than the branch.
+- **`run-dev-web.sh` gained `NAKAMA_WEB_PORT`**, so one script serves both review surfaces instead of the port
+  being hardcoded in two places. No behaviour change for the corpus: `:3003` is still the default.
+- **The fixture credential was rotated.** The previous seed password had appeared in a session transcript;
+  loopback-only and synthetic, it is still treated as compromised. Rotation is rewrite-then-rebuild: the env
+  file gets a new value, and because seeding only fills an *empty* store, the data root had to be deleted for
+  the new hash to take effect. The dataset was then re-applied through the plugin's own action surface. The
+  secret is not committed — `compose/nakama/.env.fixture` stays git-ignored like every `compose/*/.env*`.
+- **Verified end to end, in that order:** fresh data root → plugin installed from the catalog → guard OK on
+  `e289d9d8…`, the same asset the corpus serves, so the fixture instance is on the same build → dataset
+  re-applied (`2 topics, 7 axes, 2 people, 3 repositories, 1 blocked`) → **fixture 1440×900 140 · 0 · 0** and
+  **1280×800 139 · 0 · 1**, reproducing the earlier numbers exactly on the new instance. The fixture
+  transcripts in this commit are the durable instance's own.
