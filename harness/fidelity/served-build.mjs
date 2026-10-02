@@ -3,19 +3,33 @@
  * Logs in on the dashboard origin, opens the plugin page, and reports the markers that distinguish
  * pre-U6 / pre-U9 / current builds. Never prints credential values, never writes to the instance.
  *
- *   cd <plugin repo> && PROBE_ENV_HELPER=$PWD/harness/env-file.mjs \
- *     bun /path/which-build.mjs --env-file <env> --url http://<host>:3003 --viewport 1440x900 --shots <dir>
+ *   cd <plugin repo> && bun harness/fidelity/served-build.mjs \
+ *     --env-file <env> --url http://<host>:3003 --viewport 1440x900 --shots <dir>
+ *
+ * The shared credential helper is resolved from this file's own location (`harness/env-file.mjs`, or
+ * $PROBE_ENV_HELPER), the same way `capture-current.mjs` does it. It used to be `import(process.env
+ * .PROBE_ENV_HELPER)` with no fallback, so the documented invocation — and the way this tool's own output
+ * feeds `montage.mjs --build` — died with `Cannot find package 'undefined'`, an error that names nothing
+ * about the missing helper. A missing helper now says so and exits 2.
  */
 import { chromium } from "playwright-core";
 import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
+const HERE = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 const flag = (name, fallback) => {
   const at = args.indexOf(`--${name}`);
   return at === -1 ? fallback : args[at + 1];
 };
-const { loadEnvFileArg } = await import(process.env.PROBE_ENV_HELPER);
+const helper = process.env.PROBE_ENV_HELPER ?? path.resolve(HERE, "..", "env-file.mjs");
+if (!existsSync(helper)) {
+  console.error(`served-build: the credential helper is missing at ${helper}`);
+  console.error("  pass PROBE_ENV_HELPER=<path to env-file.mjs>, or run from the plugin repo");
+  process.exit(2);
+}
+const { loadEnvFileArg } = await import(helper);
 loadEnvFileArg();
 const TARGET = flag("url", "http://127.0.0.1:3007");
 const VIEWPORT = (flag("viewport", "1440x900")).split("x").map(Number);
