@@ -321,6 +321,72 @@ try {
     return best;
   }
 
+  /**
+   * C5 — Repositories is captured on the subject that exercises the composition, not on whichever row sorts
+   * first. The first row is legitimately the *bare* repository on the fixture (`fixture/0-bare-repository`,
+   * which exists to prove the empty-lane branch), and a montage of it would show the one repository with no
+   * lane, no fold and no rail — i.e. none of what C5 composes. So the walk counts the composition's own parts
+   * per row and leaves the page on the row that renders the most, the same rule `selectRichestProgressAxis`
+   * applies one view over: the choice is measured from the DOM, so it cannot disagree with the screenshot.
+   */
+  async function selectRichestRepository() {
+    const PARTS = [
+      "[data-rd-repository-lane] .rd-axis",
+      "[data-rd-repository-folded]",
+      "[data-rd-repository-people]",
+      "[data-rd-repository-topics] li",
+      "[data-rd-repository-activity] [data-rd-activity-event]",
+    ];
+    const read = () =>
+      page.evaluate(
+        (parts) => {
+          const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+          const panel = scope?.querySelector("[data-rd-repository-panel]");
+          return {
+            // Counted as elements rather than as a set of markers: two rows of work are a richer subject than
+            // one, and the fold, the rail's cards and the event list all count toward the composition.
+            counts: parts.map((part) => panel?.querySelectorAll(part).length ?? 0),
+            name: panel?.getAttribute("data-rd-repository-panel") ?? "",
+            present: parts.filter((part) => (panel?.querySelectorAll(part).length ?? 0) > 0),
+            rows: [...(scope?.querySelectorAll("[data-rd-repository]") ?? [])].map((node) =>
+              node.getAttribute("data-rd-repository")
+            ),
+          };
+        },
+        PARTS
+      );
+    // Wait for the selection to be *applied* rather than merely received: the panel carries the name it is
+    // showing, and that attribute is what "applied" means here.
+    const applied = (name) =>
+      page
+        .waitForFunction(
+          (wanted) =>
+            document
+              .querySelector('div[data-plugin-id="research-dashboard"] [data-rd-repository-panel]')
+              ?.getAttribute("data-rd-repository-panel") === wanted,
+          name,
+          { timeout: 10000 }
+        )
+        .catch(() => {});
+    const { rows } = await read();
+    let best = { name: null, present: [], score: -1 };
+    for (const name of rows) {
+      await page.locator(`div[data-plugin-id] [data-rd-repository="${name}"]`).click();
+      await applied(name);
+      const seen = await read();
+      const score = seen.counts.reduce((total, count) => total + count, 0);
+      if (score > best.score) {
+        best = { name, present: seen.present, score };
+      }
+    }
+    // Leave the page on the row the walk chose, not on the last one it happened to visit.
+    if (best.name !== null) {
+      await page.locator(`div[data-plugin-id] [data-rd-repository="${best.name}"]`).click();
+      await applied(best.name);
+    }
+    return best;
+  }
+
   const shots = [];
   for (const view of VIEWS) {
     if (view === "overview") {
@@ -362,6 +428,12 @@ try {
       const chosen = await selectRichestProgressAxis();
       console.log(
         `capture-current: view progress — captured on "${chosen.title}", which renders ${chosen.sections.length} optional section(s): ${chosen.sections.join(", ") || "none"}`
+      );
+    }
+    if (view === "repositories") {
+      const chosen = await selectRichestRepository();
+      console.log(
+        `capture-current: view repositories — captured on "${chosen.name}", which renders ${chosen.present.length} composition part(s): ${chosen.present.join(", ") || "none"}`
       );
     }
     if (scratch) {

@@ -212,3 +212,37 @@ reading its records are decisions in their own right; the review trail is
   `harness/dataset-identity.mjs`, asserted by `bun run harness:identity`.
 - **A destructive wipe names its target.** The estate's `wipe-plugin-rows.py` has no default
   `--data-root`/`--org` any more, after that default emptied the wrong instance.
+
+## 10. C5 — the Repositories convergence, and what it refuses to invent (2026-10-02)
+
+C5 was scoped by the reviewer as the **final fidelity/convergence pass on the Repositories view** — the
+macro-layout the view already had, brought to the prototype's grammar. The unit's doc is
+[`C5-repositories.md`](C5-repositories.md); these are the rulings a later reader needs, so the absences below
+are read as decisions rather than as omissions.
+
+- **The detail is C1's grid, not a layout of its own.** `Current work` is the lane and Recent activity /
+  Supports / People are the rail beside it, on the shared `rd-detail-grid` — so the dominance rule (the lane at
+  least **1.25× the rail**, beside it and not stacked under it) and the stacking behaviour below 1000px are
+  inherited rather than restated per view.
+- **One predicate decides what work has stopped.** `isTerminalAxis` serves both the topic lane and the
+  repository lane; the topic lane was moved onto it in the same pass. Two copies of "what counts as stopped" is
+  how two views come to disagree about one word.
+- **The fold discloses a split; it does not hide work.** Terminal axes move under one summary that states its
+  own count, and the payload's axis total stays on the page in both states (`data-rd-repository-axes`).
+- **A heading states the payload's order, not the prototype's copy.** The Repositories hint reads
+  `Alphabetical by name · factual context, never scored`, because the rollup is ordered by name. This is C3's
+  ruling 3 applied to the fifth view: where the mock's static label and the projection disagree, the label
+  describes the projection.
+- **Nothing the rollup does not carry is invented.** No repository-level `Notes` card — notes belong to topics,
+  so the card is omitted and the omission is marked `data-rd-repository-notes-omitted="true"` — and no `Stale`
+  tag of the view's own invention: the store's `stale` rule is the overview's recency rule on its own cards,
+  and a second definition of one word inside one product is worse than an absent tag. The row states the age
+  and `no current axis` instead.
+- **People is derived, never fabricated, and collapses when empty.** The repository rollup carries no people;
+  the card is built from the people rollup's axes and states it when that projection is truncated.
+- **Judging an empty pane is not judging the composition.** The topic-detail block now waits for the surface it
+  reads, and every control is asserted before it is clicked: a click on a control that is not rendered does not
+  fail a check, it aborts the pass on a 30s locator timeout — and an aborted run is a lost record rather than a
+  verdict. The first corpus 1440×900 attempt for this unit was lost exactly that way, on a
+  `500 SQLiteError: database is locked` from the dev instance (22:41:23, requestId `aa21cc5e`) that left
+  `get_topic`'s pane empty while the checks read it.

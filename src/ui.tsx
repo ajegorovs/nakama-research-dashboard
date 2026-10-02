@@ -569,7 +569,10 @@ type ViewName = (typeof VIEW_OPTIONS)[number]["value"];
 const VIEW_HEADINGS: Record<ViewName, string> = {
   people: "Recent activity is factual, not a workload score",
   progress: "Problem first; execution detail beneath it",
-  repositories: "Most recently active first",
+  // The repository rollup is ordered by full name (`ORDER BY full_name COLLATE NOCASE`), so the hint says that.
+  // The prototype's "Most recently active first" was copied from a static mock and described an order this view
+  // does not have — the same class of drift as the landing's ordering labels (C3, ruling 3).
+  repositories: "Alphabetical by name · factual context, never scored",
   topics: "Most recently active first · primarily read-only",
 };
 
@@ -621,6 +624,17 @@ const FEED_LEAD = 12;
  * store reports (`data-rd-topic-activity` stays the payload's own number).
  */
 const RAIL_ACTIVITY_LEAD = 4;
+
+/**
+ * The two states that mean *work that has stopped*, and the one place that decides it.
+ *
+ * The Topics lane and the repository lane both split their axes into "current" and a fold, and a second copy
+ * of this predicate is exactly how two lanes come to disagree about what "current" means. No state is terminal
+ * because of how its name reads: `parked` and `draft` are still current work.
+ */
+const TERMINAL_AXIS_STATES: ReadonlyArray<AxisScan["state"]> = ["completed", "abandoned"];
+const isTerminalAxis = (state: AxisScan["state"]): boolean =>
+  TERMINAL_AXIS_STATES.includes(state);
 
 const css = `
 /*
@@ -2266,6 +2280,23 @@ export function apply(ctx: Context) {
     return parts.join(" · ");
   }
 
+  /**
+   * The repository index row's second line, phrased from the rollup's own numbers — the prototype's
+   * "supports 1 topic · 2 current axes". "Current" is the same partition the lane below the row uses, through
+   * the one predicate, so the row and the lane cannot disagree about what current means; a repository with
+   * nothing current says so here instead of filing stopped work under the lane's heading.
+   */
+  function supportsLine(entry: { axes: AxisScan[]; topics: unknown[] }): string {
+    const current = entry.axes.filter((axis) => !isTerminalAxis(axis.state)).length;
+    const topics =
+      entry.topics.length === 0
+        ? "no topic names it"
+        : `supports ${countLabel(entry.topics.length, "topic", "topics")}`;
+    return `${topics} · ${
+      current === 0 ? "no current axis" : countLabel(current, "current axis", "current axes")
+    }`;
+  }
+
   /** One axis in a C6 rollup: state, title, repo/branch/PR, and the blocker where there is one. */
   function AxisScanItem({
     axis,
@@ -3080,23 +3111,39 @@ export function apply(ctx: Context) {
   }
 
   /**
-   * Repository-first (C6): what each codebase supports, the axes that name it, and the events recorded
-   * against it or against one of those axes. The same rules as the person view — factual, never scored.
+   * Repository-first (C6, brought onto C1's composition by C5): what each codebase supports, what is happening
+   * in it, and the entities it belongs to. The same rules as the person view — factual, never scored.
+   *
+   * C5 is a convergence pass, not a rebuild. The index/detail macro-layout is unchanged; the detail now uses the
+   * shared `rd-detail-grid` — current work as the **dominant** lane with a rail beside it — the way the Topics
+   * and People panels already do. The index row carries the prototype's two facts (the age of the last recorded
+   * activity, and what the repository supports) and the head carries its age box. Nothing here is computed that
+   * the rollup does not carry: `RepositoryRollup` holds no people and no note of its own, so People is
+   * **derived** from the people rollup (D5's rule, and labelled when that rollup is truncated) and the
+   * prototype's Notes card is **omitted with a marker**, because there is no repository-level note in the
+   * payload to render.
    */
   function RepositoriesView({
     onOpenEntity,
+    people,
+    peopleTruncated,
     preselect,
     repositories,
     truncated,
     windowDays,
   }: {
     onOpenEntity: (type: EntityType, id: string) => void;
+    /** D5: the people rollup, read only to derive this repository's people — never to assert one. */
+    people: PersonRollup[];
+    peopleTruncated: boolean;
     preselect: { id: string; seq: number } | null;
     repositories: RepositoryRollup[];
     truncated: boolean;
     windowDays: number;
   }) {
     const [selectedId, setSelectedId] = React.useState<string | null>(null);
+    /** The rail's window is the reader's, keyed on the subject so switching repository returns to the lead. */
+    const [railAllFor, setRailAllFor] = React.useState<string | null>(null);
     /**
      * The EntityTag contract's other half: a tag elsewhere in the app navigates here and *selects*, so the
      * view has to honour the request rather than only opening. Keyed on `seq` so the same repository asked for
@@ -3111,6 +3158,24 @@ export function apply(ctx: Context) {
       repositories.find((entry) => entry.repository.id === selectedId) ??
       repositories[0] ??
       null;
+
+    // The rail is a window, not a feed (RAIL_ACTIVITY_LEAD) — the rule the Topics and People rails already use.
+    const railAll = railAllFor !== null && railAllFor === selected?.repository.id;
+    const railActivity = selected?.recentActivity ?? [];
+    const railShown = railAll ? railActivity : railActivity.slice(0, RAIL_ACTIVITY_LEAD);
+    const railHidden = railActivity.length - railShown.length;
+    // The lane's current/completed split, through the one predicate both lanes use, so "current work" means the
+    // same thing here as it does on a topic.
+    const currentAxes = (selected?.axes ?? []).filter((axis) => !isTerminalAxis(axis.state));
+    const foldedAxes = (selected?.axes ?? []).filter((axis) => isTerminalAxis(axis.state));
+    // D5: the people on this repository, derived from the people rollup's own axes (an axis carries the
+    // repositories it names). When that rollup is truncated the card says so rather than presenting a bounded
+    // subset as the whole list.
+    const repositoryPeople = people.filter((entry) =>
+      entry.axes.some((axis) =>
+        axis.repositories.some((link) => link.id === selected?.repository.id)
+      )
+    );
 
     if (repositories.length === 0) {
       return (
@@ -3143,8 +3208,17 @@ export function apply(ctx: Context) {
                 onClick={() => setSelectedId(entry.repository.id)}
                 type="button"
               >
-                <span className="rd-strong">{entry.repository.fullName}</span>
-                <span className="rd-meta">{involvementLine(entry)}</span>
+                {/* The prototype's row, in C1's row grammar: the name, the age of its last recorded activity
+                    top-right, then what it supports. The age is `lastActivityAt` — the same fact the detail's
+                    age box states — so two rows are compared on one timestamp; the heading says the order is by
+                    name, so the age is not read as the sort. */}
+                <span className="rd-row">
+                  <span className="rd-strong">{entry.repository.fullName}</span>
+                  <RecencyLabel at={entry.lastActivityAt} />
+                </span>
+                <span className="rd-meta" data-rd-repository-line="true">
+                  {supportsLine(entry)}
+                </span>
               </button>
             </li>
           ))}
@@ -3155,7 +3229,20 @@ export function apply(ctx: Context) {
             data-rd-repository-panel={selected.repository.fullName}
           >
             <CardHeader>
-              <DetailHeader title={<CardTitle>{selected.repository.fullName}</CardTitle>}>
+              <DetailHeader
+                badge={
+                  /* The prototype's age box: how stale this is, before any of the detail, in the title row
+                     where it reads. The marker the previous composition carried moves with it. */
+                  <span className="rd-cluster" data-rd-repository-last="true">
+                    {selected.lastActivityAt ? (
+                      <RecencyLabel at={selected.lastActivityAt} prefix="last activity " />
+                    ) : (
+                      <span className="rd-muted">no activity recorded yet</span>
+                    )}
+                  </span>
+                }
+                title={<CardTitle>{selected.repository.fullName}</CardTitle>}
+              >
                 <span className="rd-meta">
                   {selected.repository.description || "no description recorded"}
                   {selected.repository.defaultBranch
@@ -3165,74 +3252,159 @@ export function apply(ctx: Context) {
               </DetailHeader>
             </CardHeader>
             <CardContent>
-              <div className="rd-form">
-                <span className="rd-section">Supports</span>
-                <ul
-                  className="rd-view"
-                  data-rd-repository-topics={selected.topics.length}
+              {/* C5 convergence: the shared detail grid. The repository's current supported work is the dominant
+                  lane; everything else is a rail beside it — the composition the Topics and People panels
+                  already use, and the reason the panel no longer reads as four equal stacked sections. */}
+              <div className="rd-detail-grid" data-rd-repository-split="true">
+                <section
+                  className="rd-current-work"
+                  data-rd-repository-current={currentAxes.length}
+                  data-rd-repository-lane="current"
                 >
-                  {selected.topics.map((link) => (
-                    <li className="rd-cluster" key={link.topic.id}>
-                      <EntityTag
-                        compact
-                        id={link.topic.id}
-                        label={link.topic.name}
-                        onOpen={onOpenEntity}
-                        type="topic"
-                      />
-                      <span className="rd-muted">· {link.relationship}</span>
-                    </li>
-                  ))}
-                  {selected.topics.length === 0 ? (
-                    <li>
-                      <Notice kind="empty">no topic names it yet</Notice>
-                    </li>
-                  ) : null}
-                </ul>
-
-                <span className="rd-section">Current work</span>
-                <ul
-                  className="rd-axes"
-                  data-rd-repository-axes={selected.axes.length}
-                >
-                  {selected.axes.map((axis) => (
-                    <AxisScanItem
-                      axis={axis}
-                      key={axis.id}
-                      onOpenEntity={onOpenEntity}
-                    />
-                  ))}
-                  {selected.axes.length === 0 ? (
-                    <li>
-                      <Notice kind="empty">no axis names this repository</Notice>
-                    </li>
-                  ) : null}
-                </ul>
-
-                <span className="rd-section">Recent activity</span>
-                <ActivityList
-                  dataAttr="data-rd-repository-activity"
-                  items={selected.recentActivity}
-                  labelFor={(item) => ({
-                    topic:
-                      selected.topics.find(
-                        (link) => link.topic.id === item.topicId
-                      )?.topic.name ?? null,
-                  })}
-                  onOpenEntity={onOpenEntity}
-                  windowDays={windowDays}
-                />
-
-                <span className="rd-cluster" data-rd-repository-last="true">
-                  {selected.lastActivityAt ? (
-                    <RecencyLabel
-                      at={selected.lastActivityAt}
-                      prefix="last activity "
-                    />
+                  <span className="rd-section">Current work</span>
+                  {currentAxes.length === 0 ? (
+                    <p className="rd-muted">No current work in this repository.</p>
                   ) : (
-                    <span className="rd-muted">no activity recorded yet</span>
+                    <ul className="rd-axes" data-rd-repository-axes={selected.axes.length}>
+                      {currentAxes.map((axis) => (
+                        <AxisScanItem
+                          axis={axis}
+                          key={axis.id}
+                          onOpenEntity={onOpenEntity}
+                        />
+                      ))}
+                    </ul>
                   )}
-                </span>
+                  {/* The topic lane's fold, applied to the same partition: stopped work is stated with its own
+                      count and is one control away, never filed under "Current work". */}
+                  {foldedAxes.length > 0 ? (
+                    <details className="rd-completed-fold" data-rd-repository-folded={foldedAxes.length}>
+                      <summary>Completed and abandoned work ({foldedAxes.length})</summary>
+                      <ul className="rd-axes" data-rd-repository-axes={selected.axes.length}>
+                        {foldedAxes.map((axis) => (
+                          <AxisScanItem
+                            axis={axis}
+                            key={axis.id}
+                            onOpenEntity={onOpenEntity}
+                          />
+                        ))}
+                      </ul>
+                    </details>
+                  ) : null}
+                  {/* Nothing to split at all: said once, in the lane, instead of as two empty lists. */}
+                  {selected.axes.length === 0 ? (
+                    <p className="rd-muted">No axis names this repository yet.</p>
+                  ) : null}
+                </section>
+
+                <aside className="rd-side-stack">
+                  <section className="rd-side-card">
+                    <h3 className="rd-side-title">Recent activity</h3>
+                    <ul
+                      className="rd-activity"
+                      data-rd-repository-activity={railActivity.length}
+                      data-rd-repository-activity-shown={railShown.length}
+                    >
+                      {railShown.map((item) => (
+                        <ActivityLine
+                          axisLabel={
+                            selected.axes.find((axis) => axis.id === item.axisId)?.title ?? null
+                          }
+                          item={item}
+                          key={item.id}
+                          onOpenEntity={onOpenEntity}
+                          topicLabel={
+                            selected.topics.find((link) => link.topic.id === item.topicId)?.topic
+                              .name ?? null
+                          }
+                        />
+                      ))}
+                      {railActivity.length === 0 ? (
+                        <li className="rd-muted">No activity recorded yet.</li>
+                      ) : null}
+                    </ul>
+                    {/* The rail's remainder, stated — the identical treatment the topic and person rails use:
+                        the reader is told how many there are and can have them in one click. It governs the
+                        rail's window, not the repository. */}
+                    {railHidden > 0 || railAll ? (
+                      <div
+                        className="rd-cluster"
+                        data-rd-repository-activity-more={String(railHidden)}
+                      >
+                        <span className="rd-meta" data-rd-repository-activity-note="true">
+                          {railAll
+                            ? `all ${railActivity.length} shown, newest first`
+                            : `${railShown.length} of ${railActivity.length} shown, newest first`}
+                        </span>
+                        <Button
+                          onClick={() => {
+                            setRailAllFor(
+                              railAll ? null : (selected?.repository.id ?? null)
+                            );
+                          }}
+                          size="sm"
+                          variant="ghost"
+                        >
+                          {railAll ? "Show fewer" : `Show all ${railActivity.length}`}
+                        </Button>
+                      </div>
+                    ) : null}
+                  </section>
+
+                  <section className="rd-side-card">
+                    <h3 className="rd-side-title">Supports</h3>
+                    <ul className="rd-view" data-rd-repository-topics={selected.topics.length}>
+                      {selected.topics.map((link) => (
+                        <li className="rd-cluster" key={link.topic.id}>
+                          <EntityTag
+                            compact
+                            id={link.topic.id}
+                            label={link.topic.name}
+                            onOpen={onOpenEntity}
+                            type="topic"
+                          />
+                          <span className="rd-muted">· {link.relationship}</span>
+                        </li>
+                      ))}
+                      {selected.topics.length === 0 ? (
+                        <li>
+                          <Notice kind="empty">no topic names it yet</Notice>
+                        </li>
+                      ) : null}
+                    </ul>
+                  </section>
+
+                  {/* D5: the rollup carries no people of its own, so this is derived from the people rollup's
+                      axes — and it *collapses* when the derivation has nothing (a repository with no linked
+                      person does not get a prototype-shaped empty card). While that rollup is truncated the
+                      card says so rather than presenting a bounded subset as the whole list. */}
+                  {repositoryPeople.length > 0 || peopleTruncated ? (
+                    <section className="rd-side-card" data-rd-repository-people={repositoryPeople.length}>
+                      <h3 className="rd-side-title">People</h3>
+                      <div className="rd-cluster rd-tags">
+                        {repositoryPeople.map((entry) => (
+                          <EntityTag
+                            id={entry.person.id}
+                            key={entry.person.id}
+                            label={entry.person.displayName}
+                            onOpen={onOpenEntity}
+                            type="person"
+                          />
+                        ))}
+                      </div>
+                      {peopleTruncated ? (
+                        <Notice kind="truncated">
+                          the people rollup is truncated, so this list may be partial
+                        </Notice>
+                      ) : null}
+                    </section>
+                  ) : null}
+
+                  {/* The prototype's Notes card is **omitted**, not faked: `RepositoryRollup` carries no
+                      repository-level note (notes belong to a topic and the topic panel renders them). The
+                      marker makes the absence a check rather than an oversight — the D4 pattern. */}
+                  <div className="rd-row" data-rd-repository-notes-omitted="true" />
+                </aside>
               </div>
             </CardContent>
           </Card>
@@ -4443,11 +4615,9 @@ export function apply(ctx: Context) {
     // current/completed split appears as soon as the detail that can answer it arrives.
     const currentAxes: Array<AxisDetail | AxisOverview> = (
       selectedDetails ? selectedDetails.axes : (selectedEntry?.axes ?? [])
-    ).filter((axis) => axis.state !== "completed" && axis.state !== "abandoned");
+    ).filter((axis) => !isTerminalAxis(axis.state));
     const foldedAxes: AxisDetail[] = selectedDetails
-      ? selectedDetails.axes.filter(
-          (axis) => axis.state === "completed" || axis.state === "abandoned"
-        )
+      ? selectedDetails.axes.filter((axis) => isTerminalAxis(axis.state))
       : [];
 
 
@@ -4965,6 +5135,8 @@ export function apply(ctx: Context) {
         {view === "repositories" ? (
           <RepositoriesView
             onOpenEntity={openEntity}
+            people={overview?.people ?? []}
+            peopleTruncated={overview?.peopleTruncated === true}
             preselect={entityTarget?.type === "repository" ? entityTarget : null}
             repositories={overview?.repositories ?? []}
             truncated={overview?.repositoriesTruncated === true}

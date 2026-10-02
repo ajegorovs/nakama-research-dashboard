@@ -54,7 +54,7 @@ var VIEW_OPTIONS = [
 var VIEW_HEADINGS = {
   people: "Recent activity is factual, not a workload score",
   progress: "Problem first; execution detail beneath it",
-  repositories: "Most recently active first",
+  repositories: "Alphabetical by name · factual context, never scored",
   topics: "Most recently active first · primarily read-only"
 };
 var ENTITY_VIEW = {
@@ -70,6 +70,8 @@ var PROGRESS_INDEX_OPTIONS = [
 ];
 var FEED_LEAD = 12;
 var RAIL_ACTIVITY_LEAD = 4;
+var TERMINAL_AXIS_STATES = ["completed", "abandoned"];
+var isTerminalAxis = (state) => TERMINAL_AXIS_STATES.includes(state);
 var css = `
 /*
  * One small vocabulary for type, spacing and quietness. The rules below used to carry ten literal type
@@ -1297,6 +1299,11 @@ function apply(ctx) {
     parts.push(countLabel(entry.topics.length, "topic", "topics"));
     return parts.join(" · ");
   }
+  function supportsLine(entry) {
+    const current = entry.axes.filter((axis) => !isTerminalAxis(axis.state)).length;
+    const topics = entry.topics.length === 0 ? "no topic names it" : `supports ${countLabel(entry.topics.length, "topic", "topics")}`;
+    return `${topics} · ${current === 0 ? "no current axis" : countLabel(current, "current axis", "current axes")}`;
+  }
   function AxisScanItem({
     axis,
     onOpenEntity
@@ -1785,18 +1792,28 @@ function apply(ctx) {
   }
   function RepositoriesView({
     onOpenEntity,
+    people,
+    peopleTruncated,
     preselect,
     repositories,
     truncated,
     windowDays
   }) {
     const [selectedId, setSelectedId] = React.useState(null);
+    const [railAllFor, setRailAllFor] = React.useState(null);
     React.useEffect(() => {
       if (preselect) {
         setSelectedId(preselect.id);
       }
     }, [preselect?.id, preselect?.seq]);
     const selected = repositories.find((entry) => entry.repository.id === selectedId) ?? repositories[0] ?? null;
+    const railAll = railAllFor !== null && railAllFor === selected?.repository.id;
+    const railActivity = selected?.recentActivity ?? [];
+    const railShown = railAll ? railActivity : railActivity.slice(0, RAIL_ACTIVITY_LEAD);
+    const railHidden = railActivity.length - railShown.length;
+    const currentAxes = (selected?.axes ?? []).filter((axis) => !isTerminalAxis(axis.state));
+    const foldedAxes = (selected?.axes ?? []).filter((axis) => isTerminalAxis(axis.state));
+    const repositoryPeople = people.filter((entry) => entry.axes.some((axis) => axis.repositories.some((link) => link.id === selected?.repository.id)));
     if (repositories.length === 0) {
       return /* @__PURE__ */ React.createElement(Card, null, /* @__PURE__ */ React.createElement(CardContent, null, /* @__PURE__ */ React.createElement("p", {
         className: "rd-muted"
@@ -1821,20 +1838,94 @@ function apply(ctx) {
       onClick: () => setSelectedId(entry.repository.id),
       type: "button"
     }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-row"
+    }, /* @__PURE__ */ React.createElement("span", {
       className: "rd-strong"
-    }, entry.repository.fullName), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta"
-    }, involvementLine(entry)))))), selected ? /* @__PURE__ */ React.createElement(Card, {
+    }, entry.repository.fullName), /* @__PURE__ */ React.createElement(RecencyLabel, {
+      at: entry.lastActivityAt
+    })), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta",
+      "data-rd-repository-line": "true"
+    }, supportsLine(entry)))))), selected ? /* @__PURE__ */ React.createElement(Card, {
       className: "rd-panel",
       "data-rd-repository-panel": selected.repository.fullName
     }, /* @__PURE__ */ React.createElement(CardHeader, null, /* @__PURE__ */ React.createElement(DetailHeader, {
+      badge: /* @__PURE__ */ React.createElement("span", {
+        className: "rd-cluster",
+        "data-rd-repository-last": "true"
+      }, selected.lastActivityAt ? /* @__PURE__ */ React.createElement(RecencyLabel, {
+        at: selected.lastActivityAt,
+        prefix: "last activity "
+      }) : /* @__PURE__ */ React.createElement("span", {
+        className: "rd-muted"
+      }, "no activity recorded yet")),
       title: /* @__PURE__ */ React.createElement(CardTitle, null, selected.repository.fullName)
     }, /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta"
     }, selected.repository.description || "no description recorded", selected.repository.defaultBranch ? ` · default branch ${selected.repository.defaultBranch}` : ""))), /* @__PURE__ */ React.createElement(CardContent, null, /* @__PURE__ */ React.createElement("div", {
-      className: "rd-form"
+      className: "rd-detail-grid",
+      "data-rd-repository-split": "true"
+    }, /* @__PURE__ */ React.createElement("section", {
+      className: "rd-current-work",
+      "data-rd-repository-current": currentAxes.length,
+      "data-rd-repository-lane": "current"
     }, /* @__PURE__ */ React.createElement("span", {
       className: "rd-section"
+    }, "Current work"), currentAxes.length === 0 ? /* @__PURE__ */ React.createElement("p", {
+      className: "rd-muted"
+    }, "No current work in this repository.") : /* @__PURE__ */ React.createElement("ul", {
+      className: "rd-axes",
+      "data-rd-repository-axes": selected.axes.length
+    }, currentAxes.map((axis) => /* @__PURE__ */ React.createElement(AxisScanItem, {
+      axis,
+      key: axis.id,
+      onOpenEntity
+    }))), foldedAxes.length > 0 ? /* @__PURE__ */ React.createElement("details", {
+      className: "rd-completed-fold",
+      "data-rd-repository-folded": foldedAxes.length
+    }, /* @__PURE__ */ React.createElement("summary", null, "Completed and abandoned work (", foldedAxes.length, ")"), /* @__PURE__ */ React.createElement("ul", {
+      className: "rd-axes",
+      "data-rd-repository-axes": selected.axes.length
+    }, foldedAxes.map((axis) => /* @__PURE__ */ React.createElement(AxisScanItem, {
+      axis,
+      key: axis.id,
+      onOpenEntity
+    })))) : null, selected.axes.length === 0 ? /* @__PURE__ */ React.createElement("p", {
+      className: "rd-muted"
+    }, "No axis names this repository yet.") : null), /* @__PURE__ */ React.createElement("aside", {
+      className: "rd-side-stack"
+    }, /* @__PURE__ */ React.createElement("section", {
+      className: "rd-side-card"
+    }, /* @__PURE__ */ React.createElement("h3", {
+      className: "rd-side-title"
+    }, "Recent activity"), /* @__PURE__ */ React.createElement("ul", {
+      className: "rd-activity",
+      "data-rd-repository-activity": railActivity.length,
+      "data-rd-repository-activity-shown": railShown.length
+    }, railShown.map((item) => /* @__PURE__ */ React.createElement(ActivityLine, {
+      axisLabel: selected.axes.find((axis) => axis.id === item.axisId)?.title ?? null,
+      item,
+      key: item.id,
+      onOpenEntity,
+      topicLabel: selected.topics.find((link) => link.topic.id === item.topicId)?.topic.name ?? null
+    })), railActivity.length === 0 ? /* @__PURE__ */ React.createElement("li", {
+      className: "rd-muted"
+    }, "No activity recorded yet.") : null), railHidden > 0 || railAll ? /* @__PURE__ */ React.createElement("div", {
+      className: "rd-cluster",
+      "data-rd-repository-activity-more": String(railHidden)
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta",
+      "data-rd-repository-activity-note": "true"
+    }, railAll ? `all ${railActivity.length} shown, newest first` : `${railShown.length} of ${railActivity.length} shown, newest first`), /* @__PURE__ */ React.createElement(Button, {
+      onClick: () => {
+        setRailAllFor(railAll ? null : selected?.repository.id ?? null);
+      },
+      size: "sm",
+      variant: "ghost"
+    }, railAll ? "Show fewer" : `Show all ${railActivity.length}`)) : null), /* @__PURE__ */ React.createElement("section", {
+      className: "rd-side-card"
+    }, /* @__PURE__ */ React.createElement("h3", {
+      className: "rd-side-title"
     }, "Supports"), /* @__PURE__ */ React.createElement("ul", {
       className: "rd-view",
       "data-rd-repository-topics": selected.topics.length
@@ -1851,36 +1942,25 @@ function apply(ctx) {
       className: "rd-muted"
     }, "· ", link.relationship))), selected.topics.length === 0 ? /* @__PURE__ */ React.createElement("li", null, /* @__PURE__ */ React.createElement(Notice, {
       kind: "empty"
-    }, "no topic names it yet")) : null), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-section"
-    }, "Current work"), /* @__PURE__ */ React.createElement("ul", {
-      className: "rd-axes",
-      "data-rd-repository-axes": selected.axes.length
-    }, selected.axes.map((axis) => /* @__PURE__ */ React.createElement(AxisScanItem, {
-      axis,
-      key: axis.id,
-      onOpenEntity
-    })), selected.axes.length === 0 ? /* @__PURE__ */ React.createElement("li", null, /* @__PURE__ */ React.createElement(Notice, {
-      kind: "empty"
-    }, "no axis names this repository")) : null), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-section"
-    }, "Recent activity"), /* @__PURE__ */ React.createElement(ActivityList, {
-      dataAttr: "data-rd-repository-activity",
-      items: selected.recentActivity,
-      labelFor: (item) => ({
-        topic: selected.topics.find((link) => link.topic.id === item.topicId)?.topic.name ?? null
-      }),
-      onOpenEntity,
-      windowDays
-    }), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-cluster",
-      "data-rd-repository-last": "true"
-    }, selected.lastActivityAt ? /* @__PURE__ */ React.createElement(RecencyLabel, {
-      at: selected.lastActivityAt,
-      prefix: "last activity "
-    }) : /* @__PURE__ */ React.createElement("span", {
-      className: "rd-muted"
-    }, "no activity recorded yet"))))) : null);
+    }, "no topic names it yet")) : null)), repositoryPeople.length > 0 || peopleTruncated ? /* @__PURE__ */ React.createElement("section", {
+      className: "rd-side-card",
+      "data-rd-repository-people": repositoryPeople.length
+    }, /* @__PURE__ */ React.createElement("h3", {
+      className: "rd-side-title"
+    }, "People"), /* @__PURE__ */ React.createElement("div", {
+      className: "rd-cluster rd-tags"
+    }, repositoryPeople.map((entry) => /* @__PURE__ */ React.createElement(EntityTag, {
+      id: entry.person.id,
+      key: entry.person.id,
+      label: entry.person.displayName,
+      onOpen: onOpenEntity,
+      type: "person"
+    }))), peopleTruncated ? /* @__PURE__ */ React.createElement(Notice, {
+      kind: "truncated"
+    }, "the people rollup is truncated, so this list may be partial") : null) : null, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-row",
+      "data-rd-repository-notes-omitted": "true"
+    }))))) : null);
   }
   function problemCountLine(row) {
     if (row.problems === 0) {
@@ -2529,8 +2609,8 @@ function apply(ctx) {
     const railAll = railAllFor !== null && railAllFor === selectedEntry?.topic.id;
     const railShown = railAll ? railActivity : railActivity.slice(0, RAIL_ACTIVITY_LEAD);
     const railHidden = railActivity.length - railShown.length;
-    const currentAxes = (selectedDetails ? selectedDetails.axes : selectedEntry?.axes ?? []).filter((axis) => axis.state !== "completed" && axis.state !== "abandoned");
-    const foldedAxes = selectedDetails ? selectedDetails.axes.filter((axis) => axis.state === "completed" || axis.state === "abandoned") : [];
+    const currentAxes = (selectedDetails ? selectedDetails.axes : selectedEntry?.axes ?? []).filter((axis) => !isTerminalAxis(axis.state));
+    const foldedAxes = selectedDetails ? selectedDetails.axes.filter((axis) => isTerminalAxis(axis.state)) : [];
     return /* @__PURE__ */ React.createElement("div", {
       className: "rd-stack"
     }, /* @__PURE__ */ React.createElement("div", {
@@ -2874,6 +2954,8 @@ function apply(ctx) {
       windowDays
     }) : null, view === "repositories" ? /* @__PURE__ */ React.createElement(RepositoriesView, {
       onOpenEntity: openEntity,
+      people: overview?.people ?? [],
+      peopleTruncated: overview?.peopleTruncated === true,
       preselect: entityTarget?.type === "repository" ? entityTarget : null,
       repositories: overview?.repositories ?? [],
       truncated: overview?.repositoriesTruncated === true,

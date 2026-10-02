@@ -1830,6 +1830,21 @@ if (bare === undefined) {
 // so the lane read as a report rather than as the prototype's axis row. The claim now is that the reader
 // sees the scan line, the reading and one quiet reference line; that the state claim stays visible where it
 // is read (C8); and that *nothing was removed* — the rest is one disclosure away, per axis.
+// The detail arrives from `get_topic` *after* the pane is up, and this instance has answered it with
+// `500 SQLiteError: database is locked` under load (2026-10-02 22:41:23, requestId aa21cc5e — the race below
+// cost a corpus 1440×900 record on this unit). So wait for the reading surface these checks are about instead
+// of judging an empty pane: a detail that never lands still fails them, but with the pane's own state on
+// screen rather than as a composition fault — and the click below can no longer abort the whole run.
+await page
+  .waitForFunction(
+    ([pluginId, topic]) =>
+      (document
+        .querySelector(`div[data-plugin-id="${pluginId}"] [data-rd-detail="${topic}"]`)
+        ?.querySelectorAll("[data-rd-axis-title]").length ?? 0) > 0,
+    [PLUGIN_ID, CORPUS.topic],
+    { polling: 100, timeout: 20000 }
+  )
+  .catch(() => {});
 const hierarchy = await page.evaluate(
   ([pluginId, topic]) => {
     const pane = document.querySelector(
@@ -2048,8 +2063,16 @@ if (detailPayload.status !== 200 || detailPayload.axes.length === 0) {
             : `this axis carries no description in the payload, so the box holds the confidence cluster alone (${opened.descriptionInside ? "a description element at 0px" : "no description element"})`
         }`,
   );
-  await root.locator('[data-rd-detail] details[data-rd-axis-more] summary').first().click();
-  await page.waitForTimeout(200);
+  // Put the disclosure back the way the reader found it — asserted before it is clicked, because clicking a
+  // control that is not rendered does not fail a check, it aborts the whole pass on a 30s locator timeout, and
+  // an aborted run is a lost record rather than a verdict.
+  const axisDisclosure = root
+    .locator("[data-rd-detail] details[data-rd-axis-more] summary")
+    .first();
+  if ((await axisDisclosure.count()) > 0) {
+    await axisDisclosure.click();
+    await page.waitForTimeout(200);
+  }
 }
 
 // Per-axis history expands *inside the axis* — never one merged log for the whole topic. Which axis
@@ -5898,6 +5921,461 @@ if (WRITE) {
 
   // Leave the page where the pass found it — the default view is what the final screenshot shows.
   await showView("topics");
+}
+
+// ------------------------ C5: the Repositories view — the index row, the dominant lane, the bounded rail
+// The convergence this section measures is a *composition* claim, so every check reads the page against the
+// projection rather than against the prototype's prose: the row's age is the row's own timestamp, the row's
+// second line is the rollup's own counts, the lane is the rollup's own current/terminal partition, the rail's
+// window is the page's stated lead (`RAIL_ACTIVITY_LEAD`, re-declared here so the page cannot widen its own
+// window into correctness), and the people card is derived from the people rollup or absent. Two things the
+// prototype shows are deliberately NOT here, and both are asserted as absent-with-a-marker: a repository-level
+// Notes card (the rollup carries no such note) and a `Stale` tag (the store's `stale` is a recency rule the
+// repository rollup does not carry — inventing a second definition of one word is worse than the absence).
+//
+// The click discipline is the one the topic rail's block learned: assert the control exists BEFORE clicking
+// it, because clicking a control that is not rendered aborts the whole pass on a 30s locator timeout, and an
+// aborted run is a lost record rather than a verdict.
+{
+  // The pass's read set, mirrored: a read is not a write, and the point of one check below is that this view
+  // is composition only.
+  const C5_READS = new Set([
+    "get_overview",
+    "get_progress",
+    "get_topic",
+    "list_activity",
+    "list_topics",
+  ]);
+  const c5Writes = () => actionCalls.filter((call) => !C5_READS.has(call.key)).length;
+  const TERMINAL = new Set(["completed", "abandoned"]);
+  const c5Current = (entry) => (entry.axes ?? []).filter((axis) => !TERMINAL.has(axis.state));
+  const c5Terminal = (entry) => (entry.axes ?? []).filter((axis) => TERMINAL.has(axis.state));
+  const c5Count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  // The row's second line, as the page writes it, from the projection's own numbers.
+  const c5SupportsLine = (entry) => {
+    const current = c5Current(entry).length;
+    const topics =
+      (entry.topics ?? []).length === 0
+        ? "no topic names it"
+        : `supports ${c5Count((entry.topics ?? []).length, "topic", "topics")}`;
+    return `${topics} · ${
+      current === 0 ? "no current axis" : c5Count(current, "current axis", "current axes")
+    }`;
+  };
+
+  const c5ShowRepositories = async () => {
+    await root.locator('[data-rd-view-option="repositories"]').click();
+    await page.waitForTimeout(350);
+  };
+  const c5Select = async (fullName) => {
+    await root.locator(`[data-rd-repository="${fullName}"]`).click();
+    await page.waitForTimeout(500);
+  };
+  const readC5 = () =>
+    page.evaluate(() => {
+      const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+      const pane = scope?.querySelector('[data-rd-view="repositories"]');
+      const index = pane?.querySelector("[data-rd-repositories]");
+      const panel = pane?.querySelector("[data-rd-repository-panel]");
+      const lane = panel?.querySelector("[data-rd-repository-lane]");
+      const rail = panel?.querySelector(".rd-side-stack");
+      const fold = lane?.querySelector("[data-rd-repository-folded]");
+      const supports = panel?.querySelector("[data-rd-repository-topics]");
+      const people = panel?.querySelector("[data-rd-repository-people]");
+      const activity = panel?.querySelector("[data-rd-repository-activity]");
+      const tagsIn = (node) =>
+        [...(node?.querySelectorAll("[data-rd-entity-tag]") ?? [])].map((n) => ({
+          id: n.getAttribute("data-rd-entity-id"),
+          label: n.getAttribute("data-rd-tag-label"),
+          type: n.getAttribute("data-rd-entity-tag"),
+        }));
+      const axisRows = (node) =>
+        [...(node?.querySelectorAll("[data-rd-scan-axis]") ?? [])].map((n) => ({
+          state: n.getAttribute("data-rd-axis-state"),
+          title: n.getAttribute("data-rd-scan-axis"),
+        }));
+      // The lane's OWN rows: everything it holds that the fold does not. This is what makes "the lane holds
+      // the current axes" a check rather than a guess about which list a row came from.
+      const foldedTitles = new Set(
+        [...(fold?.querySelectorAll("[data-rd-scan-axis]") ?? [])].map((n) =>
+          n.getAttribute("data-rd-scan-axis")
+        )
+      );
+      const inLane = axisRows(lane).filter((row) => !foldedTitles.has(row.title));
+      const box = (node) => {
+        if (!node) return null;
+        const rect = node.getBoundingClientRect();
+        return { left: rect.left, top: rect.top, width: rect.width };
+      };
+      return {
+        activity: {
+          note: (panel?.querySelector("[data-rd-repository-activity-note]")?.textContent ?? "").trim(),
+          rows: [...(activity?.querySelectorAll("[data-rd-activity-event]") ?? [])].map((n) => ({
+            date: n.querySelector("[data-rd-event-date]")?.getAttribute("data-rd-event-date") ?? null,
+            summary: (n.querySelector(".rd-strong")?.textContent ?? "").trim(),
+          })),
+          shown: Number(activity?.getAttribute("data-rd-repository-activity-shown") ?? -1),
+          total: Number(activity?.getAttribute("data-rd-repository-activity") ?? -1),
+        },
+        axesAttributes: [...(panel?.querySelectorAll("[data-rd-repository-axes]") ?? [])].map((n) =>
+          Number(n.getAttribute("data-rd-repository-axes"))
+        ),
+        fold: fold
+          ? {
+              count: Number(fold.getAttribute("data-rd-repository-folded") ?? -1),
+              rows: axisRows(fold),
+              summary: (fold.querySelector("summary")?.textContent ?? "").trim(),
+            }
+          : null,
+        hint: (
+          pane?.querySelector('[data-rd-view-heading="repositories"] .rd-meta')?.textContent ?? ""
+        ).trim(),
+        lane: {
+          box: box(lane),
+          count: Number(lane?.getAttribute("data-rd-repository-current") ?? -1),
+          rows: inLane,
+        },
+        notesOmitted: panel?.querySelector("[data-rd-repository-notes-omitted]") !== null,
+        panelName: panel?.getAttribute("data-rd-repository-panel") ?? null,
+        people: people
+          ? {
+              count: Number(people.getAttribute("data-rd-repository-people") ?? -1),
+              partial: (people.querySelector("[data-rd-notice]")?.textContent ?? "").trim(),
+              tags: tagsIn(people),
+            }
+          : null,
+        railBox: box(rail),
+        rows: [...(index?.querySelectorAll("[data-rd-repository]") ?? [])].map((row) => ({
+          id: row.getAttribute("data-rd-repository-id"),
+          // The row's own second line, by its own handle: the age label is a `.rd-meta` too, and reading
+          // "the first .rd-meta in the row" read the age as if it were the counts.
+          meta: (
+            row.querySelector("[data-rd-repository-line]")?.textContent ?? ""
+          ).trim(),
+          name: row.getAttribute("data-rd-repository"),
+          pressed: row.getAttribute("aria-pressed") === "true",
+          recency: row.querySelector("[data-rd-recency]")?.getAttribute("data-rd-recency") ?? null,
+          recencyText: (row.querySelector("[data-rd-recency]")?.textContent ?? "").trim(),
+        })),
+        sideTitles: [...(panel?.querySelectorAll(".rd-side-title") ?? [])].map((n) =>
+          (n.textContent ?? "").trim()
+        ),
+        supports: {
+          count: Number(supports?.getAttribute("data-rd-repository-topics") ?? -1),
+          inRail: rail?.contains(supports) ?? false,
+          tags: tagsIn(supports),
+        },
+      };
+    });
+
+  const c5Overview = await apiAction("get_overview", { activitySinceDays: windowDaysNow });
+  const c5Repositories = c5Overview?.repositories ?? [];
+  const c5People = c5Overview?.people ?? [];
+  const c5PeopleTruncated = c5Overview?.peopleTruncated === true;
+  await c5ShowRepositories();
+
+  // (1) The index row: the projection's own order, its own timestamp, its own counts.
+  const indexRead = await readC5();
+  const orderMismatch = indexRead.rows.findIndex(
+    (row, i) =>
+      row.name !== c5Repositories[i]?.repository.fullName ||
+      row.id !== c5Repositories[i]?.repository.id
+  );
+  check(
+    "the repositories index lists the projection's repositories, in the projection's own order",
+    indexRead.rows.length === c5Repositories.length && orderMismatch === -1,
+    `${indexRead.rows.length} row(s) for ${c5Repositories.length} repository(ies)` +
+      (orderMismatch === -1 ? "" : `; first difference at row ${orderMismatch}`)
+  );
+  check(
+    "the repositories heading states the order the rollup is actually in — by name, not by recency",
+    /by name/i.test(indexRead.hint) && !/most recently active/i.test(indexRead.hint),
+    `heading hint: ${JSON.stringify(indexRead.hint)}`
+  );
+  const datedRows = c5Repositories.filter((entry) => entry.lastActivityAt !== null).length;
+  const ageMismatch = indexRead.rows.filter((row, i) => {
+    const entry = c5Repositories[i];
+    if (!entry) return false;
+    return entry.lastActivityAt === null
+      ? row.recency !== null || row.recencyText !== "never"
+      : row.recency !== entry.lastActivityAt;
+  });
+  check(
+    "every repository row states the age of its own last activity, from its own timestamp",
+    ageMismatch.length === 0,
+    ageMismatch.length === 0
+      ? `${datedRows} dated row(s), ${indexRead.rows.length - datedRows} said "never"`
+      : `${ageMismatch.length} row(s) disagree with the projection: ${ageMismatch
+          .slice(0, 2)
+          .map((row) => `${row.name} "${row.recency ?? row.recencyText}"`)
+          .join(", ")}`
+  );
+  const lineMismatch = indexRead.rows
+    .map((row, i) => ({ expected: c5SupportsLine(c5Repositories[i] ?? {}), row }))
+    .filter((entry) => entry.expected !== entry.row.meta);
+  check(
+    "every repository row's second line is the rollup's own numbers, on the lane's own current/terminal split",
+    lineMismatch.length === 0,
+    lineMismatch.length === 0
+      ? indexRead.rows.map((row) => row.meta).join(" | ")
+      : `${lineMismatch[0].row.name}: "${lineMismatch[0].row.meta}" — wanted "${lineMismatch[0].expected}"`
+  );
+  // The zero-case branch is only visible where the dataset has a repository with nothing current — the
+  // fixture's bare repository exists for exactly this. Reported with its reason, never silently passed.
+  const quietRepository = c5Repositories.find(
+    (entry) => c5Current(entry).length === 0 && (entry.topics ?? []).length === 0
+  );
+  if (!quietRepository) {
+    skip(
+      "a repository with nothing current says so, instead of filing stopped work under the lane's heading",
+      "this dataset has no repository with neither a topic link nor a current axis"
+    );
+  } else {
+    const quietRow = indexRead.rows.find((row) => row.id === quietRepository.repository.id);
+    check(
+      "a repository with nothing current says so, instead of filing stopped work under the lane's heading",
+      quietRow?.meta === "no topic names it · no current axis",
+      `${quietRepository.repository.fullName}: "${quietRow?.meta ?? "no row"}"`
+    );
+  }
+
+  // (2) The dominant lane: current work beside a rail, holding the rollup's own current axes.
+  const laneSubject =
+    [...c5Repositories]
+      .filter((entry) => c5Current(entry).length > 0)
+      .sort((a, b) => (b.axes ?? []).length - (a.axes ?? []).length)[0] ?? null;
+  if (!laneSubject) {
+    skip(
+      "the repository's current work is the dominant lane: wider than the rail, beside it, not stacked under it",
+      "no repository in this dataset has a current axis, so there is no lane to measure"
+    );
+  } else {
+    await c5Select(laneSubject.repository.fullName);
+    const laneRead = await readC5();
+    const wantsCurrent = c5Current(laneSubject)
+      .map((axis) => axis.title)
+      .sort();
+    const laneTitles = laneRead.lane.rows.map((row) => row.title).sort();
+    const terminalInLane = laneRead.lane.rows.filter((row) => TERMINAL.has(row.state));
+    check(
+      "the repository's current work is the dominant lane: at least 1.25x the rail, beside it, not stacked under it",
+      laneRead.lane.box !== null &&
+        laneRead.railBox !== null &&
+        laneRead.lane.box.width >= laneRead.railBox.width * 1.25 &&
+        laneRead.lane.box.left < laneRead.railBox.left &&
+        Math.abs(laneRead.lane.box.top - laneRead.railBox.top) < 40,
+      laneRead.lane.box && laneRead.railBox
+        ? `lane ${Math.round(laneRead.lane.box.width)}px at x=${Math.round(
+            laneRead.lane.box.left
+          )}, rail ${Math.round(laneRead.railBox.width)}px at x=${Math.round(
+            laneRead.railBox.left
+          )} (${(laneRead.lane.box.width / laneRead.railBox.width).toFixed(2)}x), tops ${Math.round(
+            laneRead.lane.box.top
+          )}/${Math.round(laneRead.railBox.top)}`
+        : "lane or rail missing from the panel"
+    );
+    check(
+      "the lane holds exactly the rollup's current axes, states that count, and holds no stopped work",
+      laneRead.lane.count === wantsCurrent.length &&
+        laneTitles.length === wantsCurrent.length &&
+        laneTitles.every((title, i) => title === wantsCurrent[i]) &&
+        terminalInLane.length === 0,
+      `lane states ${laneRead.lane.count}, holds ${laneTitles.length} ` +
+        `(${laneTitles.join(", ")}) — projection's current: ${wantsCurrent.join(", ")}` +
+        (terminalInLane.length === 0
+          ? ""
+          : `; terminal states in the lane: ${terminalInLane.map((row) => row.state).join(", ")}`)
+    );
+    const wantsFolded = c5Terminal(laneSubject)
+      .map((axis) => axis.title)
+      .sort();
+    if (wantsFolded.length === 0) {
+      check(
+        "a repository with no stopped work renders no fold, rather than an empty disclosure",
+        laneRead.fold === null,
+        laneRead.fold === null
+          ? "no fold, as the projection implies"
+          : `fold present with ${laneRead.fold.count} row(s)`
+      );
+    } else {
+      const shownFolded = (laneRead.fold?.rows ?? []).map((row) => row.title).sort();
+      check(
+        "stopped work is folded with its own count, and the fold holds exactly the rollup's terminal axes",
+        laneRead.fold !== null &&
+          laneRead.fold.count === wantsFolded.length &&
+          shownFolded.length === wantsFolded.length &&
+          shownFolded.every((title, i) => title === wantsFolded[i]) &&
+          laneRead.fold.summary.includes(String(wantsFolded.length)),
+        laneRead.fold
+          ? `fold states ${laneRead.fold.count}, holds ${shownFolded.length} (${shownFolded.join(
+              ", "
+            )}) — summary ${JSON.stringify(laneRead.fold.summary)}`
+          : `no fold, but the projection has ${wantsFolded.length} terminal axis(es)`
+      );
+      // The fold is a disclosure of the split, not a place where work goes missing: the payload's own total
+      // still has to be on the page.
+      check(
+        "the split does not lose the repository's own axis count",
+        laneRead.axesAttributes.includes((laneSubject.axes ?? []).length),
+        `counts on the page ${JSON.stringify(laneRead.axesAttributes)}, projection ${
+          (laneSubject.axes ?? []).length
+        }`
+      );
+    }
+    check(
+      "the topic links are the rollup's own links, and they sit in the rail as context, not in the lane",
+      laneRead.supports.count === (laneSubject.topics ?? []).length &&
+        laneRead.supports.inRail &&
+        laneRead.supports.tags.filter((tag) => tag.type === "topic").length ===
+          (laneSubject.topics ?? []).length &&
+        (laneSubject.topics ?? []).every((link) =>
+          laneRead.supports.tags.some(
+            (tag) =>
+              tag.type === "topic" && tag.id === link.topic.id && tag.label === link.topic.name
+          )
+        ),
+      `${laneRead.supports.count} link(s), ${
+        laneRead.supports.tags.filter((tag) => tag.type === "topic").length
+      } topic tag(s), ${laneRead.supports.inRail ? "inside the rail" : "NOT in the rail"}`
+    );
+    // D5: the people card is *derived* from the people rollup's axes, or it is absent — never a
+    // prototype-shaped empty card, and never a person this rollup does not link here.
+    const wantedPeople = c5People
+      .filter((entry) =>
+        (entry.axes ?? []).some((axis) =>
+          (axis.repositories ?? []).some((link) => link.id === laneSubject.repository.id)
+        )
+      )
+      .map((entry) => entry.person);
+    const peopleTags = (laneRead.people?.tags ?? []).filter((tag) => tag.type === "person");
+    const peopleCondition =
+      wantedPeople.length > 0
+        ? laneRead.people !== null &&
+          peopleTags.length === wantedPeople.length &&
+          wantedPeople.every((person) =>
+            peopleTags.some((tag) => tag.id === person.id && tag.label === person.displayName)
+          )
+        : // Nothing links this repository: the card collapses. Unless the people rollup is truncated, in
+          // which case a labelled partial card is the honest rendering (D5) and absence is also allowed.
+          laneRead.people === null ||
+          (c5PeopleTruncated && (laneRead.people.partial ?? "").length > 0);
+    check(
+      "the people shown on a repository are derived from the people rollup's axes, and only those",
+      peopleCondition,
+      wantedPeople.length > 0
+        ? `${peopleTags.length} tag(s) for ${wantedPeople.length} derived person(s): ${peopleTags
+            .map((tag) => tag.label)
+            .join(", ")}`
+        : laneRead.people === null
+          ? "no person links this repository, and no People card is rendered"
+          : `no person links this repository, but a People card is rendered with ${
+              peopleTags.length
+            } tag(s)${c5PeopleTruncated ? ` (people rollup truncated; says "${laneRead.people.partial}")` : ""}`
+    );
+    check(
+      "the prototype's Notes card is omitted, and the omission is marked rather than left silent",
+      laneRead.notesOmitted && !laneRead.sideTitles.includes("Notes"),
+      `marker ${laneRead.notesOmitted ? "present" : "MISSING"}; rail titles: ${laneRead.sideTitles.join(
+        ", "
+      )}`
+    );
+  }
+
+  // (3) The rail is a window with its remainder stated — the treatment the topic and person rails use.
+  const railShownExpected = RAIL_ACTIVITY_LEAD;
+  const railSubject =
+    [...c5Repositories]
+      .filter((entry) => (entry.recentActivity ?? []).length > RAIL_ACTIVITY_LEAD)
+      .sort((a, b) => b.recentActivity.length - a.recentActivity.length)[0] ?? null;
+  if (!railSubject) {
+    skip(
+      "the repository rail leads with the newest few and states the remainder",
+      `no repository in this dataset has more than ${RAIL_ACTIVITY_LEAD} events in the window`
+    );
+  } else {
+    await c5Select(railSubject.repository.fullName);
+    const railBefore = (await readC5()).activity;
+    const newest = railSubject.recentActivity.slice(0, railShownExpected);
+    check(
+      "the repository rail leads with the newest few and states how many of how many",
+      railBefore.total === railSubject.recentActivity.length &&
+        railBefore.shown === railShownExpected &&
+        railBefore.rows.length === railShownExpected &&
+        railBefore.note.includes(
+          `${railShownExpected} of ${railSubject.recentActivity.length} shown, newest first`
+        ) &&
+        railBefore.rows.every(
+          (row, i) => row.date === newest[i]?.occurredAt && row.summary === newest[i]?.summary
+        ),
+      `total ${railBefore.total}/${railSubject.recentActivity.length}, shown ${railBefore.shown}, ` +
+        `${railBefore.rows.length} row(s) on screen, note ${JSON.stringify(railBefore.note)}`
+    );
+    // The rest is one control away. The control is asserted before it is clicked: clicking a control that is
+    // not rendered aborts the pass rather than failing the check.
+    const moreControl = root.locator(
+      '[data-rd-repository-activity-more] button, [data-rd-repository-activity] ~ .rd-cluster button'
+    );
+    const writesBeforeExpand = c5Writes();
+    if ((await moreControl.count()) === 0) {
+      check(
+        "the rail's remainder is one control away, and showing it changes only what is shown",
+        false,
+        `the rail is truncated to ${railBefore.shown} of ${railBefore.total} but offers no control for the rest`
+      );
+      skip(
+        "expanding and collapsing the rail's window is composition only — no write action fires",
+        "there was no control to expand with, so there is nothing to collapse"
+      );
+    } else {
+      await moreControl.first().click();
+      await page.waitForTimeout(350);
+      const railAll = (await readC5()).activity;
+      check(
+        "the rail's remainder is one control away, and showing it changes only what is shown",
+        railAll.shown === railSubject.recentActivity.length &&
+          railAll.rows.length === railSubject.recentActivity.length &&
+          railAll.total === railSubject.recentActivity.length &&
+          railAll.note.includes(
+            `all ${railSubject.recentActivity.length} shown, newest first`
+          ),
+        `shown ${railAll.shown}, ${railAll.rows.length} row(s) on screen (total ${railAll.total}), ` +
+          `note ${JSON.stringify(railAll.note)}`
+      );
+      // Put it back, so every later measurement and every screenshot is of the default composition.
+      await moreControl.first().click();
+      await page.waitForTimeout(350);
+      const railBack = (await readC5()).activity;
+      check(
+        "expanding and collapsing the rail's window is composition only — no write action fires",
+        railBack.shown === railShownExpected && c5Writes() === writesBeforeExpand,
+        `window back to ${railBack.shown}; non-read action calls ${writesBeforeExpand} -> ${c5Writes()}`
+      );
+    }
+  }
+  const quietRail = c5Repositories.find((entry) => {
+    const events = (entry.recentActivity ?? []).length;
+    return events > 0 && events <= RAIL_ACTIVITY_LEAD;
+  });
+  if (!quietRail) {
+    skip(
+      "a repository whose whole activity fits the lead states no remainder",
+      `every repository here has either no events or more than ${RAIL_ACTIVITY_LEAD}, so the case is absent`
+    );
+  } else {
+    await c5Select(quietRail.repository.fullName);
+    const quietRead = (await readC5()).activity;
+    check(
+      "a repository whose whole activity fits the lead states no remainder",
+      quietRead.note === "" &&
+        quietRead.shown === quietRail.recentActivity.length &&
+        quietRead.total === quietRail.recentActivity.length,
+      `${quietRead.shown} of ${quietRead.total} shown, note ${JSON.stringify(quietRead.note)}`
+    );
+  }
+
+  // Leave the pass where the C9 traversal left it: the default view is what the final screenshot shows.
+  await root.locator('[data-rd-view-option="topics"]').click();
+  await page.waitForTimeout(350);
 }
 
 const screenshot = `${OUT}/research-dashboard-${WRITE ? "write" : "read"}.png`;
