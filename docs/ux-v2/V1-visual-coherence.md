@@ -3,12 +3,15 @@
 **Unit:** V1. Its own acceptance record, separate from UX-v2 composition acceptance (which closed at
 `ux-v2-composition-complete`). Nothing here revises C1–C5.
 
-**Status:** Phase 2 complete and committed; **at the visual checkpoint**. Phase 3 has not started.
+**Status:** **Phase 3 in progress.** V1-A is landed for `A3` (index grammar), `A4` (one index width, restated as
+the shared row grammar), `A5` (surfaces), `A6` (hierarchy), `A7` (plan header/rows), `A8` (problem rows), plus
+`A1`'s Progress half. Open: `A1`'s Topics half, `A2`'s remainder, all of `V1-B`. The served-instance pass
+(Phase 4) has **not** run.
 
-**Measured build:** `ui/app.js` sha256 `6febf4168c5b6912…`, in the commit that carries this document
-(`git log -1 -- docs/ux-v2/V1-visual-coherence.md`), served to the preview harness (`harness/preview/`, host
-runtime, no instance). The digest is quoted rather than a short hash because a hash inside its own commit is
-self-referential and moves on every amend.
+**Measured build:** `ui/app.js` sha256 `e8e2353871a455c3…` — the digest of the build served to the preview
+harness (`harness/preview/`, host runtime, no instance) as of `bb15eec`. The digest is quoted rather than a
+short hash because a hash inside its own commit is self-referential and moves on every amend. **A preview
+render is a visual instrument, not evidence**; the served-instance pass is what closes V1.
 
 ## What this pass is
 
@@ -122,9 +125,55 @@ bun run preview:fidelity -- --dataset fixture      # crowded fixture
 Generated output: `docs/ux-v2/fidelity/preview/` is **not tracked** (policy set 2026-10-03, AGENTS.md §*What is
 tracked*) — a montage is rebuilt from the source, never committed.
 
-## At the checkpoint (what Phase 3 inherits)
+## Phase 3 — what landed, and what each item measured
 
-Phase 3 is the row-by-row pass over twelve observed rows, split **V1-A** (coherence-critical: the ones the
-review's own table names) and **V1-B** (polish). It is expected to shrink: several spacing complaints were
-symptoms of the dead token, and the axis rows are now one grammar. It starts after the visual checkpoint, and
-only the items that survive it get executed.
+| Item | What it was | Measured |
+|---|---|---|
+| **A7** | the plan header rendered as the run-together `PLAN · 2 STEPS1 of 2 done` — two spans in a 4px cluster | one row: label left, `1 of 2 done` right, same baseline |
+| **A4** | the rail was `flex: 0 1 15rem; min-width: 12rem`, with a Progress-local `16rem` override on top | one basis, non-shrinking: index **240px in every view at 1440 and at 1280**; protected invariants held (dominance **1.67× / 1.66×**); no wrap |
+| **A5** | Progress was the page's only detail pane with no card around it — one 1px left rule instead | computes the reference Card's surface **exactly** (1px, 14px radius, white, same shadow); content sits at **left+25 / top+25**, identical to the reference head |
+| **A6** | two rules set the rail headline; the survivor left the event headline **heavier than the axis's own reading claim** | one rule; the claim now outranks the event reporting it |
+| **A8** | only `[aria-pressed="true"]` had a surface, so a selected row read as the only row that existed | base = the outline the row already reserved, selection = the fill: **2 of 3 rows transparent, 1 of 3 filled**, border on all three |
+| **A1** (Progress) | the pane's title element carried the state badge *inside* it | **`verify-page.mjs:4818` `detailTitle === selectedRowTitle`: false → true** — see below |
+| **A4 restated** | a title and a right-aligned recency shared line 1 of a fixed-240px rail | title takes the whole line, recency joins the metadata line. DECISIONS §14.6 carries the before/after row heights and the honest **partial win** read |
+
+Three self-corrections the render made, all kept in the record: **A8**'s first attempt gave the base the same
+`--muted` fill the selection used, so all three rows computed `oklch(0.97 0 0)` and selection kept only its
+border — a change that was technically consistent and visually worse, caught by measuring rather than looking.
+**A6**'s "Problem statement +1 weight" was taken as the *relationship* the item names, not as a literal fifth
+weight step, because the statement already sits at this scale's top. **A4 restated** is recorded as a partial
+win: two rails carry one more line, and the ruling was to accept that over guaranteeing an extra line
+everywhere.
+
+## Carried into Phase 4 — an explicit reconciliation, not a footnote
+
+The A1 Progress fix turned `verify-page.mjs:4818`'s strict equality from false to true **in the preview**. A
+preview render is a visual instrument, not evidence, so this does **not** close the finding — it is carried into
+the served-instance pass as a named reconciliation:
+
+- **The served corpus pass is green on that check** → the accepted record's path differed from what the preview
+  exposed. Record *what* differed.
+- **It fails on the same equality** → the historical accepted record was inconsistent with the current
+  executable check. Record that inconsistency.
+- **Either way the discrepancy is recorded, not smoothed over.** A green result does not retroactively make the
+  pre-change measurement wrong, and a red one does not make the fix wrong. The strict title equality is a
+  correctness signal, not a styling preference.
+
+Also pending on that run, unchanged: the **focus pass and its `--negative-control`** (see above) — no run on
+this machine could exercise it.
+
+## Open in Phase 3
+
+- **A1, Topics half** — replace Topics' private `DetailHeader` copy with the shared component. Preserve the
+  existing content order (`description` → approved summary) in the `children` slot; the shared component
+  supplies geometry and the title/badge structure only, and Topics is **not** forced into another view's slot
+  shape. Both load-bearing hooks must survive: `[data-rd-detail-header]` (read position-agnostically,
+  `verify-page.mjs:5508`) and the head measured at `[data-rd-progress-detail] .rd-detail-head` (`:4786`).
+  **Prerequisite (ruled):** capture the current DOM nesting of Topics' private header first, and classify each
+  child as **header-owned · detail-body-owned · rail/body content · harness-hook-bearing** — so the adoption is
+  mechanical rather than interpretive. This is deliberately not started in the session that found the Progress
+  defect.
+- **A2 remainder** — one event-date format; one footer component; the footer **omitted** when the complete
+  result set fits rather than printing a meaningless `5 of 5 shown`; no semantic change to activity scope.
+- **V1-B B1–B4** — polish (support band, chip saturation, rail section spacing, Overview card anatomy), not a
+  new architecture pass.
