@@ -100,6 +100,13 @@ Do not use for: reading a record (that is `acceptance-pass`), or editing docs on
    perform the switch, or set it out-of-band, then confirm. A `delete`-mode copy restored over a live store (or a
    data root built by a root-run restore — these are `root:root 777`) reintroduces it, which is why the fix worth
    having is that a failed mode switch must not be fatal, not a reordered pragma.
+9. **`src/ui.tsx` holds the whole stylesheet in a template literal: a backtick inside a CSS comment ends the
+   CSS.** Writing a value as `` `flex: 0 1 15rem` `` in a comment inside that block closes the string, and the
+   break surfaces as `tsc` errors pointing at the *CSS* line (`An identifier or keyword cannot immediately
+   follow a numeric literal`) — nowhere near the comment that caused it. Quote values with plain words or
+   single quotes in that block; never backticks. Related: the patch tool's LSP read of the same region reports
+   TypeScript errors for perfectly valid CSS, because it parses the text as code. `bun run typecheck` is the
+   authority — it is the only thing that has caught the real breakage, and only it can clear the false one.
 
 ## Verification
 
