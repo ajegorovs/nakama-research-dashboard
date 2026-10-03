@@ -121,7 +121,7 @@ repo), but a tool that drives removed controls would rot into a lying script. It
 - `docs/ux-v2/contract/interaction-spec.md` (and the estate copy) — **frozen, untouched.** Its
   "Add Topic / Edit Fields" checklist item is the item the acceptance checklist already words the other
   way; the clarification is in `DECISIONS.md` §1, per the ruling.
-- `docs/layout-pr/README.md`, `docs/layout-rework-brief.md` — dated stage records; left as written.
+- `docs/layout-pr/README.md` (retired from `main` 2026-10-03; preserved at tag `pre-ux-v2`), `docs/layout-rework-brief.md` — dated stage records; left as written.
 - `docs/corpus/README.md` — its `dashboard-detail.png` caveat ("the only route into a topic's axes is
   `Edit fields`") carried a one-line supersession note, because that README is a living document. The
   regenerated detail capture no longer shows an editor.

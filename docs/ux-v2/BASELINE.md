@@ -40,7 +40,7 @@ Two sets are kept, deliberately:
 | Set | What it is | Where |
 |---|---|---|
 | Pre-layout-rework | What the layout review of 2026-10-01 was written against | `docs/screenshots/`, `docs/layout-fixtures/screenshots/` |
-| Post-layout-rework (PR #1) | The state v2 builds on | `docs/layout-pr/after-*/`, with its transcripts in `docs/layout-pr/verify-*.txt` |
+| Post-layout-rework (PR #1) | The state v2 builds on | `docs/layout-pr/after-*/`, with its transcripts in `docs/layout-pr/verify-*.txt` — retired from `main` 2026-10-03, preserved at tag `pre-ux-v2` |
 
 Measured density from PR #1, for comparison after the redesign: corpus topic detail **4374 px** at
 1440 px width (down from 4496), fixture detail 2529 px (from 2648) — i.e. the axis compression saved
@@ -50,6 +50,11 @@ Measured density from PR #1, for comparison after the redesign: corpus topic det
 `docs/screenshots/` and `docs/layout-pr/` to disappear. They are kept as they are, because promoting now
 would destroy the pre-rework set that the review was written against and v2 re-captures everything at
 U11 anyway. The promotion happens at U11, against the finished v2 UI.
+
+**Superseded 2026-10-03.** The promotion this paragraph deferred has happened: `docs/layout-pr/` was
+removed from `main` on 2026-10-03, exactly as its own README called for once the rework was accepted.
+The post-rework captures and their transcripts remain in git at tag `pre-ux-v2`
+(`git show pre-ux-v2:docs/layout-pr/README.md`).
 
 ## Datasets
 

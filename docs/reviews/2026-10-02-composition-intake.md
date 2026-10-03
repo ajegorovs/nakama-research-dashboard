@@ -176,7 +176,7 @@ Original finding, as recorded at intake:
 `ajegorovs/nakama-research-dashboard` is **public**, and this host's real device name + tailnet suffix
 (`<box>.<tailnet>.ts.net` — the values are the ones the estate's AGENTS.md legend scrubs) are committed in
 **11 tracked files**: `docs/ux-v2/fidelity/REVIEW.md`,
-`docs/ux-v2/STATUS.md`, `docs/ux-v2/fidelity/side-by-side/*.html` (5), `docs/layout-pr/verify-*.txt` (4) —
+`docs/ux-v2/STATUS.md`, `docs/ux-v2/fidelity/side-by-side/*.html` (5), `docs/layout-pr/verify-*.txt` (4; since retired from `main` 2026-10-03, preserved at tag `pre-ux-v2`) —
 and **hardcoded in the generator** `harness/fidelity/montage.mjs:64`, so re-running the instrument
 reproduces the leak. The montage **PNGs bake the string into the rendered caption** (confirmed by eye on
 `side-by-side/people.png`); a string grep cannot find it there.
