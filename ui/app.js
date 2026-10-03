@@ -130,14 +130,48 @@ var css = `
     gap: var(--rd-gap-block);
     grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
   }
-  [data-plugin-id="research-dashboard"] .rd-landing-column { display: grid; gap: 10px; }
+  [data-plugin-id="research-dashboard"] .rd-landing-column { display: grid; gap: 12px; }
+  /* The column head is a section, not a floating line: its label sits on a rule, so the two columns read
+     as two labelled sections of one page rather than two loose stacks. */
   [data-plugin-id="research-dashboard"] .rd-landing-head {
     align-items: baseline; display: flex; gap: 8px; justify-content: space-between;
+    padding-bottom: 8px; border-bottom: var(--rd-edge);
   }
-  [data-plugin-id="research-dashboard"] .rd-landing-card { display: grid; gap: 6px; }
+  [data-plugin-id="research-dashboard"] .rd-landing-head .rd-side-title { font-size: var(--rd-body); }
+  /* The card is a surface — white, edged, rounded, with room to breathe. Before this the landing cards
+     were bare text on the page background, which is exactly what read as "flat" beside the prototype's
+     panel cards. */
+  [data-plugin-id="research-dashboard"] .rd-landing-card {
+    background: var(--card, #fff);
+    border: var(--rd-edge);
+    border-radius: var(--radius-md, 10px);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    display: grid;
+    gap: 8px;
+    padding: 12px 14px;
+  }
+  /* The card head: name + description as one block, and the age stated beside it in the prototype's own
+     age-box grammar (a strong age over a quiet label) instead of as a third muted line. */
   [data-plugin-id="research-dashboard"] .rd-landing-top {
-    align-items: baseline; display: flex; gap: 8px; justify-content: space-between;
+    align-items: flex-start; display: flex; gap: 12px; justify-content: space-between;
   }
+  [data-plugin-id="research-dashboard"] .rd-landing-title { display: grid; gap: 2px; min-width: 0; }
+  [data-plugin-id="research-dashboard"] .rd-landing-title .rd-meta { margin-top: 0; }
+  [data-plugin-id="research-dashboard"] .rd-age-box {
+    display: grid; gap: 1px; text-align: right; white-space: nowrap;
+  }
+  [data-plugin-id="research-dashboard"] .rd-age-box > .rd-meta { margin-top: 0; }
+  /* The event band: the prototype's Last event block — an eyebrow over the event's own line, on a soft
+     inset. Rendered only where the payload carries a real event; a card with none states what it does
+     carry rather than being given a fabricated title. */
+  [data-plugin-id="research-dashboard"] .rd-event-band {
+    display: grid; gap: 2px;
+    background: var(--muted, rgba(127, 127, 127, 0.06));
+    border-radius: calc(var(--radius-sm, 6px));
+    padding: 8px 10px;
+  }
+  [data-plugin-id="research-dashboard"] .rd-event-band .rd-section { font-size: 10px; }
+  [data-plugin-id="research-dashboard"] .rd-event-band .rd-meta { margin-top: 0; }
   [data-plugin-id="research-dashboard"] .rd-landing-pills { display: flex; flex-wrap: wrap; gap: 4px; }
   /* The shell title as the way home: the same type as the heading it replaces, with nothing of a tab about
      it — no border, no fill, no pressed state. It underlines on hover and that is the whole affordance. */
@@ -335,6 +369,9 @@ var css = `
   letter-spacing: 0.04em;
   opacity: var(--rd-quiet);
   font-weight: 600;
+  /* On a heading element (the Progress top-grid's eyebrows) this keeps the label tight; on a span it is
+     inert. */
+  margin: 0;
 }
 [data-plugin-id="research-dashboard"] .rd-axis-detail {
   /* An axis inside an open card is not a second card: it takes the same left rule the axis index uses. */
@@ -400,10 +437,16 @@ var css = `
   flex: 0 1 15rem;
   min-width: 12rem;
   margin: 0;
-  padding: 0;
+  /* The index is a surface, not a bare list — the prototype's panel. Rows sit inside on a small inset,
+     so a pressed row reads as a selected row within a panel rather than a stray rectangle on the page. */
+  padding: 5px;
   list-style: none;
   display: grid;
-  gap: var(--rd-gap-row);
+  gap: 2px;
+  align-content: start;
+  background: var(--card, #fff);
+  border: var(--rd-edge);
+  border-radius: var(--radius-md, 10px);
 }
 [data-plugin-id="research-dashboard"] .rd-index-item {
   width: 100%;
@@ -413,11 +456,18 @@ var css = `
   background: none;
   border: 1px solid transparent;
   border-radius: 8px;
-  padding: 6px 8px;
+  padding: 8px 10px;
   cursor: pointer;
 }
 [data-plugin-id="research-dashboard"] .rd-index-item:hover {
   border-color: var(--border);
+}
+/* An index row's age stays whole at the row's end and never breaks mid-label; the counts line below it
+   is free to wrap. */
+[data-plugin-id="research-dashboard"] .rd-index-item .rd-row { align-items: baseline; }
+[data-plugin-id="research-dashboard"] .rd-index-item .rd-row > .rd-meta {
+  margin-top: 0;
+  white-space: nowrap;
 }
 /* The Progress composition, nested the way the prototype nests it: the index, then ONE selected-subject pane
    holding the header and three grouped rows. Previously the Problem and Activity columns were the index's own
@@ -537,7 +587,7 @@ var css = `
 [data-plugin-id="research-dashboard"] .rd-tags { gap: var(--rd-gap-tight); }
 /* An entity tag: navigation, not a filter — it reads as a chip because it goes somewhere. */
 [data-plugin-id="research-dashboard"] .rd-tag {
-  background: none;
+  background: var(--muted, rgba(127, 127, 127, 0.08));
   border: var(--rd-edge);
   border-radius: 999px;
   color: inherit;
@@ -605,6 +655,12 @@ var css = `
   min-width: 20rem;
   display: grid;
   gap: var(--rd-gap-block);
+  /* The detail is the same card the People and Repositories panels get from the host; the Topics pane
+     draws its own, so the three views read as one surface. */
+  background: var(--card, #fff);
+  border: var(--rd-edge);
+  border-radius: var(--radius-md, 10px);
+  padding: 16px 18px;
 }
 [data-plugin-id="research-dashboard"] .rd-detail-head {
   display: grid;
@@ -1488,6 +1544,23 @@ function apply(ctx) {
       badge: entry.person.githubLogin ? /* @__PURE__ */ React.createElement("span", {
         className: "rd-muted"
       }, "@", entry.person.githubLogin) : null,
+      context: entry.topics.length > 0 || relatedRepositories.length > 0 ? /* @__PURE__ */ React.createElement(React.Fragment, null, entry.topics.slice(0, 4).map((involvement) => /* @__PURE__ */ React.createElement(EntityTag, {
+        compact: true,
+        id: involvement.topic.id,
+        key: involvement.topic.id,
+        label: involvement.topic.name,
+        onOpen: onOpenEntity,
+        type: "topic"
+      })), entry.topics.length > 4 ? /* @__PURE__ */ React.createElement("span", {
+        className: "rd-muted"
+      }, "+", entry.topics.length - 4, " more") : null, relatedRepositories.slice(0, 3).map((repository) => /* @__PURE__ */ React.createElement(EntityTag, {
+        compact: true,
+        id: repository.id,
+        key: repository.id,
+        label: repository.fullName,
+        onOpen: onOpenEntity,
+        type: "repository"
+      }))) : null,
       title: /* @__PURE__ */ React.createElement(CardTitle, null, entry.person.displayName)
     }, /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta",
@@ -1635,17 +1708,19 @@ function apply(ctx) {
       onClick: () => setSelectedId(entry.person.id),
       type: "button"
     }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-row"
+    }, /* @__PURE__ */ React.createElement("span", {
       className: "rd-strong"
     }, entry.person.displayName), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta",
-      "data-rd-person-context": "true"
-    }, involvementLine(entry)), /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta",
       "data-rd-person-recency": entry.attributable ? entry.lastActivityAt ?? "none" : "unattributable"
     }, entry.attributable ? entry.lastActivityAt ? /* @__PURE__ */ React.createElement(RecencyLabel, {
       at: entry.lastActivityAt,
       prefix: "last activity "
-    }) : "nothing attributed yet" : "no account mapped"))))), selected ? /* @__PURE__ */ React.createElement(PersonPanel, {
+    }) : "nothing attributed yet" : "no account mapped")), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta",
+      "data-rd-person-context": "true"
+    }, involvementLine(entry)))))), selected ? /* @__PURE__ */ React.createElement(PersonPanel, {
       entry: selected,
       onOpenEntity,
       windowDays
@@ -1701,16 +1776,22 @@ function apply(ctx) {
         key: entry.topic.id
       }, /* @__PURE__ */ React.createElement("div", {
         className: "rd-landing-top"
+      }, /* @__PURE__ */ React.createElement("div", {
+        className: "rd-landing-title"
       }, /* @__PURE__ */ React.createElement("h5", {
         className: "rd-strong",
         "data-rd-landing-name": entry.topic.id
-      }, entry.topic.name), /* @__PURE__ */ React.createElement("span", {
-        className: "rd-meta",
-        "data-rd-landing-recency": entry.topic.id
-      }, describeAge(entry.lastActivityAt), " · last recorded activity")), entry.topic.description ? /* @__PURE__ */ React.createElement("p", {
+      }, entry.topic.name), entry.topic.description ? /* @__PURE__ */ React.createElement("p", {
         className: "rd-meta",
         "data-rd-landing-description": entry.topic.id
-      }, entry.topic.description) : null, current ? /* @__PURE__ */ React.createElement("p", {
+      }, entry.topic.description) : null), /* @__PURE__ */ React.createElement("span", {
+        className: "rd-age-box",
+        "data-rd-landing-recency": entry.topic.id
+      }, /* @__PURE__ */ React.createElement("span", {
+        className: "rd-strong"
+      }, describeAge(entry.lastActivityAt)), /* @__PURE__ */ React.createElement("span", {
+        className: "rd-muted"
+      }, "last recorded activity"))), current ? /* @__PURE__ */ React.createElement("p", {
         className: "rd-current-work",
         "data-rd-landing-current-work": entry.topic.id
       }, current) : null, entry.axes.length > 0 ? /* @__PURE__ */ React.createElement("div", {
@@ -1725,7 +1806,7 @@ function apply(ctx) {
       }, "+", entry.axes.length - 3, " more") : null) : null, /* @__PURE__ */ React.createElement("p", {
         className: "rd-meta",
         "data-rd-landing-activity": entry.topic.id
-      }, countLabel(entry.activityCount, "event", "events"), " in the selected window ·", " ", entry.lastActivityAt ? `last activity ${describeAge(entry.lastActivityAt)}` : "no activity recorded yet"), entry.people.length > 0 || entry.repositories.length > 0 ? /* @__PURE__ */ React.createElement("div", {
+      }, countLabel(entry.activityCount, "event", "events"), " in the selected window", entry.lastActivityAt ? "" : " · no activity recorded yet"), entry.people.length > 0 || entry.repositories.length > 0 ? /* @__PURE__ */ React.createElement("div", {
         className: "rd-tags",
         "data-rd-landing-chips": entry.topic.id
       }, entry.people.map((person) => /* @__PURE__ */ React.createElement(EntityTag, {
@@ -1772,21 +1853,31 @@ function apply(ctx) {
         key: entry.repository.id
       }, /* @__PURE__ */ React.createElement("div", {
         className: "rd-landing-top"
+      }, /* @__PURE__ */ React.createElement("div", {
+        className: "rd-landing-title"
       }, /* @__PURE__ */ React.createElement("h5", {
         className: "rd-strong",
         "data-rd-landing-name": entry.repository.id
-      }, entry.repository.fullName), /* @__PURE__ */ React.createElement("span", {
-        className: "rd-meta",
-        "data-rd-landing-recency": entry.repository.id
-      }, describeAge(entry.lastActivityAt), " · last recorded activity")), entry.repository.description ? /* @__PURE__ */ React.createElement("p", {
+      }, entry.repository.fullName), entry.repository.description ? /* @__PURE__ */ React.createElement("p", {
         className: "rd-meta",
         "data-rd-landing-description": entry.repository.id
-      }, entry.repository.description) : null, latest ? /* @__PURE__ */ React.createElement("p", {
-        className: "rd-meta",
-        "data-rd-landing-last-event": entry.repository.id
+      }, entry.repository.description) : null), /* @__PURE__ */ React.createElement("span", {
+        className: "rd-age-box",
+        "data-rd-landing-recency": entry.repository.id
       }, /* @__PURE__ */ React.createElement("span", {
         className: "rd-strong"
-      }, latest.summary), " ·", " ", latest.sourceRef || latest.sourceType, " · ", describeAge(latest.occurredAt)) : null, entry.topics.length > 0 || entry.axes.length > 0 ? /* @__PURE__ */ React.createElement("div", {
+      }, describeAge(entry.lastActivityAt)), /* @__PURE__ */ React.createElement("span", {
+        className: "rd-muted"
+      }, "last recorded activity"))), latest ? /* @__PURE__ */ React.createElement("div", {
+        className: "rd-event-band",
+        "data-rd-landing-last-event": entry.repository.id
+      }, /* @__PURE__ */ React.createElement("span", {
+        className: "rd-section"
+      }, "Last event"), /* @__PURE__ */ React.createElement("span", {
+        className: "rd-strong"
+      }, latest.summary), /* @__PURE__ */ React.createElement("span", {
+        className: "rd-meta"
+      }, latest.sourceRef || latest.sourceType, " · ", describeAge(latest.occurredAt))) : null, entry.topics.length > 0 || entry.axes.length > 0 ? /* @__PURE__ */ React.createElement("div", {
         className: "rd-tags",
         "data-rd-landing-chips": entry.repository.id
       }, entry.topics.map((link) => /* @__PURE__ */ React.createElement(EntityTag, {
@@ -1879,6 +1970,23 @@ function apply(ctx) {
       }) : /* @__PURE__ */ React.createElement("span", {
         className: "rd-muted"
       }, "no activity recorded yet")),
+      context: selected.topics.length > 0 || selected.axes.length > 0 ? /* @__PURE__ */ React.createElement(React.Fragment, null, selected.topics.map((link) => /* @__PURE__ */ React.createElement(EntityTag, {
+        compact: true,
+        id: link.topic.id,
+        key: link.topic.id,
+        label: link.topic.name,
+        onOpen: onOpenEntity,
+        type: "topic"
+      })), selected.axes.slice(0, 4).map((axis) => /* @__PURE__ */ React.createElement(EntityTag, {
+        compact: true,
+        id: axis.id,
+        key: axis.id,
+        label: axis.title,
+        onOpen: onOpenEntity,
+        type: "axis"
+      })), selected.axes.length > 4 ? /* @__PURE__ */ React.createElement("span", {
+        className: "rd-muted"
+      }, "+", selected.axes.length - 4, " more") : null) : null,
       title: /* @__PURE__ */ React.createElement(CardTitle, null, selected.repository.fullName)
     }, /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta"
@@ -2156,13 +2264,17 @@ function apply(ctx) {
       onClick: () => setSelectedAxisId(row.id),
       type: "button"
     }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-row"
+    }, /* @__PURE__ */ React.createElement("span", {
       className: "rd-strong"
     }, row.title), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, `last activity ${describeAge(row.recencyAt)}`)), /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta"
     }, /* @__PURE__ */ React.createElement(StateBadge, {
       confidence: row.stateConfidence,
       state: row.state
-    }), ` · ${row.topicName} · ${problemCountLine(row)} · ${row.stale ? "stale · " : ""}last activity ${describeAge(row.recencyAt)}`))))), problemsMode && problemRows.length === 0 ? /* @__PURE__ */ React.createElement("p", {
+    }), ` · ${row.topicName} · ${problemCountLine(row)}${row.stale ? " · stale" : ""}`))))), problemsMode && problemRows.length === 0 ? /* @__PURE__ */ React.createElement("p", {
       className: "rd-muted",
       "data-rd-problem-index-empty": "true"
     }, "No problems yet.") : null, !problemsMode && progress && progress.axes.axes.length === 0 ? /* @__PURE__ */ React.createElement("p", {
@@ -2210,7 +2322,7 @@ function apply(ctx) {
       "data-rd-progress-problem-open": activeAxis?.openProblems ?? 0,
       "data-rd-progress-problem-shown": shownProblem?.id ?? ""
     }, /* @__PURE__ */ React.createElement("h3", {
-      className: "rd-strong",
+      className: "rd-section",
       "data-rd-progress-problem-heading": "true"
     }, problemsMode ? "Problem" : `Open problems (${activeAxis?.openProblems ?? 0})`), problemsMode && shownProblem ? /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta",
@@ -2244,7 +2356,7 @@ function apply(ctx) {
       "data-rd-progress-feed-count": feed?.eventCount ?? 0,
       "data-rd-progress-feed-mode": indexMode
     }, /* @__PURE__ */ React.createElement("h3", {
-      className: "rd-strong"
+      className: "rd-section"
     }, `Activity (${activeAxis?.activityInWindow ?? 0})`), problemsMode && activeAxis ? /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta",
       "data-rd-progress-feed-parent": "true"
