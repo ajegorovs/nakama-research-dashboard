@@ -36,6 +36,17 @@ side-by-side/` shape the committed `fixture/` pack uses, so the corpus and fixtu
 other. To capture against an already-running preview on another port:
 `bun run preview:capture -- --url http://127.0.0.1:3011/preview.html`.
 
+The capture does not photograph each view's default row — it *selects a representative*: the repository
+whose detail draws the most work, then the Progress axis whose index row carries the most open problems and,
+within it, the problem with the most support (repository threads, evidence, steering, the plan step it sits
+on). That is an **instrument step, not the app's behaviour**: the page still opens every view on the
+projection's own first row, and `bun harness/preview/capture.mjs --no-select` photographs exactly that
+default. Selection exists because the first row is not always the composition worth comparing — the
+fixture's Repositories view opens on `fixture/0-bare-repository`, which no topic and no axis names, and the
+corpus's Progress view opens on a completed axis with no open problem. The capture prints what it selected
+and, where the dataset carries a populated subject, refuses to write unless that populated detail is what
+ended up on screen.
+
 The browser is resolved by `harness/chromium.mjs` (env `CHROMIUM_EXECUTABLE` → the Playwright cache, whatever
 revision is present → a system chromium), so nothing downloads and no user path is hardcoded.
 
@@ -70,17 +81,27 @@ exits 2 if it cannot find Vite there.
 ## The two datasets
 
 Fixtures are **built, not written**: `make-fixtures.mjs` creates a database, applies the shipped migrations,
-replays a dataset's own action transcript through the **real action layer** (`src/actions.ts`), and then asks
+replays a dataset's own action transcript through the **real action layer** (`src/actions.ts`), then asks
 that layer for the read payloads. A hand-written fixture JSON would drift from what the server answers, and
 then the preview would lie about the one thing it exists to show.
 
+Two of a dataset's states no single write can express, because a problem is named by an id the store mints:
+the corpus's unmerged pull requests, and the fixture's Fixture E. Both are applied in a second pass that
+reads the ids back from the projection — and neither is restated here. `corpus-derivation.mjs` slices the
+derivation out of `harness/replay-corpus.mjs`, and `fixture-e-calls.mjs` slices `applyFixtureE` (and its
+constants) out of `harness/apply-layout-fixture.mjs`, so the preview runs the *same* derivation the instance
+is seeded from. A preview that invented its own problems would drift from the corpus the moment either changed.
+
 | dataset | source | what it exercises |
 | --- | --- | --- |
-| `corpus` (default) | `docs/corpus/transcript/actions.jsonl` — the corpus's own 695-call record | the real, public corpus: what the page looks like on data nobody chose |
-| `fixture` | the `FIXTURE` array in `harness/apply-layout-fixture.mjs`, read out of that file | the edge states: a blocked axis with a blocker sentence, an inferred state, an axis with nothing behind it, a person with no mapped account, a crowded card |
+| `corpus` (default) | `docs/corpus/transcript/actions.jsonl` — the corpus's own 695-call record | the real, public corpus: what the page looks like on data nobody chose; its **three problems** derived from its own unmerged pull requests (two open, one closed-without-merging read as resolved) |
+| `fixture` | the `FIXTURE` array in `harness/apply-layout-fixture.mjs` plus its `applyFixtureE`, read out of that file | the edge states: a blocked axis with a blocker sentence, an inferred state, an axis with nothing behind it, a person with no mapped account, a crowded card — and **Fixture E**: a problem on a plan step on two repositories with a person, an event, an evidence record and a steering note; a problem with none of those; a closed-out problem |
 
 `harness/preview/layout-fixture-calls.mjs --check` prints what it read from that file, so a change there
-that breaks the read shows up as a smaller dataset instead of a silently empty one.
+that breaks the read shows up as a smaller dataset instead of a silently empty one; `fixture-e-calls.mjs`
+prints the Fixture E constants and function it read. To assert the payloads themselves, run
+`bun harness/preview/test-fixtures.mjs` — it builds both datasets and checks that each Progress payload
+carries its problem rows, in every window.
 
 Both windows the page offers (7 / 14 / 30 / all time) are built for real, because the window is the page's
 only query-level control and a preview where clicking "30 days" errors is lying about the control.
@@ -94,8 +115,10 @@ only query-level control and a preview where clicking "30 days" errors is lying 
   with the plugin's own error path. A preview that pretended a write landed would be lying about the one
   thing a read-only instrument cannot check — use `harness:write` for the write composition.
 - **Light theme only** (the committed screenshots are light). `ctx.theme` is passed as `light`.
-- **Fixture E is not replayed** (see `layout-fixture-calls.mjs`): it needs server-generated ids resolved
-  between two calls, so the fixture dataset shows no problem rows. The corpus dataset does.
+- **Fixture E is replayed locally** (see `fixture-e-calls.mjs`): it needs store-generated ids resolved
+  between two calls, and the local action layer mints them, so the preview runs the fixture's own
+  `applyFixtureE` against `src/actions.ts` and the fixture dataset shows its problem rows too. Only the
+  *transport* differs from `harness/apply-layout-fixture.mjs` — the write itself is that file's.
 - **`harness/` is outside the typechecked program** (`tsconfig.json` includes `src` and `types`), so nothing
   here can break `bun run check` — and nothing here is typechecked either.
 - **`fixtures.json` is generated and git-ignored** (the corpus one is ~845 KB).
@@ -119,6 +142,17 @@ On 2026-10-03, on a bare clone, with the checkout above at `v0.4.31`:
   exactly what both committed transcripts assert (`the shell opens on the default landing`, `the landing
   shows both aggregation columns`). No console or page errors; the only failed request is the browser's
   automatic `favicon.ico`.
+- **Progress is populated on both datasets** (measured on the same 2026-10-03 checkout): `corpus` → 3
+  problems, 2 open / 1 resolved, each on its own repository and event, derived from its own unmerged pull
+  requests; `fixture` → Fixture E's 3 problems (one on a plan step on two repositories with a person, two
+  events and a steering note; one with no step, no repository and no artifact; one closed out) above two
+  plans. `bun harness/preview/test-fixtures.mjs` asserts this for every window and passes.
+- **The capture selects a representative row per view, not the default** (same checkout): for `corpus` it
+  photographs `ajegorovs/udv-echo-process` and the `Signal analysis` axis carrying its two open problems
+  (the default is the completed `Acquisition` axis, with no open problem); for `fixture` it photographs
+  `fixture/crowded-card` (the default is the bare repository) and Fixture E's problem on `Fixture step 2`,
+  with repository threads, evidence and steering on screen. `--no-select` still produces the defaults, which
+  is what keeps the selection an instrument and not a change to the page.
 
 ## Preview vs prototype, one command
 
@@ -129,5 +163,6 @@ the existing `harness/fidelity/render-prototypes.mjs`, and builds the labelled m
 `ui/app.js`'s sha256 — never a served URL — so the artifact cannot be mistaken for a served-UI capture.
 
 Boundaries, restated for the montage: it compares *composition and styling*, not the served page; it is only
-as current as `ui/app.js` at capture time (the printed sha256 is the record); and it does not exercise writes,
-the light/dark theme switch, or Fixture E's problem rows (see above).
+as current as `ui/app.js` at capture time (the printed sha256 is the record); and it does not exercise writes
+or the light/dark theme switch. The datasets' derived problem/plan rows (Fixture E, and the corpus's own
+unmerged-PR problems — see above) are present in the payloads the capture mounts.

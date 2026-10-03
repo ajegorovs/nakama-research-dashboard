@@ -10,10 +10,12 @@
  * `person`) and the `FIXTURE` array literal and evaluates exactly those declarations. Nothing in
  * `apply-layout-fixture.mjs` is modified, and no network or environment is touched.
  *
- * Boundary, stated: this is the `FIXTURE` array only — the dataset the fixture instance is seeded from
- * first. **Fixture E** (the open problem, its plan steps and the steering note) is applied by that file's
- * own `applyFixtureE`, which resolves server-generated ids between two HTTP calls; it is not replayed
- * here, so the preview's Progress view shows no problem rows on this dataset. The corpus dataset does.
+ * Boundary, stated: this is the `FIXTURE` array only — the plain `reconcile_topic` calls the fixture
+ * instance is seeded from first. **Fixture E** (the open problem, its plan steps and the steering note) is
+ * applied by that file's own `applyFixtureE`, which resolves store-minted ids between two calls; it is read
+ * separately, from the same file, by `harness/preview/fixture-e-calls.mjs`, and applied after this array.
+ * The preview's Progress view therefore shows Fixture E's problem rows too. The corpus dataset derives its
+ * own problems the same way, out of `harness/replay-corpus.mjs`.
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
