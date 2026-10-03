@@ -11,6 +11,8 @@
  * Datasets:
  *   corpus  (default) — `docs/corpus/transcript/actions.jsonl`, the corpus's own record (695 calls).
  *   fixture           — the synthetic edge-state pack declared in `harness/apply-layout-fixture.mjs`.
+ *   scale             — the oversized deterministic pack (many topics/axes/problems, long labels, uneven
+ *                       activity, empty subjects) declared in `harness/preview/scale-fixture-calls.mjs`.
  *
  * Nothing here touches a server: the store is testable without a host, and that is the whole trick.
  *
@@ -102,8 +104,15 @@ if (DATASET === "corpus") {
     path.join(HERE, "layout-fixture-calls.mjs")
   );
   writes = layoutFixtureCalls();
+} else if (DATASET === "scale") {
+  // The oversized dataset: a deterministic third dataset, declared as reconcile_topic payloads only and
+  // replayed through the same action layer as the other two (see scale-fixture-calls.mjs).
+  const { scaleFixtureCalls } = await import(
+    path.join(HERE, "scale-fixture-calls.mjs")
+  );
+  writes = scaleFixtureCalls();
 } else {
-  console.error(`make-fixtures: --dataset wants 'corpus' or 'fixture', got '${DATASET}'`);
+  console.error(`make-fixtures: --dataset wants 'corpus', 'fixture' or 'scale', got '${DATASET}'`);
   process.exit(2);
 }
 
@@ -146,6 +155,17 @@ if (DATASET === "corpus" && derived.derivedProblems.length > 0) {
   const refused = await applyFixtureE({});
   if (refused !== 0) {
     throw new Error("make-fixtures: Fixture E could not be applied — see the fixture E line above");
+  }
+  derivedProblems =
+    (await call("get_progress", { activitySinceDays: 0 })).problems?.problems?.length ?? 0;
+} else if (DATASET === "scale") {
+  // The oversized dataset's second pass: plan-step / person / evidence / steering links and a recorded
+  // resolution, all on store-minted ids read back from the projection (see scale-fixture-calls.mjs).
+  const { applyScaleLinksWith } = await import(path.join(HERE, "scale-fixture-calls.mjs"));
+  const applyScaleLinks = applyScaleLinksWith(async (key, input) => run(input, context(key)));
+  const refused = await applyScaleLinks({});
+  if (refused !== 0) {
+    throw new Error("make-fixtures: the scale fixture links could not be applied — see the scale fixture line above");
   }
   derivedProblems =
     (await call("get_progress", { activitySinceDays: 0 })).problems?.problems?.length ?? 0;

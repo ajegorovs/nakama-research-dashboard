@@ -16,6 +16,7 @@ credentials.
 ```bash
 bun run preview                    # corpus dataset, http://127.0.0.1:3010/preview.html
 bun run preview:fixture            # the synthetic layout fixture
+bun harness/preview/run.mjs --dataset scale --port 3012   # the oversized deterministic dataset
 bun harness/preview/run.mjs --checkout /path/to/nakama --port 3011 --rebuild --watch
 ```
 
@@ -28,8 +29,14 @@ To capture the preview and build a montage against the approved prototypes, in o
 ```bash
 bun run preview:fidelity                          # build, serve, capture, montage (corpus)
 bun run preview:fidelity -- --dataset fixture     # the fixture dataset
+bun run preview:fidelity -- --dataset scale       # the oversized dataset
 bun run preview:fidelity -- --no-rebuild --full   # skip the build; also write full-page PNGs
 ```
+
+The capture route works against any of the three datasets: point it at a running preview with
+`bun harness/preview/capture.mjs --url http://127.0.0.1:3012/preview.html --out <dir>`, which writes the
+five-view screenshots wherever `--out` says — useful for the scale dataset without landing new artifacts in
+the committed `docs/ux-v2/fidelity/preview/` tree.
 
 Artifacts land in `docs/ux-v2/fidelity/preview/<dataset>/` in the same `prototype-1440x900/ · current-1440x900/ ·
 side-by-side/` shape the committed `fixture/` pack uses, so the corpus and fixture previews sit beside each
@@ -84,7 +91,7 @@ cd ~/Repos/nakama && bun install
 Default checkout is `$NAKAMA_CHECKOUT` or `~/Repos/nakama`; `run.mjs` says which names it looked for and
 exits 2 if it cannot find Vite there.
 
-## The two datasets
+## The three datasets
 
 Fixtures are **built, not written**: `make-fixtures.mjs` creates a database, applies the shipped migrations,
 replays a dataset's own action transcript through the **real action layer** (`src/actions.ts`), then asks
@@ -92,22 +99,25 @@ that layer for the read payloads. A hand-written fixture JSON would drift from w
 then the preview would lie about the one thing it exists to show.
 
 Two of a dataset's states no single write can express, because a problem is named by an id the store mints:
-the corpus's unmerged pull requests, and the fixture's Fixture E. Both are applied in a second pass that
-reads the ids back from the projection — and neither is restated here. `corpus-derivation.mjs` slices the
-derivation out of `harness/replay-corpus.mjs`, and `fixture-e-calls.mjs` slices `applyFixtureE` (and its
-constants) out of `harness/apply-layout-fixture.mjs`, so the preview runs the *same* derivation the instance
-is seeded from. A preview that invented its own problems would drift from the corpus the moment either changed.
+the corpus's unmerged pull requests, the fixture's Fixture E, and the scale dataset's problem links. Each is
+applied in a second pass that reads the ids back from the projection — and none is restated here.
+`corpus-derivation.mjs` slices the derivation out of `harness/replay-corpus.mjs`, `fixture-e-calls.mjs`
+slices `applyFixtureE` (and its constants) out of `harness/apply-layout-fixture.mjs`, and
+`scale-fixture-calls.mjs` declares the oversized dataset and its own id-resolving pass. A preview that
+invented its own problems would drift from the corpus the moment either changed.
 
 | dataset | source | what it exercises |
 | --- | --- | --- |
 | `corpus` (default) | `docs/corpus/transcript/actions.jsonl` — the corpus's own 695-call record | the real, public corpus: what the page looks like on data nobody chose; its **three problems** derived from its own unmerged pull requests (two open, one closed-without-merging read as resolved) |
 | `fixture` | the `FIXTURE` array in `harness/apply-layout-fixture.mjs` plus its `applyFixtureE`, read out of that file | the edge states: a blocked axis with a blocker sentence, an inferred state, an axis with nothing behind it, a person with no mapped account, a crowded card — and **Fixture E**: a problem on a plan step on two repositories with a person, an event, an evidence record and a steering note; a problem with none of those; a closed-out problem |
+| `scale` | `harness/preview/scale-fixture-calls.mjs` — a deterministic generator, replayed through the same action layer | **oversize**: 14 topics and 62 axes and 65 problems (past the store's rollup cap of 50), labels long enough to wrap, activity piled on one axis and absent on most (the 7/14/30/all windows disagree), and empty subjects — a topic with no axes, an evidence-free axis, a repository no topic claims, a person with no mapped account, a problem with no support. A separate dataset, never merged with `fixture` |
 
 `harness/preview/layout-fixture-calls.mjs --check` prints what it read from that file, so a change there
 that breaks the read shows up as a smaller dataset instead of a silently empty one; `fixture-e-calls.mjs`
-prints the Fixture E constants and function it read. To assert the payloads themselves, run
-`bun harness/preview/test-fixtures.mjs` — it builds both datasets and checks that each Progress payload
-carries its problem rows, in every window.
+prints the Fixture E constants and function it read; `scale-fixture-calls.mjs --check` prints the oversized
+dataset's declared shape. To assert the payloads themselves, run `bun harness/preview/test-fixtures.mjs`
+(corpus + fixture) and `bun harness/preview/test-scale-fixture.mjs` (scale) — each builds its dataset with
+the same `make-fixtures.mjs` the preview uses and checks the payloads carry the subjects they exist for.
 
 All four windows the page offers (7 / 14 / 30 / all time) are built for real. The window is **Overview's**
 only query-level control — the other four tabs read all time — and a preview where clicking "30 days" errors
