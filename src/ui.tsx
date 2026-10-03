@@ -1175,18 +1175,8 @@ const css = `
   min-width: 20rem;
   padding: 24px;
 }
-[data-plugin-id="research-dashboard"] .rd-progress-title {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 0;
-  min-width: 0;
-}
-[data-plugin-id="research-dashboard"] .rd-progress-title > span:last-child {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
+/* V1/A1 — the rd-progress-title rule is gone with the third header path: the pane's title is a CardTitle in
+   the shared header now, so this view-local flex wrapper (and its last-child wrap rule) had no caller left. */
 /* Row 1 reuses C1's own dominance grid, the same rule the Topics and People panes use: the Problem is the main
    lane and the Activity its rail at no less than 1.25x. Row 2 and the support band size to how many sections
    actually rendered — auto-fit gives two and three columns when both or all exist and one when a subject has
@@ -4293,6 +4283,11 @@ export function apply(ctx: Context) {
               (the topic and the axis itself, both navigable — the payload carries no repository or person
               relation at axis scope, and none is invented here), and when it last moved. */}
           <DetailHeader
+            badge={
+              activeAxis ? (
+                <StateBadge confidence={activeAxis.stateConfidence} state={activeAxis.state} />
+              ) : null
+            }
             context={
               activeAxis ? (
                 <>
@@ -4312,12 +4307,17 @@ export function apply(ctx: Context) {
               ) : null
             }
             title={
-              <h3 className="rd-strong rd-progress-title" data-rd-progress-detail-title="true">
-                {activeAxis ? (
-                  <StateBadge confidence={activeAxis.stateConfidence} state={activeAxis.state} />
-                ) : null}
-                <span>{activeAxis?.title ?? "Nothing is selected"}</span>
-              </h3>
+              /* V1/A1 — one title element, as on the other three panes, so the view has one title size and the
+                 state badge takes the shared badge slot instead of living inside the title. That placement was
+                 not only a style divergence: it put the badge's word into this element's textContent —
+                 "active" glued to the title with no separator — and the pass compares that text to the selected
+                 index row's title with === (verify-page.mjs:4818), so the check was red. Measured before this
+                 change: detailTitle "activeSignal analysis — …" against selectedRowTitle "Signal analysis — …". */
+              <CardTitle>
+                <span data-rd-progress-detail-title="true">
+                  {activeAxis?.title ?? "Nothing is selected"}
+                </span>
+              </CardTitle>
             }
           >
             {activeAxis ? (
