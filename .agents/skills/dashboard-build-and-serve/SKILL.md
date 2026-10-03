@@ -107,6 +107,12 @@ Do not use for: reading a record (that is `acceptance-pass`), or editing docs on
    single quotes in that block; never backticks. Related: the patch tool's LSP read of the same region reports
    TypeScript errors for perfectly valid CSS, because it parses the text as code. `bun run typecheck` is the
    authority — it is the only thing that has caught the real breakage, and only it can clear the false one.
+10. **`pkill -f <pattern>` kills the shell that runs it, when the pattern appears in its own command line.** The
+   preview server is stopped with `pkill -f harness/preview/run.mjs`, and the command doing the stopping
+   *contains that string*, so the shell matches itself and dies with SIGTERM — quietly enough that the rest of
+   the chain (captures, guards, the commit) never runs, while the process list looks clean and the log looks
+   unchanged. Use a bracketed pattern that cannot match its own text (`pkill -f "[h]arness/preview/run.mjs"`),
+   or kill by port/PID, and check `git log`/`git status` after any command that both kills and commits.
 
 ## Verification
 

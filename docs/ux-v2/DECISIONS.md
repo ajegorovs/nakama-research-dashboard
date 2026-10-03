@@ -411,6 +411,13 @@ The rail's own rows stay identifiable by hook (`data-rd-index-axis` counted 3 in
 `.rd-index-item` elements the after-run counted are the pane's open-problems rows, which carry
 `data-rd-problem-choice` and reuse the row class; they are not index rows and no index row was duplicated.
 
+**Follow-ups from the ruling, recorded as localized density work — not blockers.** *People*: the secondary
+metadata line is denser than it needs to be now that the recency sits on it; shortening or simplifying that line
+is the fix, and the shared grammar is not at fault. *Repositories*: the repository name itself still overflows
+the 240px line by ~10px, so the constraint is the name's length, not where the recency sits — the rail is **not**
+widened for that case, because the index/detail balance (§14.2) is the stronger rule; a different break rule or
+ellipsis are the options if the final montages show it reading badly.
+
 ### 14.7 The People recency slot keeps its exceptional state (ruled, 2026-10-03)
 
 "One recency grammar everywhere" is withdrawn as too broad. There are two cases and they are different facts:
