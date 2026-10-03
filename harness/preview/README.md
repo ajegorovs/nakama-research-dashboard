@@ -1,0 +1,133 @@
+# Preview — see the real page without an instance
+
+`src/ui.tsx` is a host-injected React module: it is handed React, the component library, a stylesheet sink
+and a data channel by the dashboard, and it cannot render without them. The only place it *was* renderable
+was a served instance, and the plugin asset is served from the org's installed **release snapshot** — not
+from the checkout tree — so every visual tweak cost `build → vendor → reinstall → guard → reload`, with a
+~10 s asset lag on the end. That loop is the right loop for a *record*; it is a bad loop for looking at
+type sizes.
+
+This is the fast loop. It mounts the same built bundle (`ui/app.js`) through the host's own activation path
+(`apps/web/src/lib/plugin-runtime.ts`), against the host's own components (`@nakama/ui`) and the host's own
+stylesheet (the dashboard's `index.css`, so the same Tailwind build and the same design tokens), and answers
+the page's action calls from a real dataset's own call transcript. No server, no database, no instance, no
+credentials.
+
+```bash
+bun run preview                    # corpus dataset, http://127.0.0.1:3010/preview.html
+bun run preview:fixture            # the synthetic layout fixture
+bun harness/preview/run.mjs --checkout /path/to/nakama --port 3011 --rebuild --watch
+```
+
+Then edit `src/ui.tsx`; with `--watch` (or `bun run build:watch` in another shell) the bundle rebuilds on save
+and the browser reloads itself — Vite watches `ui/app.js`, so there is no copy step. Without `--watch`, run
+`bun run build` by hand.
+
+To capture the preview and build a montage against the approved prototypes, in one command:
+
+```bash
+bun run preview:fidelity                          # build, serve, capture, montage (corpus)
+bun run preview:fidelity -- --dataset fixture     # the fixture dataset
+bun run preview:fidelity -- --no-rebuild --full   # skip the build; also write full-page PNGs
+```
+
+Artifacts land in `docs/ux-v2/fidelity/preview/<dataset>/` in the same `prototype-1440x900/ · current-1440x900/ ·
+side-by-side/` shape the committed `fixture/` pack uses, so the corpus and fixture previews sit beside each
+other. To capture against an already-running preview on another port:
+`bun run preview:capture -- --url http://127.0.0.1:3011/preview.html`.
+
+The browser is resolved by `harness/chromium.mjs` (env `CHROMIUM_EXECUTABLE` → the Playwright cache, whatever
+revision is present → a system chromium), so nothing downloads and no user path is hardcoded.
+
+## Generated files in the checkout, and cleanup
+
+Running the preview writes **six** files into the checkout's `apps/web/` (`preview.html`, `preview-main.tsx`,
+`preview.css`, `preview-fixtures.json`, `preview-plugin.ts`, `preview.vite.config.ts`). `run.mjs` tracks what
+it writes in `.preview-generated.json` and, by default, removes exactly what it created when it exits (SIGINT
+and SIGTERM included). Two safety rules:
+
+- a file that **existed and differs** from what the preview would write is treated as yours: it is backed up
+  and **restored**, never deleted;
+- a file identical to what the preview writes is reclaimed as the harness's own leftover (this is how the
+  files older preview runs left behind get cleaned up).
+
+`--keep` leaves everything in place for inspection; a stale manifest from a crashed run is recovered on the
+next start. The manifest and any `.preview-bak` files are removed on cleanup too.
+
+## Prerequisite
+
+A **Nakama checkout** (`v0.4.31` is the version this plugin targets) — the host's packages are not
+published, so the preview runs inside one, borrowing its React 19, `@nakama/ui`, Tailwind v4 and tokens.
+
+```bash
+git clone --depth 1 --branch v0.4.31 https://github.com/ahmadrosid/nakama.git ~/Repos/nakama
+cd ~/Repos/nakama && bun install
+```
+
+Default checkout is `$NAKAMA_CHECKOUT` or `~/Repos/nakama`; `run.mjs` says which names it looked for and
+exits 2 if it cannot find Vite there.
+
+## The two datasets
+
+Fixtures are **built, not written**: `make-fixtures.mjs` creates a database, applies the shipped migrations,
+replays a dataset's own action transcript through the **real action layer** (`src/actions.ts`), and then asks
+that layer for the read payloads. A hand-written fixture JSON would drift from what the server answers, and
+then the preview would lie about the one thing it exists to show.
+
+| dataset | source | what it exercises |
+| --- | --- | --- |
+| `corpus` (default) | `docs/corpus/transcript/actions.jsonl` — the corpus's own 695-call record | the real, public corpus: what the page looks like on data nobody chose |
+| `fixture` | the `FIXTURE` array in `harness/apply-layout-fixture.mjs`, read out of that file | the edge states: a blocked axis with a blocker sentence, an inferred state, an axis with nothing behind it, a person with no mapped account, a crowded card |
+
+`harness/preview/layout-fixture-calls.mjs --check` prints what it read from that file, so a change there
+that breaks the read shows up as a smaller dataset instead of a silently empty one.
+
+Both windows the page offers (7 / 14 / 30 / all time) are built for real, because the window is the page's
+only query-level control and a preview where clicking "30 days" errors is lying about the control.
+
+## Boundaries
+
+- **It is a preview, not the served page.** This mounts the same bundle through a different entry. Judge
+  composition, density and styling here; take the record with the acceptance pass (`harness/read-pass.sh`),
+  which measures what the instance actually serves.
+- **Writes are refused, not simulated.** `reconcile_topic`, `record_activity` and `add_annotation` answer
+  with the plugin's own error path. A preview that pretended a write landed would be lying about the one
+  thing a read-only instrument cannot check — use `harness:write` for the write composition.
+- **Light theme only** (the committed screenshots are light). `ctx.theme` is passed as `light`.
+- **Fixture E is not replayed** (see `layout-fixture-calls.mjs`): it needs server-generated ids resolved
+  between two calls, so the fixture dataset shows no problem rows. The corpus dataset does.
+- **`harness/` is outside the typechecked program** (`tsconfig.json` includes `src` and `types`), so nothing
+  here can break `bun run check` — and nothing here is typechecked either.
+- **`fixtures.json` is generated and git-ignored** (the corpus one is ~845 KB).
+
+## What was measured when this was built
+
+On 2026-10-03, on a bare clone, with the checkout above at `v0.4.31`:
+
+- `bun run check` green (126 pass / 0 fail), and `ui/app.js` rebuilt **byte-identical** to the committed one
+  — so the preview renders exactly the bundle the repo commits.
+- `corpus` → `1 topic · 3 axes · 1 person · 1 repository`, topic `UDV Echo Process`; the committed corpus
+  transcript records the same fixture identity (`axes:3, people:1, repositories:1`), and its
+  `windowEvents: 30` is the *capped* timeline (3 axes × the 10-per-axis limit) against the landing's
+  uncapped `422 events`.
+- `fixture` → `2 topics · 7 axes · 2 people · 3 repositories`, one blocked. The committed fixture transcript's
+  `axes: 6` is its **first topic's** axis count (6 + 1 = 7), so the two agree. Its `FIXTURE` array declares
+  **2** repositories (`layout-fixture-calls.mjs --check` prints that declared count); the third,
+  `fixture/0-bare-repository`, is named only by an activity in the transcript, so the store derives it and the
+  page shows 3. Declared and rendered are different numbers for the same dataset, and both are correct.
+- The page lands on the default aggregation — `landing=true`, no view pressed, both columns — which is
+  exactly what both committed transcripts assert (`the shell opens on the default landing`, `the landing
+  shows both aggregation columns`). No console or page errors; the only failed request is the browser's
+  automatic `favicon.ico`.
+
+## Preview vs prototype, one command
+
+`harness/preview/fidelity.mjs` (one command: `bun run preview:fidelity`) starts the preview, screenshots it
+across all five views at 1440x900 via `capture.mjs`, renders the approved prototypes at the same viewport with
+the existing `harness/fidelity/render-prototypes.mjs`, and builds the labelled montages with
+`harness/fidelity/montage.mjs`. The montage caption says **PREVIEW (host runtime, no instance)** and carries
+`ui/app.js`'s sha256 — never a served URL — so the artifact cannot be mistaken for a served-UI capture.
+
+Boundaries, restated for the montage: it compares *composition and styling*, not the served page; it is only
+as current as `ui/app.js` at capture time (the printed sha256 is the record); and it does not exercise writes,
+the light/dark theme switch, or Fixture E's problem rows (see above).

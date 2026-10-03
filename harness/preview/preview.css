@@ -1,0 +1,14 @@
+/*
+ * The host's own stylesheet, plus the preview entry itself as a Tailwind source.
+ *
+ * `src/index.css` is the dashboard's real stylesheet: Tailwind v4, the design tokens the plugin
+ * reads through `var(--muted)`, `var(--border)`, `var(--accent)`, `var(--ring)` and `var(--destructive)`,
+ * and the `@source "../../../packages/ui/src"` scan that generates the utility classes the host's
+ * components carry. Importing it is what makes the preview's primitives the same primitives.
+ *
+ * The extra `@source` is only so the wrapper's own `p-4 sm:p-6` chrome is generated — it is not part
+ * of the plugin, and adding it changes nothing the plugin renders.
+ */
+@import "./src/index.css";
+
+@source "./preview-main.tsx";

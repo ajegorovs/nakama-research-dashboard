@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit",
     "typecheck:host": "bun harness/typecheck-host.mjs",
     "build": "bun build ./src/actions.ts --outdir actions --target bun && bun build ./src/ui.tsx --outfile ui/app.js --target browser",
+    "build:watch": "bun build ./src/ui.tsx --outfile ui/app.js --target browser --watch --no-clear-screen",
     "test": "bun test src",
     "check": "bun run typecheck && bun run build && bun test src",
     "harness:read": "bash harness/read-pass.sh",
@@ -20,7 +21,11 @@
     "harness:records": "bun harness/test-redact.mjs",
     "harness:focus": "bash harness/focus-pass.sh",
     "harness:identity": "bun harness/test-dataset-identity.mjs",
-    "harness:write": "bash harness/read-pass.sh --write"
+    "harness:write": "bash harness/read-pass.sh --write",
+    "preview": "bun harness/preview/run.mjs",
+    "preview:fixture": "bun harness/preview/run.mjs --dataset fixture",
+    "preview:capture": "bun harness/preview/capture.mjs",
+    "preview:fidelity": "bun harness/preview/fidelity.mjs"
   },
   "devDependencies": {
     "@types/bun": "^1.4.2",

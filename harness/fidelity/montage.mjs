@@ -8,7 +8,8 @@
  * string written into this file would be a lie the moment the next release is minted).
  */
 import { chromium } from "playwright-core";
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { chromiumLaunchOptions } from "../chromium.mjs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 const args = process.argv.slice(2);
@@ -22,25 +23,19 @@ const OUT = flag("out", path.join(FID, "side-by-side"));
 // Hygiene). Pass --url-label only for a montage that will not be committed.
 const URL_LABEL = flag("url-label", "<box>.<tailnet>.ts.net:3003");
 const BUILD = flag("build", null);
+// The bottom caption. The sane default names the served review UI; a preview-vs-prototype montage passes
+// `--current-label "PREVIEW (host runtime, no instance)"` so the caption does not claim an instance it
+// never touched.
+const CURRENT_LABEL = flag("current-label", "RUNNING REVIEW UI");
+// The bottom caption's right-hand note. Defaults to the review URL + served build; a preview montage passes
+// `--current-note` so the caption does not carry a host it never visited.
+const CURRENT_NOTE =
+  flag("current-note", null) ??
+  `http://${URL_LABEL}${BUILD === null ? "" : ` — build ${BUILD}`}`;
 // The placeholder is written into HTML, so its angle brackets must be escaped or the browser parses
 // `<box>.<tailnet>` as an element and the caption renders a mangled URL.
 const esc = (value) =>
   String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
-const cachedChromium = () => {
-  const root = path.join(process.env.HOME ?? "", ".cache", "ms-playwright");
-  if (!existsSync(root)) return null;
-  for (const entry of readdirSync(root)) {
-    if (!entry.startsWith("chromium")) continue;
-    for (const candidate of [
-      path.join(root, entry, "chrome-linux", "chrome"),
-      path.join(root, entry, "chrome-linux", "headless_shell"),
-    ]) {
-      if (existsSync(candidate)) return candidate;
-    }
-  }
-  return null;
-};
 
 // view name -> [prototype stem, current screenshot]
 const PAIRS = [
@@ -58,7 +53,7 @@ const PAIRS = [
 
 mkdirSync(OUT, { recursive: true });
 const abs = (p) => `file://${path.resolve(p)}`;
-const browser = await chromium.launch({ executablePath: cachedChromium() ?? undefined });
+const browser = await chromium.launch(chromiumLaunchOptions());
 const page = await browser.newPage({ viewport: { width: 1480, height: 1200 }, deviceScaleFactor: 1 });
 
 for (const [name, protoStem, currentFile] of PAIRS) {
@@ -79,7 +74,7 @@ for (const [name, protoStem, currentFile] of PAIRS) {
     <div class="cap"><b>${name} — APPROVED PROTOTYPE</b><span>docs/ux-v2/contract/prototypes/${protoStem}.html</span></div>
     <img src="${abs(proto)}">
     <div class="gap"></div>
-    <div class="cap"><b>${name} — RUNNING REVIEW UI</b><span>http://${esc(URL_LABEL)}${BUILD === null ? "" : ` — build ${esc(BUILD)}`}</span></div>
+    <div class="cap"><b>${name} — ${CURRENT_LABEL}</b><span>${esc(CURRENT_NOTE)}</span></div>
     <img src="${abs(current)}">
   </body></html>`;
   const file = path.join(OUT, `${name}.html`);

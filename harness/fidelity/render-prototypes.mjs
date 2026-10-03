@@ -4,7 +4,8 @@
  *   bun harness/fidelity/render-prototypes.mjs --dir docs/ux-v2/contract/prototypes --out <dir> --viewport 1440x900
  */
 import { chromium } from "playwright-core";
-import { existsSync, mkdirSync, readdirSync } from "node:fs";
+import { chromiumLaunchOptions } from "../chromium.mjs";
+import { mkdirSync, readdirSync } from "node:fs";
 import path from "node:path";
 
 const args = process.argv.slice(2);
@@ -16,23 +17,8 @@ const DIR = flag("dir", "docs/ux-v2/contract/prototypes");
 const OUT = flag("out", "/tmp/prototypes");
 const VIEWPORT = (flag("viewport", "1440x900")).split("x").map(Number);
 
-const cachedChromium = () => {
-  const root = path.join(process.env.HOME ?? "", ".cache", "ms-playwright");
-  if (!existsSync(root)) return null;
-  for (const entry of readdirSync(root)) {
-    if (!entry.startsWith("chromium")) continue;
-    for (const candidate of [
-      path.join(root, entry, "chrome-linux", "chrome"),
-      path.join(root, entry, "chrome-linux", "headless_shell"),
-    ]) {
-      if (existsSync(candidate)) return candidate;
-    }
-  }
-  return null;
-};
-
 mkdirSync(OUT, { recursive: true });
-const browser = await chromium.launch({ executablePath: cachedChromium() ?? undefined });
+const browser = await chromium.launch(chromiumLaunchOptions());
 const page = await browser.newPage({ viewport: { width: VIEWPORT[0], height: VIEWPORT[1] } });
 const pages = readdirSync(DIR).filter((name) => name.endsWith(".html")).sort();
 for (const name of pages) {
