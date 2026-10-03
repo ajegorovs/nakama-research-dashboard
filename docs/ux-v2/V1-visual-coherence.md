@@ -51,6 +51,55 @@ Verified by attribute set rather than by eye — **192 `data-rd-*` names before,
 invented** (`harness/verify-page.mjs` reads them, and some are the only way a check can tell which projection
 is on screen).
 
+## The attribute gate — and what it does and does not mean
+
+The refactor's gate was **"rendered attribute inventory before = rendered attribute inventory after"**
+(192 → 192). A sweep of the harness afterwards found 12 names it selects that the source no longer renders.
+**That is not automatically drift** — the first pass over it labelled them "stale", which is wrong and is
+corrected here so nobody acts on it:
+
+| Category | Meaning | Action |
+|---|---|---|
+| **positive selector** | the element must exist; absence is a failure | the hook must be rendered |
+| **negative selector** | the element must **not** exist; its absence *is* the assertion | **leave it unrendered** |
+| **rendered unasserted hook** | DOM/CSS/debug contract, no executable coverage yet | keep it; not disposable |
+
+Traced to the `check(…)` that consumes each read:
+
+- **Negative selectors (9) — leave exactly as they are:** `data-rd-progress-empty`, `-events`, `-event`,
+  `-filters`, `-axis`, `-topic`, `data-rd-progress-summary`, `data-rd-detail-counts`, `data-rd-edit-open`,
+  `data-rd-topic-editor`. Each is consumed by an assertion of the form `=== 0` — *"C4: the retired window-wide
+  feed is gone — not moved, and with nothing of it left behind"*, *"the topic detail offers no broad edit
+  control (D7: Topics is read-first)"*, *"N count strip(s) in the detail"*. **Re-adding any of these
+  attributes would fail the acceptance pass.**
+- **Still-valid indirect contract — leave:** `data-rd-topic-card` is half of `served-build.mjs`'s
+  `[data-rd-topic-card], .rd-topic-card` build fingerprint, and the class half is live on the landing cards
+  (`src/ui.tsx:3355,3459`). Half a live selector is not a cleanup.
+- **Genuinely dead — fixed:** `data-rd-topic` in `focus-matrix.mjs`, below.
+
+The corollary is why 192 → 192 is the stronger gate: the **41 unasserted hooks** are still CSS, screenshot,
+debug and future-coverage contracts, and absence from the harness does not make them disposable.
+
+### The one confirmed leftover, fixed (`28e73c2`, harness-only)
+
+`focus-matrix.mjs` labelled a control class by `data-rd-topic` — unrendered since the card was retired —
+instead of the live `data-rd-index-topic` on the Topics index buttons. It could never match, so the Topics
+rail was the **only** index rail whose rows fell through to the class fallback and were reported in the H1
+focus record as a bare `button.rd-index-item`. The committed corpus record shows `index-row-person` ×27 and
+`index-row-repository` ×27 — and `topic-row` ×0. Measured on the corpus preview, with the hook chain read out
+of the harness itself: the retired hook matched **0** instances, the live one matches **4**, and unlabelled
+`rd-index-item` instances fall **6 → 2**. No UI source change; a label cannot affect what the pass measures.
+
+**Stated boundaries of that fix:**
+
+- **The focus pass has not been re-run** — including `--negative-control`. It needs a served instance, and
+  this machine has neither an instance nor the estate's env file. It is on the Phase-4 list and rides that
+  run.
+- The **2 remaining** unlabelled `rd-index-item` instances are the Progress rail's (`data-rd-index-axis` is
+  not in this chain). That rail was never in the chain, so labelling it is a new decision rather than a
+  repair — left alone deliberately.
+- The **41 unasserted hooks were not touched.**
+
 ## Boundaries
 
 - **The frozen contract is untouched** (`docs/ux-v2/contract/`, byte-unchanged). Its omission of `AxisRow` is
