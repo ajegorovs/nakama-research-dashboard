@@ -1720,7 +1720,110 @@ export function apply(ctx: Context) {
     );
   }
 
-  /** The state counts the reviewer's scan asks for: one line, or nothing at all when there is no work. */
+  /**
+   * V1 — one Axis, one visual grammar.
+   *
+   * The same conceptual Axis was rendered four ways: a row with a head and no reading (the Topics
+   * fallback), a row whose head was a plain `.rd-row` instead of an axis head (Repositories), a row with a
+   * reading and a fold (People), and a card with head, reading, references and fold (the Topics detail). A
+   * reader had to relearn what an axis looks like on every tab. This is the shape they now share:
+   *
+   *   head        the state claim · the axis's own name · kind/version, quiet at the row's end
+   *   reading     what the axis says about itself now, with its own confidence where there is a claim
+   *   blocker     the exception, kept visible — it is the thing that needs acting on
+   *   references  the repositories/people/branch the work lives in
+   *   disclosure  the fold that holds the rest
+   *
+   * It is deliberately **presentational**: it takes no domain projection, so it cannot grow a conditional
+   * per caller. The two rollups, the overview projection and the axis detail do not share a type, and this
+   * component should not learn four — each caller adapts its own projection into these slots. And the
+   * reading is a slot rather than a field this component fills in: AxisScan carries no current state, so
+   * "no blocker recorded" stays the caller's own truthful sentence instead of prose invented here.
+   *
+   * Every caller keeps its own `data-rd-*` hooks through `attrs`/`readingAttrs` — harness/verify-page.mjs
+   * reads them, and for some checks they are the only way to tell which projection is on screen.
+   */
+  type AxisRowProps = {
+    /** Attributes for the row element itself — the caller's own markers, e.g. data-rd-scan-axis. */
+    attrs?: Record<string, string>;
+    axisId: string;
+    blocker?: React.ReactNode;
+    className?: string;
+    disclosure?: React.ReactNode;
+    kindNote?: React.ReactNode;
+    onOpenEntity: (type: EntityType, id: string) => void;
+    reading?: React.ReactNode;
+    /** Attributes for the reading element, where a check reads it (data-rd-person-axis-reading). */
+    readingAttrs?: Record<string, string>;
+    references?: React.ReactNode;
+    state: AxisState;
+    stateConfidence?: Confidence | null;
+    title: string;
+  };
+
+  /** The head both a row and the axis detail read from: state claim · name · kind, at the row's end. */
+  function AxisHead({
+    axisId,
+    kindNote = null,
+    onOpenEntity,
+    state,
+    stateConfidence = null,
+    title,
+  }: {
+    axisId: string;
+    kindNote?: React.ReactNode;
+    onOpenEntity: (type: EntityType, id: string) => void;
+    state: AxisState;
+    stateConfidence?: Confidence | null;
+    title: string;
+  }) {
+    return (
+      <div className="rd-axis-head">
+        <StateBadge confidence={stateConfidence} state={state} />
+        <EntityTag compact id={axisId} label={title} onOpen={onOpenEntity} type="axis" />
+        {kindNote === null ? null : <span className="rd-axis-kind">{kindNote}</span>}
+      </div>
+    );
+  }
+
+  function AxisRow({
+    attrs,
+    axisId,
+    blocker = null,
+    className = "rd-axis",
+    disclosure = null,
+    kindNote = null,
+    onOpenEntity,
+    reading = null,
+    readingAttrs,
+    references = null,
+    state,
+    stateConfidence = null,
+    title,
+  }: AxisRowProps) {
+    return (
+      <li className={className} {...(attrs ?? {})}>
+        <AxisHead
+          axisId={axisId}
+          kindNote={kindNote}
+          onOpenEntity={onOpenEntity}
+          state={state}
+          stateConfidence={stateConfidence}
+          title={title}
+        />
+        {reading === null ? null : (
+          <p className="rd-axis-reading" {...(readingAttrs ?? {})}>
+            {reading}
+          </p>
+        )}
+        {blocker}
+        {references === null ? null : (
+          <div className="rd-axis-secondary rd-axis-refs">{references}</div>
+        )}
+        {disclosure}
+      </li>
+    );
+  }
 
   function AxisItem({
     axis,
@@ -1736,27 +1839,38 @@ export function apply(ctx: Context) {
       .filter(Boolean)
       .join(" · ");
     const blocked = axis.state === "blocked";
+    /* V1: the shape the other three surfaces now read too — head, reading, blocker, references. The overview
+       projection carries no version and no people, so those slots are simply absent rather than faked; the
+       axis names itself and it names the repositories it lives in, because both are entities (both are tags,
+       component-contract.md § EntityTag) and the row's own words are unchanged. */
     return (
-      <li className="rd-axis" data-rd-axis-state={axis.state}>
-        {/* Two levels, not four. The first row is what a reader scans: the state claim and the axis
-            name dominate, and the kind recedes to the end of the row. Where the work lives and what it
-            says about itself are one subordinate line underneath. A blocker is the exception — it stays
-            on its own line, immediately visible, because it is the thing that needs acting on.
-            The axis names itself and it names the repositories it lives in: both are entities, so both
-            are tags (component-contract.md § EntityTag), and the row's own words are unchanged. */}
-        <div className="rd-axis-head">
-          <StateBadge confidence={axis.stateConfidence} state={axis.state} />
-          <EntityTag
-            compact
-            id={axis.id}
-            label={axis.title}
-            onOpen={onOpenEntity}
-            type="axis"
-          />
-          <span className="rd-axis-kind">{axis.kind}</span>
-        </div>
-        {where || axis.currentState || axis.repositories.length > 0 ? (
-          <p className="rd-axis-secondary">
+      <AxisRow
+        attrs={{ "data-rd-axis-state": axis.state }}
+        axisId={axis.id}
+        blocker={
+          axis.blocker ? (
+            <div className="rd-blocker" data-rd-strong={blocked}>
+              Blocker: {axis.blocker}
+            </div>
+          ) : null
+        }
+        kindNote={axis.kind}
+        onOpenEntity={onOpenEntity}
+        reading={
+          axis.currentState ? (
+            <>
+              <span className="rd-claim-value">{axis.currentState}</span>
+              <span className="rd-cluster">
+                <span className="rd-muted">current state</span>
+                <ConfidenceBadge value={axis.stateConfidence} />
+              </span>
+            </>
+          ) : (
+            <span className="rd-muted">no progress note</span>
+          )
+        }
+        references={
+          where || axis.currentState || axis.repositories.length > 0 ? (
             <span className="rd-cluster rd-tags">
               {axis.repositories.map((repository) => (
                 <EntityTag
@@ -1769,20 +1883,15 @@ export function apply(ctx: Context) {
                 />
               ))}
               {where ? <span className="rd-meta">{where}</span> : null}
-              {axis.currentState ? (
-                <span className="rd-meta">{axis.currentState}</span>
-              ) : null}
               {/* The age of the timestamp this list is ordered by — the component's whole rule. */}
               <RecencyLabel at={axis.updatedAt} prefix="· updated " />
             </span>
-          </p>
-        ) : null}
-        {axis.blocker ? (
-          <div className="rd-blocker" data-rd-strong={blocked}>
-            Blocker: {axis.blocker}
-          </div>
-        ) : null}
-      </li>
+          ) : null
+        }
+        state={axis.state}
+        stateConfidence={axis.stateConfidence}
+        title={axis.title}
+      />
     );
   }
 
@@ -2255,23 +2364,16 @@ export function apply(ctx: Context) {
         data-rd-axis-title={axis.title}
         data-rd-axis-version={axis.version}
       >
-        {/* The same two levels as a lead row in a collapsed card: the state claim and the name on one
-            line, with kind and version receding to the end of it; everything else about the axis on one
-            subordinate line underneath. Four equal-weight lines is what step 3 exists to remove, and the
-            detail is where they cost the most height. */}
-        <div className="rd-axis-head">
-          <StateBadge confidence={axis.stateConfidence} state={axis.state} />
-          <EntityTag
-            compact
-            id={axis.id}
-            label={axis.title}
-            onOpen={onOpenEntity}
-            type="axis"
-          />
-          <span className="rd-axis-kind">
-            {axis.kind} · v{axis.version}
-          </span>
-        </div>
+        {/* V1: the head is the shared one now — the same claim · name · kind the three rows read, so the
+            detail card and the scan rows can no longer disagree about what an axis looks like. */}
+        <AxisHead
+          axisId={axis.id}
+          kindNote={`${axis.kind} · v${axis.version}`}
+          onOpenEntity={onOpenEntity}
+          state={axis.state}
+          stateConfidence={axis.stateConfidence}
+          title={axis.title}
+        />
         {/* The reading: what this axis says about itself right now, clamped so one verbose axis cannot
             push the rest of the lane off the screen. Its own confidence travels with it (C8), and a claim
             nobody stated renders no confidence at all. */}
@@ -2565,53 +2667,53 @@ export function apply(ctx: Context) {
       .filter((value) => value !== "")
       .join(" · ");
     return (
-      <li
-        className="rd-axis"
-        data-rd-axis-state={axis.state}
-        data-rd-scan-axis={axis.title}
-      >
-        {/* The axis names itself and it names where the work lives: both are entities, so both are tags —
-            the axis opens in Progress's own subview, the repositories open in theirs. The label is the
-            entity's own name, and the row's own words are unchanged. */}
-        <div className="rd-row">
-          <span className="rd-cluster">
-            <StateBadge confidence={axis.stateConfidence} state={axis.state} />
-            <EntityTag
-              compact
-              id={axis.id}
-              label={axis.title}
-              onOpen={onOpenEntity}
-              type="axis"
-            />
-          </span>
-          <span className="rd-muted">{axis.kind}</span>
-        </div>
-        <span className="rd-cluster rd-tags" data-rd-scan-where="true">
-          {axis.repositories.length === 0 ? (
-            <span className="rd-meta">no repository or branch recorded</span>
+      <AxisRow
+        attrs={{
+          "data-rd-axis-state": axis.state,
+          "data-rd-scan-axis": axis.title,
+        }}
+        axisId={axis.id}
+        kindNote={axis.kind}
+        onOpenEntity={onOpenEntity}
+        /* V1: the reading is the one narrative fact a scan row has — its blocker — in the same
+           "value + label + confidence" shape the person rollup uses, and where there is none the row says
+           so. The old `· confirmed` text suffix is gone: the badge already carries that confidence, and one
+           fact rendered twice is what the shared grammar exists to stop. */
+        reading={
+          axis.blocker ? (
+            <>
+              <span className="rd-claim-value">{axis.blocker}</span>
+              <span className="rd-cluster">
+                <span className="rd-muted">blocker</span>
+                <ConfidenceBadge value={axis.blockerConfidence} />
+              </span>
+            </>
           ) : (
-            axis.repositories.map((repository) => (
-              <EntityTag
-                id={repository.id}
-                key={repository.id}
-                label={repository.fullName}
-                onOpen={onOpenEntity}
-                type="repository"
-              />
-            ))
-          )}
-          {where ? <span className="rd-meta">{where}</span> : null}
-        </span>
-        {axis.blocker ? (
-          <span
-            className="rd-blocker"
-            data-rd-strong={axis.blockerConfidence === "confirmed"}
-          >
-            {axis.blocker}
-            {axis.blockerConfidence ? ` · ${axis.blockerConfidence}` : ""}
+            <span className="rd-muted">no blocker recorded</span>
+          )
+        }
+        references={
+          <span className="rd-cluster rd-tags" data-rd-scan-where="true">
+            {axis.repositories.length === 0 ? (
+              <span className="rd-meta">no repository or branch recorded</span>
+            ) : (
+              axis.repositories.map((repository) => (
+                <EntityTag
+                  id={repository.id}
+                  key={repository.id}
+                  label={repository.fullName}
+                  onOpen={onOpenEntity}
+                  type="repository"
+                />
+              ))
+            )}
+            {where ? <span className="rd-meta">{where}</span> : null}
           </span>
-        ) : null}
-      </li>
+        }
+        state={axis.state}
+        stateConfidence={axis.stateConfidence}
+        title={axis.title}
+      />
     );
   }
 
@@ -2695,30 +2797,37 @@ export function apply(ctx: Context) {
       .filter((value) => value !== "")
       .join(" · ");
     return (
-      <li
-        className="rd-axis"
-        data-rd-axis-state={axis.state}
-        data-rd-scan-axis={axis.title}
-      >
-        <div className="rd-axis-head">
-          <StateBadge confidence={axis.stateConfidence} state={axis.state} />
-          <EntityTag
-            compact
-            id={axis.id}
-            label={axis.title}
-            onOpen={onOpenEntity}
-            type="axis"
-          />
-          <span className="rd-axis-kind">
-            {axis.kind} · v{axis.version}
-          </span>
-        </div>
-        {/* The reading. A C1 row leads with its current-state claim and its own confidence; this rollup has
-            no current state, so the claim here is the axis's blocker where it has one, in C1's own
-            "value + label + confidence" shape. Where it has none the row reads one muted sentence and stops:
-            an orphan `blocker` label under "no blocker recorded" is noise that reads like the blocker text. */}
-        <p className="rd-axis-reading" data-rd-person-axis-reading={axis.id}>
-          {axis.blocker ? (
+      <AxisRow
+        attrs={{
+          "data-rd-axis-state": axis.state,
+          "data-rd-scan-axis": axis.title,
+        }}
+        axisId={axis.id}
+        disclosure={
+          <details className="rd-axis-more" data-rd-person-axis-more={axis.id}>
+            <summary>More on this axis</summary>
+            <div className="rd-cluster">
+              <span className="rd-muted">state</span>
+              <ConfidenceBadge value={axis.stateConfidence} />
+              <span className="rd-muted">
+                last recorded {axis.updatedAt.slice(0, 10)}
+              </span>
+              {axis.lastReviewedAt ? (
+                <span className="rd-muted">
+                  · last reviewed {axis.lastReviewedAt.slice(0, 10)}
+                </span>
+              ) : null}
+            </div>
+          </details>
+        }
+        kindNote={`${axis.kind} · v${axis.version}`}
+        onOpenEntity={onOpenEntity}
+        /* The reading. A C1 row leads with its current-state claim and its own confidence; this rollup has
+           no current state, so the claim here is the axis's blocker where it has one, in C1's own
+           "value + label + confidence" shape. Where it has none the row reads one muted sentence and stops:
+           an orphan `blocker` label under "no blocker recorded" is noise that reads like the blocker text. */
+        reading={
+          axis.blocker ? (
             <>
               <span className="rd-claim-value">{axis.blocker}</span>
               <span className="rd-cluster">
@@ -2728,9 +2837,10 @@ export function apply(ctx: Context) {
             </>
           ) : (
             <span className="rd-muted">no blocker recorded</span>
-          )}
-        </p>
-        <div className="rd-axis-secondary rd-axis-refs">
+          )
+        }
+        readingAttrs={{ "data-rd-person-axis-reading": axis.id }}
+        references={
           <span className="rd-cluster rd-tags" data-rd-scan-where="true">
             {axis.repositories.length === 0 ? (
               <span className="rd-meta">no repository or branch recorded</span>
@@ -2747,23 +2857,11 @@ export function apply(ctx: Context) {
             )}
             {where ? <span className="rd-meta">{where}</span> : null}
           </span>
-        </div>
-        <details className="rd-axis-more" data-rd-person-axis-more={axis.id}>
-          <summary>More on this axis</summary>
-          <div className="rd-cluster">
-            <span className="rd-muted">state</span>
-            <ConfidenceBadge value={axis.stateConfidence} />
-            <span className="rd-muted">
-              last recorded {axis.updatedAt.slice(0, 10)}
-            </span>
-            {axis.lastReviewedAt ? (
-              <span className="rd-muted">
-                · last reviewed {axis.lastReviewedAt.slice(0, 10)}
-              </span>
-            ) : null}
-          </div>
-        </details>
-      </li>
+        }
+        state={axis.state}
+        stateConfidence={axis.stateConfidence}
+        title={axis.title}
+      />
     );
   }
 
@@ -2872,7 +2970,12 @@ export function apply(ctx: Context) {
               rather than restating it with its own numbers. */}
           <div className="rd-detail-grid" data-rd-person-split="true">
             <div className="rd-current-work" data-rd-person-lane="current">
-              <span className="rd-section">Current involvement</span>
+              {/* Q2 (ruled): "Current involvement" is false the moment completed work sits under it — Topics
+                  and Repositories both fold terminal axes out, so the rollup was the one place calling a
+                  finished axis current. The section is renamed, and the axes are stably partitioned so the
+                  terminal ones read last while the projection's own order survives inside each group. One
+                  section, no sub-navigation: a fold can come later if historical axes ever outnumber these. */}
+              <span className="rd-section">Involvement</span>
               <ul className="rd-view" data-rd-person-topics={entry.topics.length}>
                 {entry.topics.map((involvement) => (
                   <li
@@ -2898,7 +3001,14 @@ export function apply(ctx: Context) {
                       <Notice kind="empty">no axis of theirs here</Notice>
                     ) : (
                       <ul className="rd-axes">
-                        {involvement.axes.map((axis) => (
+                        {[
+                          ...involvement.axes.filter(
+                            (axis) => !isTerminalAxis(axis.state),
+                          ),
+                          ...involvement.axes.filter((axis) =>
+                            isTerminalAxis(axis.state),
+                          ),
+                        ].map((axis) => (
                           <PersonAxisRow
                             axis={axis}
                             key={axis.id}
@@ -4108,6 +4218,13 @@ export function apply(ctx: Context) {
                     <span className="rd-strong">{row.title}</span>
                     <span className="rd-meta">{`last activity ${describeAge(row.recencyAt)}`}</span>
                   </span>
+                  {/* V1 Task 2.5 rehearsed moving this pill up beside the title, and the render rejected it:
+                      at 240px a full-size axis title cannot share the line with a pill ("PARKED · INFERRED" is
+                      ~90px), so the pill takes line 1 alone and the row grows to three lines — in the one rail
+                      the review's own table already flags as "rows much taller" (§1). The other three index
+                      rails carry no pill in the index at all, so this is not drift from a pattern the rest of
+                      the page already sets; it is a Progress-local choice, and it belongs to the row-by-row
+                      pass that has the montage in hand rather than to this extraction. */}
                   <span className="rd-meta">
                     <StateBadge confidence={row.stateConfidence} state={row.state} />
                     {` · ${row.topicName} · ${problemCountLine(row)}${

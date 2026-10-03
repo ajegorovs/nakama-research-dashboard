@@ -1058,6 +1058,61 @@ function apply(ctx) {
       variant: "outline"
     }, option.label)));
   }
+  function AxisHead({
+    axisId,
+    kindNote = null,
+    onOpenEntity,
+    state,
+    stateConfidence = null,
+    title
+  }) {
+    return /* @__PURE__ */ React.createElement("div", {
+      className: "rd-axis-head"
+    }, /* @__PURE__ */ React.createElement(StateBadge, {
+      confidence: stateConfidence,
+      state
+    }), /* @__PURE__ */ React.createElement(EntityTag, {
+      compact: true,
+      id: axisId,
+      label: title,
+      onOpen: onOpenEntity,
+      type: "axis"
+    }), kindNote === null ? null : /* @__PURE__ */ React.createElement("span", {
+      className: "rd-axis-kind"
+    }, kindNote));
+  }
+  function AxisRow({
+    attrs,
+    axisId,
+    blocker = null,
+    className = "rd-axis",
+    disclosure = null,
+    kindNote = null,
+    onOpenEntity,
+    reading = null,
+    readingAttrs,
+    references = null,
+    state,
+    stateConfidence = null,
+    title
+  }) {
+    return /* @__PURE__ */ React.createElement("li", {
+      className,
+      ...attrs ?? {}
+    }, /* @__PURE__ */ React.createElement(AxisHead, {
+      axisId,
+      kindNote,
+      onOpenEntity,
+      state,
+      stateConfidence,
+      title
+    }), reading === null ? null : /* @__PURE__ */ React.createElement("p", {
+      className: "rd-axis-reading",
+      ...readingAttrs ?? {}
+    }, reading), blocker, references === null ? null : /* @__PURE__ */ React.createElement("div", {
+      className: "rd-axis-secondary rd-axis-refs"
+    }, references), disclosure);
+  }
   function AxisItem({
     axis,
     onOpenEntity
@@ -1067,44 +1122,45 @@ function apply(ctx) {
       axis.prNumber ? `PR #${axis.prNumber}` : ""
     ].filter(Boolean).join(" · ");
     const blocked = axis.state === "blocked";
-    return /* @__PURE__ */ React.createElement("li", {
-      className: "rd-axis",
-      "data-rd-axis-state": axis.state
-    }, /* @__PURE__ */ React.createElement("div", {
-      className: "rd-axis-head"
-    }, /* @__PURE__ */ React.createElement(StateBadge, {
-      confidence: axis.stateConfidence,
-      state: axis.state
-    }), /* @__PURE__ */ React.createElement(EntityTag, {
-      compact: true,
-      id: axis.id,
-      label: axis.title,
-      onOpen: onOpenEntity,
-      type: "axis"
-    }), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-axis-kind"
-    }, axis.kind)), where || axis.currentState || axis.repositories.length > 0 ? /* @__PURE__ */ React.createElement("p", {
-      className: "rd-axis-secondary"
-    }, /* @__PURE__ */ React.createElement("span", {
-      className: "rd-cluster rd-tags"
-    }, axis.repositories.map((repository) => /* @__PURE__ */ React.createElement(EntityTag, {
-      compact: true,
-      id: repository.id,
-      key: repository.id,
-      label: repository.fullName,
-      onOpen: onOpenEntity,
-      type: "repository"
-    })), where ? /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta"
-    }, where) : null, axis.currentState ? /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta"
-    }, axis.currentState) : null, /* @__PURE__ */ React.createElement(RecencyLabel, {
-      at: axis.updatedAt,
-      prefix: "· updated "
-    }))) : null, axis.blocker ? /* @__PURE__ */ React.createElement("div", {
-      className: "rd-blocker",
-      "data-rd-strong": blocked
-    }, "Blocker: ", axis.blocker) : null);
+    return /* @__PURE__ */ React.createElement(AxisRow, {
+      attrs: { "data-rd-axis-state": axis.state },
+      axisId: axis.id,
+      blocker: axis.blocker ? /* @__PURE__ */ React.createElement("div", {
+        className: "rd-blocker",
+        "data-rd-strong": blocked
+      }, "Blocker: ", axis.blocker) : null,
+      kindNote: axis.kind,
+      onOpenEntity,
+      reading: axis.currentState ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("span", {
+        className: "rd-claim-value"
+      }, axis.currentState), /* @__PURE__ */ React.createElement("span", {
+        className: "rd-cluster"
+      }, /* @__PURE__ */ React.createElement("span", {
+        className: "rd-muted"
+      }, "current state"), /* @__PURE__ */ React.createElement(ConfidenceBadge, {
+        value: axis.stateConfidence
+      }))) : /* @__PURE__ */ React.createElement("span", {
+        className: "rd-muted"
+      }, "no progress note"),
+      references: where || axis.currentState || axis.repositories.length > 0 ? /* @__PURE__ */ React.createElement("span", {
+        className: "rd-cluster rd-tags"
+      }, axis.repositories.map((repository) => /* @__PURE__ */ React.createElement(EntityTag, {
+        compact: true,
+        id: repository.id,
+        key: repository.id,
+        label: repository.fullName,
+        onOpen: onOpenEntity,
+        type: "repository"
+      })), where ? /* @__PURE__ */ React.createElement("span", {
+        className: "rd-meta"
+      }, where) : null, /* @__PURE__ */ React.createElement(RecencyLabel, {
+        at: axis.updatedAt,
+        prefix: "· updated "
+      })) : null,
+      state: axis.state,
+      stateConfidence: axis.stateConfidence,
+      title: axis.title
+    });
   }
   function OptionSelect({
     ariaLabel,
@@ -1352,20 +1408,14 @@ function apply(ctx) {
       "data-rd-axis-state": axis.state,
       "data-rd-axis-title": axis.title,
       "data-rd-axis-version": axis.version
-    }, /* @__PURE__ */ React.createElement("div", {
-      className: "rd-axis-head"
-    }, /* @__PURE__ */ React.createElement(StateBadge, {
-      confidence: axis.stateConfidence,
-      state: axis.state
-    }), /* @__PURE__ */ React.createElement(EntityTag, {
-      compact: true,
-      id: axis.id,
-      label: axis.title,
-      onOpen: onOpenEntity,
-      type: "axis"
-    }), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-axis-kind"
-    }, axis.kind, " · v", axis.version)), /* @__PURE__ */ React.createElement("p", {
+    }, /* @__PURE__ */ React.createElement(AxisHead, {
+      axisId: axis.id,
+      kindNote: `${axis.kind} · v${axis.version}`,
+      onOpenEntity,
+      state: axis.state,
+      stateConfidence: axis.stateConfidence,
+      title: axis.title
+    }), /* @__PURE__ */ React.createElement("p", {
       className: "rd-axis-reading",
       "data-rd-axis-reading": axis.id
     }, /* @__PURE__ */ React.createElement("span", {
@@ -1576,42 +1626,43 @@ function apply(ctx) {
       axis.branch,
       axis.prNumber === null ? "" : `PR #${axis.prNumber}`
     ].filter((value) => value !== "").join(" · ");
-    return /* @__PURE__ */ React.createElement("li", {
-      className: "rd-axis",
-      "data-rd-axis-state": axis.state,
-      "data-rd-scan-axis": axis.title
-    }, /* @__PURE__ */ React.createElement("div", {
-      className: "rd-row"
-    }, /* @__PURE__ */ React.createElement("span", {
-      className: "rd-cluster"
-    }, /* @__PURE__ */ React.createElement(StateBadge, {
-      confidence: axis.stateConfidence,
-      state: axis.state
-    }), /* @__PURE__ */ React.createElement(EntityTag, {
-      compact: true,
-      id: axis.id,
-      label: axis.title,
-      onOpen: onOpenEntity,
-      type: "axis"
-    })), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-muted"
-    }, axis.kind)), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-cluster rd-tags",
-      "data-rd-scan-where": "true"
-    }, axis.repositories.length === 0 ? /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta"
-    }, "no repository or branch recorded") : axis.repositories.map((repository) => /* @__PURE__ */ React.createElement(EntityTag, {
-      id: repository.id,
-      key: repository.id,
-      label: repository.fullName,
-      onOpen: onOpenEntity,
-      type: "repository"
-    })), where ? /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta"
-    }, where) : null), axis.blocker ? /* @__PURE__ */ React.createElement("span", {
-      className: "rd-blocker",
-      "data-rd-strong": axis.blockerConfidence === "confirmed"
-    }, axis.blocker, axis.blockerConfidence ? ` · ${axis.blockerConfidence}` : "") : null);
+    return /* @__PURE__ */ React.createElement(AxisRow, {
+      attrs: {
+        "data-rd-axis-state": axis.state,
+        "data-rd-scan-axis": axis.title
+      },
+      axisId: axis.id,
+      kindNote: axis.kind,
+      onOpenEntity,
+      reading: axis.blocker ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("span", {
+        className: "rd-claim-value"
+      }, axis.blocker), /* @__PURE__ */ React.createElement("span", {
+        className: "rd-cluster"
+      }, /* @__PURE__ */ React.createElement("span", {
+        className: "rd-muted"
+      }, "blocker"), /* @__PURE__ */ React.createElement(ConfidenceBadge, {
+        value: axis.blockerConfidence
+      }))) : /* @__PURE__ */ React.createElement("span", {
+        className: "rd-muted"
+      }, "no blocker recorded"),
+      references: /* @__PURE__ */ React.createElement("span", {
+        className: "rd-cluster rd-tags",
+        "data-rd-scan-where": "true"
+      }, axis.repositories.length === 0 ? /* @__PURE__ */ React.createElement("span", {
+        className: "rd-meta"
+      }, "no repository or branch recorded") : axis.repositories.map((repository) => /* @__PURE__ */ React.createElement(EntityTag, {
+        id: repository.id,
+        key: repository.id,
+        label: repository.fullName,
+        onOpen: onOpenEntity,
+        type: "repository"
+      })), where ? /* @__PURE__ */ React.createElement("span", {
+        className: "rd-meta"
+      }, where) : null),
+      state: axis.state,
+      stateConfidence: axis.stateConfidence,
+      title: axis.title
+    });
   }
   function ActivityList({
     dataAttr,
@@ -1645,65 +1696,58 @@ function apply(ctx) {
       axis.branch,
       axis.prNumber === null ? "" : `PR #${axis.prNumber}`
     ].filter((value) => value !== "").join(" · ");
-    return /* @__PURE__ */ React.createElement("li", {
-      className: "rd-axis",
-      "data-rd-axis-state": axis.state,
-      "data-rd-scan-axis": axis.title
-    }, /* @__PURE__ */ React.createElement("div", {
-      className: "rd-axis-head"
-    }, /* @__PURE__ */ React.createElement(StateBadge, {
-      confidence: axis.stateConfidence,
-      state: axis.state
-    }), /* @__PURE__ */ React.createElement(EntityTag, {
-      compact: true,
-      id: axis.id,
-      label: axis.title,
-      onOpen: onOpenEntity,
-      type: "axis"
-    }), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-axis-kind"
-    }, axis.kind, " · v", axis.version)), /* @__PURE__ */ React.createElement("p", {
-      className: "rd-axis-reading",
-      "data-rd-person-axis-reading": axis.id
-    }, axis.blocker ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("span", {
-      className: "rd-claim-value"
-    }, axis.blocker), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-cluster"
-    }, /* @__PURE__ */ React.createElement("span", {
-      className: "rd-muted"
-    }, "blocker"), /* @__PURE__ */ React.createElement(ConfidenceBadge, {
-      value: axis.blockerConfidence
-    }))) : /* @__PURE__ */ React.createElement("span", {
-      className: "rd-muted"
-    }, "no blocker recorded")), /* @__PURE__ */ React.createElement("div", {
-      className: "rd-axis-secondary rd-axis-refs"
-    }, /* @__PURE__ */ React.createElement("span", {
-      className: "rd-cluster rd-tags",
-      "data-rd-scan-where": "true"
-    }, axis.repositories.length === 0 ? /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta"
-    }, "no repository or branch recorded") : axis.repositories.map((repository) => /* @__PURE__ */ React.createElement(EntityTag, {
-      id: repository.id,
-      key: repository.id,
-      label: repository.fullName,
-      onOpen: onOpenEntity,
-      type: "repository"
-    })), where ? /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta"
-    }, where) : null)), /* @__PURE__ */ React.createElement("details", {
-      className: "rd-axis-more",
-      "data-rd-person-axis-more": axis.id
-    }, /* @__PURE__ */ React.createElement("summary", null, "More on this axis"), /* @__PURE__ */ React.createElement("div", {
-      className: "rd-cluster"
-    }, /* @__PURE__ */ React.createElement("span", {
-      className: "rd-muted"
-    }, "state"), /* @__PURE__ */ React.createElement(ConfidenceBadge, {
-      value: axis.stateConfidence
-    }), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-muted"
-    }, "last recorded ", axis.updatedAt.slice(0, 10)), axis.lastReviewedAt ? /* @__PURE__ */ React.createElement("span", {
-      className: "rd-muted"
-    }, "· last reviewed ", axis.lastReviewedAt.slice(0, 10)) : null)));
+    return /* @__PURE__ */ React.createElement(AxisRow, {
+      attrs: {
+        "data-rd-axis-state": axis.state,
+        "data-rd-scan-axis": axis.title
+      },
+      axisId: axis.id,
+      disclosure: /* @__PURE__ */ React.createElement("details", {
+        className: "rd-axis-more",
+        "data-rd-person-axis-more": axis.id
+      }, /* @__PURE__ */ React.createElement("summary", null, "More on this axis"), /* @__PURE__ */ React.createElement("div", {
+        className: "rd-cluster"
+      }, /* @__PURE__ */ React.createElement("span", {
+        className: "rd-muted"
+      }, "state"), /* @__PURE__ */ React.createElement(ConfidenceBadge, {
+        value: axis.stateConfidence
+      }), /* @__PURE__ */ React.createElement("span", {
+        className: "rd-muted"
+      }, "last recorded ", axis.updatedAt.slice(0, 10)), axis.lastReviewedAt ? /* @__PURE__ */ React.createElement("span", {
+        className: "rd-muted"
+      }, "· last reviewed ", axis.lastReviewedAt.slice(0, 10)) : null)),
+      kindNote: `${axis.kind} · v${axis.version}`,
+      onOpenEntity,
+      reading: axis.blocker ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("span", {
+        className: "rd-claim-value"
+      }, axis.blocker), /* @__PURE__ */ React.createElement("span", {
+        className: "rd-cluster"
+      }, /* @__PURE__ */ React.createElement("span", {
+        className: "rd-muted"
+      }, "blocker"), /* @__PURE__ */ React.createElement(ConfidenceBadge, {
+        value: axis.blockerConfidence
+      }))) : /* @__PURE__ */ React.createElement("span", {
+        className: "rd-muted"
+      }, "no blocker recorded"),
+      readingAttrs: { "data-rd-person-axis-reading": axis.id },
+      references: /* @__PURE__ */ React.createElement("span", {
+        className: "rd-cluster rd-tags",
+        "data-rd-scan-where": "true"
+      }, axis.repositories.length === 0 ? /* @__PURE__ */ React.createElement("span", {
+        className: "rd-meta"
+      }, "no repository or branch recorded") : axis.repositories.map((repository) => /* @__PURE__ */ React.createElement(EntityTag, {
+        id: repository.id,
+        key: repository.id,
+        label: repository.fullName,
+        onOpen: onOpenEntity,
+        type: "repository"
+      })), where ? /* @__PURE__ */ React.createElement("span", {
+        className: "rd-meta"
+      }, where) : null),
+      state: axis.state,
+      stateConfidence: axis.stateConfidence,
+      title: axis.title
+    });
   }
   function PersonPanel({
     entry,
@@ -1761,7 +1805,7 @@ function apply(ctx) {
       "data-rd-person-lane": "current"
     }, /* @__PURE__ */ React.createElement("span", {
       className: "rd-section"
-    }, "Current involvement"), /* @__PURE__ */ React.createElement("ul", {
+    }, "Involvement"), /* @__PURE__ */ React.createElement("ul", {
       className: "rd-view",
       "data-rd-person-topics": entry.topics.length
     }, entry.topics.map((involvement) => /* @__PURE__ */ React.createElement("li", {
@@ -1782,7 +1826,10 @@ function apply(ctx) {
       kind: "empty"
     }, "no axis of theirs here") : /* @__PURE__ */ React.createElement("ul", {
       className: "rd-axes"
-    }, involvement.axes.map((axis) => /* @__PURE__ */ React.createElement(PersonAxisRow, {
+    }, [
+      ...involvement.axes.filter((axis) => !isTerminalAxis(axis.state)),
+      ...involvement.axes.filter((axis) => isTerminalAxis(axis.state))
+    ].map((axis) => /* @__PURE__ */ React.createElement(PersonAxisRow, {
       axis,
       key: axis.id,
       onOpenEntity

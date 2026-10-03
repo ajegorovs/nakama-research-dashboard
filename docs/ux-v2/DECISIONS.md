@@ -331,3 +331,60 @@ most detailed. Navigation changes the view and does not mutate data.
 - **Remove the archived toggle** and show current items only. Refresh remains a secondary action. The
   read-only preview and the served-instance acceptance pass must distinguish these scopes; old screenshots
   and transcripts remain historical evidence, not silently rewritten records.
+
+---
+
+## 14. V1 — the visual-coherence pass (2026-10-03)
+
+Reading all ten montages together (corpus + crowded fixture × five views) showed the product structure
+coherent but the **visual system** not: elements meaning the same thing had evolved separately in each tab.
+V1 is that pass — its own unit, its own acceptance record, nothing here revising C1–C5.
+
+### 14.1 `--rd-gap` was dead, and that was the layout defect (repaired)
+
+`--rd-gap` was declared as `var(--rd-gap)` — a self-reference, so it computed to the empty string and the
+eleven `gap: var(--rd-gap)` rules that read it dropped. Sites with a literal value locally masked it
+(`.rd-current-work > .rd-axes { gap: 18px }`), which is why the page read as "dense" rather than "broken".
+Measured: computed `""` → `8px`. **8px is the repaired intended token, not a final tuning value** — contexts
+wanting a tighter or looser step take `gap-tight`/`gap-block` after the montages are read, rather than being
+hand-tuned on top of the repair. The two protected invariants (Problem/Activity dominance 1.67×, index 240px)
+are unmoved by it.
+
+### 14.2 The view's name is the page-level type step
+
+The token block topped out at the host's 16px card title, so the 16px shell brand outranked the 14px view
+title and every page read as a subsection of the title bar. `--rd-title-view` (23px) is now the largest
+page-level step and the view's hint sits on its own line, at the metadata step. No second token was added for
+the entity title: that is the host's own `--rd-title`, and a token nothing reads is the bloat this pass exists
+to remove.
+
+### 14.3 One visual Axis grammar, multiple truthful data sources (ruled, A3)
+
+One Axis appeared as four different objects: a head with no reading (Topics' fallback row), a row whose head
+was a plain `.rd-row` (Repositories), a row with a reading and a fold (People), and a card with head, reading,
+references and fold (Topics' detail). `AxisRow`/`AxisHead` now carry one shared shape — `head · reading ·
+blocker · references · disclosure` — with a **presentational** props interface: no projection type, no
+per-caller conditional inside it, every `data-rd-*` hook passed through by the caller. The reading is a **slot,
+not a field**: `AxisScan` carries no current state, so "no blocker recorded" stays the caller's own truthful
+sentence rather than prose the component invents.
+
+Adopted by all four surfaces (`AxisItem`, `AxisScanItem`, `PersonAxisRow`, and `AxisDetailCard`'s head), and
+verified by attribute set rather than by eye: **192 `data-rd-*` names before, 192 after, none lost, none
+invented** — the harness reads them, and for some checks they are the only way to tell which projection is on
+screen. The frozen `contract/` is untouched (A1); its omission of this primitive is historical fact, not a
+defect to patch.
+
+### 14.4 People's section is `Involvement`, terminal axes last (ruled, Q2)
+
+`CURRENT INVOLVEMENT` was false the moment completed work sat under it, and People was the one view rendering
+terminal axes inline while Topics and Repositories fold them out. The section is renamed **Involvement** and
+the axes are stably partitioned — non-terminal first, terminal last, each keeping its own state badge — so the
+projection's own order survives inside each group. One section, no `Current | Completed` sub-navigation.
+
+### 14.5 Rehearsed and rejected: the Progress index pill
+
+Moving the Progress index row's state pill up beside its title was built, measured and reverted. At 240px a
+full-size axis title cannot share a line with a pill — "PARKED · INFERRED" alone is ~90px — so the pill takes
+line 1 alone and the row grows to three lines, in the one rail the montage review already flags as "rows much
+taller". The other three index rails carry no pill in the index at all, so there is no established pattern for
+it to converge on. Deferred to the row-by-row pass, with its montage in hand.
