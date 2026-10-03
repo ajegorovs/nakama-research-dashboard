@@ -390,8 +390,31 @@ var css = `
 [data-plugin-id="research-dashboard"] .rd-views [aria-pressed="true"] { font-weight: 600; }
 /* The Progress index's subject switch: a control over the left column, so it sits with it rather than in
    the toolbar — the page it governs is the same page in both positions. */
-[data-plugin-id="research-dashboard"] .rd-progress-switch { margin-bottom: 10px; }
-[data-plugin-id="research-dashboard"] .rd-progress-switch [aria-pressed="true"] { font-weight: 600; }
+/* A joined segmented switch: white selected face against a darker muted track. */
+[data-plugin-id="research-dashboard"] .rd-progress-switch {
+  display: inline-flex;
+  width: fit-content;
+  gap: 0;
+  margin-bottom: 10px;
+  padding: 3px;
+  border: var(--rd-edge);
+  border-radius: 9px;
+  background: var(--muted, #e5e7eb);
+}
+[data-plugin-id="research-dashboard"] .rd-progress-switch [data-rd-progress-subview-option] {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  opacity: 0.72;
+  padding: 5px 12px;
+}
+[data-plugin-id="research-dashboard"] .rd-progress-switch [aria-pressed="true"] {
+  background: var(--card, #fff);
+  color: var(--foreground, #171717);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
+  font-weight: 600;
+  opacity: 1;
+}
 /* C8: the qualifier on a state is part of the claim, not decoration — quieter, never optional. */
 [data-plugin-id="research-dashboard"] .rd-claim-suffix { font-weight: 400; opacity: var(--rd-quiet); }
 [data-plugin-id="research-dashboard"] .rd-newtopic { flex-wrap: nowrap; }
@@ -551,6 +574,18 @@ var css = `
   gap: var(--rd-gap-block);
   min-width: 20rem;
   padding-left: 12px;
+}
+[data-plugin-id="research-dashboard"] .rd-progress-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+}
+[data-plugin-id="research-dashboard"] .rd-progress-title > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 /* Row 1 reuses C1's own dominance grid, the same rule the Topics and People panes use: the Problem is the main
    lane and the Activity its rail at no less than 1.25x. Row 2 and the support band size to how many sections
@@ -2420,10 +2455,6 @@ function apply(ctx) {
       "data-rd-progress-detail": "true",
       "data-rd-progress-detail-axis": activeAxis?.id ?? ""
     }, /* @__PURE__ */ React.createElement(DetailHeader, {
-      badge: activeAxis ? /* @__PURE__ */ React.createElement(StateBadge, {
-        confidence: activeAxis.stateConfidence,
-        state: activeAxis.state
-      }) : null,
       context: activeAxis ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement(EntityTag, {
         id: activeAxis.topicId,
         label: activeAxis.topicName,
@@ -2436,9 +2467,12 @@ function apply(ctx) {
         type: "axis"
       })) : null,
       title: /* @__PURE__ */ React.createElement("h3", {
-        className: "rd-strong",
+        className: "rd-strong rd-progress-title",
         "data-rd-progress-detail-title": "true"
-      }, activeAxis?.title ?? "Nothing is selected")
+      }, activeAxis ? /* @__PURE__ */ React.createElement(StateBadge, {
+        confidence: activeAxis.stateConfidence,
+        state: activeAxis.state
+      }) : null, /* @__PURE__ */ React.createElement("span", null, activeAxis?.title ?? "Nothing is selected"))
     }, activeAxis ? /* @__PURE__ */ React.createElement("span", {
       className: "rd-cluster",
       "data-rd-progress-recency": "true"
@@ -2491,7 +2525,7 @@ function apply(ctx) {
       "data-rd-progress-feed-count": feed?.eventCount ?? 0,
       "data-rd-progress-feed-mode": indexMode
     }, /* @__PURE__ */ React.createElement("h3", {
-      className: "rd-section"
+      className: "rd-side-title"
     }, "Recent activity"), /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta",
       "data-rd-progress-activity-total": "true"
@@ -2526,7 +2560,8 @@ function apply(ctx) {
       onClick: () => {
         setFeedAllFor(feedAll ? null : activeAxis?.id ?? "");
       },
-      variant: "outline"
+      size: "sm",
+      variant: "ghost"
     }, feedAll ? "Show fewer" : `Show all ${feed.events.length}`)) : null)), axisPlan !== null || openAxisProblems.length > 0 ? /* @__PURE__ */ React.createElement("div", {
       className: "rd-progress-row",
       "data-rd-progress-row": "true"
