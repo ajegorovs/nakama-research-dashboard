@@ -641,7 +641,7 @@ const css = `
 /*
  * One small vocabulary for type, spacing and quietness. The rules below used to carry ten literal type
  * sizes, seven gap values and five opacities — which reads as noise rather than hierarchy, and made every
- * later tweak a new number. Four type steps, three gaps and one quietness are the whole scale: the tier a
+ * later tweak a new number. Four type steps, four gaps and one quietness are the whole scale: the tier a
  * thing belongs to is now the thing you read, not the pixel it happens to sit at.
  *
  *   --rd-title  the host card's own title (16px, set by CardTitle) — the entity's name
@@ -656,7 +656,15 @@ const css = `
   --rd-quiet: 0.62;
   --rd-gap-row: 2px;
   --rd-gap-tight: 4px;
-  --rd-gap: var(--rd-gap);
+  /* V1 (2026-10-03). This read var(--rd-gap): a self-reference, which per CSS Variables makes the custom
+     property invalid at computed-value time — so the eleven 'gap: var(--rd-gap)' rules below resolved to
+     normal, i.e. to no gap at all, and the rows they govern sat tighter than designed. It was reported and
+     deliberately left alone in the C1 pass (docs/reviews/2026-10-02-c1-acceptance-record.md, "Not changed,
+     deliberately"), because repairing it moves geometry the accepted records had already measured. The V1
+     visual pass re-measures that geometry, so the token is repaired here — and the few places that had
+     papered over the hole with a literal (.rd-current-work > .rd-axes, gap: 18px) are the survivors to
+     reconcile, not the model to follow. */
+  --rd-gap: 8px;
   --rd-gap-block: 12px;
   /* One box edge and one inner line: a surface is a card, and everything inside it is a rule, not a box. */
   --rd-edge: 1px solid var(--border);
