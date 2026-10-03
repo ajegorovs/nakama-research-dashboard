@@ -1972,19 +1972,17 @@ function apply(ctx) {
       onClick: () => setSelectedId(entry.person.id),
       type: "button"
     }, /* @__PURE__ */ React.createElement("span", {
-      className: "rd-row"
-    }, /* @__PURE__ */ React.createElement("span", {
       className: "rd-strong"
     }, entry.person.displayName), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta",
+      "data-rd-person-context": "true"
+    }, involvementLine(entry), " · ", /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta",
       "data-rd-person-recency": entry.attributable ? entry.lastActivityAt ?? "none" : "unattributable"
     }, entry.attributable ? entry.lastActivityAt ? /* @__PURE__ */ React.createElement(RecencyLabel, {
       at: entry.lastActivityAt,
       prefix: "last activity "
-    }) : "nothing attributed yet" : "no account mapped")), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta",
-      "data-rd-person-context": "true"
-    }, involvementLine(entry)))))), selected ? /* @__PURE__ */ React.createElement(PersonPanel, {
+    }) : "nothing attributed yet" : "no account mapped")))))), selected ? /* @__PURE__ */ React.createElement(PersonPanel, {
       entry: selected,
       onOpenEntity,
       windowDays
@@ -2222,15 +2220,13 @@ function apply(ctx) {
       onClick: () => setSelectedId(entry.repository.id),
       type: "button"
     }, /* @__PURE__ */ React.createElement("span", {
-      className: "rd-row"
-    }, /* @__PURE__ */ React.createElement("span", {
       className: "rd-strong"
-    }, entry.repository.fullName), /* @__PURE__ */ React.createElement(RecencyLabel, {
-      at: entry.lastActivityAt
-    })), /* @__PURE__ */ React.createElement("span", {
+    }, entry.repository.fullName), /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta",
       "data-rd-repository-line": "true"
-    }, supportsLine(entry)))))), selected ? /* @__PURE__ */ React.createElement(Card, {
+    }, supportsLine(entry), " · ", /* @__PURE__ */ React.createElement(RecencyLabel, {
+      at: entry.lastActivityAt
+    })))))), selected ? /* @__PURE__ */ React.createElement(Card, {
       className: "rd-panel",
       "data-rd-repository-panel": selected.repository.fullName
     }, /* @__PURE__ */ React.createElement(CardHeader, null, /* @__PURE__ */ React.createElement(DetailHeader, {
@@ -2534,17 +2530,13 @@ function apply(ctx) {
       onClick: () => setSelectedAxisId(row.id),
       type: "button"
     }, /* @__PURE__ */ React.createElement("span", {
-      className: "rd-row"
-    }, /* @__PURE__ */ React.createElement("span", {
       className: "rd-strong"
     }, row.title), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta"
-    }, describeAge(row.recencyAt))), /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta"
     }, /* @__PURE__ */ React.createElement(StateBadge, {
       confidence: row.stateConfidence,
       state: row.state
-    }), ` · ${row.topicName} · ${problemCountLine(row)}${row.stale ? " · stale" : ""}`))))), problemsMode && problemRows.length === 0 ? /* @__PURE__ */ React.createElement("p", {
+    }), ` · ${row.topicName} · ${problemCountLine(row)}${row.stale ? " · stale" : ""}`, ` · ${describeAge(row.recencyAt)}`))))), problemsMode && problemRows.length === 0 ? /* @__PURE__ */ React.createElement("p", {
       className: "rd-muted",
       "data-rd-problem-index-empty": "true"
     }, "No problems yet.") : null, !problemsMode && progress && progress.axes.axes.length === 0 ? /* @__PURE__ */ React.createElement("p", {
@@ -3094,17 +3086,15 @@ function apply(ctx) {
         onClick: () => selectTopic(entry.topic.id),
         type: "button"
       }, /* @__PURE__ */ React.createElement("span", {
-        className: "rd-row"
-      }, /* @__PURE__ */ React.createElement("span", {
         className: "rd-strong"
-      }, entry.topic.name), entry.lastActivityAt ? /* @__PURE__ */ React.createElement(RecencyLabel, {
-        at: entry.lastActivityAt
-      }) : null), /* @__PURE__ */ React.createElement("span", {
+      }, entry.topic.name), /* @__PURE__ */ React.createElement("span", {
         className: "rd-cluster"
       }, /* @__PURE__ */ React.createElement("span", {
         className: "rd-meta",
         "data-rd-index-current": currentCount
-      }, countLabel(currentCount, "current axis", "current axes")), isStale ? /* @__PURE__ */ React.createElement("span", {
+      }, countLabel(currentCount, "current axis", "current axes")), entry.lastActivityAt ? /* @__PURE__ */ React.createElement(RecencyLabel, {
+        at: entry.lastActivityAt
+      }) : null, isStale ? /* @__PURE__ */ React.createElement("span", {
         className: "rd-count",
         "data-rd-index-stale": "true"
       }, "Stale") : null)));

@@ -3244,8 +3244,14 @@ export function apply(ctx: Context) {
                     account gets the missing-link fact instead — "no activity" would be a different and
                     false claim. `data-rd-person-recency` carries the timestamp, or `none` /
                     `unattributable`, so a check can compare the row against the payload it came from. */}
-                <span className="rd-row">
-                  <span className="rd-strong">{entry.person.displayName}</span>
+                <span className="rd-strong">{entry.person.displayName}</span>
+                <span className="rd-meta" data-rd-person-context="true">
+                  {involvementLine(entry)}
+                  {" · "}
+                  {/* V1/A4 — the shared index-row grammar: the name takes the row's full width and the recency
+                      joins the involvement line beneath it. The exceptional states are kept exactly as they
+                      were, and keep their own marker: a person with no attributable activity states that fact
+                      rather than an age, because "no activity" would be a different and false claim. */}
                   <span
                     className="rd-meta"
                     data-rd-person-recency={
@@ -3267,9 +3273,6 @@ export function apply(ctx: Context) {
                       "no account mapped"
                     )}
                   </span>
-                </span>
-                <span className="rd-meta" data-rd-person-context="true">
-                  {involvementLine(entry)}
                 </span>
               </button>
             </li>
@@ -3654,16 +3657,13 @@ export function apply(ctx: Context) {
                 onClick={() => setSelectedId(entry.repository.id)}
                 type="button"
               >
-                {/* The prototype's row, in C1's row grammar: the name, the age of its last recorded activity
-                    top-right, then what it supports. The age is `lastActivityAt` — the same fact the detail's
-                    age box states — so two rows are compared on one timestamp; the heading says the order is by
-                    name, so the age is not read as the sort. */}
-                <span className="rd-row">
-                  <span className="rd-strong">{entry.repository.fullName}</span>
-                  <RecencyLabel at={entry.lastActivityAt} />
-                </span>
+                {/* V1/A4 — the shared index-row grammar: the title takes the row's full width, and the age
+                    moves down to the line that already carries the row's other quiet facts. */}
+                <span className="rd-strong">{entry.repository.fullName}</span>
                 <span className="rd-meta" data-rd-repository-line="true">
                   {supportsLine(entry)}
+                  {" · "}
+                  <RecencyLabel at={entry.lastActivityAt} />
                 </span>
               </button>
             </li>
@@ -4243,26 +4243,22 @@ export function apply(ctx: Context) {
                   onClick={() => setSelectedAxisId(row.id)}
                   type="button"
                 >
-                  <span className="rd-row">
-                    <span className="rd-strong">{row.title}</span>
-                    {/* V1/A3 — the index grammar is the bare age, as on the other three rails; this row was
-                        the one place an index carried the label too, so the same fact read as "last activity
-                        today" in Progress and "today" everywhere else. The label belongs to the detail
-                        header's recency slot, not to the index. */}
-                    <span className="rd-meta">{describeAge(row.recencyAt)}</span>
-                  </span>
+                  {/* V1/A4 — the shared index-row grammar: the title takes the row's full width, and the age
+                      (V1/A3: the bare age, not the label) joins the pill line beneath it. */}
+                  <span className="rd-strong">{row.title}</span>
                   {/* V1 Task 2.5 rehearsed moving this pill up beside the title, and the render rejected it:
                       at 240px a full-size axis title cannot share the line with a pill ("PARKED · INFERRED" is
-                      ~90px), so the pill takes line 1 alone and the row grows to three lines — in the one rail
-                      the review's own table already flags as "rows much taller" (§1). The other three index
-                      rails carry no pill in the index at all, so this is not drift from a pattern the rest of
-                      the page already sets; it is a Progress-local choice, and it belongs to the row-by-row
-                      pass that has the montage in hand rather than to this extraction. */}
+                      ~90px), so the title would lose the line it now owns outright and the row would grow back
+                      to three lines — in the one rail the review's own table already flags as "rows much
+                      taller" (§1). The other three index rails carry no pill in the index at all, so this is
+                      not drift from a pattern the rest of the page already sets; it is a Progress-local
+                      choice, and it belongs to the row-by-row pass that has the montage in hand. */}
                   <span className="rd-meta">
                     <StateBadge confidence={row.stateConfidence} state={row.state} />
                     {` · ${row.topicName} · ${problemCountLine(row)}${
                       row.stale ? " · stale" : ""
                     }`}
+                    {` · ${describeAge(row.recencyAt)}`}
                   </span>
                 </button>
               </li>
@@ -5198,16 +5194,18 @@ export function apply(ctx: Context) {
                       onClick={() => selectTopic(entry.topic.id)}
                       type="button"
                     >
-                      <span className="rd-row">
-                        <span className="rd-strong">{entry.topic.name}</span>
-                        {entry.lastActivityAt ? (
-                          <RecencyLabel at={entry.lastActivityAt} />
-                        ) : null}
-                      </span>
+                      {/* V1/A4 — the index-row grammar, shared by all four rails: the title takes the row's
+                          full width and what used to compete with it for line 1 moves down. Here the age joins
+                          the counts that were already beneath. At 240px a title sharing its line with a
+                          right-aligned age wrapped even when it had room to fit. */}
+                      <span className="rd-strong">{entry.topic.name}</span>
                       <span className="rd-cluster">
                         <span className="rd-meta" data-rd-index-current={currentCount}>
                           {countLabel(currentCount, "current axis", "current axes")}
                         </span>
+                        {entry.lastActivityAt ? (
+                          <RecencyLabel at={entry.lastActivityAt} />
+                        ) : null}
                         {isStale ? (
                           <span className="rd-count" data-rd-index-stale="true">
                             Stale
