@@ -183,6 +183,25 @@ on white).
 - **Boundaries are stated, not implied.** Where something is out of reach (a host-owned control, a retired
   finding's subject), the record says so, so a reader does not mistake silence for coverage.
 
+## What is tracked
+
+Evidence accumulates faster than source, so the checkout carries three buckets (policy set 2026-10-03):
+
+- **Tracked permanently** — source, tests, migrations, the bundles install needs (`ui/app.js`, `actions/`),
+  the datasets' seed and provenance, the approved prototypes, the current canonical screenshot and acceptance
+  transcript per dataset and viewport, and the final acceptance records.
+- **Generated, never tracked** — side-by-side montages and their HTML wrappers, write-pass screenshots,
+  preview montage packs, per-iteration visual comparisons. If it can be rebuilt from the first bucket it
+  belongs in `.gitignore`, not in the index.
+- **Preserved by tag, not by the tip** — superseded checkpoints (`*.revision-<n>.txt`), earlier stage
+  transcripts, implementation diaries, review correspondence. A tag already carries them, and
+  `git show <tag>:<path>` recovers one, so the tip keeps only the current canonical set.
+
+Two follow-ups are recorded rather than done: the write pass still publishes into the read-shot directory
+instead of a scratch directory (`read-pass.sh` uses one `DEFAULT_SHOTS` for both passes, so `.gitignore`
+rules hold the line), and the derived prototype/montage packs under `docs/ux-v2/fidelity/` stay
+harness-coupled while that area is in active visual use.
+
 ## Commits and tags
 
 - Commit messages are imperative and **evidence-bearing**: what changed, what was measured, which build. The
