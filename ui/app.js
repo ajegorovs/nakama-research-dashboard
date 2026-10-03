@@ -109,6 +109,12 @@ var css = `
      reconcile, not the model to follow. */
   --rd-gap: 8px;
   --rd-gap-block: 12px;
+  /* V1/A4 (2026-10-03) — one index width. A shrinkable basis of 15rem with a 12rem floor let the rail give
+     ground whenever the detail wanted room, so the same rail laid out at a different width in each view and
+     long entity names wrapped to three and four lines. One basis, and the rail does not shrink below it:
+     where there is not room for both, .rd-split wraps the detail below rather than squeezing the index.
+     Progress used to carry its own 16rem override; it takes this one now. */
+  --rd-index-basis: 15rem;
   /* One box edge and one inner line: a surface is a card, and everything inside it is a rule, not a box. */
   --rd-edge: 1px solid var(--border);
   --rd-rule: 2px solid var(--border);
@@ -542,8 +548,7 @@ var css = `
   flex-wrap: wrap;
 }
 [data-plugin-id="research-dashboard"] .rd-index {
-  flex: 0 1 15rem;
-  min-width: 12rem;
+  flex: 0 0 var(--rd-index-basis);
   margin: 0;
   max-height: min(72vh, 760px);
   overflow-y: auto;
@@ -587,7 +592,7 @@ var css = `
    inside the Problem column. The sections inside the pane stay individually conditional, so a subject without a
    plan or without support material collapses honestly instead of reserving space for it. */
 [data-plugin-id="research-dashboard"] .rd-progress-top > .rd-progress-index {
-  flex: 0 1 16rem;
+  flex: 0 0 var(--rd-index-basis);
 }
 [data-plugin-id="research-dashboard"] .rd-progress-detail {
   border-left: 1px solid var(--border);
@@ -835,7 +840,7 @@ var css = `
    gives it its own two lanes: the work being done, then a quieter side rail. The rail keeps a rule
    instead of a box, because the detail is one page, not a dashboard of panels. */
 [data-plugin-id="research-dashboard"] .rd-topic-index {
-  flex: 0 1 15rem;
+  flex: 0 0 var(--rd-index-basis);
 }
 [data-plugin-id="research-dashboard"] .rd-topic-detail {
   flex: 1 1 34rem;
@@ -2642,15 +2647,15 @@ function apply(ctx) {
       "data-rd-progress-plan-claims-order": planClaimsOrder,
       "data-rd-progress-plan-steps": axisPlan.steps.length
     }, /* @__PURE__ */ React.createElement("div", {
-      className: "rd-cluster"
+      className: "rd-row"
     }, /* @__PURE__ */ React.createElement("span", {
       className: "rd-section"
     }, `Plan · ${countLabel(axisPlan.steps.length, "step", "steps")}`), /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta"
-    }, `${axisPlan.stepsDone} of ${axisPlan.steps.length} done`), planClaimsOrder ? null : /* @__PURE__ */ React.createElement("span", {
+    }, `${axisPlan.stepsDone} of ${axisPlan.steps.length} done`)), planClaimsOrder ? null : /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta",
       "data-rd-progress-plan-unordered": "true"
-    }, "unordered — no step claims a position")), /* @__PURE__ */ React.createElement("p", {
+    }, "unordered — no step claims a position"), /* @__PURE__ */ React.createElement("p", {
       className: "rd-meta"
     }, axisPlan.summary), /* @__PURE__ */ React.createElement("ul", {
       className: "rd-plan-steps",
@@ -2660,16 +2665,18 @@ function apply(ctx) {
       "data-rd-plan-step": step.id,
       "data-rd-plan-step-position": step.position === null ? "" : String(step.position),
       key: step.id
-    }, /* @__PURE__ */ React.createElement("div", {
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-row"
+    }, /* @__PURE__ */ React.createElement("span", {
       className: "rd-cluster"
     }, step.position === null ? null : /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta"
-    }, `${step.position + 1}.`), /* @__PURE__ */ React.createElement(StateBadge, {
+    }, `${step.position + 1}.`), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-strong"
+    }, step.title)), /* @__PURE__ */ React.createElement(StateBadge, {
       kind: "stored",
       state: step.state
-    }), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-strong"
-    }, step.title)), step.id === shownProblem?.planStepId ? /* @__PURE__ */ React.createElement("span", {
+    })), step.id === shownProblem?.planStepId ? /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta",
       "data-rd-plan-step-shown": "true"
     }, "the step the problem on screen sits on") : null)))) : null, openAxisProblems.length > 0 ? /* @__PURE__ */ React.createElement("section", {

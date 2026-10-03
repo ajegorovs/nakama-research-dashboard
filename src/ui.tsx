@@ -672,6 +672,12 @@ const css = `
      reconcile, not the model to follow. */
   --rd-gap: 8px;
   --rd-gap-block: 12px;
+  /* V1/A4 (2026-10-03) — one index width. A shrinkable basis of 15rem with a 12rem floor let the rail give
+     ground whenever the detail wanted room, so the same rail laid out at a different width in each view and
+     long entity names wrapped to three and four lines. One basis, and the rail does not shrink below it:
+     where there is not room for both, .rd-split wraps the detail below rather than squeezing the index.
+     Progress used to carry its own 16rem override; it takes this one now. */
+  --rd-index-basis: 15rem;
   /* One box edge and one inner line: a surface is a card, and everything inside it is a rule, not a box. */
   --rd-edge: 1px solid var(--border);
   --rd-rule: 2px solid var(--border);
@@ -1105,8 +1111,7 @@ const css = `
   flex-wrap: wrap;
 }
 [data-plugin-id="research-dashboard"] .rd-index {
-  flex: 0 1 15rem;
-  min-width: 12rem;
+  flex: 0 0 var(--rd-index-basis);
   margin: 0;
   max-height: min(72vh, 760px);
   overflow-y: auto;
@@ -1150,7 +1155,7 @@ const css = `
    inside the Problem column. The sections inside the pane stay individually conditional, so a subject without a
    plan or without support material collapses honestly instead of reserving space for it. */
 [data-plugin-id="research-dashboard"] .rd-progress-top > .rd-progress-index {
-  flex: 0 1 16rem;
+  flex: 0 0 var(--rd-index-basis);
 }
 [data-plugin-id="research-dashboard"] .rd-progress-detail {
   border-left: 1px solid var(--border);
@@ -1398,7 +1403,7 @@ const css = `
    gives it its own two lanes: the work being done, then a quieter side rail. The rail keeps a rule
    instead of a box, because the detail is one page, not a dashboard of panels. */
 [data-plugin-id="research-dashboard"] .rd-topic-index {
-  flex: 0 1 15rem;
+  flex: 0 0 var(--rd-index-basis);
 }
 [data-plugin-id="research-dashboard"] .rd-topic-detail {
   flex: 1 1 34rem;
@@ -4477,19 +4482,22 @@ export function apply(ctx: Context) {
                 data-rd-progress-plan-claims-order={planClaimsOrder}
                 data-rd-progress-plan-steps={axisPlan.steps.length}
               >
-                <div className="rd-cluster">
+                {/* A7: the label and the count were two spans in a 4px cluster, which rendered as
+                    "PLAN · 2 STEPS1 of 2 done" — the count collided with the label it was reporting on. One
+                    header row, the label left and the progress right, on a shared baseline. */}
+                <div className="rd-row">
                   <span className="rd-section">
                     {`Plan · ${countLabel(axisPlan.steps.length, "step", "steps")}`}
                   </span>
                   <span className="rd-meta">
                     {`${axisPlan.stepsDone} of ${axisPlan.steps.length} done`}
                   </span>
-                  {planClaimsOrder ? null : (
-                    <span className="rd-meta" data-rd-progress-plan-unordered="true">
-                      unordered — no step claims a position
-                    </span>
-                  )}
                 </div>
+                {planClaimsOrder ? null : (
+                  <span className="rd-meta" data-rd-progress-plan-unordered="true">
+                    unordered — no step claims a position
+                  </span>
+                )}
                 <p className="rd-meta">{axisPlan.summary}</p>
                 <ul className="rd-plan-steps" data-rd-plan-steps={axisPlan.steps.length}>
                   {axisPlan.steps.map((step) => (
@@ -4499,13 +4507,19 @@ export function apply(ctx: Context) {
                       data-rd-plan-step-position={step.position === null ? "" : String(step.position)}
                       key={step.id}
                     >
-                      <div className="rd-cluster">
-                        {step.position === null ? null : (
-                          <span className="rd-meta">{`${step.position + 1}.`}</span>
-                        )}
+                      {/* A7: the state took the row's right edge rather than its middle — as a cluster member
+                          it sat between the number and the title, so the one word a reader scans a step list
+                          for came last in the line. The shown-step marker stays a line of its own: it is a
+                          sentence, not a status, and inline it would crowd the title. */}
+                      <span className="rd-row">
+                        <span className="rd-cluster">
+                          {step.position === null ? null : (
+                            <span className="rd-meta">{`${step.position + 1}.`}</span>
+                          )}
+                          <span className="rd-strong">{step.title}</span>
+                        </span>
                         <StateBadge kind="stored" state={step.state} />
-                        <span className="rd-strong">{step.title}</span>
-                      </div>
+                      </span>
                       {step.id === shownProblem?.planStepId ? (
                         <span className="rd-meta" data-rd-plan-step-shown="true">
                           the step the problem on screen sits on
