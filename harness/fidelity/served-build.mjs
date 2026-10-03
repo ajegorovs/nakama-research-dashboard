@@ -13,7 +13,8 @@
  * about the missing helper. A missing helper now says so and exits 2.
  */
 import { chromium } from "playwright-core";
-import { existsSync, mkdirSync, readdirSync } from "node:fs";
+import { chromiumLaunchOptions } from "../chromium.mjs";
+import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -44,22 +45,10 @@ const PASSWORD =
   process.env.NAKAMA_PASSWORD ??
   "";
 
-const cachedChromium = () => {
-  const root = path.join(process.env.HOME ?? "", ".cache", "ms-playwright");
-  if (!existsSync(root)) return null;
-  for (const entry of readdirSync(root)) {
-    if (!entry.startsWith("chromium")) continue;
-    for (const candidate of [
-      path.join(root, entry, "chrome-linux", "chrome"),
-      path.join(root, entry, "chrome-linux", "headless_shell"),
-    ]) {
-      if (existsSync(candidate)) return candidate;
-    }
-  }
-  return null;
-};
-
-const browser = await chromium.launch({ executablePath: cachedChromium() ?? undefined });
+// The same shared resolver `harness/preview/capture.mjs` uses. The local probe this replaced only knew the
+// older `chrome-linux/chrome` cache layout, so on a machine whose Playwright cache carries the newer
+// `chrome-linux64/chrome` it found nothing and let the driver try to download its pinned revision.
+const browser = await chromium.launch(chromiumLaunchOptions());
 const context = await browser.newContext({ viewport: { width: VIEWPORT[0], height: VIEWPORT[1] } });
 const page = await context.newPage();
 
@@ -101,6 +90,13 @@ const markers = await page.evaluate(() => {
     views: [...scope.querySelectorAll("[data-rd-view-option]")].map((el) =>
       el.getAttribute("data-rd-view-option")
     ),
+    // Five peer tabs: which one the page reports active, and whether the Overview-only window selector is
+    // present (it belongs to Overview's heading; the other tabs read all time and carry none).
+    activeView: scope
+      .querySelector('[data-rd-view-option][aria-pressed="true"]')
+      ?.getAttribute("data-rd-view-option") ?? null,
+    activeWindow:
+      scope.querySelector('[data-rd-window][aria-pressed="true"]')?.getAttribute("data-rd-window") ?? null,
     title: (scope.querySelector(".rd-page-title")?.textContent ?? "(no .rd-page-title)").trim(),
     preU6_broadControls: /Add topic|Edit fields/i.test(scope.textContent ?? ""),
     u6_singleControl: /Read topic/i.test(scope.textContent ?? ""),
@@ -114,10 +110,22 @@ build.markers = markers;
 
 if (SHOTS !== null) {
   mkdirSync(SHOTS, { recursive: true });
-  for (const view of ["topics", "people", "repositories", "progress"]) {
+  // All five peer tabs, Overview included. Each is clicked through its own control and the active marker is
+  // checked, so a build whose tabs do not select cannot be photographed under a tab's name.
+  for (const view of ["overview", "topics", "people", "repositories", "progress"]) {
     const control = page.locator(`div[data-plugin-id] [data-rd-view-option="${view}"]`);
     if ((await control.count()) > 0) {
       await control.first().click();
+      await page
+        .waitForFunction(
+          (wanted) =>
+            document
+              .querySelector('div[data-plugin-id] [data-rd-view-option][aria-pressed="true"]')
+              ?.getAttribute("data-rd-view-option") === wanted,
+          view,
+          { timeout: 5000 }
+        )
+        .catch(() => console.warn(`served-build: view ${view} did not report active after click`));
       await page.waitForTimeout(900);
     }
     await page.screenshot({

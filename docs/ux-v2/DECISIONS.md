@@ -300,3 +300,34 @@ rather than per instance or per view.
   `NAKAMA_URL`, so an inherited value silently redirected a "corpus" reinstall to the fixture — reported success,
   new version, previous bytes still served. The wrapper resolves the URL from `--dataset`/`--url` and exports it
   explicitly, and the served-build guard runs as a precondition that REFUSES (exit 3) rather than recording.
+
+## 13. Prototype navigation and view-specific recency (2026-10-03)
+
+The owner restored the approved prototypes' five equal-style top-level entries: **Overview, Topics, People,
+Repositories, Progress**. Overview is the brief recency/status summary; Topics expands one project's latest
+changes and current axes; the other views expose different facets of the same information, with Progress the
+most detailed. Navigation changes the view and does not mutate data.
+
+- **Supersedes §3 and §5's four-tab/default-landing navigation ruling.** Overview is now a normal peer tab,
+  selected on entry. The shell brand/title is not the special fifth route home. The five-tab prototype markup
+  and `contract/interaction-spec.md` §1 are again authoritative for navigation. §7's two-heading rule is
+  superseded where it depended on a persistent `Research overview` heading: each view has its own heading,
+  while the top bar carries a dashboard brand.
+- **Time scope belongs to Overview alone**, beside its heading as in `contract/prototypes/overview.html`.
+  Its 7/14/30-day and All choices answer whether a project moved recently or has been quiet; changing that
+  choice does not alter the data shown by the other four views.
+- **Other views show all-time, recency-first recent activity**, with a provisional visible lead of **five
+  events** so the last change and a few predecessors fit the page. An existing Show all affordance retains
+  access to older entries; this is a display limit, not a claim that only five events exist. Entity indices
+  are not silently truncated to five subjects. The owner will revisit the lead size later.
+- **Progress remains a state dashboard, not another activity-log page.** Its selected Axis/Problem, optional
+  Plan, open-problem inventory, Repository threads, Evidence and Human steering keep the accepted C4 hierarchy.
+  One selected-axis Activity rail is supporting chronology: newest five initially, the authoritative all-time
+  event total labelled separately from the returned bucket, with Show all limited to that bucket. Retire the
+  old window-wide footer now that Progress has no time window. The top-left is the **current selected Problem**,
+  not a duplicate open-problems inventory; its statement/status/factual context are prominent, while the
+  inventory stays below. The projection has no distinct explanatory/current-reading field, so none is
+  fabricated to mimic the prototype's sample prose.
+- **Remove the archived toggle** and show current items only. Refresh remains a secondary action. The
+  read-only preview and the served-instance acceptance pass must distinguish these scopes; old screenshots
+  and transcripts remain historical evidence, not silently rewritten records.

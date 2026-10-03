@@ -47,6 +47,12 @@ corpus's Progress view opens on a completed axis with no open problem. The captu
 and, where the dataset carries a populated subject, refuses to write unless that populated detail is what
 ended up on screen.
 
+The page is **five peer tabs** — Overview, Topics, People, Repositories, Progress — with Overview the
+default, and the capture clicks each tab's own control and refuses unless the page reports that same tab
+active (`aria-pressed="true"`). Overview is the only tab whose data is scoped by a window; its selector
+lives in its own heading, so the capture also checks that Overview renders a single pressed window option
+inside `[data-rd-view-heading="overview"]` and that a non-Overview tab carries none.
+
 The browser is resolved by `harness/chromium.mjs` (env `CHROMIUM_EXECUTABLE` → the Playwright cache, whatever
 revision is present → a system chromium), so nothing downloads and no user path is hardcoded.
 
@@ -103,8 +109,9 @@ prints the Fixture E constants and function it read. To assert the payloads them
 `bun harness/preview/test-fixtures.mjs` — it builds both datasets and checks that each Progress payload
 carries its problem rows, in every window.
 
-Both windows the page offers (7 / 14 / 30 / all time) are built for real, because the window is the page's
-only query-level control and a preview where clicking "30 days" errors is lying about the control.
+All four windows the page offers (7 / 14 / 30 / all time) are built for real. The window is **Overview's**
+only query-level control — the other four tabs read all time — and a preview where clicking "30 days" errors
+is lying about the control.
 
 ## Boundaries
 
@@ -138,10 +145,13 @@ On 2026-10-03, on a bare clone, with the checkout above at `v0.4.31`:
   **2** repositories (`layout-fixture-calls.mjs --check` prints that declared count); the third,
   `fixture/0-bare-repository`, is named only by an activity in the transcript, so the store derives it and the
   page shows 3. Declared and rendered are different numbers for the same dataset, and both are correct.
-- The page lands on the default aggregation — `landing=true`, no view pressed, both columns — which is
-  exactly what both committed transcripts assert (`the shell opens on the default landing`, `the landing
-  shows both aggregation columns`). No console or page errors; the only failed request is the browser's
-  automatic `favicon.ico`.
+- The page opens on **Overview**, the default peer tab. The capture finds all five tabs
+  (`data-rd-view-option`); each clicked tab reported itself active (`aria-pressed="true"`); Overview shows
+  the landing aggregation in both columns and its window selector (7 / 14 / 30 / all time, 14 days pressed)
+  inside its own heading (`[data-rd-view-heading="overview"]`); and the other four tabs read all time and
+  render no window selector. No tab renders an "archived" toggle — it was removed. This supersedes the
+  earlier "default landing, no view pressed" measurement: Overview is a selected tab, not an unselected
+  shell landing.
 - **Progress is populated on both datasets** (measured on the same 2026-10-03 checkout): `corpus` → 3
   problems, 2 open / 1 resolved, each on its own repository and event, derived from its own unmerged pull
   requests; `fixture` → Fixture E's 3 problems (one on a plan step on two repositories with a person, two

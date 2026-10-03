@@ -408,16 +408,15 @@ if (NEGATIVE) {
 }
 
 const goToView = async (view) => {
-  if (view === "overview") {
-    const home = root.locator('[data-rd-home="available"]');
-    if ((await home.count()) > 0) await home.first().click();
-    await page.waitForTimeout(250);
-    return (await root.locator("[data-rd-landing]").count()) > 0;
-  }
+  // §13: every view — Overview included — is a peer tab in the toolbar. Overview's tab renders the landing
+  // (the aggregation), so "overview" is no longer a shell home control but just another tab.
   const option = root.locator(`[data-rd-view-option="${view}"]`);
   if ((await option.count()) === 0) return false;
   await option.first().click();
-  await page.waitForTimeout(350);
+  await page.waitForTimeout(view === "overview" ? 250 : 350);
+  if (view === "overview") {
+    return (await root.locator("[data-rd-landing]").count()) > 0;
+  }
   return true;
 };
 
@@ -648,44 +647,49 @@ console.log("");
     entered === null ? "Tab never reached the plugin" : `first plugin control is tab stop ${entered} from the top of the document`);
 }
 
-// ---- the shell title / home regression -----------------------------------------------------------------------
+// ---- the Overview-tab / window regression ---------------------------------------------------------------------
 console.log("");
 {
-  const reached = await goToView("repositories");
-  if (!reached) skip("Enter on the title returns to the landing and keeps the window", "no repositories view in this build");
+  // §13: the shell title is static text now, so it is not the way back. The navigation regression this block
+  // protects is that the **Overview tab** is keyboard reachable from a subview and activating it returns to the
+  // landing without losing the reader's window (the window control lives on Overview's heading).
+  const reached = await goToView("overview");
+  if (!reached) skip("Enter on the Overview tab returns to the landing and keeps the window", "no Overview tab in this build");
   else {
     const windows = root.locator("[data-rd-window]");
     const windowCount = await windows.count();
-    if (windowCount === 0) skip("Enter on the title returns to the landing and keeps the window", "this build exposes no window control");
+    if (windowCount === 0) skip("Enter on the Overview tab returns to the landing and keeps the window", "this build exposes no window control");
     else {
       const chosen = windowCount > 1 ? windows.nth(1) : windows.first();
       const chosenDays = await chosen.getAttribute("data-rd-window");
       await chosen.click();
       await page.waitForTimeout(300);
-      const homeCount = await root.locator('[data-rd-home="available"]').count();
-      check("the title is a control on a subview", homeCount > 0, `[data-rd-home="available"] x${homeCount}`);
-      if (homeCount > 0) {
-        // Reach it the way a keyboard user does: rewind to the top of the document and tab forward until the
-        // title holds focus. Tabbing forward from wherever focus happens to be would never arrive — the title
-        // sits *before* the view controls in document order.
+      // Navigate to a subview, so returning to Overview is a real navigation rather than a no-op.
+      const onSubview = await goToView("topics");
+      if (!onSubview) {
+        skip("Enter on the Overview tab returns to the landing and keeps the window", "no Topics tab to leave Overview with");
+      } else {
+        // Reach the Overview tab the way a keyboard user does: rewind to the top of the document and tab forward
+        // until it holds focus. Tabbing from wherever focus happens to be would never arrive — the tab sits
+        // *before* the view-specific controls in document order.
         await page.evaluate(() => window.__fmRewind());
         let focused = null;
-        for (let i = 0; i < MAX_TAB_PER_VIEW && focused !== "home"; i += 1) {
+        for (let i = 0; i < MAX_TAB_PER_VIEW && focused !== "overview"; i += 1) {
           await page.keyboard.press("Tab");
           // Focus passes through the shell chrome before it reaches the plugin, so `null` here means "not yet",
           // not "gone" — the loop's budget is what ends this, and the check below reports where it stopped.
           focused = await page.evaluate((plugin) => {
             const el = document.activeElement;
             if (!el || !el.closest(`div[data-plugin-id="${plugin}"]`)) return null;
-            return el.hasAttribute("data-rd-home") ? "home" : "other";
+            return el.getAttribute("data-rd-view-option") === "overview" ? "overview" : "other";
           }, PLUGIN_ID);
         }
-        check("the title can be reached and holds keyboard focus", focused === "home", `stopped at: ${focused}`);
-        if (focused === "home") {
+        check("the Overview tab can be reached and holds keyboard focus", focused === "overview", `stopped at: ${focused}`);
+        if (focused === "overview") {
           await page.keyboard.press("Enter");
           await page.waitForTimeout(400);
           const landing = (await root.locator("[data-rd-landing]").count()) > 0;
-          check("Enter on the title returns to the landing", landing, landing ? "the landing rendered" : "still on the subview");
+          check("Enter on the Overview tab returns to the landing", landing, landing ? "the landing rendered" : "still on the subview");
           const pressed = await page.evaluate(
             (days) => document.querySelector(`[data-rd-window="${days}"]`)?.getAttribute("aria-pressed"),
             chosenDays

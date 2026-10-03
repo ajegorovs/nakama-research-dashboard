@@ -46,12 +46,14 @@ var WINDOW_OPTIONS = [
   { days: 0, label: "All time" }
 ];
 var VIEW_OPTIONS = [
+  { label: "Overview", value: "overview" },
   { label: "Topics", value: "topics" },
   { label: "People", value: "people" },
   { label: "Repositories", value: "repositories" },
   { label: "Progress", value: "progress" }
 ];
 var VIEW_HEADINGS = {
+  overview: "Topic and repository activity in the window you choose",
   people: "Recent activity is factual, not a workload score",
   progress: "Problem first; execution detail beneath it",
   repositories: "Alphabetical by name · factual context, never scored",
@@ -68,8 +70,8 @@ var PROGRESS_INDEX_OPTIONS = [
   { label: "Axes", value: "axes" },
   { label: "Problems", value: "problems" }
 ];
-var FEED_LEAD = 12;
-var RAIL_ACTIVITY_LEAD = 4;
+var FEED_LEAD = 5;
+var RAIL_ACTIVITY_LEAD = 5;
 var TERMINAL_AXIS_STATES = ["completed", "abandoned"];
 var isTerminalAxis = (state) => TERMINAL_AXIS_STATES.includes(state);
 var css = `
@@ -214,6 +216,34 @@ var css = `
   padding-left: 0;
   border-left: 0;
 }
+[data-plugin-id="research-dashboard"] [data-rd-topbar] {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+[data-plugin-id="research-dashboard"] [data-rd-topbar] .rd-page-title {
+  white-space: nowrap;
+}
+[data-plugin-id="research-dashboard"] [data-rd-topbar] .rd-toolbar {
+  flex: 1 1 auto;
+  justify-content: space-between;
+}
+[data-plugin-id="research-dashboard"] [data-rd-topbar] .rd-group {
+  border: 0;
+  padding: 0;
+}
+[data-plugin-id="research-dashboard"] .rd-views { gap: 2px; }
+[data-plugin-id="research-dashboard"] .rd-views [data-rd-view-option] {
+  border-color: transparent;
+  background: transparent;
+}
+[data-plugin-id="research-dashboard"] .rd-views [aria-pressed="true"] {
+  border-color: var(--border);
+  background: var(--card, #fff);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+[data-plugin-id="research-dashboard"] .rd-views [data-rd-view-option]:hover {
+  border-color: var(--border);
+}
 [data-plugin-id="research-dashboard"] .rd-muted { font-size: var(--rd-meta); opacity: var(--rd-quiet); }
 [data-plugin-id="research-dashboard"] .rd-error { color: var(--destructive, #b91c1c); font-size: var(--rd-body); }
 [data-plugin-id="research-dashboard"] .rd-meta {
@@ -273,6 +303,12 @@ var css = `
   flex: 0 0 100%;
   gap: var(--rd-gap-block);
   grid-column: 1 / -1;
+}
+/* Overview's heading carries the window selector at its right edge: the control belongs to the tab, so it
+   sits with the heading that names it rather than in the global toolbar. */
+[data-plugin-id="research-dashboard"] .rd-overview-head {
+  align-items: center;
+  justify-content: space-between;
 }
 [data-plugin-id="research-dashboard"] .rd-view-title {
   font-size: 14px;
@@ -525,6 +561,20 @@ var css = `
   padding: 0 0 0 10px;
   display: grid;
   gap: var(--rd-gap-tight);
+}
+[data-plugin-id="research-dashboard"] .rd-progress-problem > .rd-problem-card {
+  background: var(--card, #fff);
+  border: var(--rd-edge);
+  border-left: 3px solid var(--border);
+  border-radius: 8px;
+  gap: 10px;
+  min-height: 165px;
+  padding: 14px 16px;
+}
+[data-plugin-id="research-dashboard"] .rd-progress-problem > .rd-problem-card > .rd-strong {
+  font-size: 16px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 [data-plugin-id="research-dashboard"] .rd-problem-card p {
   margin: 0;
@@ -821,7 +871,6 @@ function apply(ctx) {
     SelectItem,
     SelectTrigger,
     SelectValue,
-    Switch,
     Textarea
   } = ctx.ui;
   ctx.styles(css);
@@ -1478,7 +1527,7 @@ function apply(ctx) {
       });
     }), items.length === 0 ? /* @__PURE__ */ React.createElement("li", null, /* @__PURE__ */ React.createElement(Notice, {
       kind: "empty"
-    }, "Nothing recorded in", " ", windowDays === 0 ? "any window" : `the last ${countLabel(windowDays, "day", "days")}`, ".")) : null);
+    }, windowDays === 0 ? "Nothing recorded yet." : `Nothing recorded in the last ${countLabel(windowDays, "day", "days")}.`)) : null);
   }
   function PersonAxisRow({
     axis,
@@ -1759,9 +1808,12 @@ function apply(ctx) {
   }
   function LandingView({
     blocked,
+    busy,
     onOpenEntity,
+    onWindowChange,
     repositories,
-    topics
+    topics,
+    windowDays
   }) {
     const stateWords = ["blocked", "active", "draft", "parked", "usable"];
     function currentWorkLine(entry) {
@@ -1776,14 +1828,20 @@ function apply(ctx) {
       className: "rd-landing",
       "data-rd-landing": topics.length + repositories.length
     }, /* @__PURE__ */ React.createElement("div", {
-      className: "rd-view-heading",
+      className: "rd-view-heading rd-overview-head",
       "data-rd-view-heading": "overview"
+    }, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-cluster"
     }, /* @__PURE__ */ React.createElement("h3", {
       className: "rd-view-title",
       "data-rd-view-title": "overview"
     }, "Overview"), /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta"
-    }, "Both columns come from the same overview read the four views use")), /* @__PURE__ */ React.createElement("div", {
+    }, VIEW_HEADINGS.overview)), /* @__PURE__ */ React.createElement(WindowControl, {
+      disabled: busy,
+      onChange: onWindowChange,
+      value: windowDays
+    })), /* @__PURE__ */ React.createElement("div", {
       className: "rd-landing-grid"
     }, /* @__PURE__ */ React.createElement("section", {
       "aria-label": "Topic activity",
@@ -2132,9 +2190,7 @@ function apply(ctx) {
     people,
     preselect,
     progress,
-    repositories,
-    timeline,
-    windowDays
+    repositories
   }) {
     const [selectedAxisId, setSelectedAxisId] = React.useState(null);
     const [selectedProblemId, setSelectedProblemId] = React.useState(null);
@@ -2152,7 +2208,6 @@ function apply(ctx) {
         setSelectedProblemId(preselect.id);
       }
     }, [preselect?.id, preselect?.seq, preselect?.type]);
-    const windowEventCount = timeline.reduce((total, group) => total + group.eventCount, 0);
     const axisRows = progress?.axes.axes ?? [];
     const problemRows = progress?.problems.problems ?? [];
     const problemsMode = indexMode === "problems";
@@ -2355,7 +2410,7 @@ function apply(ctx) {
     }, /* @__PURE__ */ React.createElement("h3", {
       className: "rd-section",
       "data-rd-progress-problem-heading": "true"
-    }, problemsMode ? "Problem" : `Open problems (${activeAxis?.openProblems ?? 0})`), problemsMode && shownProblem ? /* @__PURE__ */ React.createElement("span", {
+    }, "Current problem"), problemsMode && shownProblem ? /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta",
       "data-rd-progress-problem-context": "true"
     }, problemContext(shownProblem)) : null, activeAxis === null && !problemsMode ? /* @__PURE__ */ React.createElement("p", {
@@ -2388,13 +2443,16 @@ function apply(ctx) {
       "data-rd-progress-feed-mode": indexMode
     }, /* @__PURE__ */ React.createElement("h3", {
       className: "rd-section"
-    }, `Activity (${activeAxis?.activityInWindow ?? 0})`), problemsMode && activeAxis ? /* @__PURE__ */ React.createElement("span", {
+    }, "Recent activity"), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta",
+      "data-rd-progress-activity-total": "true"
+    }, countLabel(activeAxis?.activityInWindow ?? 0, "recorded event", "recorded events"), " total"), problemsMode && activeAxis ? /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta",
       "data-rd-progress-feed-parent": "true"
     }, `on ${activeAxis.title}`) : null, feed === null || feed.events.length === 0 ? /* @__PURE__ */ React.createElement("p", {
       className: "rd-muted",
       "data-rd-progress-feed-empty": "true"
-    }, "Nothing recorded against this axis in this window.") : /* @__PURE__ */ React.createElement("ul", {
+    }, "Nothing recorded against this axis.") : /* @__PURE__ */ React.createElement("ul", {
       className: "rd-feed",
       "data-rd-progress-feed": feed.events.length,
       "data-rd-progress-feed-shown": feedShown.length
@@ -2556,21 +2614,18 @@ function apply(ctx) {
       className: "rd-meta"
     }, `on the axis · ${claim.authorType} · ${claim.recordedAt.slice(0, 10)}${claim.confidence ? ` · ${claim.confidence}` : ""}`)), /* @__PURE__ */ React.createElement("p", {
       className: "rd-steering-text"
-    }, claim.text)))) : null) : null) : null)), /* @__PURE__ */ React.createElement("p", {
-      className: "rd-muted",
-      "data-rd-progress-summary": "true"
-    }, windowDays === 0 ? "All time" : `Last ${countLabel(windowDays, "day", "days")}`, " ", "· ", countLabel(windowEventCount, "event", "events"), " recorded across", " ", countLabel(timeline.length, "topic", "topics"), " in this window — the reading above is the selected ", problemsMode ? "problem" : "axis"));
+    }, claim.text)))) : null) : null) : null)));
   }
   function ResearchPage() {
-    const [overview, setOverview] = React.useState(null);
-    const [view, setView] = React.useState(null);
+    const [loadedOverview, setOverview] = React.useState(null);
+    const [loadedScope, setLoadedScope] = React.useState(null);
+    const [view, setView] = React.useState("overview");
     const [entityTarget, setEntityTarget] = React.useState(null);
     function openEntity(type, id) {
       setEntityTarget({ id, seq: (entityTarget?.seq ?? 0) + 1, type });
       setView(ENTITY_VIEW[type]);
     }
     const [windowDays, setWindowDays] = React.useState(14);
-    const [includeArchived, setIncludeArchived] = React.useState(false);
     const [expandedId, setExpandedId] = React.useState(null);
     React.useEffect(() => {
       if (entityTarget?.type === "topic") {
@@ -2618,23 +2673,31 @@ function apply(ctx) {
         }
       }
     }
-    async function load(nextWindow, archived) {
-      const scope = {
-        activitySinceDays: nextWindow,
-        ...archived ? { includeArchived: true } : {}
-      };
+    const loadSeq = React.useRef(0);
+    const scopeWindow = view === "overview" ? windowDays : 0;
+    const overview = loadedScope === scopeWindow ? loadedOverview : null;
+    const visibleProgress = loadedScope === scopeWindow ? progress : null;
+    async function load(nextWindow) {
+      const seq = ++loadSeq.current;
+      const scope = { activitySinceDays: nextWindow };
       const result = await call("get_overview", scope);
-      if (!ctx.signal.aborted && result) {
-        setOverview(result);
+      if (loadSeq.current !== seq || ctx.signal.aborted) {
+        return;
       }
       const progressResult = await call("get_progress", scope);
-      if (!ctx.signal.aborted) {
-        setProgress(progressResult ? progressResult : null);
+      if (loadSeq.current !== seq || ctx.signal.aborted) {
+        return;
       }
+      setOverview(result ? result : null);
+      setProgress(progressResult ? progressResult : null);
+      setLoadedScope(nextWindow);
+    }
+    function reloadCurrent() {
+      return load(scopeWindow);
     }
     React.useEffect(() => {
-      load(windowDays, includeArchived);
-    }, [windowDays, includeArchived]);
+      load(scopeWindow);
+    }, [scopeWindow]);
     async function loadDetail(topicId) {
       const result = await call("get_topic", {
         topicId
@@ -2703,7 +2766,7 @@ function apply(ctx) {
         setCorrection(null);
         setConflict(null);
         await loadDetail(detail.topic.id);
-        await load(windowDays, includeArchived);
+        await reloadCurrent();
       }
     }
     async function reloadAxis(topicId, axisId) {
@@ -2752,7 +2815,7 @@ function apply(ctx) {
         setActivitySummary("");
         setActivitySourceRef("");
         await loadDetail(expandedId);
-        await load(windowDays, includeArchived);
+        await reloadCurrent();
       }
     }
     const topics = overview?.topics ?? [];
@@ -2779,15 +2842,10 @@ function apply(ctx) {
     }, /* @__PURE__ */ React.createElement("div", {
       className: "rd-row",
       "data-rd-topbar": "true"
-    }, view === null ? /* @__PURE__ */ React.createElement("h2", {
+    }, /* @__PURE__ */ React.createElement("h2", {
       className: "rd-page-title",
       "data-rd-home": "current"
-    }, "Research overview") : /* @__PURE__ */ React.createElement("button", {
-      className: "rd-page-title rd-home",
-      "data-rd-home": "available",
-      onClick: () => setView(null),
-      type: "button"
-    }, "Research overview"), /* @__PURE__ */ React.createElement("div", {
+    }, "Research dashboard"), /* @__PURE__ */ React.createElement("div", {
       className: "rd-toolbar",
       "data-rd-toolbar": "true"
     }, /* @__PURE__ */ React.createElement("div", {
@@ -2799,28 +2857,11 @@ function apply(ctx) {
       value: view
     })), /* @__PURE__ */ React.createElement("div", {
       className: "rd-group",
-      "data-rd-group": "window"
-    }, /* @__PURE__ */ React.createElement(WindowControl, {
-      disabled: busy,
-      onChange: setWindowDays,
-      value: windowDays
-    }), /* @__PURE__ */ React.createElement("div", {
-      className: "rd-cluster"
-    }, /* @__PURE__ */ React.createElement(Switch, {
-      "aria-label": "Show archived topics",
-      checked: includeArchived,
-      disabled: busy,
-      onCheckedChange: (next) => setIncludeArchived(next === true),
-      size: "sm"
-    }), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-muted"
-    }, "archived"))), /* @__PURE__ */ React.createElement("div", {
-      className: "rd-group",
       "data-rd-group": "actions"
     }, /* @__PURE__ */ React.createElement(Button, {
       disabled: busy,
       onClick: () => {
-        load(windowDays, includeArchived);
+        reloadCurrent();
       },
       variant: "outline"
     }, "Refresh")))), error ? /* @__PURE__ */ React.createElement("p", {
@@ -2835,11 +2876,14 @@ function apply(ctx) {
       countLabel(counts.axes, "axis", "axes"),
       countLabel(counts.people, "person", "people"),
       countLabel(counts.repositories, "repository", "repositories")
-    ].join(" · ") : "loading…")), view === null ? /* @__PURE__ */ React.createElement(LandingView, {
+    ].join(" · ") : "loading…")), view === "overview" ? /* @__PURE__ */ React.createElement(LandingView, {
       blocked: overview?.blocked ?? [],
+      busy,
       onOpenEntity: openEntity,
+      onWindowChange: setWindowDays,
       repositories: overview?.repositories ?? [],
-      topics
+      topics,
+      windowDays
     }) : null, view === "topics" ? /* @__PURE__ */ React.createElement("div", {
       className: "rd-split",
       "data-rd-view": "topics"
@@ -3114,7 +3158,7 @@ function apply(ctx) {
       people: overview?.people ?? [],
       preselect: entityTarget?.type === "person" ? entityTarget : null,
       truncated: overview?.peopleTruncated === true,
-      windowDays
+      windowDays: scopeWindow
     }) : null, view === "repositories" ? /* @__PURE__ */ React.createElement(RepositoriesView, {
       onOpenEntity: openEntity,
       people: overview?.people ?? [],
@@ -3122,15 +3166,13 @@ function apply(ctx) {
       preselect: entityTarget?.type === "repository" ? entityTarget : null,
       repositories: overview?.repositories ?? [],
       truncated: overview?.repositoriesTruncated === true,
-      windowDays
+      windowDays: scopeWindow
     }) : null, view === "progress" ? /* @__PURE__ */ React.createElement(ProgressView, {
       onOpenEntity: openEntity,
       people: overview?.people ?? [],
       preselect: entityTarget && (entityTarget.type === "axis" || entityTarget.type === "problem") ? entityTarget : null,
-      progress,
-      repositories: overview?.repositories ?? [],
-      timeline: overview?.timeline ?? [],
-      windowDays
+      progress: visibleProgress,
+      repositories: overview?.repositories ?? []
     }) : null, view === "topics" && overview && topics.length === 0 ? /* @__PURE__ */ React.createElement(Card, null, /* @__PURE__ */ React.createElement(CardContent, null, /* @__PURE__ */ React.createElement("p", {
       className: "rd-muted"
     }, "No topics yet. Add one above, or let the agent record what the group is working on."))) : null);

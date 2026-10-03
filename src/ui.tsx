@@ -3,19 +3,17 @@
 /** @jsxFrag React.Fragment */
 
 /**
- * Plugin page — the overview (C4).
+ * Plugin page — the research dashboard.
  *
- * The default screen is the group's 10-second view, and it renders from **one** `get_overview` call:
- * one card per topic, and under each topic the scan order the reviewer settled —
- * topic name → people → axis state counts → the most relevant axes (kind, repo/branch/PR line,
- * current state, blocker) → a recent-activity summary. Expanding a card shows the remaining axes and
- * the editing surface (fields, status, activity) that generation 1 kept as its whole page; this is
- * the "detail editing underneath" the redesign asked to retain, which C5 deepens and C8 annotates
- * with provenance.
+ * Five peer tabs: **Overview, Topics, People, Repositories, Progress**. Overview is the default
+ * landing and the only tab whose data is scoped by a window (7d / 14d / 30d / all time, offered by its
+ * own heading); the other four read **all time**, so a reader never has to wonder whether a piece of
+ * work is missing because it fell outside a window. Overview's window re-issues `get_overview` with a
+ * different `activitySinceDays`, which the store treats as a parameter rather than stored state.
  *
- * The only control that changes the *query* is the window (7d / 14d / 30d / all time): it re-issues
- * `get_overview` with a different `activitySinceDays`, which the store treats as a parameter rather
- * than stored state. Everything else on the page is presentation.
+ * Each non-Overview tab's read is `get_overview` + `get_progress` at `activitySinceDays: 0`; the two
+ * are issued together so the Progress index and the timeline it rides are scoped the same. Everything
+ * else on the page is presentation.
  *
  * No personal identifiers live here: names shown are the display names the group itself entered into
  * the dashboard.
@@ -547,12 +545,12 @@ const COUNTED_STATES: AxisState[] = ["blocked", "active", "draft", "parked"];
 const OTHER_STATES: AxisState[] = ["completed", "abandoned"];
 
 /**
- * The three views of one page (C6). The reviewer's symmetry, in the order a reader asks about it:
- * what research directions are active (Topics, the default), what each person is on (People), what is
- * happening in each codebase (Repositories). The counts line under the header is the compressed
- * synthesis they all share.
+ * The five peer tabs, in the prototype's order. Overview is the default landing and the only tab whose
+ * data is scoped by a window; Topics, People, Repositories and Progress read all time so nothing is
+ * hidden behind a window the reader did not choose.
  */
 const VIEW_OPTIONS = [
+  { label: "Overview", value: "overview" },
   { label: "Topics", value: "topics" },
   { label: "People", value: "people" },
   { label: "Repositories", value: "repositories" },
@@ -567,6 +565,7 @@ type ViewName = (typeof VIEW_OPTIONS)[number]["value"];
  * nothing rather than something invented.
  */
 const VIEW_HEADINGS: Record<ViewName, string> = {
+  overview: "Topic and repository activity in the window you choose",
   people: "Recent activity is factual, not a workload score",
   progress: "Problem first; execution detail beneath it",
   // The repository rollup is ordered by full name (`ORDER BY full_name COLLATE NOCASE`), so the hint says that.
@@ -606,24 +605,26 @@ type ProgressIndexMode = (typeof PROGRESS_INDEX_OPTIONS)[number]["value"];
 /** How many axes a collapsed card leads with — "then 2–4 most relevant axes". */
 
 /**
- * How many events the Progress feed leads with before it states the rest — the density reference is
- * 1280×800, and one corpus axis carries 43 events (the uncapped column measured ~10.8k px tall, i.e.
- * thirteen screens of Activity before anything else in the view). Showing the newest and **stating** the
- * remainder is the same reading decision the axis index already makes (`LEAD_AXES`); nothing is lost,
- * because the count is the projection's own and the rest is one control away.
+ * How many events the Progress Activity column leads with before it states the rest. The reader's latest
+ * preference is **five**: the last change plus a few prior, enough to see momentum without turning the
+ * column into a dump. Nothing is lost — the authoritative **all-time** total is the projection's own
+ * `eventCount` (stated in the column's own line and never the length of the capped list), and the rest is
+ * one control away. This is a display cap only; it is not the projection's bucket.
  */
-const FEED_LEAD = 12;
+const FEED_LEAD = 5;
 
 /**
  * How many activity events the Topics side rail leads with. The reference reading width is 1440×900, and
  * the rail is the topic detail's *context*, not its feed: on the corpus's topic (25 events, several of them
- * long subjects) the uncapped rail is eleven screens of activity and the two cards under it — Notes and
- * Related repositories — never reach the first screen. Four is what the prototype's rail shows, and the
- * remainder is **stated** with the rest one control away, exactly as the Progress feed does. Density here
+ * long subjects) a longer rail pushes the two cards under it — Notes and Related repositories — off the
+ * first screen. **Five** is the reader's latest preference and it is now the ceiling for every recent-activity
+ * rail (Topics, People, Repositories): a person's or repository's rollup already carries at most
+ * `DEFAULT_ROLLUP_ACTIVITY_LIMIT` (5) events, so the rail shows the full list for those and the remainder for
+ * a topic is **stated** with the rest one control away, exactly as the Progress feed does. Density here
  * is a composition decision, not a data one: nothing is dropped, and no cap is applied to the count the
  * store reports (`data-rd-topic-activity` stays the payload's own number).
  */
-const RAIL_ACTIVITY_LEAD = 4;
+const RAIL_ACTIVITY_LEAD = 5;
 
 /**
  * The two states that mean *work that has stopped*, and the one place that decides it.
@@ -778,6 +779,34 @@ const css = `
   padding-left: 0;
   border-left: 0;
 }
+[data-plugin-id="research-dashboard"] [data-rd-topbar] {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+[data-plugin-id="research-dashboard"] [data-rd-topbar] .rd-page-title {
+  white-space: nowrap;
+}
+[data-plugin-id="research-dashboard"] [data-rd-topbar] .rd-toolbar {
+  flex: 1 1 auto;
+  justify-content: space-between;
+}
+[data-plugin-id="research-dashboard"] [data-rd-topbar] .rd-group {
+  border: 0;
+  padding: 0;
+}
+[data-plugin-id="research-dashboard"] .rd-views { gap: 2px; }
+[data-plugin-id="research-dashboard"] .rd-views [data-rd-view-option] {
+  border-color: transparent;
+  background: transparent;
+}
+[data-plugin-id="research-dashboard"] .rd-views [aria-pressed="true"] {
+  border-color: var(--border);
+  background: var(--card, #fff);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+[data-plugin-id="research-dashboard"] .rd-views [data-rd-view-option]:hover {
+  border-color: var(--border);
+}
 [data-plugin-id="research-dashboard"] .rd-muted { font-size: var(--rd-meta); opacity: var(--rd-quiet); }
 [data-plugin-id="research-dashboard"] .rd-error { color: var(--destructive, #b91c1c); font-size: var(--rd-body); }
 [data-plugin-id="research-dashboard"] .rd-meta {
@@ -837,6 +866,12 @@ const css = `
   flex: 0 0 100%;
   gap: var(--rd-gap-block);
   grid-column: 1 / -1;
+}
+/* Overview's heading carries the window selector at its right edge: the control belongs to the tab, so it
+   sits with the heading that names it rather than in the global toolbar. */
+[data-plugin-id="research-dashboard"] .rd-overview-head {
+  align-items: center;
+  justify-content: space-between;
 }
 [data-plugin-id="research-dashboard"] .rd-view-title {
   font-size: 14px;
@@ -1089,6 +1124,20 @@ const css = `
   padding: 0 0 0 10px;
   display: grid;
   gap: var(--rd-gap-tight);
+}
+[data-plugin-id="research-dashboard"] .rd-progress-problem > .rd-problem-card {
+  background: var(--card, #fff);
+  border: var(--rd-edge);
+  border-left: 3px solid var(--border);
+  border-radius: 8px;
+  gap: 10px;
+  min-height: 165px;
+  padding: 14px 16px;
+}
+[data-plugin-id="research-dashboard"] .rd-progress-problem > .rd-problem-card > .rd-strong {
+  font-size: 16px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 [data-plugin-id="research-dashboard"] .rd-problem-card p {
   margin: 0;
@@ -1419,7 +1468,6 @@ export function apply(ctx: Context) {
     SelectItem,
     SelectTrigger,
     SelectValue,
-    Switch,
     Textarea,
   } = ctx.ui;
 
@@ -1530,20 +1578,16 @@ export function apply(ctx: Context) {
   }
 
   /**
-   * Which view of the same data is on screen (C6). Not a query-level control: `get_overview` already
-   * carries all three views, so switching costs nothing and the page never asks the store twice.
+   * Which peer tab is on screen. Five equal buttons, no query of their own: the page already reads the
+   * payload each tab renders, so switching costs nothing the reader waits for.
    */
   function ViewControl({
     value,
     onChange,
     disabled,
   }: {
-    /**
-     * `null` is the shell's default landing (C3): no view is selected yet, so the control shows nothing
-     * pressed — the landing is shell behaviour, not a fifth destination, and pretending otherwise by
-     * highlighting Topics would say the reader is in a view they have not chosen.
-     */
-    value: ViewName | null;
+    /** The selected tab. Overview is a real default, so there is no unselected state to render. */
+    value: ViewName;
     onChange: (next: ViewName) => void;
     disabled: boolean;
   }) {
@@ -2513,11 +2557,9 @@ export function apply(ctx: Context) {
         {items.length === 0 ? (
           <li>
             <Notice kind="empty">
-              Nothing recorded in{" "}
               {windowDays === 0
-                ? "any window"
-                : `the last ${countLabel(windowDays, "day", "days")}`}
-              .
+                ? "Nothing recorded yet."
+                : `Nothing recorded in the last ${countLabel(windowDays, "day", "days")}.`}
             </Notice>
           </li>
         ) : null}
@@ -3004,16 +3046,16 @@ export function apply(ctx: Context) {
   }
 
   /**
-  /**
-   * C3 — the default landing: the prototype's Overview aggregation, re-homed as shell behaviour
-   * (`COMPOSITION.md` §4.1) so the dashboard gains the composition **without** a fifth navigation item. No
-   * view is selected until one is chosen or a tag navigates, and the shell title is the way back.
+   * Overview — the default tab, and the prototype's aggregation as a peer of the other four tabs.
    *
-   * Both columns read the SAME `get_overview` payload the four views read — topics from `Overview.topics`,
-   * repositories from `Overview.repositories`, the very collections the Topics and Repositories views render —
-   * so the landing cannot drift from them and cannot become a second reading surface. Each column keeps the
+   * Both columns read the SAME `get_overview` payload the other tabs read — topics from `Overview.topics`,
+   * repositories from `Overview.repositories`, the very collections the Topics and Repositories tabs render —
+   * so Overview cannot drift from them and cannot become a second reading surface. Each column keeps the
    * payload's order and says which order it is: topics arrive in attention order (status, then a blocked axis,
    * then recency), repositories by name. Nothing here re-ranks or re-aggregates.
+   *
+   * Its heading carries the window selector — the one query-level control, scoped to this tab. Every other
+   * tab reads all time, so the same work is never hidden by a window the reader set somewhere else.
    *
    * Two prototype fields are absent by decision, each **marked rather than faked**. The repository card's
    * window event count is omitted under D4: `RepositoryRollup` carries no authoritative total, and printing
@@ -3025,14 +3067,20 @@ export function apply(ctx: Context) {
    */
   function LandingView({
     blocked,
+    busy,
     onOpenEntity,
+    onWindowChange,
     repositories,
     topics,
+    windowDays,
   }: {
     blocked: BlockedAxis[];
+    busy: boolean;
     onOpenEntity: (type: EntityType, id: string) => void;
+    onWindowChange: (next: number) => void;
     repositories: RepositoryRollup[];
     topics: TopicOverview[];
+    windowDays: number;
   }) {
     /**
      * The current-work line, composed from facts the payload already states and nothing else: the axis-state
@@ -3056,13 +3104,20 @@ export function apply(ctx: Context) {
 
     return (
       <div className="rd-landing" data-rd-landing={topics.length + repositories.length}>
-        <div className="rd-view-heading" data-rd-view-heading="overview">
-          <h3 className="rd-view-title" data-rd-view-title="overview">
-            Overview
-          </h3>
-          <span className="rd-meta">
-            Both columns come from the same overview read the four views use
-          </span>
+        <div className="rd-view-heading rd-overview-head" data-rd-view-heading="overview">
+          <div className="rd-cluster">
+            <h3 className="rd-view-title" data-rd-view-title="overview">
+              Overview
+            </h3>
+            <span className="rd-meta">{VIEW_HEADINGS.overview}</span>
+          </div>
+          {/* The window selector lives here and only here: it scopes this tab's data, and it sits with the
+              heading that names the data it scopes rather than in the global toolbar. */}
+          <WindowControl
+            disabled={busy}
+            onChange={onWindowChange}
+            value={windowDays}
+          />
         </div>
 
         <div className="rd-landing-grid">
@@ -3618,8 +3673,6 @@ export function apply(ctx: Context) {
     preselect,
     progress,
     repositories,
-    timeline,
-    windowDays,
   }: {
     onOpenEntity: (type: EntityType, id: string) => void;
     people: PersonRollup[];
@@ -3632,8 +3685,6 @@ export function apply(ctx: Context) {
     preselect: { id: string; seq: number; type: EntityType } | null;
     progress: ProgressIndex | null;
     repositories: RepositoryRollup[];
-    timeline: TimelineGroup[];
-    windowDays: number;
   }) {
     const [selectedAxisId, setSelectedAxisId] = React.useState<string | null>(null);
     /**
@@ -3670,23 +3721,6 @@ export function apply(ctx: Context) {
         setSelectedProblemId(preselect.id);
       }
     }, [preselect?.id, preselect?.seq, preselect?.type]);
-    /*
-     * The window's own total — the one thing kept from the second reading that used to sit below the
-     * composition.
-     *
-     * That was a four-filter, topic-bucketed event feed over the same window, and it is retired (C4/F2,
-     * reviewer-ruled): an unbounded second grouping of the same events is the report/dump shape C1 and C2
-     * removed, and it competed with the composition's one dominant reading of the selected subject. Its count
-     * stays, so nothing disappears silently — scoped to the *same* window the composition's boxes are scoped
-     * to, because `load()` issues `get_overview` (this timeline) and `get_progress` (the index and its detail)
-     * with one `activitySinceDays`. A window-wide audit is a separate product surface if it is ever wanted; it
-     * does not belong underneath Progress as a second reading.
-     */
-    const windowEventCount = timeline.reduce(
-      (total, group) => total + group.eventCount,
-      0
-    );
-
     // ---- the index's subject, and the two columns that follow it ---------------------------------------
     // One payload, two indexes. Row sets, order, states, counts and staleness all come from the server in
     // both, and switching between them changes selection and nothing else — no call, no write, and no
@@ -4067,9 +4101,7 @@ export function apply(ctx: Context) {
               data-rd-progress-problem-shown={shownProblem?.id ?? ""}
             >
               <h3 className="rd-section" data-rd-progress-problem-heading="true">
-                {problemsMode
-                  ? "Problem"
-                  : `Open problems (${activeAxis?.openProblems ?? 0})`}
+                Current problem
               </h3>
               {problemsMode && shownProblem ? (
                 <span className="rd-meta" data-rd-progress-problem-context="true">
@@ -4126,9 +4158,10 @@ export function apply(ctx: Context) {
               data-rd-progress-feed-count={feed?.eventCount ?? 0}
               data-rd-progress-feed-mode={indexMode}
             >
-              <h3 className="rd-section">
-                {`Activity (${activeAxis?.activityInWindow ?? 0})`}
-              </h3>
+              <h3 className="rd-section">Recent activity</h3>
+              <span className="rd-meta" data-rd-progress-activity-total="true">
+                {countLabel(activeAxis?.activityInWindow ?? 0, "recorded event", "recorded events")} total
+              </span>
               {problemsMode && activeAxis ? (
                 <span className="rd-meta" data-rd-progress-feed-parent="true">
                   {`on ${activeAxis.title}`}
@@ -4136,7 +4169,7 @@ export function apply(ctx: Context) {
               ) : null}
               {feed === null || feed.events.length === 0 ? (
                 <p className="rd-muted" data-rd-progress-feed-empty="true">
-                  Nothing recorded against this axis in this window.
+                  Nothing recorded against this axis.
                 </p>
               ) : (
                 <ul
@@ -4433,42 +4466,20 @@ export function apply(ctx: Context) {
           ) : null}
         </div>
         </div>
-
-        {/* The retired feed's one survivor: what this window holds, stated rather than listed. */}
-        <p className="rd-muted" data-rd-progress-summary="true">
-          {windowDays === 0
-            ? "All time"
-            : `Last ${countLabel(windowDays, "day", "days")}`}{" "}
-          · {countLabel(windowEventCount, "event", "events")} recorded across{" "}
-          {countLabel(timeline.length, "topic", "topics")} in this window — the reading above is the
-          selected {problemsMode ? "problem" : "axis"}
-        </p>
-
-        {/*
-         * The topic-bucketed event feed used to stand here: every topic in the window, each with its axis
-         * rails and their events, filterable without a re-query. It is retired (C4/F2) — the same window's
-         * events were being read twice, once inside the composition's scoped `Activity` box and once here
-         * unbounded, and the unbounded copy is what would grow back into a dump. What it reported survives as
-         * the count line above, and anything a reader needs per axis is in the composition: the selected
-         * axis's `Activity` box already states the axis's own total and how much of it it is showing.
-         *
-         * The markers it carried (`data-rd-progress-topic`, `data-rd-progress-axis`,
-         * `data-rd-progress-events`, `data-rd-progress-event`, `data-rd-progress-empty`, `data-rd-progress-filters`)
-         * are gone with it, and the pass asserts their absence rather than merely not looking for them.
-         */}
       </div>
     );
   }
 
   function ResearchPage() {
-    const [overview, setOverview] = React.useState<Overview | null>(null);
+    const [loadedOverview, setOverview] = React.useState<Overview | null>(null);
+    const [loadedScope, setLoadedScope] = React.useState<number | null>(null);
     /**
-     * C3 — the selected view, or `null` for the default landing. `null` is the honest default: the landing
-     * aggregates topics and repositories together, so it is not "the Topics view" and none of the four nav
-     * options is selected while it shows. Choosing a view or following a tag sets one; the shell title
-     * returns here, carrying the current window with it (only the view changes).
+     * The selected tab. Overview is the default landing and one of the five peers — no unselected state
+     * (the earlier `null` "shell landing, not a tab" is superseded). Choosing a tab or following a tag
+     * sets it; the shell title no longer doubles as a home control because Overview is addressable
+     * directly.
      */
-    const [view, setView] = React.useState<ViewName | null>(null);
+    const [view, setView] = React.useState<ViewName>("overview");
     /**
      * The entity a cross-view tag asked for, and how many times it has asked. `seq` is what makes a second
      * click on the same tag land again after the reader selected something else by hand — without it the
@@ -4490,8 +4501,11 @@ export function apply(ctx: Context) {
       setView(ENTITY_VIEW[type]);
     }
 
+    /**
+     * The Overview tab's window — the page's only query-level control, and it now belongs to Overview
+     * alone (the top-bar window selector is superseded). Every other tab reads all time.
+     */
     const [windowDays, setWindowDays] = React.useState(14);
-    const [includeArchived, setIncludeArchived] = React.useState(false);
     const [expandedId, setExpandedId] = React.useState<string | null>(null);
     /**
      * A topic tag's destination is the topic index, where "selected" means the card is expanded — the detail is
@@ -4569,36 +4583,57 @@ export function apply(ctx: Context) {
     }
 
     /**
-     * The whole default screen comes from this one call. The window is the only thing that changes
-     * the query; `includeArchived` is additive and only sent when it is on, so a request body shows
-     * exactly what the page asked for.
+     * The tab's read. Overview scopes its query by the window its own heading offers; every other tab reads
+     * **all time** (`activitySinceDays: 0`), so a reader never wonders whether work fell outside a window
+     * they could not see. The store treats `activitySinceDays` as a parameter, not stored state, so this is
+     * one call shape with one field changing.
      *
-     * The Progress index rides the same trigger rather than its own: the contract says switching views never
-     * queries, so the second read happens when the *window* changes, not when Progress is opened. That costs
-     * one extra read per window change and keeps view switching free, which is the trade the contract asks
-     * for.
+     * `get_overview` supplies the Topics/People/Repositories context and `get_progress` supplies the
+     * Progress state. Both reads use the current tab's scope and share one generation counter: a slower
+     * earlier load must not overwrite a newer one.
      */
-    async function load(nextWindow: number, archived: boolean): Promise<void> {
-      const scope = {
-        activitySinceDays: nextWindow,
-        ...(archived ? { includeArchived: true } : {}),
-      };
+    const loadSeq = React.useRef(0);
+    /**
+     * The scope the current tab reads at: the Overview window on Overview, all time everywhere else.
+     * A derived value, so switching between two all-time tabs does not re-query (the dep is unchanged).
+     */
+    const scopeWindow = view === "overview" ? windowDays : 0;
+    // Never render a previous window's projection under a newly selected tab/window.
+    const overview = loadedScope === scopeWindow ? loadedOverview : null;
+    const visibleProgress = loadedScope === scopeWindow ? progress : null;
+
+    async function load(nextWindow: number): Promise<void> {
+      const seq = ++loadSeq.current;
+      const scope = { activitySinceDays: nextWindow };
       const result = await call<{ ok?: boolean } & Overview>("get_overview", scope);
-      if (!ctx.signal.aborted && result) {
-        setOverview(result as Overview);
+      if (loadSeq.current !== seq || ctx.signal.aborted) {
+        return;
       }
       const progressResult = await call<{ ok?: boolean } & ProgressIndex>("get_progress", scope);
-      if (!ctx.signal.aborted) {
-        // Replaced wholesale, never merged: the index is the projection for *this* window, and a row kept
-        // from the previous result would be a client-side model the projection never answered for.
-        setProgress(progressResult ? (progressResult as ProgressIndex) : null);
+      if (loadSeq.current !== seq || ctx.signal.aborted) {
+        return;
       }
+      // Commit the two projections together; never pair a new Overview with the old Progress index.
+      setOverview(result ? (result as Overview) : null);
+      // Replaced wholesale, never merged: the index is the projection for *this* scope, and a row kept
+      // from the previous result would be a client-side model the projection never answered for.
+      setProgress(progressResult ? (progressResult as ProgressIndex) : null);
+      setLoadedScope(nextWindow);
+    }
+
+    /**
+     * Reload the tab currently on screen — the one call shape the Refresh button, a successful save and a
+     * recorded activity all use, so a write never re-reads a scope the reader is not looking at.
+     */
+    function reloadCurrent(): Promise<void> {
+      return load(scopeWindow);
     }
 
     React.useEffect(() => {
-      void load(windowDays, includeArchived);
-      // Re-issued whenever the window or the archived toggle changes — nothing else re-queries.
-    }, [windowDays, includeArchived]);
+      void load(scopeWindow);
+      // Re-issued only when the scope changes: the Overview window moving, or a switch between the
+      // Overview scope and the all-time one. Two all-time tabs share a scope and do not re-query.
+    }, [scopeWindow]);
 
     /** The expanded card *is* the detail view: one `get_topic` call, per-axis history included. */
     async function loadDetail(topicId: string): Promise<void> {
@@ -4698,7 +4733,7 @@ export function apply(ctx: Context) {
         setCorrection(null);
         setConflict(null);
         await loadDetail(detail.topic.id);
-        await load(windowDays, includeArchived);
+        await reloadCurrent();
       }
     }
 
@@ -4762,7 +4797,7 @@ export function apply(ctx: Context) {
         // The detail holds the list now, so it is the thing that has to be re-read; the overview
         // follows because a new event moves the topic's recent-activity line.
         await loadDetail(expandedId);
-        await load(windowDays, includeArchived);
+        await reloadCurrent();
       }
     }
 
@@ -4808,55 +4843,22 @@ export function apply(ctx: Context) {
     return (
       <div className="rd-stack">
         <div className="rd-row" data-rd-topbar="true">
-          {/* C3 — the shell title is also the way home. The ruling allows the aggregation as default
-              landing behaviour but no fifth navigation item, so the title is the only control that returns
-              to it — and it stays a shell affordance: same typography as the heading it replaces, no tab
-              treatment, nothing that reads as a fifth member of Views | People | Repositories | Progress.
-              It is a button only when there is somewhere to return from, so on the landing itself it is
-              the plain heading a reader expects. */}
-          {view === null ? (
-            <h2 className="rd-page-title" data-rd-home="current">
-              Research overview
-            </h2>
-          ) : (
-            <button
-              className="rd-page-title rd-home"
-              data-rd-home="available"
-              onClick={() => setView(null)}
-              type="button"
-            >
-              Research overview
-            </button>
-          )}
-          {/* Three groups rather than one strip: what you are looking at, the window you are looking
-              at it through, and the actions. The divider between them is the point — without it this
-              reads as ten controls of equal weight in a row. */}
+          {/* The shell title is the page's name, not a control: Overview is now a peer tab, so there is no
+              unselected landing to return to and the title no longer doubles as a home button. */}
+          <h2 className="rd-page-title" data-rd-home="current">
+            Research dashboard
+          </h2>
+          {/* Two groups rather than one strip: what you are looking at, and the actions. The window control
+              is no longer here — it belongs to Overview's own heading, where the data it scopes is read. */}
           <div className="rd-toolbar" data-rd-toolbar="true">
             <div className="rd-group" data-rd-group="views">
               <ViewControl disabled={busy} onChange={setView} value={view} />
-            </div>
-            <div className="rd-group" data-rd-group="window">
-              <WindowControl
-                disabled={busy}
-                onChange={setWindowDays}
-                value={windowDays}
-              />
-              <div className="rd-cluster">
-                <Switch
-                  aria-label="Show archived topics"
-                  checked={includeArchived}
-                  disabled={busy}
-                  onCheckedChange={(next) => setIncludeArchived(next === true)}
-                  size="sm"
-                />
-                <span className="rd-muted">archived</span>
-              </div>
             </div>
             <div className="rd-group" data-rd-group="actions">
               <Button
                 disabled={busy}
                 onClick={() => {
-                  void load(windowDays, includeArchived);
+                  void reloadCurrent();
                 }}
                 variant="outline"
               >
@@ -4885,23 +4887,24 @@ export function apply(ctx: Context) {
           </span>
         </div>
 
-        {view === null ? (
-          /* C3 — the default landing. Rendered from the same `overview` payload the views below read, and
-             only while no view is selected: the four views keep their own nav options and their own
-             headings, and nothing here adds a fifth. */
+        {view === "overview" ? (
+          /* Overview — the default tab. Rendered from the same `overview` payload the other views read,
+             but at its own window; its heading carries the window selector. */
           <LandingView
             blocked={overview?.blocked ?? []}
+            busy={busy}
             onOpenEntity={openEntity}
+            onWindowChange={setWindowDays}
             repositories={overview?.repositories ?? []}
             topics={topics}
+            windowDays={windowDays}
           />
         ) : null}
 
         {view === "topics" ? (
           <div className="rd-split" data-rd-view="topics">
-            {/* §7 — the shell title stays (the toolbar's "Research overview") and the view names itself:
-                a reader landing here, or arriving from a tag, can see which view this page is without
-                inferring it from which toolbar button is pressed. */}
+            {/* The brand stays in the top bar while this view names itself; readers arriving from a
+                tag need not infer the destination from the selected navigation button. */}
             <ViewHeading view="topics" />
             {/* C1 — the prototype's composition: a compact index rail, and ONE persistent detail. The
                 index carries the server's order unreranked; the only client state is which topic is
@@ -5312,7 +5315,7 @@ export function apply(ctx: Context) {
             people={overview?.people ?? []}
             preselect={entityTarget?.type === "person" ? entityTarget : null}
             truncated={overview?.peopleTruncated === true}
-            windowDays={windowDays}
+            windowDays={scopeWindow}
           />
         ) : null}
 
@@ -5324,7 +5327,7 @@ export function apply(ctx: Context) {
             preselect={entityTarget?.type === "repository" ? entityTarget : null}
             repositories={overview?.repositories ?? []}
             truncated={overview?.repositoriesTruncated === true}
-            windowDays={windowDays}
+            windowDays={scopeWindow}
           />
         ) : null}
 
@@ -5338,10 +5341,8 @@ export function apply(ctx: Context) {
                 ? entityTarget
                 : null
             }
-            progress={progress}
+            progress={visibleProgress}
             repositories={overview?.repositories ?? []}
-            timeline={overview?.timeline ?? []}
-            windowDays={windowDays}
           />
         ) : null}
 

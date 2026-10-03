@@ -24,8 +24,9 @@
  * missing helper fails with a sentence rather than a TypeError from `import(undefined)`.
  */
 import { chromium } from "playwright-core";
+import { chromiumLaunchOptions } from "../chromium.mjs";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, renameSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -59,18 +60,20 @@ const VIEWS = ["overview", "topics", "people", "repositories", "progress"];
 let scratchDir = null;
 // The durable markers, per view — the same attributes the acceptance pass reads. Each view's own list
 // container is the first thing a half-mounted view does not have, the topic index's detail pane is the
-// composition's core claim, and every view now names itself (§7: the shell title stays, the view says which
-// one it is), so a build that lost the heading or the pane cannot be captured under either name.
+// composition's core claim, and every view names itself (§7: the shell title stays, the view says which one
+// it is), so a build that lost the heading or the pane cannot be captured under either name.
 const VIEW_MARKERS = {
   /**
-   * C3 — the landing. There is deliberately no nav control for it (the aggregation is shell behaviour, not a
-   * fifth destination), so its markers include the home affordance in its "nothing selected" form: the shell
-   * title is a plain heading on the landing and a control everywhere else.
+   * Overview — a peer tab since the five-tab unit: it has its own nav control (`data-rd-view-option`) and
+   * names itself with a heading, and the shell title is a plain page name again (no home affordance — there
+   * is no unselected landing to return to). Its landing container is still the aggregation, and its heading
+   * now carries the page's only window selector.
    */
   overview: [
     "[data-rd-landing]",
     '[data-rd-landing-column="topics"]',
     '[data-rd-landing-column="repositories"]',
+    '[data-rd-view-heading="overview"]',
     '[data-rd-home="current"]',
   ],
   people: ['[data-rd-view="people"]', "[data-rd-people]", '[data-rd-view-heading="people"]'],
@@ -94,6 +97,9 @@ const VIEW_MARKERS = {
   ],
 };
 const PLUGIN_ROOT = 'div[data-plugin-id="research-dashboard"]';
+// Overview's window selector lives in its own heading — the page's only query-level control, scoped to the
+// one tab whose data is windowed. Every other tab reads all time and renders no such control.
+const WINDOW_GROUP = "[data-rd-window]";
 
 const EMAIL =
   process.env.NAKAMA_DEV_EMAIL ?? process.env.NAKAMA_SEED_ADMIN_EMAIL ?? process.env.NAKAMA_EMAIL ?? "";
@@ -133,22 +139,10 @@ if (!EMAIL || !PASSWORD) {
   refuse("no credentials — set NAKAMA_EMAIL / NAKAMA_PASSWORD or pass --env-file");
 }
 
-const cachedChromium = () => {
-  const root = path.join(process.env.HOME ?? "", ".cache", "ms-playwright");
-  if (!existsSync(root)) return null;
-  for (const entry of readdirSync(root)) {
-    if (!entry.startsWith("chromium")) continue;
-    for (const candidate of [
-      path.join(root, entry, "chrome-linux", "chrome"),
-      path.join(root, entry, "chrome-linux", "headless_shell"),
-    ]) {
-      if (existsSync(candidate)) return candidate;
-    }
-  }
-  return null;
-};
-
-const browser = await chromium.launch({ executablePath: cachedChromium() ?? undefined });
+// The same shared resolver `harness/preview/capture.mjs` uses. The local probe this replaced only knew the
+// older `chrome-linux/chrome` cache layout, so on a machine whose Playwright cache carries the newer
+// `chrome-linux64/chrome` it found nothing and let the driver try to download its pinned revision.
+const browser = await chromium.launch(chromiumLaunchOptions());
 try {
   const page = await browser.newPage({ viewport: { width: VIEWPORT[0], height: VIEWPORT[1] } });
   await page.goto(`${TARGET}/`, { waitUntil: "domcontentloaded" });
@@ -169,10 +163,10 @@ try {
   }
 
   await page.goto(PAGE_URL, { waitUntil: "networkidle" }).catch(() => {});
-  // C3 — the mount gate waits for what the shell actually opens on: the **default landing**, which by design
-  // renders no view container (there is no fifth destination and no view is selected yet). It waited for the
-  // Topics container until this unit, which is the same "the default is a view" assumption the acceptance
-  // pass had to drop; a view container at this point would mean the shell silently picked a view.
+  // The mount gate waits for what the page opens on: Overview, the default tab, which renders the landing
+  // aggregation (`data-rd-landing`) rather than a `[data-rd-view]` container. Overview is a peer tab now, so
+  // this is the default tab's container, not an "unselected shell landing"; a failure here means the tab
+  // never mounted. The per-tab loop below still proves each tab's own container before it is photographed.
   const mounted = await page
     .waitForSelector(`${PLUGIN_ROOT} [data-rd-landing]`, { timeout: 20000 })
     .then(() => true)
@@ -389,29 +383,57 @@ try {
 
   const shots = [];
   for (const view of VIEWS) {
+    /*
+     * Five peer tabs now, Overview included: every view has its own `data-rd-view-option` control, so the
+     * capture clicks the tab it is about to photograph and refuses unless the page reports that same tab
+     * active. There is no unselected landing any more, so no view (Overview least of all) is captured by
+     * default. Clicking Overview on a page that already opens on it is the no-op a reader would make too.
+     */
+    const control = page.locator(`${PLUGIN_ROOT} [data-rd-view-option="${view}"]`);
+    if ((await control.count()) === 0) {
+      refuse(`no control for view ${view} — the capture would record another view under its name`);
+    }
+    await control.first().click();
+    const active = await page
+      .waitForFunction(
+        ({ root, wanted }) =>
+          document
+            .querySelector(`${root} [data-rd-view-option="${wanted}"]`)
+            ?.getAttribute("aria-pressed") === "true",
+        { root: PLUGIN_ROOT, wanted: view },
+        { timeout: 10000 }
+      )
+      .then(() => true)
+      .catch(() => false);
+    if (!active) {
+      refuse(`view ${view} did not become the active tab (aria-pressed)`);
+    }
+
     if (view === "overview") {
-      /* C3 — the landing is the *initial* state, so it is captured before anything is clicked, and there is
-         no control to click for it: the ruling allows the aggregation as default landing behaviour and no
-         fifth nav item. Refuse if a view container is already on screen, because a shot named "overview" that
-         is really some other view is worse than no shot at all. */
-      const alreadyInView = await page.locator(`${PLUGIN_ROOT} [data-rd-view]`).count();
-      if (alreadyInView > 0) {
-        refuse("the overview shot would record a view the reader had already selected");
+      // Overview renders the aggregation, not a view container: a [data-rd-view] here would mean the tab
+      // switched to one of the other four under the name "overview".
+      const otherView = await page.locator(`${PLUGIN_ROOT} [data-rd-view]`).count();
+      if (otherView > 0) {
+        refuse("the overview shot would record a view other than the overview tab");
       }
+      // The window selector belongs to Overview's heading, and exactly one option is pressed.
+      const inHeading = await page
+        .locator(`${PLUGIN_ROOT} [data-rd-view-heading="overview"] ${WINDOW_GROUP}`)
+        .count();
+      if (inHeading === 0) refuse("the overview heading renders no window selector");
+      const pressed = await page.locator(`${PLUGIN_ROOT} ${WINDOW_GROUP}[aria-pressed="true"]`).count();
+      if (pressed !== 1) refuse(`the overview window selector has ${pressed} pressed option(s), expected 1`);
     } else {
-      const control = page.locator(`div[data-plugin-id] [data-rd-view-option="${view}"]`);
-      if ((await control.count()) > 0) {
-        await control.first().click();
-        const switched = await page
-          .waitForSelector(`div[data-plugin-id] [data-rd-view="${view}"]`, { timeout: 10000 })
-          .then(() => true)
-          .catch(() => false);
-        if (!switched) {
-          refuse(`view ${view} never rendered its container ([data-rd-view="${view}"])`);
-        }
-      } else if (view !== "topics") {
-        refuse(`no control for view ${view} — the capture would record another view under its name`);
+      const switched = await page
+        .waitForSelector(`${PLUGIN_ROOT} [data-rd-view="${view}"]`, { timeout: 10000 })
+        .then(() => true)
+        .catch(() => false);
+      if (!switched) {
+        refuse(`view ${view} never rendered its container ([data-rd-view="${view}"])`);
       }
+      // The window selector is Overview-only; a non-Overview tab must not carry the global one.
+      const windowed = await page.locator(`${PLUGIN_ROOT} ${WINDOW_GROUP}`).count();
+      if (windowed > 0) refuse(`view ${view} renders a window selector — only Overview is windowed`);
     }
     const markers = VIEW_MARKERS[view].map((selector) => `${PLUGIN_ROOT} ${selector}`);
     const present = await page.evaluate((selectors) => {

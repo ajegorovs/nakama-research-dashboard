@@ -8,6 +8,13 @@
  * (`overview`, `topics`, `people`, `repositories`, `progress`), same 1440x900 clip, same scratch-then-move
  * discipline — but against `http://127.0.0.1:<port>/preview.html`, with no login and no credentials.
  *
+ * The five views are **peer tabs** (`data-rd-view-option`). Overview is the selected default, not a
+ * separate "shell landing": the capture clicks each tab in turn and refuses unless the tab it clicked is
+ * the one the page reports active (`aria-pressed="true"`). Overview is the only tab whose data is scoped
+ * by a window; its window selector lives in its own heading (`[data-rd-view-heading="overview"]`), and the
+ * other four tabs read all time. The capture checks both: Overview must render a single pressed window
+ * option inside its heading, and a non-Overview tab must not carry the global window group.
+ *
  * Before each view is photographed it *selects a representative subject* — the row whose rendered detail is
  * most populated — by clicking the page's own controls. That is an instrument step, not the app's default:
  * the page still opens on the projection's own first row, and `--no-select` photographs exactly that. The
@@ -48,17 +55,22 @@ const FULL = has("full");
 // Selection is instrumentation, not the app's default: `--no-select` photographs the page's own landing
 // (the projection's first row in each view) and skips the representative-row step entirely.
 const NO_SELECT = has("no-select");
-// Same order as capture-current: the landing is captured first, before any view control is pressed.
+// Same order as capture-current: Overview is the default tab and is clicked first, then the other four.
 const VIEWS = ["overview", "topics", "people", "repositories", "progress"];
 const PLUGIN_ROOT = 'div[data-plugin-id="research-dashboard"]';
+// Overview's window selector lives in its own heading — the page's only query-level control, scoped to the
+// one tab whose data is windowed. A non-Overview tab renders all time and carries no such control.
+const WINDOW_GROUP = "[data-rd-window]";
 
 // The durable markers each view must carry before it is captured — the attributes the acceptance pass
-// reads, so a build that lost one cannot be photographed under its name.
+// reads, so a build that lost one cannot be photographed under its name. Overview is a peer tab now: it
+// names itself with a heading like the other four, and the landing container is still the aggregation.
 const VIEW_MARKERS = {
   overview: [
     "[data-rd-landing]",
     '[data-rd-landing-column="topics"]',
     '[data-rd-landing-column="repositories"]',
+    '[data-rd-view-heading="overview"]',
     '[data-rd-home="current"]',
   ],
   people: ['[data-rd-view="people"]', "[data-rd-people]", '[data-rd-view-heading="people"]'],
@@ -312,20 +324,48 @@ try {
 
   const shots = [];
   for (const view of VIEWS) {
-    if (view !== "overview") {
-      const control = page.locator(`${PLUGIN_ROOT} [data-rd-view-option="${view}"]`);
-      if ((await control.count()) === 0) {
-        refuse(`no control for view ${view} — the capture would record another view under its name`);
-      }
-      await control.first().click();
+    // Every view is a peer tab now, Overview included: click its own control, then refuse unless the page
+    // reports that same tab active. Clicking Overview on a page that already defaults to it is the no-op a
+    // reader would make too; the active check is what keeps a mislabelled shot off the montage.
+    const control = page.locator(`${PLUGIN_ROOT} [data-rd-view-option="${view}"]`);
+    if ((await control.count()) === 0) {
+      refuse(`no control for view ${view} — the capture would record another view under its name`);
+    }
+    await control.first().click();
+    const active = await page
+      .waitForFunction(
+        ({ root, wanted }) =>
+          document
+            .querySelector(`${root} [data-rd-view-option="${wanted}"]`)
+            ?.getAttribute("aria-pressed") === "true",
+        { root: PLUGIN_ROOT, wanted: view },
+        { timeout: 10000 }
+      )
+      .then(() => true)
+      .catch(() => false);
+    if (!active) refuse(`view ${view} did not become the active tab (aria-pressed)`);
+
+    if (view === "overview") {
+      // Overview renders the aggregation, not a view container: a [data-rd-view] here would mean the tab
+      // switched to one of the other four under the name "overview".
+      const otherView = await page.locator(`${PLUGIN_ROOT} [data-rd-view]`).count();
+      if (otherView > 0) refuse("the overview shot would record a view other than the overview tab");
+      // The window selector belongs to Overview's heading, and exactly one option is pressed.
+      const inHeading = await page
+        .locator(`${PLUGIN_ROOT} [data-rd-view-heading="overview"] ${WINDOW_GROUP}`)
+        .count();
+      if (inHeading === 0) refuse("the overview heading renders no window selector");
+      const pressed = await page.locator(`${PLUGIN_ROOT} ${WINDOW_GROUP}[aria-pressed="true"]`).count();
+      if (pressed !== 1) refuse(`the overview window selector has ${pressed} pressed option(s), expected 1`);
+    } else {
       const switched = await page
         .waitForSelector(`${PLUGIN_ROOT} [data-rd-view="${view}"]`, { timeout: 10000 })
         .then(() => true)
         .catch(() => false);
       if (!switched) refuse(`view ${view} never rendered its container ([data-rd-view="${view}"])`);
-    } else {
-      const alreadyInView = await page.locator(`${PLUGIN_ROOT} [data-rd-view]`).count();
-      if (alreadyInView > 0) refuse("the overview shot would record a view that was already selected");
+      // The window selector is Overview-only; a non-Overview tab must not carry the global one.
+      const windowed = await page.locator(`${PLUGIN_ROOT} ${WINDOW_GROUP}`).count();
+      if (windowed > 0) refuse(`view ${view} renders a window selector — only Overview is windowed`);
     }
     // Representative selection — instrumentation, not the default (see the header). It runs before the
     // markers are re-checked, so what is verified and photographed is the state the selection left behind.

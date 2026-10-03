@@ -87,9 +87,10 @@ const WRITE = process.argv.includes("--write");
  * The rail's lead, mirroring `RAIL_ACTIVITY_LEAD` in `src/ui.tsx`. The harness states it independently so
  * the page cannot define its own window into correctness: if the page silently grew the lead to fit a long
  * topic, this check would fail rather than agree. The corpus topic carries 25 events and the fixture's
- * sparse one carries none, so both sides of the comparison have a subject.
+ * sparse one carries none, so both sides of the comparison have a subject. §13 raised the lead to five (the
+ * same value the Progress Activity column uses), so the harness states five to match.
  */
-const RAIL_ACTIVITY_LEAD = 4;
+const RAIL_ACTIVITY_LEAD = 5;
 
 const problems = [];
 const skipped = [];
@@ -423,13 +424,41 @@ const render = await page.evaluate((pluginId) => {
   const node = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
   const text = (node?.innerText ?? "").replace(/\s+/g, " ");
   return {
-    heading: text.includes("Research overview"),
+    countsLine: /\d+ topics? · \d+ axes · \d+ (?:person|people) · \d+ repositor(?:y|ies)/.test(text),
+    home: node?.querySelector("[data-rd-home]")?.getAttribute("data-rd-home") ?? null,
+    homeIsButton: node?.querySelector("button[data-rd-home]") !== null,
+    landing: node?.querySelector("[data-rd-landing]") !== null,
     mounted: Boolean(node),
+    overviewHeading: (node?.querySelector('[data-rd-view-title="overview"]')?.textContent ?? "").trim(),
+    pressedView:
+      node
+        ?.querySelector('[data-rd-view-option][aria-pressed="true"]')
+        ?.getAttribute("data-rd-view-option") ?? null,
     text,
   };
 }, PLUGIN_ID);
 check("plugin page mounted", render.mounted);
-check("overview renders as the default screen", render.heading);
+// §13: Overview is a peer tab selected on entry, not a shell-only landing. It renders the aggregation
+// (the landing markup) and is the pressed tab on first paint.
+check(
+  "the page opens on the Overview tab, the default screen",
+  render.landing && render.pressedView === "overview" && render.overviewHeading === "Overview",
+  `landing=${render.landing}; pressed view=${JSON.stringify(render.pressedView)}; heading ${JSON.stringify(render.overviewHeading)}`
+);
+// §13 supersedes §7's "persistent Research overview heading": the top bar is a dashboard brand, not a
+// control. The `data-rd-home` marker stays, but it is static text now (never a button), so assert the
+// absence of the old home affordance rather than a specific brand string the owner is still tuning.
+check(
+  "the shell title is static branding, not a home control (§13)",
+  render.home === "current" && render.homeIsButton === false,
+  `data-rd-home=${JSON.stringify(render.home)}; is a button=${render.homeIsButton}`
+);
+// The counts line lives in the top bar, so it renders on the default screen whichever tab follows. Read
+// here rather than on a subview so it is asserted once, where it is guaranteed present.
+check("the header carries the counts line", render.countsLine, render.text.slice(0, 200));
+// …and the count line reads as English in the singular too: "1 repository", never "1 repositories".
+const oneRepo = render.text.match(/\d+ repositor(?:y|ies)/)?.[0] ?? "";
+check("the count line reads correctly when the count is one", !oneRepo.startsWith("1 ") || oneRepo === "1 repository", oneRepo);
 
 // ------------------------------------------------------------------ C4: the overview shell
 const overviewCalls = callsFor("get_overview");
@@ -535,11 +564,11 @@ const landing = await page.evaluate((pluginId) => {
 }, PLUGIN_ID);
 
 check(
-  "the shell opens on the default landing, with no view selected",
+  "the Overview tab is the default: it renders the landing with no subview container, and Overview is the pressed tab (§13)",
   landing !== null &&
     landing.landing === true &&
     landing.viewContainers === 0 &&
-    landing.pressedViews.length === 0 &&
+    JSON.stringify(landing.pressedViews) === JSON.stringify(["overview"]) &&
     landing.home === "current",
   `landing=${landing?.landing}; view container(s)=${landing?.viewContainers}; pressed view option(s)=${JSON.stringify(landing?.pressedViews)}; home=${landing?.home}`
 );
@@ -601,17 +630,11 @@ check(
   `topics ${JSON.stringify(landing?.columns.topics.box)} vs repositories ${JSON.stringify(landing?.columns.repositories.box)} in ${JSON.stringify(landing?.viewport)}`
 );
 
-// The pass reads the Topics view from here on, so it goes there rather than assuming it is already there.
-await root.locator('[data-rd-view-option="topics"]').click();
-await page.waitForSelector(`div[data-plugin-id] [data-rd-view="topics"]`, { timeout: 10000 });
-
-// Leave the page where the checks that follow expect it: the Topics view, on its default selection, with the
-// detail loaded. This block deliberately moves around — two views, the landing and back — and stopping wherever
-// it happens to land left the next checks reading a view they did not ask for.
-if ((await root.locator('[data-rd-home="available"]').count()) > 0) {
-  await root.locator('[data-rd-home="available"]').click();
-  await page.waitForSelector(`div[data-plugin-id] [data-rd-landing]`, { timeout: 10000 });
-}
+// The pass reads the Topics view from here on, so it navigates there rather than assuming it is already
+// there. §13: the "way home" is the Overview tab, not the shell title. Round-trip through Overview using
+// that tab so the navigation is exercised, then land on Topics where the checks below read.
+await root.locator('[data-rd-view-option="overview"]').click();
+await page.waitForSelector(`div[data-plugin-id] [data-rd-landing]`, { timeout: 10000 });
 await root.locator('[data-rd-view-option="topics"]').click();
 await page.waitForSelector(`div[data-plugin-id] [data-rd-view="topics"]`, { timeout: 10000 });
 
@@ -630,35 +653,29 @@ const indexRows = await page.evaluate((pluginId) => {
 }, PLUGIN_ID);
 check("the topic index rendered", indexRows.length > 0, `${indexRows.length} index rows`);
 
+// Read on the Topics tab, where the window control must NOT be: §13 scopes the 7/14/30/All control to
+// Overview's own heading, and removes the archived toggle. Both are asserted as absences so re-adding a
+// global control fails here rather than passing quietly. The counts line is asserted on the default
+// Overview screen above, where it is rendered whichever tab follows.
 const header = await page.evaluate((pluginId) => {
   const node = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
   const text = (node?.innerText ?? "").replace(/\s+/g, " ");
   return {
+    archivedToggle: text.includes("archived"),
     createControl: /Add topic|New topic name/.test(text),
     editControl: /Edit fields|Done editing/.test(text),
-    archivedToggle: text.includes("archived"),
-    countsLine: /\d+ topics? · \d+ axes · \d+ (?:person|people) · \d+ repositor(?:y|ies)/.test(text),
-    headerText: text.slice(0, 200),
     windowButtons: node?.querySelectorAll("[data-rd-window]").length ?? 0,
   };
 }, PLUGIN_ID);
 check(
-  "the header carries the title, window control, archived toggle and count line, and no create/edit control",
+  "the Topics header carries no create/edit control, no global window control and no archived toggle (§13)",
   // D7 (Topics is read-first): the page offers no broad create or edit control, so this asserts their
   // absence — re-adding one fails here rather than passing quietly.
-  header.windowButtons === 4 &&
+  header.windowButtons === 0 &&
     !header.createControl &&
     !header.editControl &&
-    header.archivedToggle &&
-    header.countsLine,
+    !header.archivedToggle,
   JSON.stringify(header)
-);
-// …and the count line reads as English in the singular too: "1 repository", never "1 repositories".
-const oneRepo = header.headerText.match(/\d+ repositor(?:y|ies)/)?.[0] ?? "";
-check(
-  "the count line reads correctly when the count is one",
-  !oneRepo.startsWith("1 ") || oneRepo === "1 repository",
-  oneRepo
 );
 
 // Each topic in the payload has one index row, and the visible detail carries its own topic's axes and
@@ -845,7 +862,10 @@ if (CORPUS.blockedEntries.length > 0) {
   );
 }
 
-// The window control changes the query and nothing else.
+// The window control changes the query and nothing else. §13 moves it into Overview's own heading, so the
+// pass goes to Overview to exercise it — the control does not exist on any other tab.
+await root.locator('[data-rd-view-option="overview"]').click();
+await page.waitForSelector(`div[data-plugin-id] [data-rd-landing]`, { timeout: 10000 });
 const sevenDayRequest = page.waitForRequest(
   (request) =>
     request.url().includes("/actions/get_overview") &&
@@ -875,21 +895,22 @@ const settleUntil = async (predicate, arg, capMs = 3000) => {
   await page.waitForTimeout(50); // one frame, for a React commit that follows the DOM marker
 };
 await settleUntil(
-  (pluginId) =>
-    (document.querySelector(`div[data-plugin-id="${pluginId}"]`)?.innerText ?? "").includes(
-      "Research overview"
-    ),
-  PLUGIN_ID,
-  3000
+  ([pluginId, days]) =>
+    document.querySelector(
+      `div[data-plugin-id="${pluginId}"] [data-rd-window="${days}"][aria-pressed="true"]`
+    ) !== null,
+  [PLUGIN_ID, "7"],
+  5000
 );
 const refreshed = await page.evaluate(
   (pluginId) =>
-    (document.querySelector(`div[data-plugin-id="${pluginId}"]`)?.innerText ?? "").includes(
-      "Research overview"
-    ),
+    document.querySelector(`div[data-plugin-id="${pluginId}"] [data-rd-landing]`) !== null,
   PLUGIN_ID
 );
 check("the page still renders after the window change", refreshed);
+// Back to the Topics tab the checks below read — the window control lives on Overview alone.
+await root.locator('[data-rd-view-option="topics"]').click();
+await page.waitForSelector(`div[data-plugin-id] [data-rd-view="topics"]`, { timeout: 10000 });
 
 // C1 replaced the topic card stack with an index rail and ONE persistent detail. The assertions below are
 // what that composition must be true of. The disclosure they replace (`Read topic` / `Close`), and the
@@ -983,15 +1004,17 @@ check(
   anatomy.sideActivity === 1 && anatomy.sideNotes === 1 && anatomy.sideRepositories === 1,
   `activity ${anatomy.sideActivity}, notes ${anatomy.sideNotes}, repositories ${anatomy.sideRepositories}`
 );
-// ------------------------------------------------------- §7: the view names itself, the shell title stays
-// The decision is two headings, not one: "Research overview" on the shell, and the view's own name — and
-// its prototype hint — above the layout. Before this, the pressed toolbar button was the only thing on the
-// page saying which view a reader was looking at, which is nothing to arrive at from a tag.
+// ------------------------------------------------------- §7 (as amended by §13): the view names itself
+// §13 superseded §7's "persistent Research overview heading": the top bar now carries a dashboard brand
+// (static text), while each view still names itself — and its prototype hint — above the layout. So the
+// claim kept here is the view's own heading; the brand is asserted constant across the tabs in the §7
+// traversal below (where every view is read) rather than pinned to a string the owner is still tuning.
 check(
-  "the view names itself while the shell title stays (§7: two headings, not one)",
+  "the view names itself while the shell keeps a static brand (§7 as amended by §13)",
   anatomy.viewHeading === "Topics" &&
     anatomy.viewHeadingView === "topics" &&
-    anatomy.shellTitle === "Research overview",
+    anatomy.shellTitle.length > 0 &&
+    anatomy.shellTitle !== anatomy.viewHeading,
   `view heading ${JSON.stringify(anatomy.viewHeading)} (${anatomy.viewHeadingView}), ` +
     `shell title ${JSON.stringify(anatomy.shellTitle)}`
 );
@@ -1410,13 +1433,14 @@ check(
 // placed earlier it inflated the `get_topic` count the check just above measures, and left its own selection
 // in place for the index checks that follow. Both were my harness leaking state into other checks' premises.
 // It returns to the landing first, since the read checks leave the page in whatever view they were reading.
-if ((await root.locator('[data-rd-home="available"]').count()) > 0) {
-  await root.locator('[data-rd-home="available"]').click();
-  await page.waitForSelector(`div[data-plugin-id] [data-rd-landing]`, { timeout: 10000 });
-}
-// The card actions are navigation, not filters — the same contract the tag chips use — and the shell title is
-// the way home. Both behavioural checks the reviewer added are read from that: each card action lands in its
-// own view with that entity selected, and coming home preserves the window rather than resetting it.
+// §13: the "way home" is the Overview tab (the shell title is static branding now), so the round trips go
+// through that tab rather than through a home button.
+await root.locator('[data-rd-view-option="overview"]').click();
+await page.waitForSelector(`div[data-plugin-id] [data-rd-landing]`, { timeout: 10000 });
+// The card actions are navigation, not filters — the same contract the tag chips use — and returning to the
+// Overview tab is the way back. Both behavioural checks the reviewer added are read from that: each card
+// action lands in its own view with that entity selected, and coming back to Overview preserves the window
+// rather than resetting it.
 const windowPressed = () =>
   page.evaluate((pluginId) => {
     const root = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
@@ -1461,27 +1485,30 @@ await page.waitForSelector(`div[data-plugin-id] [data-rd-view="topics"]`, { time
 const openedTopic = await page.evaluate((pluginId) => {
   const root = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
   return {
-    home: root?.querySelector("[data-rd-home]")?.getAttribute("data-rd-home") ?? null,
+    view:
+      root
+        ?.querySelector('[data-rd-view-option][aria-pressed="true"]')
+        ?.getAttribute("data-rd-view-option") ?? null,
     selected: [
       ...(root?.querySelectorAll('[data-rd-index-topic][aria-pressed="true"]') ?? []),
     ].map((node) => node.getAttribute("data-rd-index-topic")),
   };
 }, PLUGIN_ID);
 check(
-  "`Open topic` lands in the Topics view with that topic selected",
-  openedTopic.home === "available" &&
+  "`Open topic` lands in the Topics tab with that topic selected",
+  openedTopic.view === "topics" &&
     firstTopicName !== null &&
     JSON.stringify(openedTopic.selected) === JSON.stringify([firstTopicName]),
-  `selected ${JSON.stringify(openedTopic.selected)} for card ${JSON.stringify(firstTopicName)} (${firstTopicCard}); home=${openedTopic.home}`
+  `selected ${JSON.stringify(openedTopic.selected)} for card ${JSON.stringify(firstTopicName)} (${firstTopicCard}); view=${openedTopic.view}`
 );
 
-await root.locator('[data-rd-home="available"]').click();
+await root.locator('[data-rd-view-option="overview"]').click();
 await page.waitForSelector(`div[data-plugin-id] [data-rd-landing]`, { timeout: 10000 });
 const windowAfterHome = await windowPressed();
 check(
-  "the shell title returns to the landing and carries the window with it",
+  "returning to the Overview tab carries the window with it",
   windowAfterHome === windowAfterChange && windowAfterChange === "30",
-  `window before ${windowAfterChange}, after returning home ${windowAfterHome}`
+  `window before ${windowAfterChange}, after returning to Overview ${windowAfterHome}`
 );
 
 const firstRepositoryCard = landing.repositoryCards[0].id;
@@ -1508,19 +1535,19 @@ check(
   `panel shows ${JSON.stringify(openedRepository)} for card ${JSON.stringify(firstRepositoryName)}`
 );
 
-// The reviewer's stale-target question, tested rather than argued. Home clears only the *view* selection, so
-// a target from an earlier card action must not resurface as a surprise: after two card actions and two
-// returns home, a plain view choice (which asks for no entity at all) must land on the entity the reader last
-// asked for — not a third one, and not a target that was superseded. The fixture carries two topics, so a
-// stale target would be exactly the other card's topic.
+// The reviewer's stale-target question, tested rather than argued. Returning to the Overview tab clears only
+// the *view* selection, so a target from an earlier card action must not resurface as a surprise: after two
+// card actions and two returns to Overview, a plain view choice (which asks for no entity at all) must land
+// on the entity the reader last asked for — not a third one, and not a target that was superseded. The
+// fixture carries two topics, so a stale target would be exactly the other card's topic.
 //
-// The block opens by returning home, because the check above left the page in the Repositories view: a landing
-// card cannot be clicked from there, and reaching for one is what aborted the pass on the first attempt.
-await root.locator('[data-rd-home="available"]').click();
+// The block opens by returning to Overview, because the check above left the page in the Repositories view: a
+// landing card cannot be clicked from there, and reaching for one is what aborted the pass on the first attempt.
+await root.locator('[data-rd-view-option="overview"]').click();
 await page.waitForSelector(`div[data-plugin-id] [data-rd-landing]`, { timeout: 10000 });
 await root.locator(`[data-rd-landing-topic="${firstTopicCard}"] [data-rd-landing-open="topic"]`).click();
 await page.waitForSelector(`div[data-plugin-id] [data-rd-view="topics"]`, { timeout: 10000 });
-await root.locator('[data-rd-home="available"]').click();
+await root.locator('[data-rd-view-option="overview"]').click();
 await page.waitForSelector(`div[data-plugin-id] [data-rd-landing]`, { timeout: 10000 });
 
 const secondTopicCard = landing.topicCards[1] ?? null;
@@ -1536,7 +1563,7 @@ if (secondTopicCard !== null) {
   );
   await root.locator(`[data-rd-landing-topic="${secondTopicCard}"] [data-rd-landing-open="topic"]`).click();
   await page.waitForSelector(`div[data-plugin-id] [data-rd-view="topics"]`, { timeout: 10000 });
-  await root.locator('[data-rd-home="available"]').click();
+  await root.locator('[data-rd-view-option="overview"]').click();
   await page.waitForSelector(`div[data-plugin-id] [data-rd-landing]`, { timeout: 10000 });
   await root.locator('[data-rd-view-option="topics"]').click();
   await page.waitForSelector(`div[data-plugin-id] [data-rd-view="topics"]`, { timeout: 10000 });
@@ -1551,7 +1578,7 @@ if (secondTopicCard !== null) {
     JSON.stringify(afterPlainNav) === JSON.stringify([secondTopicName]),
     `landed on ${JSON.stringify(afterPlainNav)}; last asked for ${JSON.stringify(secondTopicName)} (first was ${JSON.stringify(firstTopicName)})`
   );
-  await root.locator('[data-rd-home="available"]').click();
+  await root.locator('[data-rd-view-option="overview"]').click();
   await page.waitForSelector(`div[data-plugin-id] [data-rd-landing]`, { timeout: 10000 });
 } else {
   skip(
@@ -1560,12 +1587,11 @@ if (secondTopicCard !== null) {
   );
 }
 
-// Back home — unless the block above already left the page there, which is one of the two legal outcomes.
-// Then on to the view the rest of the pass reads: the pass navigates rather than inheriting.
-if ((await root.locator('[data-rd-home="available"]').count()) > 0) {
-  await root.locator('[data-rd-home="available"]').click();
-  await page.waitForSelector(`div[data-plugin-id] [data-rd-landing]`, { timeout: 10000 });
-}
+// Back to Overview — unless the block above already left the page there, which is one of the two legal
+// outcomes. Then on to the view the rest of the pass reads: the pass navigates rather than inheriting.
+// §13: the way back is the Overview tab.
+await root.locator('[data-rd-view-option="overview"]').click();
+await page.waitForSelector(`div[data-plugin-id] [data-rd-landing]`, { timeout: 10000 });
 // Leave the window exactly where it was found, so nothing downstream is reading a window this block moved.
 if (windowAtBlockStart) {
   await root.locator(`[data-rd-window="${windowAtBlockStart}"]`).click();
@@ -1686,11 +1712,15 @@ const toolbar = await page.evaluate((pluginId) => {
     ),
   };
 }, PLUGIN_ID);
-const wantedGroups = ["views", "window", "actions"];
+// §13: the window group (7/14/30/All + the archived switch) is gone from the global toolbar — the window
+// control belongs to Overview's own heading and the archived toggle is removed. So the toolbar is two groups:
+// views and actions, with no window group.
+const wantedGroups = ["views", "actions"];
 check(
-  "the toolbar controls form groups rather than one strip",
+  "the toolbar controls form groups rather than one strip, with no window group (§13)",
   wantedGroups.every((name) => toolbar.groups.includes(name)) &&
-    toolbar.groups.length >= wantedGroups.length,
+    toolbar.groups.length >= wantedGroups.length &&
+    !toolbar.groups.includes("window"),
   `groups ${JSON.stringify(toolbar.groups)}, holding ${toolbar.controls} controls`
 );
 
@@ -2715,80 +2745,115 @@ const apiIndex = async (days) => {
   const result = await apiProgress(days);
   return result?.axes?.axes ?? null;
 };
-const setWindow = async (days) => {
-  await root.locator(`[data-rd-window="${days}"]`).click();
-  // Returns false instead of throwing: an index that never appears would otherwise abort the whole pass with
-  // a TimeoutError, which says nothing about the page. A missing element is a failure of *this* check.
-  try {
-    await page.waitForFunction(
-      (wanted) =>
-        document
-          .querySelector('[data-rd-progress-index="true"]')
-          ?.getAttribute("data-rd-progress-index-window") === String(wanted),
-      days,
-      { timeout: 10000 }
+// §13: Progress reads all time, and the window control lives on Overview alone. So the old loop — which
+// changed the window *on Progress* — has no control to drive any more. The invariant it protected is kept,
+// and the new contract's scope rule is added: the index must equal the ALL-TIME projection (replaced rather
+// than extended), and changing Overview's window must NOT re-scope Progress. That last clause is the point of
+// §13 ("changing the Overview window does not alter the data shown by the other four views").
+const showOverview = async () => {
+  await root
+    .locator('[data-rd-view-option="overview"]')
+    .click();
+  await page.waitForSelector(`div[data-plugin-id] [data-rd-landing]`, { timeout: 10000 }).catch(() => {});
+};
+const showProgress = async () => {
+  await root.locator('[data-rd-view-option="progress"]').click();
+  await page
+    .waitForSelector('div[data-plugin-id] [data-rd-view="progress"] [data-rd-progress-index]', {
+      timeout: 10000,
+    })
+    .catch(() => {});
+};
+const overviewWindowPressed = () =>
+  page.evaluate((pluginId) => {
+    const scope = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
+    return (
+      scope
+        ?.querySelector('[data-rd-window][aria-pressed="true"]')
+        ?.getAttribute("data-rd-window") ?? null
     );
-    return true;
-  } catch {
-    return false;
-  }
+  }, PLUGIN_ID);
+const setOverviewWindow = async (days) => {
+  await root.locator(`[data-rd-window="${days}"]`).click();
+  await page
+    .waitForFunction(
+      ([pluginId, wanted]) =>
+        document
+          .querySelector(`div[data-plugin-id="${pluginId}"] [data-rd-window][aria-pressed="true"]`)
+          ?.getAttribute("data-rd-window") === String(wanted),
+      [PLUGIN_ID, String(days)],
+      { timeout: 10000 }
+    )
+    .catch(() => {});
 };
 
-const startWindow = (await readIndex())?.window ?? 7;
+const startWindow = (await readIndex())?.window ?? 0;
 const indexMismatches = [];
-for (const days of [30, 7]) {
-  if (!(await setWindow(days))) {
-    indexMismatches.push(`${days}d: the index never reported the new window — element missing, or the client kept the old result`);
-    continue;
-  }
+const compareIndexToProjection = async (label) => {
   const dom = await readIndex();
-  const projection = await apiIndex(days);
+  const projection = await apiIndex(0);
   if (!dom || !projection) {
-    indexMismatches.push(`${days}d: no index (${Boolean(dom)}) or no projection (${Boolean(projection)})`);
-    continue;
+    indexMismatches.push(`${label}: no index (${Boolean(dom)}) or no projection (${Boolean(projection)})`);
+    return;
   }
-  if (dom.window !== days) {
-    indexMismatches.push(`${days}d: the index reports window ${dom.window}`);
+  if (dom.window !== 0) {
+    indexMismatches.push(`${label}: the index reports window ${dom.window}, not all time (0)`);
   }
   if (dom.rows.length !== projection.length) {
-    indexMismatches.push(`${days}d: ${dom.rows.length} rows on screen, ${projection.length} in the projection`);
+    indexMismatches.push(`${label}: ${dom.rows.length} rows on screen, ${projection.length} in the projection`);
   }
   for (const row of dom.rows) {
     const expected = projection.find((entry) => entry.id === row.id);
     if (!expected) {
-      indexMismatches.push(`${days}d: a row (${row.id.slice(0, 8)}) is not in the projection`);
+      indexMismatches.push(`${label}: a row (${row.id.slice(0, 8)}) is not in the projection`);
       continue;
     }
     if (row.activity !== expected.activityInWindow) {
       indexMismatches.push(
-        `${days}d: "${expected.title}" shows ${row.activity} events, the projection says ${expected.activityInWindow}`
+        `${label}: "${expected.title}" shows ${row.activity} events, the projection says ${expected.activityInWindow}`
       );
     }
     if (row.problems !== expected.problems) {
       indexMismatches.push(
-        `${days}d: "${expected.title}" shows ${row.problems} problems, the projection says ${expected.problems}`
+        `${label}: "${expected.title}" shows ${row.problems} problems, the projection says ${expected.problems}`
       );
     }
     if (row.state !== expected.state) {
-      indexMismatches.push(`${days}d: "${expected.title}" shows state ${row.state}, the projection says ${expected.state}`);
+      indexMismatches.push(`${label}: "${expected.title}" shows state ${row.state}, the projection says ${expected.state}`);
     }
     if (row.stale !== expected.stale) {
-      indexMismatches.push(`${days}d: "${expected.title}" shows stale=${row.stale}, the projection says ${expected.stale}`);
+      indexMismatches.push(`${label}: "${expected.title}" shows stale=${row.stale}, the projection says ${expected.stale}`);
     }
   }
   // Server order is the presentation order: the page must not re-sort what the projection ordered.
   const screenOrder = dom.rows.map((row) => row.id).join(",");
   const projectionOrder = projection.map((entry) => entry.id).join(",");
   if (screenOrder !== projectionOrder) {
-    indexMismatches.push(`${days}d: the on-screen row order differs from the projection's`);
+    indexMismatches.push(`${label}: the on-screen row order differs from the projection's`);
   }
+};
+await showOverview();
+const overviewWindowAtStart = await overviewWindowPressed();
+for (const overviewDays of [30, 7]) {
+  // The window control lives on Overview, so each iteration has to stand on Overview before clicking it —
+  // the previous iteration left the page on Progress.
+  await showOverview();
+  await setOverviewWindow(overviewDays);
+  await showProgress();
+  await compareIndexToProjection(`after an Overview window of ${overviewDays}d`);
 }
 check(
-  "the Progress index is the projection for the current window — replaced on change, not extended",
+  "the Progress index is the all-time projection — replaced on re-entry, and never re-scoped by Overview's window",
   indexMismatches.length === 0,
-  indexMismatches.slice(0, 4).join("; ") || `matched the projection at 30 and 7 days (${startWindow}d restored)`
+  indexMismatches.slice(0, 4).join("; ") ||
+    "matched the all-time projection after changing Overview to 30 and 7 days, without re-scoping"
 );
-await setWindow(startWindow);
+// Put the Overview window back where it was found, so nothing downstream reads a window this block moved.
+await showOverview();
+if (overviewWindowAtStart !== null) {
+  await setOverviewWindow(overviewWindowAtStart);
+}
+await showProgress();
 
 // ---------------------------------- C7c: the three-column composition, and selection that changes it
 // Step 2 of the Progress slice: index on the left, the selected axis's Problem in the middle, its Activity
@@ -2954,7 +3019,10 @@ if (problemAxis && problemAxis.rows.length > 0) {
   const onAxis = await readTop();
   check(
     "the Problem column shows the projection's first open problem, under the projection's own count",
-    onAxis.problem.heading === `Open problems (${problemAxis.axis.openProblems})` &&
+    // §13 / reviewer: the top-left heading is the *selected* problem ("Current problem"), not the inventory
+    // heading — the full open-problems list is its own section below. The count is still the projection's own,
+    // read from the card's own attribute rather than from a heading string.
+    /[Cc]urrent problem/.test(onAxis.problem.heading) &&
       onAxis.problem.open === problemAxis.axis.openProblems &&
       onAxis.problem.shown === problemAxis.rows[0]?.id &&
       onAxis.problem.statement === (problemAxis.rows[0]?.statement ?? "").trim(),
@@ -2995,7 +3063,9 @@ if (problemAxis && problemAxis.rows.length > 0) {
     "the Activity feed is the projection's bucket for the selected axis, newest first, capped and stating the remainder",
     top.feed.axis === first?.id &&
       top.feed.count === (bucket?.eventCount ?? 0) &&
-      top.feed.heading === `Activity (${first?.activityInWindow ?? 0})` &&
+      // §13 / reviewer: the column is labelled "Recent activity", with the authoritative total stated
+      // separately (asserted above via feed.count === bucket.eventCount) rather than embedded in the heading.
+      /[Rr]ecent activity/.test(top.feed.heading) &&
       (expected.length === 0 ? top.feed.rows.length === 0 : aligned && capStated),
     `feed axis ${top.feed.axis?.slice(0, 8)}, count ${top.feed.count} (projection ${bucket?.eventCount ?? 0}), heading "${top.feed.heading}" (index row ${first?.activityInWindow ?? 0}), shown ${top.feed.shown}/${expected.length} (rendered ${rows.length}), holds back ${top.feed.stated}, note "${top.feed.note}"`
   );
@@ -3033,7 +3103,7 @@ if (problemAxis && problemAxis.rows.length > 0) {
       "selecting another axis moves the Problem and Activity columns to that axis",
       moved.problem.axis === wanted.id &&
         moved.feed.axis === wanted.id &&
-        moved.problem.heading === `Open problems (${expected.axis?.openProblems ?? -1})` &&
+        /[Cc]urrent problem/.test(moved.problem.heading) &&
         moved.feed.count === (expected.bucket?.eventCount ?? 0) &&
         (moved.problem.open === 0
           ? moved.problem.empty !== ""
@@ -4475,9 +4545,11 @@ if (inferredInCorpus.length > 0) {
 // ---- C4/F2: the duplicate window-wide feed is retired; the composition is the one reading -----------------
 // Progress carried a second, unbounded grouping of the same window below the composition — topic cards →
 // axis rails → their events, plus four filters. The ruling retired it: the page keeps one dominant reading of
-// the selected subject, with the count it reported kept as the summary line so nothing disappears silently.
-// These checks prove the duplicate is *gone* rather than moved, and that the surviving count is the payload's
-// own number rather than a client recount.
+// the selected subject, and (§13 / reviewer) the authoritative total now lives in the Activity column rather
+// than in a window-wide bottom summary, which is removed outright.
+// These checks prove the duplicate is *gone* rather than moved, and that the surviving reading's count is the
+// projection's own number rather than a client recount (asserted against the bucket above and the column's own
+// total attribute).
 const retiredFeed = await page.evaluate(() => {
   const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
   const count = (selector) => scope?.querySelectorAll(selector).length ?? 0;
@@ -4515,42 +4587,16 @@ check(
   retiredFeed.feeds === 1 || retiredFeed.feedEmpty === 1,
   `feed lists ${retiredFeed.feeds}, empty state ${retiredFeed.feedEmpty}`
 );
-// The count line's number must be the payload's own — and it is compared at **All time**, because a live
-// window such as "last 7 days" moves while the pass runs: an event sitting on the boundary can legitimately
-// leave the window between the page's load and this fetch. A first version of this check compared at the
-// page's own 7-day window and caught exactly that as a one-event disagreement, which would have become a
-// standing flake. All time has no boundary to move, so the comparison is exact.
-const windowLabel = (days) => (days === 0 ? "All time" : `${days} days`);
-const previousWindow = retiredFeed.window;
-const allTimeRequest = page.waitForRequest(
-  (request) =>
-    request.url().includes("/actions/get_overview") &&
-    (request.postData() ?? "").includes('"activitySinceDays":0'),
-  { timeout: 10000 }
-);
-await root.getByRole("button", { name: "All time", exact: true }).click();
-await allTimeRequest.catch(() => null);
-// Wait for the page to *apply* the response, not merely to send the request. `load()` awaits `get_overview`,
-// sets the overview, then awaits `get_progress` and sets the index — so the index's window attribute reaching
-// 0 is a true readiness signal for both. Reading the summary after the request alone raced that update and
-// compared the new window's label against the previous window's timeline: 8 events at "All time" on a fixture
-// holding 9, and 142 against 143 on the corpus. This is the harness's own documented rule — wait for the DOM
-// to say what "ready" means rather than for a fixed sleep.
-await settleUntil(
-  (pluginId) =>
-    document
-      .querySelector(`div[data-plugin-id="${pluginId}"]`)
-      ?.querySelector("[data-rd-progress-index]")
-      ?.getAttribute("data-rd-progress-index-window") === "0",
-  PLUGIN_ID,
-  5000
-);
-const allTimeSummary = await page.evaluate(() => {
+// §13 / reviewer ruling: Progress reads all time, and the former bottom window-wide summary is dropped
+// entirely — the Activity reading is relabelled "Recent activity", its authoritative total is stated in the
+// column (secondary to the newest rows), and the total-vs-shown invariant is asserted where the rail is read
+// (the feed count === the projection's own `eventCount`, with the remainder stated). So the bottom summary is
+// asserted *absent* rather than compared: re-introducing a second window-wide reading must fail here, and the
+// all-time scope is pinned so a window can never leak into Progress.
+const progressScope = await page.evaluate(() => {
   const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
   return {
-    summary: (scope?.querySelector("[data-rd-progress-summary]")?.textContent ?? "")
-      .replace(/\s+/g, " ")
-      .trim(),
+    summaryPresent: scope?.querySelector("[data-rd-progress-summary]") !== null,
     window: Number(
       scope
         ?.querySelector("[data-rd-progress-index]")
@@ -4558,32 +4604,10 @@ const allTimeSummary = await page.evaluate(() => {
     ),
   };
 });
-const allTimeOverview = await apiAction("get_overview", { activitySinceDays: 0 });
-const allTimeTopics = allTimeOverview?.timeline ?? [];
-const allTimeEventTotal = allTimeTopics.reduce(
-  (total, group) => total + (group.eventCount ?? 0),
-  0
-);
 check(
-  "C4: the surviving count line states the window's own total — the payload's number, not a client recount",
-  allTimeSummary.window === 0 &&
-    allTimeSummary.summary.includes(String(allTimeEventTotal)) &&
-    allTimeSummary.summary.includes(String(allTimeTopics.length)) &&
-    allTimeSummary.summary.includes("in this window") &&
-    allTimeSummary.summary.includes("the reading above is the selected"),
-  `summary "${allTimeSummary.summary}"; payload ${allTimeEventTotal} event(s) across ${allTimeTopics.length} topic(s) at All time`
-);
-// The window control is put back where the reader had it, so nothing later in the pass inherits this probe's
-// view of the page — and the wait is on the same readiness signal, not a sleep.
-await root.getByRole("button", { name: windowLabel(previousWindow), exact: true }).click();
-await settleUntil(
-  (expected) =>
-    document
-      .querySelector(`div[data-plugin-id="${expected.pluginId}"]`)
-      ?.querySelector("[data-rd-progress-index]")
-      ?.getAttribute("data-rd-progress-index-window") === String(expected.days),
-  { days: previousWindow, pluginId: PLUGIN_ID },
-  5000
+  "C4: Progress is at the all-time scope, and the retired window-wide bottom summary is gone",
+  progressScope.window === 0 && progressScope.summaryPresent === false,
+  `index window ${progressScope.window}; bottom summary present: ${progressScope.summaryPresent}`
 );
 
 // The composition's own order, asserted rather than assumed: the top row first, then Plan beside Open
@@ -5097,10 +5121,9 @@ if (paletteReachable) {
 // matters and no view runs away with the scroll. The budget is in screens so it means the same thing at
 // either recorded viewport.
 {
-  // The four views the toolbar actually offers (`VIEW_OPTIONS`); "Research overview" is the page's title on
-  // every view, not a fifth destination. Naming a view that has no control would measure whatever happened
-  // to be on screen under another view's name.
-  const views = ["Topics", "People", "Repositories", "Progress"];
+  // The five peer tabs the toolbar actually offers (`VIEW_OPTIONS`); §13 makes Overview a real tab, so it is
+  // measured too. The top-bar brand is static text, not a destination, so it is not named as a view.
+  const views = ["Overview", "Topics", "People", "Repositories", "Progress"];
   const heights = {};
   for (const view of views) {
     await root.getByRole("button", { name: view, exact: true }).click();
@@ -5501,6 +5524,10 @@ if (WRITE) {
           text: (n.textContent ?? "").trim(),
         })),
         rowCount: rows.length,
+        // §7 (as amended by §13): the top bar carries a static dashboard brand, and it must read the same in
+        // every view the traversal visits — the brand is not a per-view heading. Read here so its constancy is
+        // a measured property, not an assumption.
+        shellTitle: (scope?.querySelector(".rd-page-title")?.textContent ?? "").trim(),
         tags: tagsIn(scope),
         unbadged: rows.filter((row) => !row.querySelector("[data-rd-state-confidence]"))
           .length,
@@ -5508,8 +5535,6 @@ if (WRITE) {
           scope
             ?.querySelector('[data-rd-view-option][aria-pressed="true"]')
             ?.getAttribute("data-rd-view-option") ?? null,
-        // §7 — the shell title stays and the view names itself. Read here so the claim is checked in every
-        // view the traversal visits, not only on the one the pass happens to open with.
         viewHeading: (scope?.querySelector("[data-rd-view-title]")?.textContent ?? "").trim(),
         viewHeadingView:
           scope
@@ -5548,9 +5573,9 @@ if (WRITE) {
     snapshots[view] = await readGrammar();
   }
 
-  // (0) §7 — two headings, not one: the shell keeps "Research overview" and every view names itself. Read
-  // from the same traversal the rest of this section uses, so the heading cannot be true only on the view
-  // the pass happens to open with, and the heading's own marker has to agree with the view it names.
+  // (0) §7 as amended by §13: the top bar carries a static dashboard brand, and every view names itself.
+  // Read from the same traversal the rest of this section uses, so the heading cannot be true only on the
+  // view the pass happens to open with, and the heading's own marker has to agree with the view it names.
   const VIEW_NAMES = {
     people: "People",
     progress: "Progress",
@@ -5561,7 +5586,7 @@ if (WRITE) {
     ([view, snap]) => snap.viewHeading !== VIEW_NAMES[view] || snap.viewHeadingView !== view
   );
   check(
-    "every view names itself under the shell title (§7), in all four views",
+    "every view names itself (§7), in all four views",
     unnamed.length === 0,
     unnamed.length === 0
       ? Object.entries(snapshots)
@@ -5573,6 +5598,19 @@ if (WRITE) {
               `${view}: heading ${JSON.stringify(snap.viewHeading)} (marker ${snap.viewHeadingView})`
           )
           .join(" | ")
+  );
+  // §13 superseded §7's persistent "Research overview" heading: the brand is static text and reads the same
+  // in every tab (it is not the view name). Asserted across the traversal so a per-view brand would fail.
+  const brands = Object.entries(snapshots).map(([view, snap]) => ({ brand: snap.shellTitle, view }));
+  const brandMismatch = brands.filter(
+    (entry) => entry.brand.length === 0 || entry.brand !== brands[0].brand
+  );
+  check(
+    "the top bar carries one static brand across every view (§7 as amended by §13)",
+    brands.length > 0 && brandMismatch.length === 0,
+    brandMismatch.length === 0
+      ? `brand ${JSON.stringify(brands[0]?.brand)} constant across ${brands.length} views`
+      : brandMismatch.map((entry) => `${entry.view}: ${JSON.stringify(entry.brand)}`).join(" | ")
   );
 
   // (1) The state claim always travels with its badge, wherever a state row is rendered.
