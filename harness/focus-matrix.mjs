@@ -140,7 +140,7 @@ const INSTALL = (plugin) => {
       : el.hasAttribute("data-rd-repository") ? "index-row-repository"
       : el.hasAttribute("data-rd-person") ? "index-row-person"
       : el.hasAttribute("data-rd-problem") ? "problem-row"
-      : el.hasAttribute("data-rd-topic") ? "topic-row"
+      : el.hasAttribute("data-rd-index-topic") ? "index-row-topic"
       : null;
     if (hook) return `${tag}[${hook}]${rd.length ? `.${rd.join(".")}` : ""}`;
     if (rd.length) return `${tag}.${rd.join(".")}`;
