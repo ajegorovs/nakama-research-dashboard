@@ -782,6 +782,7 @@ const css = `
 [data-plugin-id="research-dashboard"] [data-rd-topbar] {
   justify-content: flex-start;
   flex-wrap: wrap;
+  margin-bottom: 14px;
 }
 [data-plugin-id="research-dashboard"] [data-rd-topbar] .rd-page-title {
   white-space: nowrap;
@@ -794,10 +795,11 @@ const css = `
   border: 0;
   padding: 0;
 }
-[data-plugin-id="research-dashboard"] .rd-views { gap: 2px; }
+[data-plugin-id="research-dashboard"] .rd-views { gap: 4px; }
 [data-plugin-id="research-dashboard"] .rd-views [data-rd-view-option] {
   border-color: transparent;
   background: transparent;
+  padding: 7px 11px;
 }
 [data-plugin-id="research-dashboard"] .rd-views [aria-pressed="true"] {
   border-color: var(--border);
@@ -985,9 +987,19 @@ const css = `
   border-left: var(--rd-rule);
   border-radius: 7px;
   background: var(--muted, rgba(127, 127, 127, 0.04));
-  padding: 9px 11px;
+  padding: 14px 15px;
   display: grid;
-  gap: var(--rd-gap-tight);
+  gap: 9px;
+}
+[data-plugin-id="research-dashboard"] .rd-current-work > .rd-axes {
+  gap: 18px;
+}
+[data-plugin-id="research-dashboard"] .rd-axis-detail .rd-axis-controls {
+  border-top: var(--rd-edge);
+  padding-top: 4px;
+}
+[data-plugin-id="research-dashboard"] .rd-axis-more[open] > .rd-evidence {
+  margin-top: 8px;
 }
 [data-plugin-id="research-dashboard"] .rd-axis-detail[data-rd-axis-state="blocked"] {
   border-left: 3px solid var(--destructive, #b91c1c);
@@ -1046,6 +1058,9 @@ const css = `
   flex: 0 1 15rem;
   min-width: 12rem;
   margin: 0;
+  max-height: min(72vh, 760px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   /* The index is a surface, not a bare list — the prototype's panel. Rows sit inside on a small inset,
      so a pressed row reads as a selected row within a panel rather than a stray rectangle on the page. */
   padding: 5px;
@@ -1130,12 +1145,12 @@ const css = `
   border: var(--rd-edge);
   border-left: 3px solid var(--border);
   border-radius: 8px;
-  gap: 10px;
+  gap: 12px;
   min-height: 165px;
-  padding: 14px 16px;
+  padding: 18px 20px;
 }
 [data-plugin-id="research-dashboard"] .rd-progress-problem > .rd-problem-card > .rd-strong {
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
@@ -1165,11 +1180,24 @@ const css = `
   border-bottom: var(--rd-edge);
   padding: 5px 0 8px;
 }
+[data-plugin-id="research-dashboard"] .rd-progress-activity {
+  min-width: 0;
+}
+[data-plugin-id="research-dashboard"] .rd-progress-activity .rd-feed .rd-cluster {
+  min-width: 0;
+}
 [data-plugin-id="research-dashboard"] .rd-progress-activity .rd-feed .rd-strong {
+  flex: 1 1 100%;
+  min-width: 0;
   font-size: var(--rd-meta);
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1.35;
   overflow-wrap: anywhere;
+}
+[data-plugin-id="research-dashboard"] .rd-side-card .rd-activity .rd-strong {
+  font-size: var(--rd-meta);
+  font-weight: 500;
+  line-height: 1.4;
 }
 [data-plugin-id="research-dashboard"] .rd-progress-activity .rd-feed .rd-tags {
   font-size: var(--rd-label);
@@ -1273,12 +1301,19 @@ const css = `
 }
 [data-plugin-id="research-dashboard"] .rd-view { display: grid; gap: var(--rd-gap); margin: 0; padding: 0; list-style: none; }
 [data-plugin-id="research-dashboard"] .rd-involvement {
+  border: var(--rd-edge);
   border-left: var(--rd-rule);
-  padding: 0 0 0 10px;
+  border-radius: 7px;
+  background: var(--muted, rgba(127, 127, 127, 0.04));
+  padding: 11px 13px;
   display: grid;
   gap: var(--rd-gap-tight);
 }
-[data-plugin-id="research-dashboard"] .rd-involvement > ul { margin: 0; }
+[data-plugin-id="research-dashboard"] .rd-involvement > ul {
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
 /*
  * The primary line. The rd-strong class carried no rule at all, so the sentence that answers the question — a
  * problem's statement, an axis's title, a person's name — rendered exactly like the provenance under it,
@@ -2192,10 +2227,7 @@ export function apply(ctx: Context) {
           </div>
         ) : null}
 
-        {/* One quiet reference line: the entities this axis names — the repositories it lives in and the
-            people on it, both with canonical homes, so they are tags plus the axis's own words — where the
-            work physically lives, and what backs it. The evidence line renders whether or not there is
-            anything to name: "no evidence on record" is a claim, and it is read here. */}
+        {/* Keep the scan row factual but quiet; provenance belongs behind the disclosure. */}
         <div className="rd-axis-secondary rd-axis-refs">
           {line || axis.people.length > 0 || axis.repositories.length > 0 ? (
             <span className="rd-cluster rd-tags">
@@ -2222,15 +2254,12 @@ export function apply(ctx: Context) {
               {line ? <span className="rd-meta">{line}</span> : null}
             </span>
           ) : null}
-          <EvidenceLine evidence={axis.evidence} />
         </div>
 
-        {/* Everything else about the axis, one disclosure per axis rather than four equal-weight lines in
-            the reading surface: what the axis is for, the second half of the state claim, and when it was
-            last looked at. Nothing here is removed — the reader opens it for detail, the way the rail's own
-            writes sit behind theirs. */}
+        {/* Supporting evidence and record controls are available without crowding the work reading. */}
         <details className="rd-axis-more" data-rd-axis-more={axis.id}>
           <summary>More on this axis</summary>
+          <EvidenceLine evidence={axis.evidence} />
           {axis.description ? (
             <p className="rd-axis-secondary" data-rd-axis-description="true">
               {axis.description}
@@ -2245,9 +2274,7 @@ export function apply(ctx: Context) {
               </span>
             ) : null}
           </div>
-        </details>
-
-        <div className="rd-cluster rd-axis-controls">
+          <div className="rd-cluster rd-axis-controls">
           <Button
             data-rd-history-toggle={axis.id}
             disabled={busy}
@@ -2273,6 +2300,7 @@ export function apply(ctx: Context) {
             {correcting ? "Cancel" : "Correct"}
           </Button>
         </div>
+        </details>
 
         {historyOpen ? <AxisHistory axis={axis} /> : null}
 
@@ -4997,13 +5025,19 @@ export function apply(ctx: Context) {
 
                   {selectedDetails ? (
                     <div className="rd-detail-claims">
-                      <div className="rd-claim">
-                        <span className="rd-claim-value" data-rd-claim="description">
-                          {selectedDetails.topic.description || (
-                            <span className="rd-muted">no description yet</span>
-                          )}
-                        </span>
-                        <span className="rd-muted">description</span>
+                      <div className="rd-claim" data-rd-description-field="true">
+                        {selectedDetails.topic.description ? (
+                          <>
+                            <span className="rd-claim-value" data-rd-claim="description">
+                              {selectedDetails.topic.description}
+                            </span>
+                            <span className="rd-muted">description</span>
+                          </>
+                        ) : (
+                          <span className="rd-muted" data-rd-claim="description">
+                            No description recorded.
+                          </span>
+                        )}
                       </div>
                       <div className="rd-claim">
                         <span className="rd-claim-value" data-rd-claim="summary">

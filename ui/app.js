@@ -219,6 +219,7 @@ var css = `
 [data-plugin-id="research-dashboard"] [data-rd-topbar] {
   justify-content: flex-start;
   flex-wrap: wrap;
+  margin-bottom: 14px;
 }
 [data-plugin-id="research-dashboard"] [data-rd-topbar] .rd-page-title {
   white-space: nowrap;
@@ -231,10 +232,11 @@ var css = `
   border: 0;
   padding: 0;
 }
-[data-plugin-id="research-dashboard"] .rd-views { gap: 2px; }
+[data-plugin-id="research-dashboard"] .rd-views { gap: 4px; }
 [data-plugin-id="research-dashboard"] .rd-views [data-rd-view-option] {
   border-color: transparent;
   background: transparent;
+  padding: 7px 11px;
 }
 [data-plugin-id="research-dashboard"] .rd-views [aria-pressed="true"] {
   border-color: var(--border);
@@ -422,9 +424,19 @@ var css = `
   border-left: var(--rd-rule);
   border-radius: 7px;
   background: var(--muted, rgba(127, 127, 127, 0.04));
-  padding: 9px 11px;
+  padding: 14px 15px;
   display: grid;
-  gap: var(--rd-gap-tight);
+  gap: 9px;
+}
+[data-plugin-id="research-dashboard"] .rd-current-work > .rd-axes {
+  gap: 18px;
+}
+[data-plugin-id="research-dashboard"] .rd-axis-detail .rd-axis-controls {
+  border-top: var(--rd-edge);
+  padding-top: 4px;
+}
+[data-plugin-id="research-dashboard"] .rd-axis-more[open] > .rd-evidence {
+  margin-top: 8px;
 }
 [data-plugin-id="research-dashboard"] .rd-axis-detail[data-rd-axis-state="blocked"] {
   border-left: 3px solid var(--destructive, #b91c1c);
@@ -483,6 +495,9 @@ var css = `
   flex: 0 1 15rem;
   min-width: 12rem;
   margin: 0;
+  max-height: min(72vh, 760px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   /* The index is a surface, not a bare list — the prototype's panel. Rows sit inside on a small inset,
      so a pressed row reads as a selected row within a panel rather than a stray rectangle on the page. */
   padding: 5px;
@@ -567,12 +582,12 @@ var css = `
   border: var(--rd-edge);
   border-left: 3px solid var(--border);
   border-radius: 8px;
-  gap: 10px;
+  gap: 12px;
   min-height: 165px;
-  padding: 14px 16px;
+  padding: 18px 20px;
 }
 [data-plugin-id="research-dashboard"] .rd-progress-problem > .rd-problem-card > .rd-strong {
-  font-size: 16px;
+  font-size: 18px;
   line-height: 1.4;
   overflow-wrap: anywhere;
 }
@@ -602,11 +617,24 @@ var css = `
   border-bottom: var(--rd-edge);
   padding: 5px 0 8px;
 }
+[data-plugin-id="research-dashboard"] .rd-progress-activity {
+  min-width: 0;
+}
+[data-plugin-id="research-dashboard"] .rd-progress-activity .rd-feed .rd-cluster {
+  min-width: 0;
+}
 [data-plugin-id="research-dashboard"] .rd-progress-activity .rd-feed .rd-strong {
+  flex: 1 1 100%;
+  min-width: 0;
   font-size: var(--rd-meta);
-  font-weight: 600;
+  font-weight: 400;
   line-height: 1.35;
   overflow-wrap: anywhere;
+}
+[data-plugin-id="research-dashboard"] .rd-side-card .rd-activity .rd-strong {
+  font-size: var(--rd-meta);
+  font-weight: 500;
+  line-height: 1.4;
 }
 [data-plugin-id="research-dashboard"] .rd-progress-activity .rd-feed .rd-tags {
   font-size: var(--rd-label);
@@ -710,12 +738,19 @@ var css = `
 }
 [data-plugin-id="research-dashboard"] .rd-view { display: grid; gap: var(--rd-gap); margin: 0; padding: 0; list-style: none; }
 [data-plugin-id="research-dashboard"] .rd-involvement {
+  border: var(--rd-edge);
   border-left: var(--rd-rule);
-  padding: 0 0 0 10px;
+  border-radius: 7px;
+  background: var(--muted, rgba(127, 127, 127, 0.04));
+  padding: 11px 13px;
   display: grid;
   gap: var(--rd-gap-tight);
 }
-[data-plugin-id="research-dashboard"] .rd-involvement > ul { margin: 0; }
+[data-plugin-id="research-dashboard"] .rd-involvement > ul {
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
 /*
  * The primary line. The rd-strong class carried no rule at all, so the sentence that answers the question — a
  * problem's statement, an axis's title, a person's name — rendered exactly like the provenance under it,
@@ -1298,12 +1333,12 @@ function apply(ctx) {
       type: "person"
     })), line ? /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta"
-    }, line) : null) : null, /* @__PURE__ */ React.createElement(EvidenceLine, {
-      evidence: axis.evidence
-    })), /* @__PURE__ */ React.createElement("details", {
+    }, line) : null) : null), /* @__PURE__ */ React.createElement("details", {
       className: "rd-axis-more",
       "data-rd-axis-more": axis.id
-    }, /* @__PURE__ */ React.createElement("summary", null, "More on this axis"), axis.description ? /* @__PURE__ */ React.createElement("p", {
+    }, /* @__PURE__ */ React.createElement("summary", null, "More on this axis"), /* @__PURE__ */ React.createElement(EvidenceLine, {
+      evidence: axis.evidence
+    }), axis.description ? /* @__PURE__ */ React.createElement("p", {
       className: "rd-axis-secondary",
       "data-rd-axis-description": "true"
     }, axis.description) : null, /* @__PURE__ */ React.createElement("div", {
@@ -1314,7 +1349,7 @@ function apply(ctx) {
       value: axis.stateConfidence
     }), axis.lastReviewedAt ? /* @__PURE__ */ React.createElement("span", {
       className: "rd-muted"
-    }, "last reviewed ", axis.lastReviewedAt.slice(0, 10)) : null)), /* @__PURE__ */ React.createElement("div", {
+    }, "last reviewed ", axis.lastReviewedAt.slice(0, 10)) : null), /* @__PURE__ */ React.createElement("div", {
       className: "rd-cluster rd-axis-controls"
     }, /* @__PURE__ */ React.createElement(Button, {
       "data-rd-history-toggle": axis.id,
@@ -1334,7 +1369,7 @@ function apply(ctx) {
       },
       size: "sm",
       variant: correcting ? "default" : "ghost"
-    }, correcting ? "Cancel" : "Correct")), historyOpen ? /* @__PURE__ */ React.createElement(AxisHistory, {
+    }, correcting ? "Cancel" : "Correct"))), historyOpen ? /* @__PURE__ */ React.createElement(AxisHistory, {
       axis
     }) : null, correcting && correction ? /* @__PURE__ */ React.createElement("div", {
       className: "rd-correction",
@@ -2953,15 +2988,17 @@ function apply(ctx) {
     }, "nobody tagged yet") : null), selectedDetails ? /* @__PURE__ */ React.createElement("div", {
       className: "rd-detail-claims"
     }, /* @__PURE__ */ React.createElement("div", {
-      className: "rd-claim"
-    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-claim",
+      "data-rd-description-field": "true"
+    }, selectedDetails.topic.description ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("span", {
       className: "rd-claim-value",
       "data-rd-claim": "description"
-    }, selectedDetails.topic.description || /* @__PURE__ */ React.createElement("span", {
+    }, selectedDetails.topic.description), /* @__PURE__ */ React.createElement("span", {
       className: "rd-muted"
-    }, "no description yet")), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-muted"
-    }, "description")), /* @__PURE__ */ React.createElement("div", {
+    }, "description")) : /* @__PURE__ */ React.createElement("span", {
+      className: "rd-muted",
+      "data-rd-claim": "description"
+    }, "No description recorded.")), /* @__PURE__ */ React.createElement("div", {
       className: "rd-claim"
     }, /* @__PURE__ */ React.createElement("span", {
       className: "rd-claim-value",
