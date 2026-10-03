@@ -1157,13 +1157,23 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-progress-top > .rd-progress-index {
   flex: 0 0 var(--rd-index-basis);
 }
+/* V1/A5 — this pane is a Card now, like the other three views' detail panes, so its surface comes from the
+   shared host grammar rather than from the 1px rule it used to carry on its left edge. That lone rule was
+   the whole difference the montage review saw as "visually much flatter / less clearly enclosed": the pane
+   was the only detail surface on the page with no card around it.
+   Verified by measurement, not by eye: the pane now computes the reference Card's own surface exactly
+   (rounded-xl border bg-card shadow-sm, 1px / 14px radius / white).
+   The inset is set here rather than by re-nesting the pane in CardHeader + CardContent: the host Card
+   itself has padding 0 and takes it from those two, and the reference palette's CardHeader measures
+   p-6 = 24px. Wrapping ~430 lines of the pane only to re-indent them would bury the real change, so the
+   measured value is stated instead — if the host's Card padding ever moves, this is the one line to move
+   with it. */
 [data-plugin-id="research-dashboard"] .rd-progress-detail {
-  border-left: 1px solid var(--border);
   display: grid;
   flex: 1 1 34rem;
   gap: var(--rd-gap-block);
   min-width: 20rem;
-  padding-left: 12px;
+  padding: 24px;
 }
 [data-plugin-id="research-dashboard"] .rd-progress-title {
   display: flex;
@@ -1253,21 +1263,21 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-progress-activity .rd-feed .rd-cluster {
   min-width: 0;
 }
-[data-plugin-id="research-dashboard"] .rd-progress-activity .rd-feed .rd-strong {
-  flex: 1 1 100%;
-  min-width: 0;
-  font-size: var(--rd-meta);
-  font-weight: 400;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
-}
-/* One legible event type scale across Topics, People, Repositories and Progress. */
+/* V1/A2+A6 — one event-type scale for every rail, in one rule. Two rules used to set this, in this order:
+   one to --rd-meta/400, then one to --rd-body/500, so the first was dead code and the survivor left the
+   event headline (500) sitting ABOVE the axis's own reading (--rd-claim-value, which carries no weight of
+   its own, i.e. 400). The event now sits one step below the claim it reports on — body size, regular weight,
+   full foreground so it still reads as the row's headline. This is also why the Problem statement is not
+   pushed to a higher weight: the scale tops out at .rd-strong (600), and a fifth weight step is the bloat
+   this pass removes. What the review asked for is the relationship, and the relationship is now unambiguous. */
 [data-plugin-id="research-dashboard"] .rd-side-card .rd-activity .rd-strong,
 [data-plugin-id="research-dashboard"] .rd-progress-activity .rd-feed .rd-strong {
-  font-size: var(--rd-body);
-  font-weight: 500;
-  line-height: 1.45;
   color: var(--foreground, #171717);
+  flex: 1 1 100%;
+  font-size: var(--rd-body);
+  font-weight: 400;
+  line-height: 1.45;
+  min-width: 0;
   overflow-wrap: anywhere;
 }
 [data-plugin-id="research-dashboard"] .rd-side-card .rd-activity .rd-meta,
@@ -1367,6 +1377,20 @@ const css = `
   padding: 0 6px;
 }
 [data-plugin-id="research-dashboard"] .rd-steering-text { margin: 2px 0 0; }
+/* V1/A8 — every problem row is a row, and selection is a layer on top of it. Before this only
+   [aria-pressed="true"] had any surface at all: an unselected row was bare text between the rows that
+   had one, so the selected row read as the only row that existed rather than as the chosen one.
+   The base is the outline .rd-index-item already reserves for itself (1px, transparent until now); the
+   selected row adds the fill on top of it.
+   A first attempt gave the base the same --muted fill the selected row already used. Measured on the
+   rendered page rather than judged by eye, all three rows then computed oklch(0.97 0 0) and the selected
+   row kept only its border to say so — the change removed the one property that distinguished selection.
+   The palette offers white and --muted and nothing between, so the base takes the outline and the
+   selection keeps the fill. */
+[data-plugin-id="research-dashboard"] .rd-index-item[data-rd-problem-index] {
+  border-color: var(--border);
+}
+/* …and the selection treatment, on top of that base. */
 [data-plugin-id="research-dashboard"] .rd-index-item[aria-pressed="true"] {
   border-color: var(--border);
   background: var(--muted, rgba(127, 127, 127, 0.1));
@@ -4257,7 +4281,10 @@ export function apply(ctx: Context) {
             index's own siblings in one wrapping row and every lower section was an independent full-width
             band, so the selected axis was never the subject of the pane — its identity sat in the index row
             and was repeated as tags inside the Problem column. */}
-        <div
+        {/* V1/A5 — a Card, like the other three views' detail panes, so this pane takes the host's surface
+            grammar instead of the 1px left rule it used to carry. Everything below is unchanged: the pane
+            holds one axis's own header, then the three grouped rows the prototype nests inside it. */}
+        <Card
           className="rd-progress-detail"
           data-rd-progress-detail="true"
           data-rd-progress-detail-axis={activeAxis?.id ?? ""}
@@ -4696,7 +4723,7 @@ export function apply(ctx: Context) {
             ) : null}
             </div>
           ) : null}
-        </div>
+        </Card>
         </div>
       </div>
     );
