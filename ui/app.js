@@ -397,9 +397,14 @@ var css = `
 [data-plugin-id="research-dashboard"] .rd-newtopic { flex-wrap: nowrap; }
 [data-plugin-id="research-dashboard"] .rd-newtopic input { width: 18rem; }
 [data-plugin-id="research-dashboard"] .rd-activity { display: grid; gap: var(--rd-gap); margin: 0; padding: 0; list-style: none; }
+/* Activity is a flat chronology in every detail rail, not nested cards inside a card. */
 [data-plugin-id="research-dashboard"] .rd-activity li {
-  border-left: var(--rd-rule);
-  padding: 0 0 0 10px;
+  border-bottom: var(--rd-edge);
+  padding: 6px 0 10px;
+  min-width: 0;
+}
+[data-plugin-id="research-dashboard"] .rd-activity li:last-child {
+  border-bottom: 0;
 }
 [data-plugin-id="research-dashboard"] .rd-form { display: grid; gap: var(--rd-gap); }
 [data-plugin-id="research-dashboard"] .rd-divider {
@@ -631,10 +636,19 @@ var css = `
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
-[data-plugin-id="research-dashboard"] .rd-side-card .rd-activity .rd-strong {
-  font-size: var(--rd-meta);
+/* One legible event type scale across Topics, People, Repositories and Progress. */
+[data-plugin-id="research-dashboard"] .rd-side-card .rd-activity .rd-strong,
+[data-plugin-id="research-dashboard"] .rd-progress-activity .rd-feed .rd-strong {
+  font-size: var(--rd-body);
   font-weight: 500;
-  line-height: 1.4;
+  line-height: 1.45;
+  color: var(--foreground, #171717);
+  overflow-wrap: anywhere;
+}
+[data-plugin-id="research-dashboard"] .rd-side-card .rd-activity .rd-meta,
+[data-plugin-id="research-dashboard"] .rd-progress-activity .rd-feed .rd-meta {
+  opacity: 0.78;
+  overflow-wrap: anywhere;
 }
 [data-plugin-id="research-dashboard"] .rd-progress-activity .rd-feed .rd-tags {
   font-size: var(--rd-label);
