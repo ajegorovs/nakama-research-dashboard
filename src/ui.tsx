@@ -4245,7 +4245,11 @@ export function apply(ctx: Context) {
                 >
                   <span className="rd-row">
                     <span className="rd-strong">{row.title}</span>
-                    <span className="rd-meta">{`last activity ${describeAge(row.recencyAt)}`}</span>
+                    {/* V1/A3 — the index grammar is the bare age, as on the other three rails; this row was
+                        the one place an index carried the label too, so the same fact read as "last activity
+                        today" in Progress and "today" everywhere else. The label belongs to the detail
+                        header's recency slot, not to the index. */}
+                    <span className="rd-meta">{describeAge(row.recencyAt)}</span>
                   </span>
                   {/* V1 Task 2.5 rehearsed moving this pill up beside the title, and the render rejected it:
                       at 240px a full-size axis title cannot share the line with a pill ("PARKED · INFERRED" is

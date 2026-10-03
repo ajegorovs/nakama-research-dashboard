@@ -2539,7 +2539,7 @@ function apply(ctx) {
       className: "rd-strong"
     }, row.title), /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta"
-    }, `last activity ${describeAge(row.recencyAt)}`)), /* @__PURE__ */ React.createElement("span", {
+    }, describeAge(row.recencyAt))), /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta"
     }, /* @__PURE__ */ React.createElement(StateBadge, {
       confidence: row.stateConfidence,
