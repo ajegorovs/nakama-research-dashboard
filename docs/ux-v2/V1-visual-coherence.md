@@ -13,6 +13,9 @@ harness (`harness/preview/`, host runtime, no instance) as of `bb15eec`. The dig
 short hash because a hash inside its own commit is self-referential and moves on every amend. **A preview
 render is a visual instrument, not evidence**; the served-instance pass is what closes V1.
 
+> **Resuming this pass?** Read this document and the code slice it names — not the older acceptance records.
+> See § *Resuming this pass* at the end for the read scope and the resume order.
+
 ## What this pass is
 
 The composition phase made the product *structure* coherent. Reading all ten montages at once (corpus +
@@ -177,3 +180,16 @@ this machine could exercise it.
   result set fits rather than printing a meaningless `5 of 5 shown`; no semantic change to activity scope.
 - **V1-B B1–B4** — polish (support band, chip saturation, rail section spacing, Overview card anatomy), not a
   new architecture pass.
+
+## Resuming this pass
+
+**Read this document and the code slice the open items name — not the older records.** This document is written
+to be the entry point: the landed items with the measurement that closed each, the three self-corrections the
+render forced, what is open, and what waits for the served instance. Reading the composition phase's records
+first adds noise rather than context; they are reachable by `git show <tag>:<path>` when a specific historical
+claim needs checking, rather than read in sequence.
+
+Resume order: **A1 Topics** (only after the DOM-nesting classification above, so the adoption is mechanical) →
+**A2 remainder** (date and footer consistency only, no semantic change to activity scope) → **V1-B** (polish,
+not architecture) → the single served-instance Phase-4 loop, with the title-equality reconciliation checked
+explicitly and whichever way it lands recorded rather than explained away.
