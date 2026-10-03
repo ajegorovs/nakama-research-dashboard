@@ -85,8 +85,14 @@ var css = `
  *   --rd-body   the line that answers the question
  *   --rd-meta   supporting text: provenance, dates, counts, secondary lines
  *   --rd-label  a label for a section or a qualifier — uppercase, tracked, quieter
+ *
+ *   --rd-title-view  V1: the page-level step, above every subsection. The token block used to top out at
+ *   the host's own 16px card title, so a view's name and a card's name were the same size and the shell
+ *   title (16px) outranked the view it governed — which is what made every page read as compressed. There
+ *   is deliberately no second new token for the detail/entity title: that IS the host's --rd-title.
  */
 [data-plugin-id="research-dashboard"] {
+  --rd-title-view: 23px;
   --rd-body: 13px;
   --rd-meta: 12px;
   --rd-label: 11px;
@@ -301,27 +307,35 @@ var css = `
   letter-spacing: 0.04em;
   opacity: var(--rd-quiet);
 }
-/* §7 — the view names itself, under the shell title that stays. Modest on purpose: the shell already
-   carries the page title, so this is the view's identity, not a second banner. The heading takes the whole
-   row: .rd-split is a *wrapping flex* row (not a grid), so the spanning declaration is flex: 0 0 100%
-   — grid-column alone was inert and let the index share the heading's line, which pushed the detail into
-   a second row and broke the "tops aligned" geometry. Both are declared so the rule survives a change of
-   layout mode. */
+/* §7 / V1 — the view names itself, under the shell (brand) title that stays. This is now the page-level
+   type step: the token block used to top out at the host's 16px card title, so the shell title outranked the
+   view it governed and every page read as compressed. The heading is a row, so a view that owns a control
+   (Overview's window selector) puts it at the right edge, while the name and its hint sit in their own
+   column — the hint on its own line at the metadata step, not sharing the title's line at near-body weight.
+   The heading takes the whole row: .rd-split is a *wrapping flex* row (not a grid), so the spanning
+   declaration is flex: 0 0 100% — grid-column alone was inert and let the index share the heading's line,
+   which pushed the detail into a second row and broke the "tops aligned" geometry. Both are declared so the
+   rule survives a change of layout mode. */
 [data-plugin-id="research-dashboard"] .rd-view-heading {
+  align-items: flex-end;
   display: flex;
-  align-items: baseline;
   flex: 0 0 100%;
   gap: var(--rd-gap-block);
   grid-column: 1 / -1;
+  justify-content: space-between;
+}
+[data-plugin-id="research-dashboard"] .rd-view-titles {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
 }
 /* Overview's heading carries the window selector at its right edge: the control belongs to the tab, so it
    sits with the heading that names it rather than in the global toolbar. */
 [data-plugin-id="research-dashboard"] .rd-overview-head {
-  align-items: center;
-  justify-content: space-between;
+  align-items: flex-end;
 }
 [data-plugin-id="research-dashboard"] .rd-view-title {
-  font-size: 14px;
+  font-size: var(--rd-title-view);
   font-weight: 600;
   letter-spacing: -0.01em;
   margin: 0;
@@ -1250,12 +1264,14 @@ function apply(ctx) {
     return /* @__PURE__ */ React.createElement("div", {
       className: "rd-view-heading",
       "data-rd-view-heading": view
+    }, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-view-titles"
     }, /* @__PURE__ */ React.createElement("h3", {
       className: "rd-view-title",
       "data-rd-view-title": view
     }, VIEW_OPTIONS.find((option) => option.value === view)?.label ?? view), hint ? /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta"
-    }, hint) : null);
+    }, hint) : null));
   }
   function Notice({
     attrs,
@@ -1923,7 +1939,7 @@ function apply(ctx) {
       className: "rd-view-heading rd-overview-head",
       "data-rd-view-heading": "overview"
     }, /* @__PURE__ */ React.createElement("div", {
-      className: "rd-cluster"
+      className: "rd-view-titles"
     }, /* @__PURE__ */ React.createElement("h3", {
       className: "rd-view-title",
       "data-rd-view-title": "overview"
