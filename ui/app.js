@@ -231,13 +231,20 @@ var css = `
   border-left: var(--rd-rule);
   padding: 0 0 0 10px;
 }
-/* Blocked is an exceptional state and must be legible before its badge is read: it keeps the narrow
-   left rule every axis has, but the rule thickens and takes the exceptional colour. The blocked
-   .rd-axis-detail rule below states the same accent for the detail element, so the axis reads as
-   blocked on whichever element owns it, and a normal axis is untouched (U9: exceptional colour only
-   for exceptional state). No box, no background, no new treatment. */
+/* Blocked keeps the stronger exceptional rule on every axis surface; the badge still
+   provides the explicit state text. */
 [data-plugin-id="research-dashboard"] .rd-axis[data-rd-axis-state="blocked"] {
   border-left: 3px solid var(--destructive, #b91c1c);
+}
+/* Scan rows in the main work lane get the same bounded rhythm as detailed axis rows.
+   The stopped-work disclosure remains separate and no state or navigation is hidden. */
+[data-plugin-id="research-dashboard"] .rd-current-work > .rd-axes > .rd-axis {
+  background: var(--muted, rgba(127, 127, 127, 0.04));
+  border-top: var(--rd-edge);
+  border-right: var(--rd-edge);
+  border-bottom: var(--rd-edge);
+  border-radius: 7px;
+  padding: 9px 11px;
 }
 [data-plugin-id="research-dashboard"] .rd-axis-title { font-weight: 600; }
 /* Step 3: one primary row per axis (state claim + name, kind receding), one subordinate line for where
@@ -374,9 +381,12 @@ var css = `
   margin: 0;
 }
 [data-plugin-id="research-dashboard"] .rd-axis-detail {
-  /* An axis inside an open card is not a second card: it takes the same left rule the axis index uses. */
+  /* Work rows are grouped reading surfaces, not a run of equally weighted metadata. */
+  border: var(--rd-edge);
   border-left: var(--rd-rule);
-  padding: 0 0 0 10px;
+  border-radius: 7px;
+  background: var(--muted, rgba(127, 127, 127, 0.04));
+  padding: 9px 11px;
   display: grid;
   gap: var(--rd-gap-tight);
 }
@@ -529,6 +539,27 @@ var css = `
 [data-plugin-id="research-dashboard"] .rd-feed > li {
   display: grid;
   gap: var(--rd-gap-row);
+}
+/* Progress is a problem-first page. Keep its activity rail bounded and quiet so a run of
+   verbose recorded events cannot push Plan and supporting evidence out of the glance.
+   Every event remains in the DOM and the rail scrolls; links remain keyboard reachable. */
+[data-plugin-id="research-dashboard"] .rd-progress-activity .rd-feed {
+  max-height: 270px;
+  overflow-y: auto;
+  padding-right: 5px;
+}
+[data-plugin-id="research-dashboard"] .rd-progress-activity .rd-feed > li {
+  border-bottom: var(--rd-edge);
+  padding: 5px 0 8px;
+}
+[data-plugin-id="research-dashboard"] .rd-progress-activity .rd-feed .rd-strong {
+  font-size: var(--rd-meta);
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+[data-plugin-id="research-dashboard"] .rd-progress-activity .rd-feed .rd-tags {
+  font-size: var(--rd-label);
 }
 /* The plan sits below the composition, separated by a rule rather than boxed: it is a secondary section, and
    the top row is the glance. The step list is a plain list because the markup must not imply an order the
