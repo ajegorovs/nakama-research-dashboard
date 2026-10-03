@@ -388,3 +388,35 @@ full-size axis title cannot share a line with a pill — "PARKED · INFERRED" al
 line 1 alone and the row grows to three lines, in the one rail the montage review already flags as "rows much
 taller". The other three index rails carry no pill in the index at all, so there is no established pattern for
 it to converge on. Deferred to the row-by-row pass, with its montage in hand.
+
+### 14.6 The index row gives its title the full width (ruled, 2026-10-03)
+
+A rail row put the title and a right-aligned recency on one line. At the fixed 240px basis that made the age
+compete with the title for the same horizontal space, so a title wrapped whenever the age took the end of its
+line — and the rail's width can no longer be widened to compensate without breaching the index/detail balance
+(§14.2). The row grammar is therefore: **the title takes the row's whole first line, and the recency moves down
+to the line that already carries the row's quiet facts.** One grammar for Topics, People, Repositories and
+Progress — not a Topics-only fix.
+
+Measured (corpus, 1440; row height / title lines; before → after): topics 88→64, 2L→1L — the case the item was
+raised for; people 64→84, 1L→1L — nothing to unwrap, the cost is the longer metadata line; repositories
+88→108, 2L→2L — the full-width name still overflows by ~10px; progress 130→64..130.
+
+**Recorded as a partial win, not a clean one.** Folding the recency into the context line lengthens that line
+at 240px, so two rails carry one more line and one of them gains nothing. The alternative — the recency on its
+own line — was considered and not taken: it costs every rail a line and turns Topics' two-line win back into
+three. The measured numbers, not the shape of the change, are the thing to rule on.
+
+The rail's own rows stay identifiable by hook (`data-rd-index-axis` counted 3 in both runs). The extra
+`.rd-index-item` elements the after-run counted are the pane's open-problems rows, which carry
+`data-rd-problem-choice` and reuse the row class; they are not index rows and no index row was duplicated.
+
+### 14.7 The People recency slot keeps its exceptional state (ruled, 2026-10-03)
+
+"One recency grammar everywhere" is withdrawn as too broad. There are two cases and they are different facts:
+where there is attributable activity the row shows ordinary recency in the shared grammar; where there is none
+it states the attribution fact (`nothing attributed yet`, `no account mapped`) instead. Writing an age, or a
+blank, into that slot would report "no recent activity" — a different and false claim — and
+`data-rd-person-recency` already carries `none` / `unattributable` so a check can compare the row against the
+payload it came from. The visual pass may quiet or reposition the exceptional state; it may not remove or
+reinterpret it, and the payload and harness contracts are unchanged.
