@@ -114,8 +114,10 @@ evidence. Its contract:
 - **Dataset identity is checked, not trusted.** The pass separates corpus, fixture and the write pass's own
   `ui-check` residue, and refuses an empty store. Never record a fixture run as a corpus one: the transcript
   path encodes dataset and viewport precisely so that cannot happen by accident.
-- **Superseded records are archived, not discarded.** When a record is re-taken on a new build, keep the
-  previous one beside it as `*.revision-<n>.txt` (the instance revision it was taken at).
+- **Superseded records are archived, not discarded.** When a record is re-taken on a new build, preserve the
+  previous one as `*.revision-<n>.txt` (the instance revision it was taken at) — in the tag that carries
+  that build, not on the tip. The tip keeps one canonical record per dataset and viewport; recover a
+  checkpoint with `git show <tag>:docs/corpus/verify-read.txt.revision-511.txt`.
 - **The write pass mutates the fixture.** It is the canonical composition-inside-a-write record; label it
   canonical, and re-seed before the next ordinary fixture run.
 - **The screenshots are the pass's own output.** It republishes them on every run, so a pass run will show

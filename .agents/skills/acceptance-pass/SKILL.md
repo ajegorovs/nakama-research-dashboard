@@ -56,9 +56,10 @@ overwrite a good record with an aborted run's transcript by hand.
 
 3. **Read the failure list, not the count.** Failures name the check and the measured value; a skip names what
    it could not reach and why.
-4. **Archive the record you are superseding**, beside the new one, as `*.revision-<n>.txt` named for the instance
-   revision it was taken at (e.g. `verify-read.txt.revision-511.txt`). Completion: the old record is still
-   readable in the tree and in history.
+4. **Archive the record you are superseding** as `*.revision-<n>.txt` named for the instance
+   revision it was taken at (e.g. `verify-read.txt.revision-511.txt`). It belongs to the tag that carries that
+   build, not to the tip, which keeps one canonical record per dataset and viewport. Completion: the old
+   record is readable in history (`git show <tag>:<path>`).
 5. **When the fix is a source change, re-take every record it could reach** — and compare the *check
    descriptions and verdicts*, not the raw lines: detail text legitimately moves with the dataset (ids, counts,
    subject names), so "0 differing check descriptions" is the regression claim worth making.
