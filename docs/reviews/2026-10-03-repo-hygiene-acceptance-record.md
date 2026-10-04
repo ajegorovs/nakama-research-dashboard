@@ -57,6 +57,12 @@ deferred scope need a durable, public home.
 > **Main is ready for V1.**
 > **Tier B remains intentionally deferred until after V1.**
 
+> **Editorial note (2026-10-04).** The untracked working artifact the verdict names carried the V1-B visual
+> findings; those findings are now absorbed into
+> [`V1-visual-coherence.md`](../ux-v2/V1-visual-coherence.md) §*V1-B*, which is the sole committed anchor for
+> them. No committed procedure or record points at that draft now. The verdict above is reproduced verbatim
+> and is not rewritten.
+
 ## Classification
 
 | aspect | verdict |
@@ -67,7 +73,7 @@ deferred scope need a durable, public home.
 | the two deviations (A4's wider doc fix; the policy's home) | **both endorsed** |
 | Tier B (montage/prototype normalization; historical-doc trimming) | **deferred by design until after the V1 visual pass** |
 | write pass publishing into the read-shot directory | **deferred, recorded in `AGENTS.md`** — not closed by this record |
-| `temp.md` | **intentionally kept untracked**; deletion gated on V1 absorbing its findings |
+| the untracked visual-findings draft | **findings absorbed into [`V1-visual-coherence.md`](../ux-v2/V1-visual-coherence.md) §V1-B**; not referenced by a committed procedure |
 
 ## What was measured
 
@@ -76,8 +82,8 @@ deferred scope need a durable, public home.
 | tracked files | 313 | **259** |
 | tracked bytes | 32,041,846 | **23,983,442** (22.87 MiB) |
 | remote branches | 5 (`main` + 4 stale) | **1** (`main`) |
-| untracked entries | 3 | **1** (`temp.md`) |
-| `temp.md` | untracked working artifact | untracked, deliberately |
+| untracked entries | 3 | **1** (the visual-findings draft) |
+| the visual-findings draft | untracked working artifact | untracked, deliberately; findings absorbed into `V1-visual-coherence.md` §V1-B |
 
 Removals, by task: A1 `docs/layout-pr/` **29 files / 4,845,374 B**; A2+A3 write-pass shots **14 files /
 2,863,639 B**; A4 `.revision-*` checkpoints **11 files / 352,180 B** — total **54 files / 8,061,193 B**.
@@ -97,7 +103,7 @@ range.
 | G1b | `bun run harness:records` | all checks passed — **168 files scanned** (16 fewer text files) |
 | G1c | `git ls-files \| wc -l` | **259** |
 | G1d | `git grep -l 'layout-pr' -- .` | only the 4 referrers updated in A1, each marked retired |
-| final (on merged `main`) | `bun run check` + `harness:records` | both green; working tree clean except `temp.md` |
+| final (on merged `main`) | `bun run check` + `harness:records` | both green; working tree clean |
 
 The ignore rules are asserted, not asserted-by-eye: `git check-ignore -v` was run for
 `docs/screenshots/research-dashboard-write-detail.png`,
@@ -112,7 +118,7 @@ The ignore rules are asserted, not asserted-by-eye: `git check-ignore -v` was ru
 | `dbe5eb6` | A2+A3 — drop the 14 write-pass shots; add the `.gitignore` rules |
 | `f665e4b` | A4 — drop the 11 `.revision-*` checkpoints; `AGENTS.md` and the acceptance-pass skill now state where a checkpoint lives |
 | `f7db220` | A5 — ignore the generated preview montage tree |
-| `849cd51` | tracking policy recorded in `AGENTS.md`; `cleanup.md` (the reviewer's task copy) deleted, `temp.md` kept |
+| `849cd51` | tracking policy recorded in `AGENTS.md`; `cleanup.md` (the reviewer's task copy) deleted |
 
 Branch hygiene, executed separately from the working-tree cleanup: annotated tag
 `archive/h1-parked-attempt` → `c6852df`, pushed and verified live **before** `h1-keyboard-focus` was deleted;
@@ -136,6 +142,7 @@ before deletion. No tag was moved and no force-push occurred.
 - **The write-pass producer is unchanged.** `read-pass.sh` still uses one `DEFAULT_SHOTS` for both passes, so a
   write run still writes into the read-shot directory; `.gitignore` holds the line rather than the producer
   being fixed. Recorded as a follow-up in `AGENTS.md`.
-- **`temp.md` is deliberately untracked and still present.** It is the source of the current visual findings for
-  the V1 visual-coherence pass; it is deleted only once V1 has absorbed those findings into the V1 record.
+- **The untracked visual-findings draft is out of scope here.** Its findings are absorbed into
+  [`V1-visual-coherence.md`](../ux-v2/V1-visual-coherence.md) §*V1-B*, which is the committed anchor for them;
+  no committed procedure points at the draft, and the working file itself is left untouched.
 - **No V1 work is assessed here.** This record closes a repository-hygiene pass, not a product unit.

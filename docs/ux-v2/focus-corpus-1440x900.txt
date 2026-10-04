@@ -1,55 +1,47 @@
 # harness/focus-pass.sh — keyboard focus visibility · dataset corpus · viewport 1440x900
-# dashboard: http://<box>.<tailnet>.ts.net:3003
-# instance: http://127.0.0.1:4399 (0.2.0+dev.e507fa4ebc4a, revision 527)
-# generated: 2026-10-03T00:18:33+03:00
+# dashboard: http://127.0.0.1:3003
+# instance: http://127.0.0.1:4399 (0.2.0+dev.30e1f1190226, revision 52)
+# generated: 2026-10-04T01:16:20+03:00
 
 PASS  login — status 200
-# overview: 15 enabled focusable(s), the first reached on tab 38 — button[view-option] x4 · button[window-option] x4 · button[host:switch] x1 · button[host:button-default] x1 · button[entity-tag].rd-tag.rd-tag-compact x3 · button[host:button-sm] x2
-# topics: 41 enabled focusable(s), the first reached on tab 38 — button[home].rd-page-title.rd-home x1 · button[view-option] x4 · button[window-option] x4 · button[host:switch] x1 · button[host:button-default] x1 · button.rd-index-item x1 · button[entity-tag].rd-tag x14 · button[entity-tag].rd-tag.rd-tag-compact x6 · summary(in .rd-axis-more) x2 · button[host:button-sm] x5 · summary(in .rd-completed-fold) x1 · summary(in .rd-narrow-write) x1
-# people: 26 enabled focusable(s), the first reached on tab 38 — button[home].rd-page-title.rd-home x1 · button[view-option] x4 · button[window-option] x4 · button[host:switch] x1 · button[host:button-default] x1 · button[index-row-person].rd-index-item x1 · button[entity-tag].rd-tag.rd-tag-compact x4 · button[entity-tag].rd-tag x7 · summary(in .rd-axis-more) x3
-# repositories: 28 enabled focusable(s), the first reached on tab 38 — button[home].rd-page-title.rd-home x1 · button[view-option] x4 · button[window-option] x4 · button[host:switch] x1 · button[host:button-default] x1 · button[index-row-repository].rd-index-item x1 · button[entity-tag].rd-tag.rd-tag-compact x3 · button[entity-tag].rd-tag x11 · summary(in .rd-completed-fold) x1 · button[host:button-sm] x1
-# progress: 67 enabled focusable(s), the first reached on tab 38 — button[home].rd-page-title.rd-home x1 · button[view-option] x4 · button[window-option] x4 · button[host:switch] x1 · button[host:button-default] x2 · button[host:button-sm] x2 · button.rd-index-item x3 · button[entity-tag].rd-tag x50
+# overview: 15 enabled focusable(s), the first reached on tab 17 — button[view-option] x5 · button[host:button-default] x1 · button[window-option] x4 · button[entity-tag].rd-tag.rd-tag-compact x3 · button[host:button-sm] x2
+# topics: 35 enabled focusable(s), the first reached on tab 17 — button[view-option] x5 · button[host:button-default] x1 · button[index-row-topic].rd-index-item x1 · button[entity-tag].rd-tag x17 · button[entity-tag].rd-tag.rd-tag-compact x6 · summary(in .rd-axis-more) x2 · summary(in .rd-completed-fold) x1 · button[host:button-sm] x1 · summary(in .rd-narrow-write) x1
+# people: 23 enabled focusable(s), the first reached on tab 17 — button[view-option] x5 · button[host:button-default] x1 · button[index-row-person].rd-index-item x1 · button[entity-tag].rd-tag.rd-tag-compact x6 · button[entity-tag].rd-tag x7 · summary(in .rd-axis-more) x3
+# repositories: 25 enabled focusable(s), the first reached on tab 17 — button[view-option] x5 · button[host:button-default] x1 · button[index-row-repository].rd-index-item x1 · button[entity-tag].rd-tag.rd-tag-compact x4 · button[entity-tag].rd-tag x13 · summary(in .rd-completed-fold) x1
+# progress: 35 enabled focusable(s), the first reached on tab 17 — button[view-option] x5 · button[host:button-default] x1 · button[host:button-sm] x3 · button[index-row-topic].rd-index-item x3 · button[entity-tag].rd-tag x22
 
 PASS  button[view-option] paints a focus indicator (overview,topics,people,repositories,progress) — outline 2px rgb(180, 83, 9)
 PASS  button[view-option] indicator survives its clippers (overview,topics,people,repositories,progress) — not clipped
 PASS  button[view-option] stays on screen when focused (overview,topics,people,repositories,progress) — within the viewport
 PASS  button[view-option] indicator reaches 3:1 against its background (overview,topics,people,repositories,progress) — 5.02:1
-PASS  button[window-option] paints a focus indicator (overview,topics,people,repositories,progress) — outline 2px rgb(180, 83, 9)
-PASS  button[window-option] indicator survives its clippers (overview,topics,people,repositories,progress) — not clipped
-PASS  button[window-option] stays on screen when focused (overview,topics,people,repositories,progress) — within the viewport
-PASS  button[window-option] indicator reaches 3:1 against its background (overview,topics,people,repositories,progress) — 5.02:1
-PASS  button[host:switch] paints a focus indicator (overview,topics,people,repositories,progress) — outline 2px rgb(180, 83, 9)
-PASS  button[host:switch] indicator survives its clippers (overview,topics,people,repositories,progress) — not clipped
-PASS  button[host:switch] stays on screen when focused (overview,topics,people,repositories,progress) — within the viewport
-PASS  button[host:switch] indicator reaches 3:1 against its background (overview,topics,people,repositories,progress) — 4.61:1
 PASS  button[host:button-default] paints a focus indicator (overview,topics,people,repositories,progress) — outline 2px rgb(180, 83, 9)
 PASS  button[host:button-default] indicator survives its clippers (overview,topics,people,repositories,progress) — not clipped
 PASS  button[host:button-default] stays on screen when focused (overview,topics,people,repositories,progress) — within the viewport
 PASS  button[host:button-default] indicator reaches 3:1 against its background (overview,topics,people,repositories,progress) — 5.02:1
+PASS  button[window-option] paints a focus indicator (overview) — outline 2px rgb(180, 83, 9)
+PASS  button[window-option] indicator survives its clippers (overview) — not clipped
+PASS  button[window-option] stays on screen when focused (overview) — within the viewport
+PASS  button[window-option] indicator reaches 3:1 against its background (overview) — 4.61:1
 PASS  button[entity-tag].rd-tag.rd-tag-compact paints a focus indicator (overview,topics,people,repositories) — outline 2px rgb(180, 83, 9)
 PASS  button[entity-tag].rd-tag.rd-tag-compact indicator survives its clippers (overview,topics,people,repositories) — not clipped
 PASS  button[entity-tag].rd-tag.rd-tag-compact stays on screen when focused (overview,topics,people,repositories) — within the viewport
-PASS  button[entity-tag].rd-tag.rd-tag-compact indicator reaches 3:1 against its background (overview,topics,people,repositories) — 5.02:1
-PASS  button[host:button-sm] paints a focus indicator (overview,topics,repositories,progress) — outline 2px rgb(180, 83, 9)
-PASS  button[host:button-sm] indicator survives its clippers (overview,topics,repositories,progress) — not clipped
-PASS  button[host:button-sm] stays on screen when focused (overview,topics,repositories,progress) — within the viewport
-PASS  button[host:button-sm] indicator reaches 3:1 against its background (overview,topics,repositories,progress) — 5.02:1
-PASS  button[home].rd-page-title.rd-home paints a focus indicator (topics,people,repositories,progress) — outline 2px rgb(180, 83, 9)
-PASS  button[home].rd-page-title.rd-home indicator survives its clippers (topics,people,repositories,progress) — not clipped
-PASS  button[home].rd-page-title.rd-home stays on screen when focused (topics,people,repositories,progress) — within the viewport
-PASS  button[home].rd-page-title.rd-home indicator reaches 3:1 against its background (topics,people,repositories,progress) — 5.02:1
-PASS  button.rd-index-item paints a focus indicator (topics,progress) — outline 2px rgb(180, 83, 9)
-PASS  button.rd-index-item indicator survives its clippers (topics,progress) — not clipped
-PASS  button.rd-index-item stays on screen when focused (topics,progress) — within the viewport
-PASS  button.rd-index-item indicator reaches 3:1 against its background (topics,progress) — 4.61:1
+PASS  button[entity-tag].rd-tag.rd-tag-compact indicator reaches 3:1 against its background (overview,topics,people,repositories) — 4.61:1
+PASS  button[host:button-sm] paints a focus indicator (overview,topics,progress) — outline 2px rgb(180, 83, 9)
+PASS  button[host:button-sm] indicator survives its clippers (overview,topics,progress) — not clipped
+PASS  button[host:button-sm] stays on screen when focused (overview,topics,progress) — within the viewport
+PASS  button[host:button-sm] indicator reaches 3:1 against its background (overview,topics,progress) — 5.02:1
+PASS  button[index-row-topic].rd-index-item paints a focus indicator (topics,progress) — outline 2px rgb(180, 83, 9)
+PASS  button[index-row-topic].rd-index-item indicator survives its clippers (topics,progress) — not clipped
+PASS  button[index-row-topic].rd-index-item stays on screen when focused (topics,progress) — within the viewport
+PASS  button[index-row-topic].rd-index-item indicator reaches 3:1 against its background (topics,progress) — 4.61:1
 PASS  button[entity-tag].rd-tag paints a focus indicator (topics,people,repositories,progress) — outline 2px rgb(180, 83, 9)
 PASS  button[entity-tag].rd-tag indicator survives its clippers (topics,people,repositories,progress) — not clipped
 PASS  button[entity-tag].rd-tag stays on screen when focused (topics,people,repositories,progress) — within the viewport
-PASS  button[entity-tag].rd-tag indicator reaches 3:1 against its background (topics,people,repositories,progress) — 5.02:1
+PASS  button[entity-tag].rd-tag indicator reaches 3:1 against its background (topics,people,repositories,progress) — 4.61:1
 PASS  summary(in .rd-axis-more) paints a focus indicator (topics,people) — outline 2px rgb(180, 83, 9)
 PASS  summary(in .rd-axis-more) indicator survives its clippers (topics,people) — not clipped
 PASS  summary(in .rd-axis-more) stays on screen when focused (topics,people) — within the viewport
-PASS  summary(in .rd-axis-more) indicator reaches 3:1 against its background (topics,people) — 5.02:1
+PASS  summary(in .rd-axis-more) indicator reaches 3:1 against its background (topics,people) — 4.61:1
 PASS  summary(in .rd-completed-fold) paints a focus indicator (topics,repositories) — outline 2px rgb(180, 83, 9)
 PASS  summary(in .rd-completed-fold) indicator survives its clippers (topics,repositories) — not clipped
 PASS  summary(in .rd-completed-fold) stays on screen when focused (topics,repositories) — within the viewport
@@ -69,29 +61,29 @@ PASS  button[index-row-repository].rd-index-item indicator reaches 3:1 against i
 
 # overview coverage: 15 indexed, 15 tab stops walked, none skipped
 PASS  the overview walk never moves focus backwards in document order — 15 step(s), all forward
-# topics coverage: 41 indexed, 41 tab stops walked, 4 not reached
+# topics coverage: 35 indexed, 35 tab stops walked, 4 not reached
 # topics not reached: input[host:button-default] — tabbable but never reached (the walk ended first)
 # topics not reached: button[entity-tag].rd-tag — tabbable but never reached (the walk ended first)
 # topics not reached: ul.rd-activity — tabbable but never reached (the walk ended first)
-# topics not reached: ul.rd-notes — tabbable but never reached (the walk ended first)
-PASS  the topics walk never moves focus backwards in document order — 41 step(s), all forward
-# people coverage: 26 indexed, 26 tab stops walked, 3 not reached
-# people not reached: button[host:button-sm] — tabbable but never reached (the walk ended first)
+# topics not reached: ul.rd-notes — not tabbable (tabIndex -1)
+PASS  the topics walk never moves focus backwards in document order — 35 step(s), all forward
+# people coverage: 23 indexed, 23 tab stops walked, 3 not reached
+# people not reached: button[entity-tag].rd-tag — tabbable but never reached (the walk ended first)
 # people not reached: button[entity-tag].rd-tag — tabbable but never reached (the walk ended first)
 # people not reached: ul.rd-activity — tabbable but never reached (the walk ended first)
-PASS  the people walk never moves focus backwards in document order — 26 step(s), all forward
-# repositories coverage: 28 indexed, 28 tab stops walked, 1 not reached
+PASS  the people walk never moves focus backwards in document order — 23 step(s), all forward
+# repositories coverage: 25 indexed, 25 tab stops walked, 1 not reached
 # repositories not reached: ul.rd-activity — tabbable but never reached (the walk ended first)
-PASS  the repositories walk never moves focus backwards in document order — 28 step(s), all forward
-# progress coverage: 67 indexed, 67 tab stops walked, none skipped
-PASS  the progress walk never moves focus backwards in document order — 67 step(s), all forward
-PASS  every control class the walk measured was reached by keyboard — 14 class(es) reached and measured: button.rd-index-item, button[entity-tag].rd-tag, button[entity-tag].rd-tag.rd-tag-compact, button[home].rd-page-title.rd-home, button[host:button-default], button[host:button-sm], button[host:switch], button[index-row-person].rd-index-item, button[index-row-repository].rd-index-item, button[view-option], button[window-option], summary(in .rd-axis-more), summary(in .rd-completed-fold), summary(in .rd-narrow-write)
+PASS  the repositories walk never moves focus backwards in document order — 25 step(s), all forward
+# progress coverage: 35 indexed, 34 tab stops walked, 1 not reached
+# progress not reached: ul.rd-feed — not tabbable (tabIndex -1)
+PASS  the progress walk never moves focus backwards in document order — 34 step(s), all forward
+PASS  every control class the walk measured was reached by keyboard — 12 class(es) reached and measured: button[entity-tag].rd-tag, button[entity-tag].rd-tag.rd-tag-compact, button[host:button-default], button[host:button-sm], button[index-row-person].rd-index-item, button[index-row-repository].rd-index-item, button[index-row-topic].rd-index-item, button[view-option], button[window-option], summary(in .rd-axis-more), summary(in .rd-completed-fold), summary(in .rd-narrow-write)
 PASS  nothing is clickable by mouse but unreachable by keyboard
-PASS  the walk enters the plugin from the shell without bypassing it — first plugin control is tab stop 38 from the top of the document
+PASS  the walk enters the plugin from the shell without bypassing it — first plugin control is tab stop 17 from the top of the document
 
-PASS  the title is a control on a subview — [data-rd-home="available"] x1
-PASS  the title can be reached and holds keyboard focus — stopped at: home
-PASS  Enter on the title returns to the landing — the landing rendered
+PASS  the Overview tab can be reached and holds keyboard focus — stopped at: overview
+PASS  Enter on the Overview tab returns to the landing — the landing rendered
 PASS  the return to the landing keeps the reader's window — window 14: aria-pressed=true
 
-69 passed · 0 failed · 0 skipped · focus-matrix: all checks passed
+60 passed · 0 failed · 0 skipped · focus-matrix: all checks passed

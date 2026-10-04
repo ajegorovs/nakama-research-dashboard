@@ -427,3 +427,94 @@ blank, into that slot would report "no recent activity" — a different and fals
 `data-rd-person-recency` already carries `none` / `unattributable` so a check can compare the row against the
 payload it came from. The visual pass may quiet or reposition the exceptional state; it may not remove or
 reinterpret it, and the payload and harness contracts are unchanged.
+
+### 14.8 V1-B polish — four bounded rules (2026-10-03)
+
+Checkpoint 1's verdict named four remaining visible issues for V1-B; each is now a rule, with the before/after
+measurements in [`V1-visual-coherence.md`](V1-visual-coherence.md) §*V1-B*.
+
+- **A Repository's detail header names its topics, never its axes.** The header used to repeat every Axis as a
+  pill (then `+N more`) directly above a `Current work` lane that names the same axes — the "pill soup" of
+  V1-B B2. The rule: the header carries the navigable **Topic** pills and states the axis **count** as
+  quiet metadata; work detail belongs to the lane, where each Axis title is itself a navigable tag. Access is
+  not reduced — the lane's tags are the route, and this makes the Repository header read like the Topic and
+  Person headers rather than like a second copy of the lane.
+- **A flat rail separates its sections with the rail step, not with boxes.** `.rd-side-stack` takes
+  `--rd-gap-rail` (24px) instead of the 12px block gap. The reviewer's own range was about 20–24px, and the
+  intent is explicit: make the no-card rail style work, do not restore heavy card boundaries.
+- **The Progress support band keeps three columns but carries real gutters, and Human steering is tinted.**
+  Column gutter 28px (from 12px) and a larger top step; Human steering takes a subtle `--muted` fill and
+  `align-self: start` so the tint hugs its content rather than becoming a full-height block. Steering is a
+  person's constraint, a different kind of fact from Evidence, so it is not left identical to the column beside
+  it. **The band's fold position is not part of this rule** — the band still sits at/below the fold at the top
+  scroll on both datasets (measured in the V1 doc); moving it up is composition, not polish, and was not taken.
+- **The Overview card splits its state line from its blocker, and its event block is a divider.** The state
+  counts are one compact metadata line and the blocked Axis (`blocked on …`) is its own line — never
+  concatenated. The `Last event` block is a hairline over whitespace, not a gray inset (V1-B B4). Both
+  landing columns carry the same footer geometry, with the action at the card's right edge (the prototype's
+  `card-footer` placement) rather than left under the tags.
+
+None of the four changes a projection, an activity scope or the frozen contract; the `data-rd-*` name inventory
+is unchanged (192 → 192). The two further verdict items — **People metadata density** and **long Repository-name
+wrapping** — remain the recorded follow-ups of §14.6 and were not reopened.
+
+### 14.9 Overview's window control is one segmented track, and Phase 4 is on hold (2026-10-03, V1-B B5)
+
+Checkpoint 2's verdict authorized Phase 4 *verification* and named no visual corrections. V1-B's fifth item,
+**B5**, was raised and reviewer-authorized **after** that verdict: **Overview's 7d / 14d / 30d / All selector is
+one rounded segmented track**, the options integrated into it and the pressed one lifted on a light face — the
+shape `contract/prototypes/overview.html` draws, and the same joined-switch grammar the app's own
+`.rd-progress-switch` already uses (a second segmented spelling is exactly the drift V1 exists to remove).
+
+- **It is styling only, and the hooks are untouched.** `WindowControl`'s JSX is byte-unchanged, so the four
+  buttons, their `data-rd-window` value, `aria-pressed`, the `role="group"` + `aria-label`, the `disabled`
+  wiring and the `.rd-window` class — everything the harness reads — are preserved exactly; no projection,
+  activity-scope or contract change; and the window stays **Overview's alone** (§13).
+- **Where the work lands:** the `.rd-window` rules in `src/ui.tsx` and the preview montage pack; measured and
+  read in [`V1-visual-coherence.md`](V1-visual-coherence.md) §*B5*. **Preview only — not accepted**: a preview
+  render is a visual instrument, not evidence.
+- **Phase 4 is on hold.** The served-instance verification (the served-build guard, the corpus and fixture
+  acceptance passes, the focus pass with its negative control, and the Progress title-equality reconciliation)
+  does **not** start on this change; it waits until the owner explicitly lifts the hold. B5 being visual-only
+  does not itself open Phase 4, and none of the preview figures are offered as V1 acceptance.
+
+### 14.10 Phase-4 ruling — two geometry rules revised, one focus defect to fix (2026-10-03)
+
+The Phase-4 served run left three open findings (two layout-composition claims and one focus clip; recorded in
+[`V1-visual-coherence.md`](V1-visual-coherence.md) §*Phase 4 verification*). The reviewer's ruling, recorded
+verbatim and **not reopened**:
+
+> Phase-4 ruling: Findings 1 and 2 are accepted geometry-rule revisions, not visual regressions. Rail sections
+> are no longer required all to begin within the first viewport; the primary and second sections must remain
+> initially discoverable, while later sections may continue below the fold provided ordinary page scrolling
+> reaches them without clipping, overlap, or unintended nested scrolling. The Progress support band is
+> container-responsive: three columns are required when at least 720 px is available; at 480–719 px, two
+> columns with the third wrapping below is permitted; below 480 px, one column is permitted, with Repository
+> threads → Evidence → Human steering order preserved. The measured 634 px fixture case is therefore
+> acceptable. Finding 3 is a real focus defect: preserve the shared focus indicator and add minimal scroll
+> clearance so settled real-Tab focus is fully visible and not clipped by the host scrollport, then rerun the
+> focus pass and negative control. V1 remains unaccepted until that defect is corrected and the final served
+> gates are green.
+
+**What the ruling revises and what it keeps.** Findings 1 (rail first-screen rule) and 2 (support-band
+three-column rule) are **rule revisions, not regressions**: the assertions are replaced with the ruled
+conditions (primary+second discoverable; later sections reachable by ordinary page scrolling with no clipping,
+overlap or unintended nested scrolling; the band's column count keyed to its own container width at 720/480
+with the Repository threads → Evidence → Human steering order preserved). Finding 3 is a **real defect**: the
+shared 2 px focus indicator is unchanged and the fix is minimal scroll clearance only. V1 is **not accepted**
+by this ruling — acceptance waits on the corrected defect and the final green served gates; the parent
+verifies and the final reviewer decides.
+
+### 14.10 addendum — the band rule made exact (2026-10-04)
+
+An independent audit found the auto-fit implementation did not meet the ruled 480 floor: the two-column switch sat
+at **~471 px**, so a 3-card band at 471–479 px rendered **two** columns where the ruling requires **one** below 480.
+The 720/480 thresholds are **strict and are not weakened**. The band is now written explicitly with container
+queries on the pane (`container-type: inline-size`, the pane's content box being the band's own width) — one column
+below 480 px, two from 480 px (when the band has ≥2 sections), three from 720 px (when it has ≥3), each capped at
+the band's own card count so conditional sections stay natural — measured **exact** at 479→1/480→2 and 719→2/720→3
+on the served fixture (3-card band, width set directly on the container). The reachability clause is also tightened,
+not relaxed: "reached by ordinary page scrolling" is now bounded by the **intended host scroller's client bottom**
+when the host constrains the page to an inner port, not merely by the window (a window-only bound would accept
+content the port still clips). Source: `src/ui.tsx` and `harness/verify-page.mjs`; measured in
+[`V1-visual-coherence.md`](V1-visual-coherence.md) §*Post-audit correction*.
