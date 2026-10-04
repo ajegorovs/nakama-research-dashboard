@@ -1,0 +1,263 @@
+path,bytes,blob,tier,class,proposal,product_carrying,recovery
+.agents/skills/acceptance-pass/SKILL.md,11606,a7944f75b99ff46a794bf150b8a681f099b342be,-,keep,retain,,-
+.agents/skills/dashboard-build-and-serve/SKILL.md,15535,ceb8f14c67213026c418fe07d0b0d147f879ca7b,-,keep,retain,,-
+.agents/skills/keyboard-focus-pass/SKILL.md,7520,d44318f9d221a13f3c6dcf36ea2555820020b476,-,keep,retain,,-
+.agents/skills/keyboard-focus-pass/references/measurement.md,4687,d085f6717d4487b8f64602081dcd7dd6e0ae06bb,-,keep,retain,,-
+.agents/skills/public-records-hygiene/SKILL.md,4935,b6245929afe118baa0465fd1ff1cce763e58af56,-,keep,retain,,-
+.gitignore,776,25d6113aaf0921723beae597d14872c529e11392,-,keep,retain,,-
+AGENTS.md,16792,cb6f7302977269df7aa61865cdf690f276b4a5c2,-,keep,retain,,-
+LICENSE,1088,00226f83c3b1178cbed3f9618bbca5b6aecb1d38,-,keep,retain,,-
+README.md,37563,360505ba14e2811aea2d5c2df8c61bbe7579e685,-,keep,retain,,-
+actions/actions.js,106404,5d91730e9d654117431bbedf8f4c6041b188ab9f,-,keep,retain,,-
+bun.lock,7446,b055f2a2bf2509ddee5e3e9c5818fa64322e9638,-,keep,retain,,-
+docs/OPEN-QUESTIONS.md,6675,a736e2a9c5c450f61c9d2e4746a394ebf5243950,-,keep,retain,,-
+docs/PLATFORM-CONTEXT.md,11007,e34fbc9de9beab7ef86725dc4c5f62d9889d3d7f,-,keep,retain,,-
+docs/V2-PLAN.md,65529,b1eee52ce52bf94ea8b2dc3b8421c1749ca90d21,-,keep,retain,,-
+docs/corpus/AXIS-RULE.md,3878,b4e031bf76e7bfb0d4c321f3e8555085d3456f9b,-,keep,retain,,-
+docs/corpus/README.md,16658,b7b617fcd18d06850606e30f73cd37e150d0ef6e,-,keep,retain,,-
+docs/corpus/branches.json,8023,2a1e4bae78239368956ce08fa8095a5e49f145d3,-,keep,retain,,-
+docs/corpus/commits.jsonl,235396,2f4017ca1cdd063eaafe283e0512926161559034,-,keep,retain,,-
+docs/corpus/identities.json,396,5be94608cf47a4dba9b677872b2cfcea11d08277,-,keep,retain,,-
+docs/corpus/pulls.json,35932,8b24adfa033ef378fffcc3c75559debca97c1cc3,-,keep,retain,,-
+docs/corpus/summary.json,1505,4a1d8c7020bed1fcb9f6bc1c9ce42aacfd377a9c,-,keep,retain,,-
+docs/corpus/transcript/actions.jsonl,1295608,d93a5521c87f7f9ae400b08f30569b978991f868,-,keep,retain,,-
+docs/corpus/verify-read-1280x800.txt,39414,9237d34464b850fda7e819c2916660cfbc672e66,-,keep,retain,,-
+docs/corpus/verify-read.txt,39366,218308f1e89fbaf34fd61cfe7b0a6484bdbd868d,-,keep,retain,,-
+docs/corpus/verify-write.txt,38134,964d22fa81f6c553e579b678067bcb9dc0d58566,-,keep,retain,,-
+docs/layout-fixtures/README.md,9088,ddba9099f11b33f7a593e94e142e7fb87c1910e8,-,keep,retain,,-
+docs/layout-fixtures/screenshots/1280x800/dashboard-detail.png,221652,1c8375f49377dd5d366d90cbd4e6cefa92cc2450,-,keep,retain,,-
+docs/layout-fixtures/screenshots/1280x800/dashboard-people.png,67796,839e7c723cb177bd0492f0ca87c548ba9b49dc3b,-,keep,retain,,-
+docs/layout-fixtures/screenshots/1280x800/dashboard-problems.png,230643,48c8506c4887329404ab6d0993697ee3d561bc86,-,keep,retain,,-
+docs/layout-fixtures/screenshots/1280x800/dashboard-progress.png,170237,44d0546eb562261c1a36a97eac1294b992c6aa0f,-,keep,retain,,-
+docs/layout-fixtures/screenshots/1280x800/dashboard-repositories.png,112461,c0e7098c4ce8cd6109952a1247965455405b3185,-,keep,retain,,-
+docs/layout-fixtures/screenshots/1280x800/dashboard.png,101394,2206b6082b5cb87580901d25ad2318e6ae121a10,-,keep,retain,,-
+docs/layout-fixtures/screenshots/1280x800/navigation.png,63849,ad1bdaf0bce0337037f23f1e24ad9dc32b9a2c6f,-,keep,retain,,-
+docs/layout-fixtures/screenshots/1440x900/dashboard-detail.png,217627,de5eae10ae5b7b0b7712384ceb71269478e2b2e1,-,keep,retain,,-
+docs/layout-fixtures/screenshots/1440x900/dashboard-people.png,67076,439791bb2f180328a77a13c24564b2e8228fbd6d,-,keep,retain,,-
+docs/layout-fixtures/screenshots/1440x900/dashboard-problems.png,235509,8856dec7456cd50af534f3d68ae15e78fe4fd9aa,-,keep,retain,,-
+docs/layout-fixtures/screenshots/1440x900/dashboard-progress.png,174392,f8fac97751244d5e46e108f2756df1aa3ab0127e,-,keep,retain,,-
+docs/layout-fixtures/screenshots/1440x900/dashboard-repositories.png,110912,31018646dc837957bf5112665ad4c0a0421b0fdc,-,keep,retain,,-
+docs/layout-fixtures/screenshots/1440x900/dashboard.png,129949,a7d01b8cee0835ceeefe20e4fe73388b672e7d7d,-,keep,retain,,-
+docs/layout-fixtures/screenshots/1440x900/navigation.png,65090,4adc83bcdf1ddc3cc0fcc4014707bd81f7bdf0d4,-,keep,retain,,-
+docs/layout-fixtures/verify-fixture-read-1280x800.txt,36965,b35786b9706335b5d327fd4420d6d36a41f7fe8f,-,keep,retain,,-
+docs/layout-fixtures/verify-fixture-read-1440x900.txt,36975,e2e687f9d9c7fcbd7a05d09e8bc10b20669d4127,-,keep,retain,,-
+docs/layout-fixtures/verify-fixture-read-post-write-1440x900.txt,36655,eab967b3cd1c6e65afaafea90acd7a614857aab6,-,keep,retain,,-
+docs/layout-fixtures/verify-fixture-write.txt,38342,3531fa09f971953665c112a06933139f89a773a9,-,keep,retain,,-
+docs/layout-rework-brief.md,5840,73b1319cb4db5767f66b5eafc09352394f3cd9ec,-,keep,retain,,-
+docs/reviews/2026-09-30-c4-c8-answers.md,2393,0dd4547de7cf892bf0f268d43494a68fa6e5ed1f,B3,history,remove(move-out-of-tip),,git show ux-v2-composition-complete:docs/reviews/2026-09-30-c4-c8-answers.md (byte-identical) | base 4339508:docs/reviews/2026-09-30-c4-c8-answers.md
+docs/reviews/2026-09-30-v2-plan-answer.md,3265,0dbe08824f9b924ea1bef6058a698050aa5c90c0,B3,history,remove(move-out-of-tip),,git show ux-v2-composition-complete:docs/reviews/2026-09-30-v2-plan-answer.md (byte-identical) | base 4339508:docs/reviews/2026-09-30-v2-plan-answer.md
+docs/reviews/2026-09-30-v2-plan-review-request.md,6501,b17b423a64cde466c170a6085030bf297f7bfa1a,B3,history,remove(move-out-of-tip),,git show ux-v2-composition-complete:docs/reviews/2026-09-30-v2-plan-review-request.md (byte-identical) | base 4339508:docs/reviews/2026-09-30-v2-plan-review-request.md
+docs/reviews/2026-09-30-v2-structural-redesign.md,15564,c45e0c3607a2cef8b8aba9560eabfc2c3c607318,B3,history,remove(move-out-of-tip),,git show ux-v2-composition-complete:docs/reviews/2026-09-30-v2-structural-redesign.md (byte-identical) | base 4339508:docs/reviews/2026-09-30-v2-structural-redesign.md
+docs/reviews/2026-10-01-u4-step5-corpus-record.md,6588,74729d2d79532e3a35feec5e73608d491bc6217e,B3,history,remove(move-out-of-tip),,git show ux-v2-composition-complete:docs/reviews/2026-10-01-u4-step5-corpus-record.md (byte-identical) | base 4339508:docs/reviews/2026-10-01-u4-step5-corpus-record.md
+docs/reviews/2026-10-02-c1-acceptance-record.md,29165,1f09b0c3e0a13df3c41d8fc0c35d97dc821e6225,-,keep,retain,,-
+docs/reviews/2026-10-02-c3-acceptance-record.md,9809,d49d0db336cb94637627a17ae0b970d4cb91a563,-,keep,retain,,-
+docs/reviews/2026-10-02-c5-acceptance-record.md,6163,15a1c7188c02bb38ae559a1d2226a9aaa085460f,-,keep,retain,,-
+docs/reviews/2026-10-02-composition-intake.md,18689,d904ec5f85caf34fd7f97806dbff6aaea882148a,B3,history,remove(move-out-of-tip),,base 4339508:docs/reviews/2026-10-02-composition-intake.md (published checkpoint); tag differs
+docs/reviews/2026-10-02-composition-strategy.md,13102,73854fa16a91a95eef8a1a15b3da96407d69c4d7,B3,history,remove(move-out-of-tip),,git show ux-v2-composition-complete:docs/reviews/2026-10-02-composition-strategy.md (byte-identical) | base 4339508:docs/reviews/2026-10-02-composition-strategy.md
+docs/reviews/2026-10-02-mr-acceptance-record.md,4531,4b37b37808b2600f381edbe249e47f69228c440a,-,keep,retain,,-
+docs/reviews/2026-10-02-u10-corpus-coverage.md,4474,0b77bcb1caba5693871adf78f3b87420c38be5b5,B3,history,remove(move-out-of-tip),,git show ux-v2-composition-complete:docs/reviews/2026-10-02-u10-corpus-coverage.md (byte-identical) | base 4339508:docs/reviews/2026-10-02-u10-corpus-coverage.md
+docs/reviews/2026-10-02-u10-resolved-fallback-fix.md,3426,d096721fbbeb4990f6ac804dd5904016c5cefee5,B3,history,remove(move-out-of-tip),,git show ux-v2-composition-complete:docs/reviews/2026-10-02-u10-resolved-fallback-fix.md (byte-identical) | base 4339508:docs/reviews/2026-10-02-u10-resolved-fallback-fix.md
+docs/reviews/2026-10-02-u10-robustness-sweep.md,2907,a26fa63abc2415ca7f71b43bdb1c42233277a3a5,B3,history,remove(move-out-of-tip),,git show ux-v2-composition-complete:docs/reviews/2026-10-02-u10-robustness-sweep.md (byte-identical) | base 4339508:docs/reviews/2026-10-02-u10-robustness-sweep.md
+docs/reviews/2026-10-02-u11-merge-readiness.md,3910,f2018c00ac58a0ea2c934ebed8e6761b104bf9c4,B3,history,remove(move-out-of-tip),,git show ux-v2-composition-complete:docs/reviews/2026-10-02-u11-merge-readiness.md (byte-identical) | base 4339508:docs/reviews/2026-10-02-u11-merge-readiness.md
+docs/reviews/2026-10-02-u4-step6-axes-problems.md,6083,a6af2cae463acae0ca21e7d580902cb834821f19,B3,history,remove(move-out-of-tip),,git show ux-v2-composition-complete:docs/reviews/2026-10-02-u4-step6-axes-problems.md (byte-identical) | base 4339508:docs/reviews/2026-10-02-u4-step6-axes-problems.md
+docs/reviews/2026-10-02-u4-step7-grammar-propagation.md,5360,8da766603c35c0ef9d569716b23937dff7c16126,B3,history,remove(move-out-of-tip),,git show ux-v2-composition-complete:docs/reviews/2026-10-02-u4-step7-grammar-propagation.md (byte-identical) | base 4339508:docs/reviews/2026-10-02-u4-step7-grammar-propagation.md
+docs/reviews/2026-10-02-u4-step7-tag-navigation.md,7170,ca0caad98cf497f1ef42d7faca3f1a38ad1445c6,B3,history,remove(move-out-of-tip),,git show ux-v2-composition-complete:docs/reviews/2026-10-02-u4-step7-tag-navigation.md (byte-identical) | base 4339508:docs/reviews/2026-10-02-u4-step7-tag-navigation.md
+docs/reviews/2026-10-03-h1-acceptance-record.md,7277,7611ca476b80f6987e18b9eee20f3f47209fe61a,-,keep,retain,,-
+docs/reviews/2026-10-03-repo-hygiene-acceptance-record.md,8707,bf901fa1aa2ed37a2b533350ea1b8743d4d015e6,-,keep,retain,,-
+docs/reviews/2026-10-04-v1-acceptance-record.md,19001,2d1d7dfe51c644f22659defec7cb15d9f3bd5827,-,keep,retain,,-
+docs/screenshots/1280x800/dashboard-detail.png,418071,7179f7bba171232963d3edf7eddcb311b6770b24,-,keep,retain,,-
+docs/screenshots/1280x800/dashboard-people.png,97193,b1de14fffee18af6064d51d3f588d82cdca16901,-,keep,retain,,-
+docs/screenshots/1280x800/dashboard-problems.png,172339,937dbed2a505220bca6f31bbdd8f5c6c86b95f3a,-,keep,retain,,-
+docs/screenshots/1280x800/dashboard-progress.png,88536,12cf7c000de9b8bfe175e08c5294dfabe9d442bd,-,keep,retain,,-
+docs/screenshots/1280x800/dashboard-repositories.png,86291,99aa6bbbeec2dbe299902ef81664a0b8deba897d,-,keep,retain,,-
+docs/screenshots/1280x800/dashboard.png,102296,04f411da3b8f595bfc74f2e825c3e08e8ea248a6,-,keep,retain,,-
+docs/screenshots/1280x800/navigation.png,63792,a625311376da6a359b483ad2474ebfa140ca5af2,-,keep,retain,,-
+docs/screenshots/dashboard-detail.png,400142,a633fbec82de264a95c2574d778cbc593ed6d09c,-,keep,retain,,-
+docs/screenshots/dashboard-people.png,98245,02bbea0675e85ef3a2fa7a5b0d17d8df14ce0c48,-,keep,retain,,-
+docs/screenshots/dashboard-problems.png,181772,98421a0428e7d7a37044df912bd082ab9a7d2e4b,-,keep,retain,,-
+docs/screenshots/dashboard-progress.png,91577,c15fbd459eac8e68e1661ac8b147315288ab12f1,-,keep,retain,,-
+docs/screenshots/dashboard-repositories.png,89489,4c453ff5b71ac9b44c39e822730f031cc3d29382,-,keep,retain,,-
+docs/screenshots/dashboard.png,134103,aed6a45014a4170720609db2f2110d24ace7ec87,-,keep,retain,,-
+docs/screenshots/navigation.png,65143,d982a731af6d6c8f86154b7c2004540c19e766db,-,keep,retain,,-
+docs/ux-v2/BASELINE.md,4339,6d2f6fd310dec3779a8c3edb516f072dc84ae649,-,keep,retain,,-
+docs/ux-v2/C2-people.md,18108,375916b662dbb1ffb560139d4ac8aee2616a29c8,B4,uncertain,owner-decision,yes,git show ux-v2-composition-complete:docs/ux-v2/C2-people.md (byte-identical) | base 4339508:docs/ux-v2/C2-people.md
+docs/ux-v2/C3-handoff.md,7924,365842e7641f2dfffaa9e65094447a037316d419,B4,uncertain,owner-decision,,git show ux-v2-composition-complete:docs/ux-v2/C3-handoff.md (byte-identical) | base 4339508:docs/ux-v2/C3-handoff.md
+docs/ux-v2/C3-overview.md,23443,2b3fad33f76797977172d31dee2ae8490e3acfc6,B4,uncertain,owner-decision,,git show ux-v2-composition-complete:docs/ux-v2/C3-overview.md (byte-identical) | base 4339508:docs/ux-v2/C3-overview.md
+docs/ux-v2/C4-progress.md,27386,f3b794adb5762408c1eac04b27a2eb9dc848c8a8,B4,uncertain,owner-decision,yes,git show ux-v2-composition-complete:docs/ux-v2/C4-progress.md (byte-identical) | base 4339508:docs/ux-v2/C4-progress.md
+docs/ux-v2/C5-repositories.md,12556,90286aaf1316c87ad5bd496cdf161a433a647b17,B4,uncertain,owner-decision,yes,git show ux-v2-composition-complete:docs/ux-v2/C5-repositories.md (byte-identical) | base 4339508:docs/ux-v2/C5-repositories.md
+docs/ux-v2/COMPOSITION.md,15068,86364b2151bf46e302cad58b3186cd2dba2f9da0,-,keep,retain,,-
+docs/ux-v2/DECISIONS.md,40703,41d989050a91a8aadc2da5956ec2711e515286d4,-,keep,retain,,-
+docs/ux-v2/H1-focus-visibility.md,17763,55981aae65b543de9c827c93942f199a841c3321,B4,uncertain,owner-decision,,git show ux-v2-composition-complete:docs/ux-v2/H1-focus-visibility.md (byte-identical) | base 4339508:docs/ux-v2/H1-focus-visibility.md
+docs/ux-v2/MR-composition-merge-readiness.md,18139,f0def1f4f76f55a275fdb785e7f4c00be3e75bd2,B4,uncertain,owner-decision,,git show ux-v2-composition-complete:docs/ux-v2/MR-composition-merge-readiness.md (byte-identical) | base 4339508:docs/ux-v2/MR-composition-merge-readiness.md
+docs/ux-v2/README.md,7997,bc07684436b9c69112abf0598463f4224a80ea09,-,keep,retain,,-
+docs/ux-v2/STATUS.md,55081,cebeedcca49d4635217cbf78807e7da905041a56,-,keep,retain,,-
+docs/ux-v2/U1-migration.md,39679,3204d879ea62731a7503e6a14612c48530618490,B4,uncertain,owner-decision,,git show ux-v2-composition-complete:docs/ux-v2/U1-migration.md (byte-identical) | base 4339508:docs/ux-v2/U1-migration.md
+docs/ux-v2/U10-harness.md,21753,dd9288b3cb057ff77ad1f55a714a44affd4321f7,B4,uncertain,owner-decision,,git show ux-v2-composition-complete:docs/ux-v2/U10-harness.md (byte-identical) | base 4339508:docs/ux-v2/U10-harness.md
+docs/ux-v2/U11-contract-audit.md,8466,d4c6f0ae94dbaee36383082f17ca4263ef0fcbd1,B4,uncertain,owner-decision,,git show ux-v2-composition-complete:docs/ux-v2/U11-contract-audit.md (byte-identical) | base 4339508:docs/ux-v2/U11-contract-audit.md
+docs/ux-v2/U11-merge-readiness.md,11767,66b3e28f3abfc559ade862cbd8968aec17cca598,B4,uncertain,owner-decision,,git show ux-v2-composition-complete:docs/ux-v2/U11-merge-readiness.md (byte-identical) | base 4339508:docs/ux-v2/U11-merge-readiness.md
+docs/ux-v2/U2-store.md,20789,9bd8df8f8591494a44fee6440639e5474eabca02,B4,uncertain,owner-decision,,git show ux-v2-composition-complete:docs/ux-v2/U2-store.md (byte-identical) | base 4339508:docs/ux-v2/U2-store.md
+docs/ux-v2/U3-surface.md,15080,d57d0cb901381254a21c04d7b48bb34883512afb,B4,uncertain,owner-decision,,git show ux-v2-composition-complete:docs/ux-v2/U3-surface.md (byte-identical) | base 4339508:docs/ux-v2/U3-surface.md
+docs/ux-v2/U4-progress.md,69863,f0dd7ddcaa6c0867fcc6af2e9deef5e440a60673,B4,uncertain,owner-decision,,git show ux-v2-composition-complete:docs/ux-v2/U4-progress.md (byte-identical) | base 4339508:docs/ux-v2/U4-progress.md
+docs/ux-v2/U6-topics.md,9370,67f09cc32cdfe2f2368d7b67d08c00eb341aa624,B4,uncertain,owner-decision,,base 4339508:docs/ux-v2/U6-topics.md (published checkpoint); tag differs
+docs/ux-v2/U9-density.md,7077,2faf7b40d220f83439389167f26da15a9f8e3c60,B4,uncertain,owner-decision,yes,git show ux-v2-composition-complete:docs/ux-v2/U9-density.md (byte-identical) | base 4339508:docs/ux-v2/U9-density.md
+docs/ux-v2/V1-visual-coherence.md,71733,6ce88c681fcb87ea1bdcd42c4131cd73c663c71a,-,keep,retain,,-
+docs/ux-v2/contract/README.md,3722,cde9ffda98232e7854ca8a49271f9823278af1a7,-,keep,retain,,-
+docs/ux-v2/contract/acceptance-checklist.md,3914,5a37b3098a65c2d519de09bf47ec62fbe9c528ab,-,keep,retain,,-
+docs/ux-v2/contract/component-contract.md,3376,ee3ddad85333a908b625dbbf629de50bc4ec0734,-,keep,retain,,-
+docs/ux-v2/contract/fixtures.md,3101,c30e5a6936eb338871f574ba34b80693ee6e6805,-,keep,retain,,-
+docs/ux-v2/contract/information-architecture.md,4743,ccef31afb8646ac553c9359667fb7b67cac31319,-,keep,retain,,-
+docs/ux-v2/contract/interaction-spec.md,6288,54bf8454aa7a42817438dc6dff72019ace2f651b,-,keep,retain,,-
+docs/ux-v2/contract/manifest.json,563,7f6ec8fd50defeab00d6f032436e621bad5c460a,-,keep,retain,,-
+docs/ux-v2/contract/prototypes/overview.html,18383,cc9acf05800aa63126e282cc635d93252f1713f4,-,keep,retain,,-
+docs/ux-v2/contract/prototypes/people.html,12219,ded34fdb730d7f0e9f217f916433af5889c8b39a,-,keep,retain,,-
+docs/ux-v2/contract/prototypes/progress.html,19401,0e3806721a7bb63e22bd184b3f5c270dd7cbb6ea,-,keep,retain,,-
+docs/ux-v2/contract/prototypes/repositories.html,11811,8673868f1aff6d1688d1f5b0cb98e3aee3b5daff,-,keep,retain,,-
+docs/ux-v2/contract/prototypes/topics.html,14016,343287c97ffc0edaf2271aa49e3becd512a4c8e4,-,keep,retain,,-
+docs/ux-v2/fidelity/REVIEW-PACKET.md,8229,a2f6440dbfec8a6f27d3661cdb8d9944dcc50120,-,keep,retain,,-
+docs/ux-v2/fidelity/REVIEW.md,11873,8319926203bbef4774d5450749e404b04cef61f3,-,keep,retain,,-
+docs/ux-v2/fidelity/current-1440x900/overview.png,102611,9494a582e8c17264f6a1a47b9ef9d3c0eecafde8,-,keep,retain,,-
+docs/ux-v2/fidelity/current-1440x900/people.png,139391,597457a7502703aba8aeae8b47506698833d3fa8,-,keep,retain,,-
+docs/ux-v2/fidelity/current-1440x900/progress.png,148347,9eda27c5f3ddd5298e49f2d627ad83e1e3fa3213,-,keep,retain,,-
+docs/ux-v2/fidelity/current-1440x900/repositories.png,127113,3a8ce00b82bfb6cae56f9562b5c29e9aa6522843,-,keep,retain,,-
+docs/ux-v2/fidelity/current-1440x900/topics.png,189809,389028430bb291b87225e84be7d4962cba16b343,-,keep,retain,,-
+docs/ux-v2/fidelity/fixture-tall/current-1440x900/overview.png,145415,c16f4996f8b41ec5533c8640ec1b2095ef537924,-,keep,retain,,-
+docs/ux-v2/fidelity/fixture-tall/current-1440x900/people.png,151957,dac003321a34f806ec43a3cd93f6123980b6ce04,-,keep,retain,,-
+docs/ux-v2/fidelity/fixture-tall/current-1440x900/progress.png,298004,7a60d3c15ffdb598a3ca1d35d27e13b26eefe02d,-,keep,retain,,-
+docs/ux-v2/fidelity/fixture-tall/current-1440x900/repositories.png,143128,366956fde05032e284a4cd9bda6f91801a9d07da,-,keep,retain,,-
+docs/ux-v2/fidelity/fixture-tall/current-1440x900/topics.png,201966,01658922a1ac707954e5ba1002dc1d160ea94b79,-,keep,retain,,-
+docs/ux-v2/fidelity/fixture-tall/prototype-1440x900/overview-full.png,232965,7e32672d707977915dd0ffff5fbf4758552e27f3,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture-tall/prototype-1440x900/overview-viewport.png,222626,e06f0381600a62be21fd137175b2321e35fb1f2e,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture-tall/prototype-1440x900/people-full.png,128741,b33ec5091d4ba0b9fa11971c318e3c6afcb0e794,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture-tall/prototype-1440x900/people-viewport.png,128741,b33ec5091d4ba0b9fa11971c318e3c6afcb0e794,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture-tall/prototype-1440x900/progress-full.png,243352,63e102368ab511f0268b0870fb258511da935a75,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture-tall/prototype-1440x900/progress-viewport.png,184056,80251ea05edca4afb660645fe05a4330a2e69f0d,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture-tall/prototype-1440x900/repositories-full.png,124046,1ae04454ac2390f5f7a3a1e26cc3f914abc2a6c3,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture-tall/prototype-1440x900/repositories-viewport.png,123726,433d601c5f31c099d1f929e25e19e278e22dfff8,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture-tall/prototype-1440x900/topics-full.png,127680,434fe9fab1d01ca68ce264f84c35a22ace9fe3de,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture-tall/prototype-1440x900/topics-viewport.png,123505,34aa8fd710c9ddcb8ea8027232a63b5228235d1d,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture-tall/side-by-side/overview-vs-default.html,1069,8a4a59223a6b06057ab48cdbcae18c75603ccd75,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture-tall/side-by-side/overview-vs-default.png,455846,ce7524893c3a63df3843f685950ba3deab1ad1f4,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture-tall/side-by-side/overview.html,1049,bf1a2dd9853612d2728a7a8923ab225474786180,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture-tall/side-by-side/overview.png,398262,09ec0bd774a4cd243e4109690afc441e930d0591,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture-tall/side-by-side/people.html,1039,de4951468e69779a401ac0fe53cada4882b63881,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture-tall/side-by-side/people.png,298213,7fb58f4fada5568c2ac32cef9983b93ff029a2db,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture-tall/side-by-side/progress.html,1049,bc16cc189fc591ff98ba5e6e980efeb83154d354,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture-tall/side-by-side/progress.png,561830,aeed231052a780b01e05c4ba5118e0b8e4bfb68b,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture-tall/side-by-side/repositories.html,1069,f7630cf6d2a09d29f2c6b4531f7a874b0f61e54d,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture-tall/side-by-side/repositories.png,286998,7bf47dc1115bb9b4587d31cf0babdb1ee6cbb1af,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture-tall/side-by-side/topics.html,1039,e1d091b3c24560a4c96967ab2ef793bda6c6b0a8,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture-tall/side-by-side/topics.png,348928,80113eb8e7d84783df0593e23783619e02b6eae3,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture/current-1440x900/overview.png,133924,55a38a4cd4a38154f23528eb79e3a1a6987c7d7c,-,keep,retain,,-
+docs/ux-v2/fidelity/fixture/current-1440x900/people.png,140800,f61e93ac88a84dc68631c9f814da56e48467e08e,-,keep,retain,,-
+docs/ux-v2/fidelity/fixture/current-1440x900/progress.png,188358,ce91af29cf06d147dd642621e44f3d6ab0611130,-,keep,retain,,-
+docs/ux-v2/fidelity/fixture/current-1440x900/repositories.png,131500,36d90f78426d2678e01e1ef79cae36f58467e17b,-,keep,retain,,-
+docs/ux-v2/fidelity/fixture/current-1440x900/topics.png,172628,78943dac6c10ae68a9c48a1147b4dba23e616d12,-,keep,retain,,-
+docs/ux-v2/fidelity/fixture/prototype-1440x900/overview-full.png,232965,7e32672d707977915dd0ffff5fbf4758552e27f3,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture/prototype-1440x900/overview-viewport.png,222626,e06f0381600a62be21fd137175b2321e35fb1f2e,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture/prototype-1440x900/people-full.png,128741,b33ec5091d4ba0b9fa11971c318e3c6afcb0e794,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture/prototype-1440x900/people-viewport.png,128741,b33ec5091d4ba0b9fa11971c318e3c6afcb0e794,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture/prototype-1440x900/progress-full.png,243352,63e102368ab511f0268b0870fb258511da935a75,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture/prototype-1440x900/progress-viewport.png,184056,80251ea05edca4afb660645fe05a4330a2e69f0d,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture/prototype-1440x900/repositories-full.png,124046,1ae04454ac2390f5f7a3a1e26cc3f914abc2a6c3,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture/prototype-1440x900/repositories-viewport.png,123726,433d601c5f31c099d1f929e25e19e278e22dfff8,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture/prototype-1440x900/topics-full.png,127680,434fe9fab1d01ca68ce264f84c35a22ace9fe3de,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture/prototype-1440x900/topics-viewport.png,123505,34aa8fd710c9ddcb8ea8027232a63b5228235d1d,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture/side-by-side/overview-vs-default.html,1059,38485c2b34adf80323be1dd425127c32ab3391a0,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture/side-by-side/overview-vs-default.png,426630,b2b705d27040a41f52e8ad5b4f70489f80aea7c1,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture/side-by-side/overview.html,1039,2868f12c8c48a886beab90945bb761e84f5abef6,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture/side-by-side/overview.png,386585,0533147c1c95d19396f54d93dfe74ea68eac5b2e,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture/side-by-side/people.html,1029,3c7fc3a6a8b5723e4024aba5a5e691ba7b74dfb8,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture/side-by-side/people.png,287186,ea41de9c596430ca3bb80bbd10607d0e346b209a,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture/side-by-side/progress.html,1039,40b11caa115b7c4bd2f0b7a97b2f86e86e7005c7,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture/side-by-side/progress.png,451519,65927e575651155e9c2d94d44e004452acc4af6d,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture/side-by-side/repositories.html,1059,c2b55d88854f3dc423429d4eca37d901b476f42c,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture/side-by-side/repositories.png,275651,ca4157aa2de3f645e770e162c9460f24db4e7732,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture/side-by-side/topics.html,1029,f125f358ae303e378e70932ef31d03e6e814a539,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/fixture/side-by-side/topics.png,319013,9bebf84ab67f25232d50e43101e976bf2f8416ec,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/prototype-1440x900/overview-full.png,232965,7e32672d707977915dd0ffff5fbf4758552e27f3,-,keep,retain,,-
+docs/ux-v2/fidelity/prototype-1440x900/overview-viewport.png,222626,e06f0381600a62be21fd137175b2321e35fb1f2e,-,keep,retain,,-
+docs/ux-v2/fidelity/prototype-1440x900/people-full.png,128741,b33ec5091d4ba0b9fa11971c318e3c6afcb0e794,-,keep,retain,,-
+docs/ux-v2/fidelity/prototype-1440x900/people-viewport.png,128741,b33ec5091d4ba0b9fa11971c318e3c6afcb0e794,-,keep,retain,,-
+docs/ux-v2/fidelity/prototype-1440x900/progress-full.png,243352,63e102368ab511f0268b0870fb258511da935a75,-,keep,retain,,-
+docs/ux-v2/fidelity/prototype-1440x900/progress-viewport.png,184056,80251ea05edca4afb660645fe05a4330a2e69f0d,-,keep,retain,,-
+docs/ux-v2/fidelity/prototype-1440x900/repositories-full.png,124046,1ae04454ac2390f5f7a3a1e26cc3f914abc2a6c3,-,keep,retain,,-
+docs/ux-v2/fidelity/prototype-1440x900/repositories-viewport.png,123726,433d601c5f31c099d1f929e25e19e278e22dfff8,-,keep,retain,,-
+docs/ux-v2/fidelity/prototype-1440x900/topics-full.png,127680,434fe9fab1d01ca68ce264f84c35a22ace9fe3de,-,keep,retain,,-
+docs/ux-v2/fidelity/prototype-1440x900/topics-viewport.png,123505,34aa8fd710c9ddcb8ea8027232a63b5228235d1d,-,keep,retain,,-
+docs/ux-v2/fidelity/side-by-side/overview-vs-default.html,1057,e58c899c119b349c62ae57aba509d2806902d155,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/side-by-side/overview-vs-default.png,444477,d94cdc84793fbd90f533f36d8b5f5a53747437f5,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/side-by-side/overview.html,1023,714efdb2c1d754c3d104951ee6763216ae89026b,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/side-by-side/overview.png,355091,d86706272c52d1720fdcf253f961c7a14c8ee7d4,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/side-by-side/people.html,1013,7cddbe0378827018ac55760b54cbfa6788b62e9b,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/side-by-side/people.png,286003,9dfd66ac5f233f477404f0e3ee97038221247972,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/side-by-side/progress.html,1023,744630de9a74a377cb2ed9b9c0a0f1ae99c75ed5,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/side-by-side/progress.png,411558,ac19aeaf9b8841b584f626d639db12cac29e4eba,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/side-by-side/repositories.html,1043,d3b97d7ab9af66d43e2c026f262bc8135c12144b,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/side-by-side/repositories.png,271069,d6481c48294c1eef1957966e4e3be371d9a5143a,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/side-by-side/topics.html,1013,3e96751ec4ed4378829a059a618cc136798018df,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/fidelity/side-by-side/topics.png,335892,aa86e1799d9009a4384060f3c7c852edb18670f1,B1B2,generate,remove+ignore,,regenerate + tag ux-v2-composition-complete:path (byte-identical)
+docs/ux-v2/focus-corpus-1280x800.txt,10222,124452c0e8986f8ffc55065c28222c903b005c87,-,keep,retain,,-
+docs/ux-v2/focus-corpus-1440x900-negative-control.txt,7493,759e7ae936111e9a76d7e5e89af26d43b7bbbf7a,-,keep,retain,,-
+docs/ux-v2/focus-corpus-1440x900.txt,9861,f21012dd70d306babc8ca0c4daa5e2f98d63807c,-,keep,retain,,-
+docs/ux-v2/focus-fixture-1280x800.txt,9674,8a97266115d8b8970afd12a4f1de126b06a4a623,-,keep,retain,,-
+docs/ux-v2/focus-fixture-1440x900.txt,9674,624e07d8a8eb766f9cbef17015f1728ea9be894c,-,keep,retain,,-
+harness/apply-layout-fixture.mjs,37944,02f45689afc3146e33a0b0c33f5b4016a68ec49d,-,keep,retain,,-
+harness/chromium.mjs,4141,0a5722f9f719c9151248283d42fdf5cf099bfecd,-,keep,retain,,-
+harness/dataset-identity.mjs,6818,07eeda23a628fc725a36c4801114e90f2555e1cb,-,keep,retain,,-
+harness/env-file.mjs,1941,2248e7e7d5cd2775c3da0a02eff14e6de6e349aa,-,keep,retain,,-
+harness/fidelity/README.md,4548,36324a9c4dc0c1521f1c174a718a2c2462445f19,-,keep,retain,,-
+harness/fidelity/capture-current.mjs,24083,2e492f1d7f97a3146c0f0c524819eb76d79f5466,-,keep,retain,,-
+harness/fidelity/montage.mjs,4674,a996555340da62c715729a0238e7c6e29782ee4a,-,keep,retain,,-
+harness/fidelity/render-prototypes.mjs,1707,061b0eab8df87deda5dd828a829762491f56aedb,-,keep,retain,,-
+harness/fidelity/served-build.mjs,6760,b6332f7771f6a5a0dd6461418109ad2954f5a701,-,keep,retain,,-
+harness/focus-matrix.mjs,36347,222c1b01fbeeabc7fb3d785bb6dc7a80cd5e32e8,-,keep,retain,,-
+harness/focus-pass.sh,8778,b2cd1355b976b9a781b05a1d37ff33dd6f4de58f,-,keep,retain,,-
+harness/install-plugin.mjs,7463,8b799b3724f0d1a6244d747cdff5ca3e99219f42,-,keep,retain,,-
+harness/preview/README.md,14520,33350f3e7b29f6fa7f2eb4ee566d03652d58aa4a,-,keep,retain,,-
+harness/preview/capture.mjs,21961,93f5b75fe67f123daae564beb38aa7a1998650c5,-,keep,retain,,-
+harness/preview/corpus-derivation.mjs,3058,e608354fc174f401e70f9848e4309605f3bac907,-,keep,retain,,-
+harness/preview/fidelity.mjs,5895,9c6f0803f32562baf1ff973880221d3c5d75828f,-,keep,retain,,-
+harness/preview/fixture-e-calls.mjs,3422,bcc9d85794b934c612e4c048fea4fedbeed7b8cc,-,keep,retain,,-
+harness/preview/layout-fixture-calls.mjs,4480,c229bc2a9dca03620df0ede2b68d87afb10ebd67,-,keep,retain,,-
+harness/preview/make-fixtures.mjs,10987,8a24f8082cc3215d26a044b87b7df4395100fbf5,-,keep,retain,,-
+harness/preview/preview-main.tsx,4016,93ad9809ac2bb1bcac3df626dbadde63b52716f5,-,keep,retain,,-
+harness/preview/preview.css,722,dbef0a204cd1d8010fb60f324d4554bbc9101c72,-,keep,retain,,-
+harness/preview/preview.html,328,c34d241133d55be9818644dca3582630d498062b,-,keep,retain,,-
+harness/preview/run.mjs,11349,3070d0fa74a317ea177c537cffc9fb627edcf64b,-,keep,retain,,-
+harness/preview/scale-fixture-calls.mjs,25605,8ef1085e9ca8a9fc5bbcad97527288baa4660299,-,keep,retain,,-
+harness/preview/source-blocks.mjs,3336,b578527d0bcd2a516d6c1fa3dbf54bf2c3fcda0c,-,keep,retain,,-
+harness/preview/test-fixtures.mjs,6265,4bf7be07c027755251a778c047881fb8591c790f,-,keep,retain,,-
+harness/preview/test-scale-fixture.mjs,10447,99cab5d58bcaa27bd8f31fb5b2c4d8a45901db74,-,keep,retain,,-
+harness/read-pass.sh,9896,80052506927e7c4568de2d91e0d7e621a7f38dac,-,keep,retain,,-
+harness/redact-url.mjs,434,2eb7b092d35a4c6ef8a06701dea263d51b5d9c5b,-,keep,retain,,-
+harness/redact.mjs,8930,a58abcb2be3de98cd2abae4f0fcf162062785593,-,keep,retain,,-
+harness/refresh.sh,4979,ffd712c869728ef1e64646fe18d95e3ee818dbf2,-,keep,retain,,-
+harness/reinstall-plugin.mjs,5185,6c3fcb730b4013ff856ab0c144b3d6636864b8a7,-,keep,retain,,-
+harness/replay-corpus.mjs,14748,3bde401c64e43d94f64f5814078e96b7e1e3a6d5,-,keep,retain,,-
+harness/served-build-guard.mjs,5183,bb552a4616bd72421be03599efc22e6286219ff0,-,keep,retain,,-
+harness/test-004.mjs,28785,b8fb2d037538ea8306f0b2fa2a3f6490d06731cb,-,keep,retain,,-
+harness/test-dataset-identity.mjs,6536,67b9812e92c34ffd28d05f1e7e1438b239158485,-,keep,retain,,-
+harness/test-redact.mjs,11684,d49b4d4b677757e7f8bc52f33de064650f03a649,-,keep,retain,,-
+harness/typecheck-host.mjs,5425,7a8445f7f033b0d93aea46b79dda6038e424a623,-,keep,retain,,-
+harness/update-plugin.mjs,8553,1025aa6ef4264ec85e8e80764326acfe4f25e511,-,keep,retain,,-
+harness/verify-page.mjs,339851,5ed58d0c00d2a78a18d89ce3efe8ab53dcdd176f,-,keep,retain,,-
+migrations/001-research.sql,851,503234fde6b4d266ae0c243b3ccc52be1decb63b,-,keep,retain,,-
+migrations/002-coordination-model.sql,8647,69716394758dcef165d32cb4552828a0ffce7bd9,-,keep,retain,,-
+migrations/003-drop-legacy.sql,1114,3b46feec76dd7336b6ff90b6abf5f8437babb8ba,-,keep,retain,,-
+migrations/004-ux-v2-model.sql,20070,252ebd0e49c690be41c8a2fe0964682167c1f7d3,-,keep,retain,,-
+nakama.plugin.json,29620,b4f73344aff1c07cf156d2a16ddcd35219e9f88b,-,keep,retain,,-
+package.json,1741,f768784340e6ebbc0930709602c1b9c760b09847,-,keep,retain,,-
+skills/research-coordinator/SKILL.md,8556,db43bf9b2bb6f41f5279cdcbbdd3ff074ab21051,-,keep,retain,,-
+src/actions.test.ts,70426,f4f6c60460bc184f9b3545cebcbbb0694b2f69fe,-,keep,retain,,-
+src/actions.ts,13979,70c57cc42b054aa8d0dbc70cab0df61b8490e15b,-,keep,retain,,-
+src/migration.test.ts,14011,e32f2136094f1e28bd1b5651e53e0e0872e59ddf,-,keep,retain,,-
+src/store-ux-v2.test.ts,31843,b594f8c7101abb48847184e85fde2ea1c193c160,-,keep,retain,,-
+src/store.test.ts,65602,46c39107bd737bf912884a968f493f0591c78b6d,-,keep,retain,,-
+src/store.ts,185312,13e7697f7d832fe4a42ff1feff28c28e045bc13a,-,keep,retain,,-
+src/ui.tsx,250615,426db0c998e4dc66345ef18628ab481ff1acbb36,-,keep,retain,,-
+tsconfig.json,598,47413125312eb6827d8017f3045be7fff27e760f,-,keep,retain,,-
+types/host.d.ts,5848,cd8ea6cc3131ccf6ab5b116952f198774ce27e15,-,keep,retain,,-
+ui/app.js,154108,507ae4cca791813df4385e8b9ae8c64b70cfb894,-,keep,retain,,-
+vendor/allowlist.patch,618,2ea4c96215e46ae7d79112760dc8f46ef516e19d,-,keep,retain,,-
+vendor/in-tree.package.json,501,1d8c6b250fa440f4e0446c0274a4da00eb36e5d6,-,keep,retain,,-
+vendor/vendor-into-nakama.sh,2659,488c50ea36b88778240add1b380204a704545302,-,keep,retain,,-
