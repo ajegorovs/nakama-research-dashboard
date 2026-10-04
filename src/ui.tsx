@@ -3386,11 +3386,13 @@ export function apply(ctx: Context) {
                 <span className="rd-strong">{entry.person.displayName}</span>
                 <span className="rd-meta" data-rd-person-context="true">
                   {involvementLine(entry)}
-                  {" · "}
                   {/* V1/A4 — the shared index-row grammar: the name takes the row's full width and the recency
-                      joins the involvement line beneath it. The exceptional states are kept exactly as they
-                      were, and keep their own marker: a person with no attributable activity states that fact
-                      rather than an age, because "no activity" would be a different and false claim. */}
+                      joins the involvement line beneath it. No inter-block separator sits between the two:
+                      the recency child below is block-level, so a literal ` · ` here would orphan at the end
+                      of the involvement line rather than join the two. The exceptional states are kept exactly
+                      as they were, and keep their own marker: a person with no attributable activity states
+                      that fact rather than an age, because "no activity" would be a different and false
+                      claim. */}
                   <span
                     className="rd-meta"
                     data-rd-person-recency={

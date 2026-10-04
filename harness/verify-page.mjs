@@ -24,6 +24,7 @@
 import { existsSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { classifyDataset, fixHint, observedPhrase, verifyDataset } from "./dataset-identity.mjs";
+import { DANGLING_SEPARATOR_PATTERN, SEPARATOR } from "./people-boundary.mjs";
 import { pathLabel, redactEndpoint } from "./redact.mjs";
 
 // playwright-core is a devDependency of this repo, so `bun install` makes the bare specifier
@@ -2447,15 +2448,34 @@ check(
 // C2 increment 1: an index row is identity, then what is on, then *when* — and the when is the payload's
 // own number, not a second opinion about it. `unattributable` is the honest value for a person with no
 // mapped account: their last activity is unknown, which is not the same fact as "none".
-const personIndexRows = await page.evaluate(() => {
+const personIndexRows = await page.evaluate(({ separator, danglingPattern }) => {
   const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
-  return [...(scope?.querySelectorAll("[data-rd-person]") ?? [])].map((row) => ({
-    context: (row.querySelector("[data-rd-person-context]")?.textContent ?? "").trim(),
-    name: row.getAttribute("data-rd-person") ?? "",
-    recency:
-      row.querySelector("[data-rd-person-recency]")?.getAttribute("data-rd-person-recency") ?? null,
-  }));
-});
+  const SEP = separator;
+  return [...(scope?.querySelectorAll("[data-rd-person]") ?? [])].map((row) => {
+    const context = row.querySelector("[data-rd-person-context]");
+    const recency = row.querySelector("[data-rd-person-recency]");
+    // The factual metadata block is the inline content the context element holds *before* the recency
+    // child. The recency child is block-level, so a separator left between the two dangles at the end of
+    // the involvement line instead of joining them — the V1/A4 boundary. `previousSibling` names the node
+    // the source used to render there, so a regression that puts it back is caught even before it wraps.
+    const factual = [...(context?.childNodes ?? [])]
+      .filter((node) => node !== recency)
+      .map((node) => node.textContent ?? "")
+      .join("")
+      .trim();
+    const previous = recency?.previousSibling ?? null;
+    return {
+      context: (context?.textContent ?? "").trim(),
+      danglingSeparator: new RegExp(danglingPattern).test(factual),
+      factual,
+      name: row.getAttribute("data-rd-person") ?? "",
+      recency: recency?.getAttribute("data-rd-person-recency") ?? null,
+      separatorBeforeRecency: Boolean(
+        previous && previous.nodeType === 3 && previous.textContent.trim() === SEP
+      ),
+    };
+  });
+}, { separator: SEPARATOR, danglingPattern: DANGLING_SEPARATOR_PATTERN });
 const expectedRecency = new Map(
   CORPUS.people.map((person) => [
     person.name,
@@ -2472,6 +2492,25 @@ check(
         row.recency === expectedRecency.get(row.name)
     ),
   JSON.stringify({ rows: personIndexRows, expected: [...expectedRecency] })
+);
+// V1/A4 boundary regression: the People index row's factual block states its counts and ends there — a
+// person with several topics/axes, and no separator orphaned before the block-level recency child.
+check(
+  "the People index row ends its factual counts without a dangling separator before the recency",
+  personIndexRows.length === people.count &&
+    personIndexRows.every(
+      (row) =>
+        /\d+ ax(?:is|es) · \d+ topics?$/.test(row.factual) &&
+        row.danglingSeparator === false &&
+        row.separatorBeforeRecency === false
+    ),
+  JSON.stringify(
+    personIndexRows.map((row) => ({
+      before: row.separatorBeforeRecency,
+      dangling: row.danglingSeparator,
+      factual: row.factual,
+    }))
+  )
 );
 check(
   "person-first shows one person at a time, with their involvement grouped underneath",

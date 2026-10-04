@@ -1,8 +1,8 @@
 # harness/focus-pass.sh — keyboard focus visibility · dataset corpus · viewport 1440x900
 # dashboard: http://127.0.0.1:3003
-# instance: http://127.0.0.1:4399 (0.2.0+dev.30e1f1190226, revision 52)
+# instance: http://127.0.0.1:4399 (0.2.0+dev.7c8fdc999f49, revision 60)
 # negative control: a focus-killing rule is injected, and the pass MUST report failures
-# generated: 2026-10-04T01:17:45+03:00
+# generated: 2026-10-04T12:44:47+03:00
 
 PASS  login — status 200
 # NEGATIVE CONTROL — every focus indication was removed by injected CSS; the per-class measure must fail
@@ -28,7 +28,7 @@ FAIL  button[entity-tag].rd-tag paints a focus indicator (topics,people,reposito
 FAIL  summary(in .rd-axis-more) paints a focus indicator (topics,people) — focusing painted nothing — focused render equals the unfocused one ("More on this axis")
 FAIL  summary(in .rd-completed-fold) paints a focus indicator (topics,repositories) — focusing painted nothing — focused render equals the unfocused one ("Completed and abandoned work (1)")
 FAIL  summary(in .rd-narrow-write) paints a focus indicator (topics) — focusing painted nothing — focused render equals the unfocused one ("Record activity")
-FAIL  button[index-row-person].rd-index-item paints a focus indicator (people) — focusing painted nothing — focused render equals the unfocused one ("ajegorovs2 active · 3 axes · 1 topic · l")
+FAIL  button[index-row-person].rd-index-item paints a focus indicator (people) — focusing painted nothing — focused render equals the unfocused one ("ajegorovs2 active · 3 axes · 1 topiclast")
 FAIL  button[index-row-repository].rd-index-item paints a focus indicator (repositories) — focusing painted nothing — focused render equals the unfocused one ("ajegorovs/udv-echo-processsupports 1 top")
 
 # overview coverage: 15 indexed, 15 tab stops walked, none skipped

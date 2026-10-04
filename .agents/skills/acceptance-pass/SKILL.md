@@ -157,6 +157,27 @@ overwrite a good record with an aborted run's transcript by hand.
    emitter and regenerate the record; a write-pass record that still carries the old detail is regenerated only by
    a write run (which mutates the fixture) and is a stated boundary, not an exemption.
 
+## Outcome-based autonomy and review cadence
+
+Agree on the outcome, protected invariants, verification and non-goals once. Within those boundaries, the orchestrator owns investigation, replacement of failed hypotheses, implementation, self-review and technical verification. A failed experiment is not itself a review boundary.
+
+Batch related local corrections into one completed outcome. Escalate before changing product meaning, information hierarchy, shared interaction/layout rules, acceptance semantics, projections/schema or provenance, and for material scope expansion, consequential regression or genuine blockers. Reviewer judgment is required at those boundaries and for final package acceptance, not each reversible implementation step.
+
+Use milestone-based review and lightweight session-end reports labelled **Progress — no response required** or **Decision needed — work paused**. Routine reports do not halt work awaiting a response. Persist resumable package state in a scratch handoff; put detailed evidence in linked artifacts rather than coordination messages.
+
+A completed package names its objective/invariants, changed paths and branch/head, before→after outcome, verification, visual evidence, limitations, hypothesis deviations and pending owner actions. Keep UI implementation serialized. Owner approval remains separate for `AGENTS.md` changes, restarting existing services, publication/release and merge to main; technical success or reviewer approval is not owner authorization.
+
+Treat visual polish as maintenance once correctness, legibility, navigation and accessibility are established. Do not proactively open cosmetic workstreams outside an agreed outcome. Evidence automation and real-use findings require their own product scope and belong to their appropriate project, not an incidental UI fix.
+
+## Read-only product-scoping measurements
+
+- Keep pre-approval probes and screenshots in `.hermes/scratch/`, not canonical acceptance paths: pass wrappers replace records and republish shots.
+- Verify the served build and actual instance parameter set first; serialize dataset captures and wait for each view's populated markers.
+- Measure rail/content widths, row heights, text-node `Range.getClientRects()` line counts and right extents, plus `scrollWidth - clientWidth`. Range rectangles are text layout extents, not rasterized glyph ink. Inspect screenshots to distinguish separator orphaning from overflow.
+- Enumerate rendered rows at both reference viewports programmatically and report absent exceptional-state coverage. Transient DOM experiments are hypotheses, not source edits or acceptance evidence.
+- Trace formatting helpers to every consumer before proposing index-only simplification: a shared helper can also change detail panels. Keep repository break selectors repository-specific, not shared across all index titles.
+- Inspect nested metadata display rules before predicting wrapping: a block-level recency child leaves a preceding separator on the involvement line, so shortening recency cannot rescue that separator. Group per-character Range rectangles by line to detect separator-only lines; whole-node rectangles cannot identify their contents.
+
 ## Verification
 
 - The transcript's summary line states passed/failed/skipped, and the header names dataset and viewport.

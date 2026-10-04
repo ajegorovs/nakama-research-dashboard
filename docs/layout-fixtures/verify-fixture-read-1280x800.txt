@@ -1,6 +1,6 @@
 # harness/read-pass.sh — read pass · dataset fixture · viewport 1280x800
 # dashboard: http://127.0.0.1:3005
-# generated: 2026-10-04T10:58:59+03:00
+# generated: 2026-10-04T12:54:47+03:00
 
 PASS  login — status 200
 identity: expected fixture · 2 topic(s) (2 fixture-named, 0 write residue) · 3 of 3 repository(ies) under fixture/ · observed fixture markers only
@@ -79,7 +79,8 @@ PASS  a per-axis history expands inside its own axis — 4 rows for Fixture: act
 PASS  the axis's notes are kept out of its history list — history 4 rows, notes 2 rows, probe "Fixture E evidence link: the rig-floor comparison sheet"
 detail screenshot: docs/layout-fixtures/screenshots/1280x800/research-dashboard-read-detail.png
 PASS  the People view lists every person once — the header's count, not one row per link — index 2, header 2, duplicated []
-PASS  every person index row carries its context, and its recency is the payload's own — {"rows":[{"context":"2 active · 1 blocked · 4 axes · 2 topics · last activity 2 days ago","name":"Fixture Alpha","recency":"2026-10-01T15:25:00+03:00"},{"context":"1 active · 1 axis · 1 topic · no account mapped","name":"Fixture Zeta","recency":"unattributable"}],"expected":[["Fixture Alpha","2026-10-01T15:25:00+03:00"],["Fixture Zeta","unattributable"]]}
+PASS  every person index row carries its context, and its recency is the payload's own — {"rows":[{"context":"2 active · 1 blocked · 4 axes · 2 topicslast activity 2 days ago","danglingSeparator":false,"factual":"2 active · 1 blocked · 4 axes · 2 topics","name":"Fixture Alpha","recency":"2026-10-01T15:25:00+03:00","separatorBeforeRecency":false},{"context":"1 active · 1 axis · 1 topicno account mapped","danglingSeparator":false,"factual":"1 active · 1 axis · 1 topic","name":"Fixture Zeta","recency":"unattributable","separatorBeforeRecency":false}],"expected":[["Fixture Alpha","2026-10-01T15:25:00+03:00"],["Fixture Zeta","unattributable"]]}
+PASS  the People index row ends its factual counts without a dangling separator before the recency — [{"before":false,"dangling":false,"factual":"2 active · 1 blocked · 4 axes · 2 topics"},{"before":false,"dangling":false,"factual":"1 active · 1 axis · 1 topic"}]
 PASS  person-first shows one person at a time, with their involvement grouped underneath — selected 1, panel Fixture Alpha, topics 2, involvements ["Layout fixture — crowded card","Layout fixture — second topic"]
 PASS  the person panel states attribution instead of implying idleness — payload attributable=true; page marker n/a; activity lists 1
 people: Fixture Alpha, Fixture Zeta | selected: Fixture Alpha | involved in: Layout fixture — crowded card, Layout fixture — second topic
@@ -183,7 +184,7 @@ PASS  the grammar traversal wrote nothing: no write action, and the projection i
 PASS  the repositories index lists the projection's repositories, in the projection's own order — 3 row(s) for 3 repository(ies)
 PASS  the repositories heading states the order the rollup is actually in — by name, not by recency — heading hint: "Alphabetical by name · factual context, never scored"
 PASS  every repository row states the age of its own last activity, from its own timestamp — 3 dated row(s), 0 said "never"
-PASS  every repository row's second line is the rollup's own numbers, on the lane's own current/terminal split — no topic names it · no current axis · 3 days ago | supports 1 topic · 4 current axes · 2 days ago | supports 1 topic · 1 current axis · 2 days ago
+PASS  every repository row's second line is the rollup's own numbers, on the lane's own current/terminal split — no topic names it · no current axis · 3 days ago | supports 1 topic · 4 current axes · 2 days ago | supports 1 topic · 1 current axis · 3 days ago
 PASS  a repository with nothing current says so, instead of filing stopped work under the lane's heading — fixture/0-bare-repository: "no topic names it · no current axis · 3 days ago"
 PASS  the repository's current work is the dominant lane: at least 1.25x the rail, beside it, not stacked under it — lane 372px at x=597, rail 250px at x=981 (1.49x), tops 352/352
 PASS  the lane holds exactly the rollup's current axes, states that count, and holds no stopped work — lane states 4, holds 4 (Fixture: active axis (with evidence), Fixture: blocked axis (blocked + blocker text), Fixture: evidence-free axis (inferred, nothing behind it), Fixture: parked axis (inferred state)) — projection's current: Fixture: active axis (with evidence), Fixture: blocked axis (blocked + blocker text), Fixture: evidence-free axis (inferred, nothing behind it), Fixture: parked axis (inferred state)

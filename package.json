@@ -21,6 +21,7 @@
     "harness:records": "bun harness/test-redact.mjs",
     "harness:focus": "bash harness/focus-pass.sh",
     "harness:identity": "bun harness/test-dataset-identity.mjs",
+    "harness:boundary": "bun harness/test-people-boundary.mjs",
     "harness:write": "bash harness/read-pass.sh --write",
     "preview": "bun harness/preview/run.mjs",
     "preview:fixture": "bun harness/preview/run.mjs --dataset fixture",

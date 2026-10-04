@@ -1,7 +1,7 @@
 # harness/focus-pass.sh — keyboard focus visibility · dataset corpus · viewport 1440x900
 # dashboard: http://127.0.0.1:3003
-# instance: http://127.0.0.1:4399 (0.2.0+dev.30e1f1190226, revision 52)
-# generated: 2026-10-04T01:16:20+03:00
+# instance: http://127.0.0.1:4399 (0.2.0+dev.7c8fdc999f49, revision 60)
+# generated: 2026-10-04T12:43:40+03:00
 
 PASS  login — status 200
 # overview: 15 enabled focusable(s), the first reached on tab 17 — button[view-option] x5 · button[host:button-default] x1 · button[window-option] x4 · button[entity-tag].rd-tag.rd-tag-compact x3 · button[host:button-sm] x2

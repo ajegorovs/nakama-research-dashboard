@@ -1,6 +1,6 @@
 # harness/read-pass.sh — read pass · dataset corpus · viewport 1280x800
 # dashboard: http://127.0.0.1:3003
-# generated: 2026-10-04T10:57:07+03:00
+# generated: 2026-10-04T12:52:55+03:00
 
 PASS  login — status 200
 identity: expected corpus · 1 topic(s) (0 fixture-named, 0 write residue) · 0 of 1 repository(ies) under fixture/ · observed corpus markers (no fixture-named topic or repository, no write residue)
@@ -78,7 +78,8 @@ PASS  a per-axis history expands inside its own axis — 25 rows for Signal anal
 PASS  the axis's notes are kept out of its history list — history 25 rows, notes 2 rows, probe "SA3/POD and SA6 UI remain demand-driven; #49 remains"
 detail screenshot: docs/screenshots/1280x800/research-dashboard-read-detail.png
 PASS  the People view lists every person once — the header's count, not one row per link — index 1, header 1, duplicated []
-PASS  every person index row carries its context, and its recency is the payload's own — {"rows":[{"context":"2 active · 3 axes · 1 topic · last activity 5 days ago","name":"ajegorovs","recency":"2026-09-28T18:22:23+03:00"}],"expected":[["ajegorovs","2026-09-28T18:22:23+03:00"]]}
+PASS  every person index row carries its context, and its recency is the payload's own — {"rows":[{"context":"2 active · 3 axes · 1 topiclast activity 5 days ago","danglingSeparator":false,"factual":"2 active · 3 axes · 1 topic","name":"ajegorovs","recency":"2026-09-28T18:22:23+03:00","separatorBeforeRecency":false}],"expected":[["ajegorovs","2026-09-28T18:22:23+03:00"]]}
+PASS  the People index row ends its factual counts without a dangling separator before the recency — [{"before":false,"dangling":false,"factual":"2 active · 3 axes · 1 topic"}]
 PASS  person-first shows one person at a time, with their involvement grouped underneath — selected 1, panel ajegorovs, topics 1, involvements ["UDV Echo Process"]
 PASS  the person panel states attribution instead of implying idleness — payload attributable=true; page marker n/a; activity lists 1
 people: ajegorovs | selected: ajegorovs | involved in: UDV Echo Process

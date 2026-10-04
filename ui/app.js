@@ -2102,7 +2102,7 @@ function apply(ctx) {
     }, entry.person.displayName), /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta",
       "data-rd-person-context": "true"
-    }, involvementLine(entry), " · ", /* @__PURE__ */ React.createElement("span", {
+    }, involvementLine(entry), /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta",
       "data-rd-person-recency": entry.attributable ? entry.lastActivityAt ?? "none" : "unattributable"
     }, entry.attributable ? entry.lastActivityAt ? /* @__PURE__ */ React.createElement(RecencyLabel, {

@@ -518,3 +518,34 @@ not relaxed: "reached by ordinary page scrolling" is now bounded by the **intend
 when the host constrains the page to an inner port, not merely by the window (a window-only bound would accept
 content the port still clips). Source: `src/ui.tsx` and `harness/verify-page.mjs`; measured in
 [`V1-visual-coherence.md`](V1-visual-coherence.md) §*Post-audit correction*.
+
+### 15. People index metadata boundary and outcome-based review (2026-10-04)
+
+The reviewer authorized the post-V1 People readability outcome: preserve every factual count, baseline ordinary
+and exceptional recency wording, the shared row grammar, 240px rail, hooks, navigation and focus behavior.
+Because the People recency child is block-level, the index renders **no inter-block separator** between its
+involvement text and recency. Separators within the factual counts remain. This is People-index-local: no
+shared metadata CSS, detail-panel wording or Repository behavior changes.
+
+The source implementation is **accepted and closed without conditions** by the final reviewer ruling in
+[`people-index readability acceptance record`](../reviews/2026-10-04-people-index-readability-acceptance-record.md).
+Commit, publication and merge remain owner-authorized. Served measurements
+on corpus and fixture at 1440×900 and 1280×800 show Fixture Alpha 102→84px with its separator-only line 1→0;
+other sampled People rows stay 84px, with no dangling factual separator, horizontal overflow or row-height
+increase. The measured build is `0.2.0+dev.7c8fdc999f49`, bundle sha256
+`714e55a7f9181bffc0e7ef144c1cfa18fe8c1fcbf3cde10136b030b8fa86179b`, corpus revision 60 / fixture revision 44.
+The absent `nothing attributed yet` state has projection-level unit coverage, not rendered dataset coverage.
+
+Repository wrapping remains unchanged by the reviewer's ruling: the historical approximately 10px overflow
+was **not reproduced** on the fresh samples, not universally disproved. A single-line name is not a requirement;
+no ellipsis, rail widening, forced break or synthetic safety net is authorized by this package. V1 and Tier B
+B1/B2 remain closed; B3/B4 and further cleanup remain deferred.
+
+**Standing workflow (reviewer ruling, verbatim):**
+
+> Agree on outcome + invariants once. Within those boundaries, the orchestrator owns investigation, failed hypotheses, implementation and technical verification. Routine progress reports are informational. Reviewer approval is required for consequential product decisions, protected-boundary changes, material scope expansion and final package acceptance—not for each reversible implementation step. Owner-only operational actions remain separately gated.
+
+Use milestone-based review and lightweight session-end reporting. Visual polish is maintenance, not a new
+roadmap: further product work should improve operational usefulness and be separately scoped. This ruling does
+not authorize an evidence-ingestion pipeline inside this plugin repository, publication, merge, service restart
+or `AGENTS.md` edits. Contributor procedure: `.agents/skills/acceptance-pass/SKILL.md`.

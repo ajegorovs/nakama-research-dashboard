@@ -913,3 +913,37 @@ describe("U2 projections: what a problem is worth without evidence", () => {
     expect(typeof problemRow?.stale).toBe("boolean");
   });
 });
+
+/**
+ * The People index row's two exceptional recency states (V1/A4). The store is the source of both: a person
+ * with a mapped account but no recorded activity is *attributable* with no last-activity timestamp — which
+ * the row states as "nothing attributed yet", not as an age and not as "none" — while a person with no
+ * mapped account is unattributable and the row says "no account mapped". The UI branches on exactly these
+ * two fields, so pinning them here is what a store test can do to cover the absent rendered state (neither
+ * served dataset carries a mapped-but-silent person).
+ */
+describe("U2 projections: the People index recency states", () => {
+  test("a mapped but silent person is attributable with no last-activity timestamp", () => {
+    const { store } = openStore();
+    store.registerPerson({
+      displayName: "Mapped, quiet",
+      nakamaUserId: "acct-quiet",
+    });
+    store.registerPerson({ displayName: "No account" });
+
+    const byName = new Map(
+      store
+        .getOverview()
+        .people.map((entry) => [entry.person.displayName, entry])
+    );
+    const mapped = byName.get("Mapped, quiet");
+    const unmapped = byName.get("No account");
+
+    // attributable + null lastActivityAt is the pair the row reads as "nothing attributed yet".
+    expect(mapped?.attributable).toBe(true);
+    expect(mapped?.lastActivityAt).toBeNull();
+    // No mapped account: the row reads "no account mapped", and holds no timestamp either.
+    expect(unmapped?.attributable).toBe(false);
+    expect(unmapped?.lastActivityAt).toBeNull();
+  });
+});
