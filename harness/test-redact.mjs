@@ -9,19 +9,30 @@
  *   2. **the tree guard:** every committed text file in this public repository — not only `docs/` — is scanned for
  *      anything the rule would have redacted. That is what makes "the next pass cannot reintroduce it" checkable
  *      rather than hoped for: a pass that writes a live endpoint into a transcript, a caption, a `src/` default or
- *      a script fails this suite.
+ *      a script fails this suite. The same walk is run for the second class, an **identity-bearing home path**
+ *      (`/home/<name>/`, `/Users/<name>/`): a transcript that quotes its absolute screenshot path leaks the local
+ *      username, and that is caught here rather than by a reader noticing.
  *
- * The fixtures deliberately use addresses that are **not this host's** (a different tailnet-range IP, a different
- * MagicDNS name): a test that reproduced the real one would be the leak it guards against. The guard's own
- * patterns are ranges, suffixes and `os.hostname()` — never a literal address of this machine.
+ * The fixtures deliberately use addresses and paths that are **not this host's** (a different tailnet-range IP, a
+ * different MagicDNS name, a made-up username): a test that reproduced the real ones would be the leak it guards
+ * against. The guard's own patterns are ranges, suffixes, home-root prefixes and `os.hostname()` — never a literal
+ * address or path of this machine.
  *
  * Run: `bun harness/test-redact.mjs` (or `bun run harness:records`).
  */
+import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
-import { redactEndpoint, unredactedEndpoints, PLACEHOLDER_HOST } from "./redact.mjs";
+import { fileURLToPath } from "node:url";
+import {
+  pathLabel,
+  PLACEHOLDER_HOST,
+  redactEndpoint,
+  unredactedEndpoints,
+  unredactedHomePaths,
+} from "./redact.mjs";
 
-const REPO = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
+const REPO = fileURLToPath(new URL("..", import.meta.url));
 
 let failures = 0;
 const check = (description, actual, expected) => {
@@ -89,6 +100,53 @@ check(
   []
 );
 
+// --- 1b. the path rule -------------------------------------------------------------------------------------
+// The second half of the label rule: a quoted screenshot path is a label, not an address. A path inside the
+// repository becomes repo-relative — a reader with a clone resolves it, which is the linkage worth keeping — and
+// a path outside becomes `<scratch>/<name>`, keeping the artifact's name and hiding the machine. The fixtures use
+// a made-up checkout root and username, never this host's.
+const LABEL = [
+  [
+    "a shot inside the repo becomes repo-relative",
+    pathLabel("/srv/ci/checkout/docs/screenshots/x.png", "/srv/ci/checkout"),
+    "docs/screenshots/x.png",
+  ],
+  [
+    "a shot in a nested repository path stays relative to its root",
+    pathLabel("/srv/ci/checkout/docs/layout-fixtures/screenshots/1440x900/x.png", "/srv/ci/checkout"),
+    "docs/layout-fixtures/screenshots/1440x900/x.png",
+  ],
+  [
+    "a shot outside the repo keeps its name under a scratch label",
+    pathLabel("/tmp/nakama-shots/x.png", "/srv/ci/checkout"),
+    "<scratch>/x.png",
+  ],
+  [
+    "a home-directory shot is labelled, never printed",
+    pathLabel("/home/someone/shots/x.png", "/srv/ci/checkout"),
+    "<scratch>/x.png",
+  ],
+];
+for (const [description, actual, expected] of LABEL) check(`path: ${description}`, actual, expected);
+
+const HOME_DETECT = [
+  ["an absolute Linux home path", "see /home/devuser/Repos/x/docs/screenshots/y.png on the box"],
+  ["a macOS home path", "written to /Users/devuser/Desktop/shot.png"],
+  ["a Windows home path", "C:\\Users\\devuser\\shots\\shot.png on the build host"],
+  ["a home path at the end of a line", "captured from /home/devuser/shot.png"],
+];
+for (const [description, input] of HOME_DETECT) {
+  check(`detect path: ${description}`, unredactedHomePaths(input).length > 0, true);
+}
+check(
+  "detect path: placeholders and documented examples are not offences",
+  unredactedHomePaths(
+    "/home/<user>/x · /home/user/x · /Users/you/x · $HOME/.cache/ms-playwright · ~/Repos/nakama · " +
+      "'grep -cE /home/[a-z]+/|/Users/[a-z]+/'"
+  ),
+  []
+);
+
 // --- 2. the record guard -----------------------------------------------------------------------------------
 // The whole **public tree**, not just `docs/`: the reviewer's ask is that no committed artifact carries a live
 // endpoint, and a hardcoded address in `src/` or the harness would be the same leak. Two files are excluded by
@@ -106,23 +164,50 @@ const walk = (dir) =>
     return statSync(path).isDirectory() ? walk(path) : [path];
   });
 
+// The public tree is what git would publish: **tracked** files plus **untracked files that are not ignored**. A
+// gitignored path is generated output that is never committed (the preview montage packs, `dist`, …), so scanning
+// it would report the pass's own throwaway build rather than a leak a clone could read. The walk still prunes the
+// directories named above; this filter is what keeps the derived, never-committed packs out of the scan without a
+// path-specific exemption.
+const gitList = (args) =>
+  execFileSync("git", args, { cwd: REPO, encoding: "utf8" }).split("\n").filter(Boolean);
+const publicFiles = new Set([
+  ...gitList(["ls-files", "--cached"]),
+  ...gitList(["ls-files", "--others", "--exclude-standard"]),
+]);
+
 const files = walk(REPO).filter((path) => {
   const rel = relative(REPO, path);
   const dot = rel.lastIndexOf(".");
-  return !SKIP_PATHS.has(rel) && dot > 0 && SCAN_EXTENSIONS.has(rel.slice(dot).toLowerCase());
+  return (
+    publicFiles.has(rel) &&
+    !SKIP_PATHS.has(rel) &&
+    dot > 0 &&
+    SCAN_EXTENSIONS.has(rel.slice(dot).toLowerCase())
+  );
 });
 const offences = [];
+const homeOffences = [];
 for (const path of files) {
-  const found = unredactedEndpoints(readFileSync(path, "utf8"));
+  const text = readFileSync(path, "utf8");
+  const found = unredactedEndpoints(text);
   if (found.length) offences.push(`${relative(REPO, path)}: ${found.slice(0, 4).join(", ")}`);
+  const homes = unredactedHomePaths(text);
+  if (homes.length) homeOffences.push(`${relative(REPO, path)}: ${homes.slice(0, 4).join(", ")}`);
 }
 if (offences.length) failures += 1;
+if (homeOffences.length) failures += 1;
 const inDocs = files.filter((path) => relative(REPO, path).startsWith("docs/")).length;
 console.log(
   `${offences.length ? "FAIL" : "PASS"}  the committed tree carries no live endpoint — ` +
     `${files.length} text file(s) scanned (${inDocs} under docs/), ` +
     `${SKIP_PATHS.size} excluded by path` +
     (offences.length ? `\n        ${offences.join("\n        ")}` : "")
+);
+console.log(
+  `${homeOffences.length ? "FAIL" : "PASS"}  the committed tree carries no identity-bearing home path — ` +
+    `${files.length} text file(s) scanned` +
+    (homeOffences.length ? `\n        ${homeOffences.join("\n        ")}` : "")
 );
 
 // --- 3. the transcript emitter's trailing-space rule -------------------------------------------------------

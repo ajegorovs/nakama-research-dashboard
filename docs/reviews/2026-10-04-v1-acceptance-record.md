@@ -9,7 +9,10 @@ before publication. Nothing here revises C1–C5, H1 or the V1 unit doc's landed
 ruling is the acceptance; the condition is a generated-transcript whitespace repair at the emitter, not a product
 or visual change. V1 is marked **closed** only once that condition is clean, which the §*Publication condition*
 measurements below establish. No product, projection, activity-scope or frozen-contract change was made to close
-it.
+it. **A second, independent hygiene defect in the same generated records — the canonical read transcripts quoted
+their screenshots by absolute path, carrying the local username and directory layout — was found after the first
+condition was closed and is repaired at the emitter in §*Publication condition (second)*; it likewise changes no
+verdict and no visual measurement.**
 
 ## The verdict (reviewer, 2026-10-04, verbatim)
 
@@ -126,6 +129,9 @@ Both runs republished the seven canonical fixture screenshots in the **same meas
 lines, one read pass per viewport); no other canonical record and no build byte was touched. Trailing-whitespace
 lines: **2 → 0** in each file.
 
+> **These two fixture digests are superseded.** The second hygiene repair below re-took all four canonical read
+> records, so the tip's current digests are the four in §*Publication condition (second)*.
+
 **Normalized comparison.** Pre/post check descriptions and verdicts were compared with **whitespace normalized to
 a single space and trailing whitespace stripped** — the rule the verdict's condition is about. Zero semantic
 changes are expected and required.
@@ -162,6 +168,77 @@ The executable regression ships in the existing suite rather than a new one: `ha
 (`bun run harness:records`) now asserts the four canonical read records carry no trailing whitespace, by the read
 pass's own transcript naming.
 
+## Publication condition (second) — identity-bearing screenshot paths in the canonical read records, fixed at the emitter
+
+The verdict's publication condition (above) was met by the whitespace repair. A second, independent hygiene defect
+in the same generated records surfaced afterwards: **every canonical read transcript quoted its screenshots by
+absolute path** — `/home/<user>/…/docs/screenshots/…` — so the record carried the local username and the machine's
+directory layout into a public repository. Like the first condition, it changes no verdict and no visual
+measurement.
+
+**Root cause.** `harness/verify-page.mjs` prints each shot it produced (`console.log("<name> screenshot:", shot)`)
+from the same `OUT` directory `read-pass.sh` passes as `$REPO/docs/…`, which is absolute. The endpoint rule in
+`harness/redact.mjs` covered hosts, not filesystem paths, so neither emitter nor guard touched them.
+
+**Fix — emitter-only, presentation-only.** `harness/redact.mjs` gains `pathLabel(file, repoRoot)`: a path inside the
+repository becomes repo-relative (a reader with a clone resolves the same file, so the artifact linkage survives),
+and a path outside it becomes `<scratch>/<basename>` — the shot's name kept, the machine hidden. The seven
+screenshot lines in `verify-page.mjs` route through it; the shots themselves are still written to the same absolute
+`OUT`. No check description, condition, measured value or verdict is touched.
+
+**Regression.** `harness/test-redact.mjs` (`bun run harness:records`) gains `unredactedHomePaths()` and a second
+tree assertion: no committed text file carries an identity-bearing home path. The predicate is narrowed exactly as
+the endpoint rule is — `/home/<user>/` (angle brackets) and the documented placeholder `/home/user/…` are not
+offences, asserted as unit cases beside the positives — so the guard goes red on a real leak without flagging the
+repo's own prose about the rule. The scan is also restricted to the **public tree** (git-tracked plus untracked,
+not-ignored files), so the derived, never-committed preview packs cannot present the pass's own throwaway build as
+a leak (the scanned-file count is therefore 159 now, not the 174 the earlier endpoint-only filesystem walk
+reported).
+
+**Regeneration.** All four canonical read records were re-taken against the **unchanged** served build — both
+served-build guards green before the runs (sha `3b63f1fb…`, corpus revision 52, fixture revision 36), no rebuild,
+no reinstall, `ui/app.js` byte-stable:
+
+| run | exit | verdict | transcript sha256 |
+|---|---|---|---|
+| corpus 1440×900 | 0 | 153 pass / 0 fail / 27 skip | `9c9ab5e000fec27c6d60565cc878de6526410c7780ace8f172e6e41da647f7cb` |
+| corpus 1280×800 | 0 | 153 pass / 0 fail / 27 skip | `7a1b892ec017e7a45ccc1e0501a2ca9868c20892c6e2f3a13fbfa21aa4cf4d3e` |
+| fixture 1440×900 | 0 | 180 pass / 0 fail / 2 skip | `fd283d0f6faee48407a7b809979874ef7c94d6bffac4a01b217b454fc41ee756` |
+| fixture 1280×800 | 0 | 180 pass / 0 fail / 2 skip | `dbe2631abafd2a52cbbbabeedf6a399273b3318f9054c8d7183df5cf0a2b1caa` |
+
+Each run republished its seven canonical screenshots as a side effect; those **binary** re-captures were reverted,
+so the repair is a **text-only** change (records, emitter, guard, this record). The records now quote their shots
+repo-relative (e.g. `docs/screenshots/research-dashboard-read.png`) and hold no home path, username or hostname;
+the transcript header keeps loopback verbatim (`http://127.0.0.1:3003` / `:3005`).
+
+**Normalized comparison.** Pre/post check descriptions and verdicts were compared with whitespace normalized to a
+single space and trailing whitespace stripped, over every line of each file:
+
+- **Verdict tally identical** in all four (`153/0/27`, `153/0/27`, `180/0/2`, `180/0/2`); the same skips, with the
+  same reasons.
+- **Raw diffs are exactly two classes, both non-semantic.** The header's `# generated:` timestamp (it must differ),
+  and the seven screenshot lines, which move from the absolute `/home/<user>/…` form to the repo-relative label. In
+  the two **corpus** records one further line differs: the Overview topic card's own window count, `346 → 322
+  events`, which is the corpus 14-day window moving with the wall clock between the earlier run and this one — not
+  the emitter; the check compares the render against the payload's own count and passes in both. No check
+  description, condition or verdict moved.
+
+**Integrity.**
+
+| gate | result |
+|---|---|
+| `node --check harness/redact.mjs` · `harness/verify-page.mjs` · `harness/test-redact.mjs` | **OK** — all three parse |
+| `bun run harness:records` | **green** — 159 text files scanned, no live endpoint **and no identity-bearing home path**; the home-path assertion was **red on the pre-fix records**, naming exactly the four canonical read records (each `/home/<user>/`) — the guard can go red |
+| `bun run harness:identity` | **green** — 82 checks |
+| `bun run typecheck` | **green** — 0 diagnostics |
+| `bun run typecheck:host` | **green** — 0 diagnostics in this repo and `types/` (155 host-only, reported and not counted) |
+| `bun run check` | **green** — typecheck + build + 126 pass / 0 fail / 764 `expect()` |
+| `git diff --check` | **clean** (exit 0) |
+| served-build guard, corpus | **OK** — sha `3b63f1fb…`, revision 52 (unchanged) |
+| served-build guard, fixture | **OK** — sha `3b63f1fb…`, revision 36 (unchanged) |
+| `ui/app.js` sha256 | **unchanged** — `3b63f1fb2a3f7f1222280fb5ab53243651566b72ca9718e59149445f43219bac` |
+| `src/ui.tsx` sha256 | **unchanged** — `b5b14e0012d85aa28c229670170853a118665bc26b1cc24ea34d501c75f69e36` |
+
 ## Boundaries — what this record does and does not cover
 
 - **No product or visual change.** The only `src/`-reachable change is none; the emitter is harness-only
@@ -171,9 +248,12 @@ pass's own transcript naming.
   restarted.
 - **The write-pass records are a stated, non-blocking boundary.** `docs/layout-fixtures/verify-fixture-write.txt`,
   `docs/layout-fixtures/verify-fixture-read-post-write-1440x900.txt` and `docs/corpus/verify-write.txt` carry the
-  same emitter detail's trailing space from runs taken before this fix. They are regenerated only by a **write
-  pass, which mutates the fixture** (and is out of this condition's scope); the emitter fix means the next write
-  run is clean. They are not hand-edited — a committed transcript is a measurement, not prose.
+  same emitter detail's trailing space from runs taken before this fix, and they quote their shots by a
+  machine-specific mount path (`/mnt/<estate>/…`) for the same reason — the pre-fix emitter printed the absolute
+  `OUT`. They are regenerated only by a **write pass, which mutates the fixture** (and is out of both conditions'
+  scope); the emitter fix means the next write run is clean, and the home-path guard's public-tree predicate is
+  scoped to home roots, so the mount path is stated here rather than silently exempted. They are not hand-edited —
+  a committed transcript is a measurement, not prose.
 - **The two non-blocking follow-ups are untouched**, per the verdict: People metadata density and long
   Repository-name wrapping (DECISIONS §14.6 / §14.8).
 - **Tier B cleanup is not started here.** The owner's stated order (close V1 → Tier B) leaves Tier B to a

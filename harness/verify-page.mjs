@@ -22,8 +22,9 @@
  * topic, and a topic carrying a blocked axis is visually distinct.
  */
 import { existsSync, readdirSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { classifyDataset, fixHint, observedPhrase, verifyDataset } from "./dataset-identity.mjs";
-import { redactEndpoint } from "./redact.mjs";
+import { pathLabel, redactEndpoint } from "./redact.mjs";
 
 // playwright-core is a devDependency of this repo, so `bun install` makes the bare specifier
 // resolve; PLAYWRIGHT_CORE can point at any other install instead.
@@ -72,6 +73,11 @@ if (!EXECUTABLE) {
   process.exit(2);
 }
 const OUT = process.env.NAKAMA_SHOT_DIR ?? ".";
+// The transcript is a committed public artifact, so a quoted screenshot path is a label, not an address:
+// a shot inside the repo is written repo-relative (a reader with a clone resolves it), and a scratch shot is
+// `<scratch>/<name>`. The absolute `OUT` still writes the files — only what the record prints is redacted.
+const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
+const shotLabel = (file) => pathLabel(file, REPO_ROOT);
 // Viewport is a knob because the layout complaint ("crowded toolbar, unused vertical space") is a
 // function of width: a capture at one size can only show that the layout suits that size.
 const VIEWPORT = (() => {
@@ -2394,7 +2400,7 @@ await root.evaluate((node) => {
 });
 await page.waitForTimeout(300);
 await root.screenshot({ path: detailShot });
-console.log("detail screenshot:", detailShot);
+console.log("detail screenshot:", shotLabel(detailShot));
 
 // ------------------------------------------------------------------ C6: the People and Repositories views
 // The switcher is not a second query: the same `get_overview` payload carries all three views, so every
@@ -2656,7 +2662,7 @@ if (otherPerson !== undefined) {
 
 const peopleShot = `${OUT}/research-dashboard-${WRITE ? "write" : "read"}-people.png`;
 await root.screenshot({ path: peopleShot });
-console.log("people screenshot:", peopleShot);
+console.log("people screenshot:", shotLabel(peopleShot));
 
 await viewButton("Repositories").click();
 await page.waitForTimeout(700);
@@ -2726,7 +2732,7 @@ if (!linkedRepository) {
 
 const repositoriesShot = `${OUT}/research-dashboard-${WRITE ? "write" : "read"}-repositories.png`;
 await root.screenshot({ path: repositoriesShot });
-console.log("repositories screenshot:", repositoriesShot);
+console.log("repositories screenshot:", shotLabel(repositoriesShot));
 
 await viewButton("Topics").click();
 await page.waitForTimeout(600);
@@ -2789,7 +2795,7 @@ const progress = await page.evaluate(() => {
 // The screenshot shows the composition without the retired feed — the composition is the whole page now.
 const progressShot = `${OUT}/research-dashboard-${WRITE ? "write" : "read"}-progress.png`;
 await root.screenshot({ path: progressShot });
-console.log("progress screenshot:", progressShot);
+console.log("progress screenshot:", shotLabel(progressShot));
 
 // ---------------------------------------- C7b: the index *is* the projection, for the current window
 // The axis index reads `get_progress`, so it has to equal what the store reports for the window on screen —
@@ -4196,7 +4202,7 @@ const planOf = (result, axisId) =>
     // The published capture of the inverted index, taken in exactly the state the checks above describe.
     const problemsShot = `${OUT}/research-dashboard-${WRITE ? "write" : "read"}-problems.png`;
     await root.screenshot({ path: problemsShot });
-    console.log("problems screenshot:", problemsShot);
+    console.log("problems screenshot:", shotLabel(problemsShot));
 
     // (5) Back to `Axes`: the index marks the **parent axis** of the problem on screen, which is the identity
     // bridge the switch preserves — not a remembered axis the reader has since left.
@@ -5254,7 +5260,7 @@ if (paletteReachable) {
   await page.waitForTimeout(300);
   const paletteShot = `${OUT}/research-dashboard-${WRITE ? "write" : "read"}-palette.png`;
   await page.screenshot({ path: paletteShot });
-  console.log("palette screenshot:", paletteShot);
+  console.log("palette screenshot:", shotLabel(paletteShot));
   await paletteEntry.click();
   await page.waitForURL(new RegExp(`/plugins/${PLUGIN_ID}`), { timeout: 8000 }).catch(() => {});
   check(
@@ -6739,7 +6745,7 @@ const screenshot = `${OUT}/research-dashboard-${WRITE ? "write" : "read"}.png`;
 await root.evaluate((node) => node.scrollIntoView({ block: "start" }));
 await page.waitForTimeout(400);
 await root.screenshot({ path: screenshot });
-console.log("screenshot:", screenshot);
+console.log("screenshot:", shotLabel(screenshot));
 console.log(
   "console issues after login:",
   JSON.stringify(

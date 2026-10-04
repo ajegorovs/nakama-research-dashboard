@@ -17,9 +17,17 @@
  *     `<box>.<tailnet>.ts.net`, keeping scheme, port and path so the record still says what was reached;
  *   - a **public host** (a GitHub remote, an upstream doc link) is not identity and is left alone — over-redacting
  *     would damage the evidence a record carries.
+ *
+ * A second class is handled here for the same reason: **a filesystem path an artifact quotes**. A transcript
+ * writes the screenshot path it produced, and read against `read-pass.sh`'s committed shot directory that path
+ * is absolute — `/home/<user>/…/docs/screenshots/x.png` — so it carries the local username and the machine's
+ * directory layout. The rule is the same shape: a path **inside the repository** becomes repo-relative (it
+ * addresses the same file from a clone, so the linkage a reviewer wants survives and no identity does); a path
+ * **outside** it becomes `<scratch>/<name>`, keeping the basename for linkage and hiding where the work ran.
  */
 
 import { hostname } from "node:os";
+import { basename, isAbsolute, relative, resolve, sep } from "node:path";
 
 export const PLACEHOLDER_HOST = "<box>.<tailnet>.ts.net";
 
@@ -43,6 +51,20 @@ const EXAMPLE_HOSTS = new Set([
 
 /** This machine's hostname is identity — never a literal in the source, so a rename cannot break the rule. */
 export const MACHINE_HOSTNAME = hostname().toLowerCase();
+
+/**
+ * An absolute home path with a **concrete** user segment — `/home/<name>/`, `/Users/<name>/`, `C:\Users\<name>\`.
+ * The segment must be a real name: a placeholder is written `<user>` (angle brackets), which the character class
+ * cannot match, so `docs` examples do not trip the guard.
+ */
+const HOME_PATH = /(?:\/home|\/Users|\\Users)[/\\]([A-Za-z0-9._-]+)[/\\]/g;
+/**
+ * Documented placeholder user segments — the same narrowing decision as `EXAMPLE_HOSTS`. `/home/user/…` is the
+ * canonical made-up path in a README and identifies nobody; a guard that flags it teaches its reader to switch
+ * it off. `.home` is absent from this module's suffixes for the same reason, so both narrowing decisions are
+ * asserted in `test-redact.mjs` rather than left to be rediscovered.
+ */
+const PLACEHOLDER_USERS = new Set(["user", "you", "username", "name", "example", "me", "someone"]);
 
 /**
  * Would printing this host tell a public reader where the work happens?
@@ -89,6 +111,29 @@ export function redactEndpoint(url) {
   return `${scheme}${userinfo}${PLACEHOLDER_HOST}${port}${rest}`;
 }
 
+/**
+ * A public label for a filesystem path an artifact may quote.
+ *
+ * A path inside `repoRoot` becomes repo-relative, so a reader with a clone resolves the same file; a path
+ * outside it becomes `<scratch>/<basename>` — linkage to the artifact (its name) is kept, the machine it ran on
+ * is not.
+ *
+ * @param {string} file
+ * @param {string} repoRoot
+ * @returns {string}
+ */
+export function pathLabel(file, repoRoot) {
+  const text = String(file ?? "");
+  if (!text) return text;
+  const target = resolve(text);
+  const root = resolve(String(repoRoot ?? ""));
+  const rel = relative(root, target);
+  if (rel && !rel.startsWith("..") && !isAbsolute(rel)) {
+    return rel.split(sep).join("/");
+  }
+  return `<scratch>/${basename(target)}`;
+}
+
 /** HTML-escaped placeholders are the same placeholder: decode before judging, so a caption is not an offence. */
 const decodeEntities = (text) =>
   String(text ?? "")
@@ -120,5 +165,22 @@ export function unredactedEndpoints(text) {
     if (isIdentifyingHost(match[0])) found.add(match[0]);
   }
   if (MACHINE_HOSTNAME && source.toLowerCase().includes(MACHINE_HOSTNAME)) found.add(MACHINE_HOSTNAME);
+  return [...found];
+}
+
+/**
+ * Everything inside `text` that names a home directory with a **concrete** user — the path class of leak, the
+ * sibling of `unredactedEndpoints`. Judged by the same placeholder narrowing: `/home/<user>/` (angle brackets)
+ * and `/home/user/…` identify nobody and are not offences; `/home/devuser/…` and `/Users/devuser/…` are a machine.
+ * The fixtures use a made-up name that is **not** a placeholder, so both sides of the narrowing are exercised.
+ *
+ * @param {string} text
+ * @returns {string[]} the offending paths, de-duplicated, in first-seen order
+ */
+export function unredactedHomePaths(text) {
+  const found = new Set();
+  for (const match of decodeEntities(text).matchAll(HOME_PATH)) {
+    if (!PLACEHOLDER_USERS.has(match[1].toLowerCase())) found.add(match[0]);
+  }
   return [...found];
 }
