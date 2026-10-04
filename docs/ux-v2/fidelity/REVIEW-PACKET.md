@@ -90,6 +90,12 @@ docs/ux-v2/contract/prototypes/ the approved prototypes themselves (topics, peop
                                 overview) — 5 pages, ~11–19 KB each, hand-written HTML
 ```
 
+> **Generated artifacts (2026-10-04).** The `side-by-side/` montages and the per-pack prototype renders
+> (`fixture/`, `fixture-tall/`) are **generated, not tracked** (AGENTS.md § *What is tracked*) and are no
+> longer committed; the canonical `prototype-1440x900/` and `current-1440x900/` are. Rebuild the packs with the
+> `harness/fidelity/` instruments (or `bun run preview:fidelity`); the reviewed bytes remain at the immutable
+> tag `ux-v2-composition-complete`.
+
 Caveats, stated so the review does not over-read the evidence: the app captures are **viewport** captures (the
 app scrolls inside the host pane), so claims about what lies below the fold come from the DOM, not the image;
 the review instance holds a small dataset (3 topics / 2 people / 3 repositories), so its cards are emptier

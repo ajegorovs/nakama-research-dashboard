@@ -46,6 +46,14 @@ string) are in `side-by-side/`. The app scrolls inside a host pane, so app captu
 prototype captures include a full-page variant. Claims about what is "absent" are limited to the first screen
 unless the DOM evidence says otherwise.
 
+> **Generated artifacts (2026-10-04).** The `side-by-side/` montages and the per-pack copies of the prototype
+> renders are **generated, not tracked** (AGENTS.md § *What is tracked*): they are rebuilt from the frozen
+> prototypes in `docs/ux-v2/contract/prototypes/` and the captures. Only the canonical `prototype-1440x900/`
+> and `current-1440x900/` remain committed as the pack's evidence. Regenerate with `bun run preview:fidelity`,
+> or the three `harness/fidelity/` instruments directly; the reviewed bytes are recoverable at the immutable
+> tag `ux-v2-composition-complete`
+> (`git show ux-v2-composition-complete:docs/ux-v2/fidelity/side-by-side/overview.png`).
+
 ## 3. What differs, per view
 
 ### Topics — composition does not match

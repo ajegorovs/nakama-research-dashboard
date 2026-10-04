@@ -1,6 +1,7 @@
 /**
  * montage.mjs — build side-by-side montages: approved prototype (top) vs the running app (bottom).
  * Read-only.   bun harness/fidelity/montage.mjs --fidelity docs/ux-v2/fidelity --out <dir>
+ *                                   [--prototype-dir <dir>]   (default: <fidelity>/prototype-1440x900)
  *
  * The running-UI caption carries the review URL and the served build. **Neither is hardcoded**: the URL
  * label comes from `--url-label` (default: the placeholder form, so a committed montage never carries a
@@ -19,6 +20,11 @@ const flag = (name, fallback) => {
 };
 const FID = flag("fidelity", "docs/ux-v2/fidelity");
 const OUT = flag("out", path.join(FID, "side-by-side"));
+// Where the prototype renders live. Defaulted to the historical `<fidelity>/prototype-1440x900`
+// position so a bare invocation is unchanged; a caller that renders its prototypes elsewhere (the
+// preview pack, which lives under `fidelity/preview/<dataset>/`) passes `--prototype-dir` so the
+// pack no longer has to carry its own byte-identical copy of the prototype renders.
+const PROTOTYPE_DIR = flag("prototype-dir", path.join(FID, "prototype-1440x900"));
 // Placeholder by default: docs in this tree carry no host/tailnet identifiers (estate AGENTS.md § Doc
 // Hygiene). Pass --url-label only for a montage that will not be committed.
 const URL_LABEL = flag("url-label", "<box>.<tailnet>.ts.net:3003");
@@ -57,7 +63,7 @@ const browser = await chromium.launch(chromiumLaunchOptions());
 const page = await browser.newPage({ viewport: { width: 1480, height: 1200 }, deviceScaleFactor: 1 });
 
 for (const [name, protoStem, currentFile] of PAIRS) {
-  const proto = path.join(FID, "prototype-1440x900", `${protoStem}-full.png`);
+  const proto = path.join(PROTOTYPE_DIR, `${protoStem}-full.png`);
   const current = path.join(FID, "current-1440x900", currentFile);
   if (!existsSync(proto) || !existsSync(current)) {
     console.log(`${name}: MISSING ${!existsSync(proto) ? proto : current}`);

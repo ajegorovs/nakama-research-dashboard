@@ -129,6 +129,9 @@ try {
     path.join(REPO, "harness/fidelity/montage.mjs"),
     "--fidelity", absOut,
     "--out", MONTAGE_DIR,
+    // The prototypes this run just rendered; pass them explicitly so the montage does not depend on
+    // the pack carrying its own `<fidelity>/prototype-1440x900/` copy (they are generated, git-ignored).
+    "--prototype-dir", PROTOTYPE_DIR,
     "--current-label", "PREVIEW (host runtime, no instance)",
     "--current-note", note,
   ]);

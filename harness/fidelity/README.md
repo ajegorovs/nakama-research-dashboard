@@ -8,7 +8,12 @@ They produced `docs/ux-v2/fidelity/` (evidence) and the verdict in `REVIEW.md`.
 | `capture-current.mjs` | **Capture the running UI for the montage, or refuse.** Proves the capture before writing it: the page URL answers as a page, the plugin asset the browser fetched answers 200 and is hashed (this is where the served revision/version come from), and each view carries the durable markers the acceptance pass reads. Fails closed — exit 3 with the target untouched — and resolves the shared credential helper itself. |
 | `served-build.mjs` | **Which build is this URL serving?** Logs in on the dashboard origin, opens the plugin page, and reports structural markers that distinguish builds (page title class, removed controls, Activity-cap attributes, tag count, card count). Point it at any origin: the persistent review UI, an acceptance instance, or a deployed one. |
 | `render-prototypes.mjs` | Renders the approved prototypes (`docs/ux-v2/contract/prototypes/*.html`) at a given viewport, viewport-clipped and full-page, so the comparison uses the same browser and the same width as the app captures. |
-| `montage.mjs` | Builds labelled side-by-side montages — prototype above, running UI below, with the served build string in the caption — for each view, including the prototype's `overview.html` against the app's default landing. `--current-label` / `--current-note` override the bottom caption, which is how the preview montage names itself without a served URL. |
+| `montage.mjs` | Builds labelled side-by-side montages — prototype above, running UI below, with the served build string in the caption — for each view, including the prototype's `overview.html` against the app's default landing. `--current-label` / `--current-note` override the bottom caption, which is how the preview montage names itself without a served URL. `--prototype-dir` overrides where the prototype renders are read from (default: `<fidelity>/prototype-1440x900/`), so a pack no longer needs to carry its own copy of them. |
+
+The **side-by-side montages and their HTML wrappers, and the per-pack duplicate prototype renders, are
+generated, not tracked** (AGENTS.md § *What is tracked*) — they are git-ignored and rebuilt from the frozen
+prototypes in `docs/ux-v2/contract/prototypes/` and the current captures. Only the canonical
+`prototype-1440x900/` and `current-1440x900/` stay committed.
 
 The browser is resolved by `harness/chromium.mjs`: `$CHROMIUM_EXECUTABLE`, else the Playwright cache (whatever
 revision is present — the directory name is not assumed), else a system chromium. Nothing downloads and no

@@ -39,8 +39,11 @@ five-view screenshots wherever `--out` says — useful for the scale dataset wit
 the committed `docs/ux-v2/fidelity/preview/` tree.
 
 Artifacts land in `docs/ux-v2/fidelity/preview/<dataset>/` in the same `prototype-1440x900/ · current-1440x900/ ·
-side-by-side/` shape the committed `fixture/` pack uses, so the corpus and fixture previews sit beside each
-other. To capture against an already-running preview on another port:
+side-by-side/` shape the committed fixture pack uses, so the corpus and fixture previews sit beside each
+other. The montage step is handed these freshly rendered prototypes with `--prototype-dir`, so the pack does
+not carry its own copy of them; the `side-by-side/` output and the per-pack prototype renders are git-ignored
+generated artifacts (only the canonical `docs/ux-v2/fidelity/prototype-1440x900/` and `current-1440x900/` are
+tracked). To capture against an already-running preview on another port:
 `bun run preview:capture -- --url http://127.0.0.1:3011/preview.html`.
 
 The capture does not photograph each view's default row — it *selects a representative*: the repository
