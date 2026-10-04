@@ -121,7 +121,8 @@ HTML wrappers" as **generated, never tracked**, and the guarded upstream is the 
 plus the instruments that render them. Nothing unique lives in the packs: every pixel is reproducible from
 `docs/ux-v2/contract/prototypes/*.html` (frozen, retained) + the committed current capture + a served or
 preview render. **Each of the 56 paths also exists byte-identically at tag `ux-v2-composition-complete`**
-(3f08460) — verified 56/56 — so even the current bytes are recoverable from an immutable tag, not only by
+(tag object `099540b`, commit `2b7c9a9`) — verified 56/56 — so even the current bytes are recoverable from an
+immutable tag, not only by
 regeneration.
 
 **Dependency to clear first: `--prototype-dir`.** A per-pack duplicate prototype directory exists only
@@ -258,7 +259,7 @@ Corroborating immutable tags (byte-identical check run per file):
 
 | | B3 (14) | B4 (16) |
 |---|---|---|
-| byte-identical at `ux-v2-composition-complete` (3f08460) | **13** | 15 |
+| byte-identical at `ux-v2-composition-complete` (commit `2b7c9a9`) | **13** | 15 |
 | **differs** at that tag (use base SHA) | `2026-10-02-composition-intake.md` (gained its A1 retirement annotation after the tag) | `docs/ux-v2/V1-visual-coherence.md`'s sibling set is unaffected; the one B4 doc that differs at the tag is flagged in the CSV |
 
 The CSV's `recovery` column gives each row's exact command and whether the tag match is byte-identical.
