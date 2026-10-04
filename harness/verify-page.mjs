@@ -95,8 +95,14 @@ const RAIL_ACTIVITY_LEAD = 5;
 const problems = [];
 const skipped = [];
 let passed = 0;
+// A transcript is a committed public artifact, so an emitted line must not carry trailing whitespace. Several
+// checks build their `detail` from rendered text via `text.slice(0, N)`; `replace(/\s+/g, " ")` collapses runs
+// but leaves a trailing space when the cut lands on one. Trim at the one place a line is emitted — a
+// presentation-only change: it cannot alter a check description, a condition or a verdict, only the last
+// character the transcript prints.
+const emitLine = (line) => console.log(line.replace(/[ \t]+$/, ""));
 const check = (description, condition, detail = "") => {
-  console.log(`${condition ? "PASS" : "FAIL"}  ${description}${detail ? ` — ${detail}` : ""}`);
+  emitLine(`${condition ? "PASS" : "FAIL"}  ${description}${detail ? ` — ${detail}` : ""}`);
   if (condition) {
     passed += 1;
   } else {
@@ -107,10 +113,39 @@ const check = (description, condition, detail = "") => {
 // check that prints PASS is how a harness stops meaning anything: the demo corpus used to carry a
 // blocked axis, an unmapped person and a card that hid axes, and this corpus carries none of them.
 const skip = (description, reason) => {
-  console.log(`SKIP  ${description} — ${reason}`);
+  emitLine(`SKIP  ${description} — ${reason}`);
   skipped.push(`${description} — ${reason}`);
 };
 const checksSoFar = () => passed + problems.length + skipped.length;
+/**
+ * The page's own age vocabulary, stated once and shared. A rendered age has to be the age of the timestamp
+ * beside it, and the two checks that read a bare age (the Progress axis row, a repository row's second line)
+ * compare against these words rather than trusting the phrase. Keeping one copy means the vocabulary cannot
+ * drift between the checks that read it.
+ */
+const ageWords = (iso) => {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) {
+    return "unknown";
+  }
+  const days = Math.floor((Date.now() - then) / 86_400_000);
+  if (days <= 0) {
+    return "today";
+  }
+  if (days === 1) {
+    return "yesterday";
+  }
+  if (days < 7) {
+    return `${days} days ago`;
+  }
+  if (days < 14) {
+    return "last week";
+  }
+  if (days < 60) {
+    return `${Math.floor(days / 7)} weeks ago`;
+  }
+  return `${Math.floor(days / 30)} months ago`;
+};
 // A pass that dies mid-file must not leave a record that reads like a short successful run. The transcript
 // file is written by the wrapper as this process prints, so the summary has to come from here: name the
 // abort, say the record is partial, and exit with a code the wrapper refuses to record (2 — distinct from
@@ -638,6 +673,67 @@ await page.waitForSelector(`div[data-plugin-id] [data-rd-landing]`, { timeout: 1
 await root.locator('[data-rd-view-option="topics"]').click();
 await page.waitForSelector(`div[data-plugin-id] [data-rd-view="topics"]`, { timeout: 10000 });
 
+// ------------------------------------------------------------------ readiness, not sleeps
+// Entering a view triggers its data: Topics renders its index ~300 ms after the view container appears
+// (measured on this estate; action latency itself is ~40 ms), and the landing cards are replaced while a
+// window change refetches. A check that reads immediately therefore reports a correct page as broken, and a
+// click on a control that has not rendered aborts the whole pass on a 30 s locator timeout — a lost record,
+// not a verdict. These helpers wait on the page's own DOM markers (the index row, the pane, the detail the
+// checks below read), so the wait ends as soon as the page is ready and never masks a genuinely missing
+// element: the assertions still run afterwards and still report what they actually found.
+const waitForLandingReady = async (expectedTopics = 1) => {
+  await page
+    .waitForFunction(
+      ([pluginId, count]) => {
+        const root = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
+        return (
+          root !== null &&
+          root.querySelectorAll("[data-rd-landing-topic]").length >= count &&
+          root.querySelectorAll("[data-rd-landing-topic] [data-rd-landing-name]").length >= count
+        );
+      },
+      [PLUGIN_ID, expectedTopics],
+      { timeout: 12000, polling: 50 }
+    )
+    .catch(() => {});
+};
+const waitForTopicsReady = async () => {
+  await page
+    .waitForFunction(
+      ([pluginId, expected]) => {
+        const scope = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
+        if (!scope) return false;
+        const rows = scope.querySelectorAll("[data-rd-index-topic]");
+        const pressed = scope.querySelector('[data-rd-index-topic][aria-pressed="true"]');
+        const pane = scope.querySelector("[data-rd-detail]");
+        const detail = pane?.querySelector('[data-rd-claim="summary"]') ?? null;
+        return rows.length >= expected && pressed !== null && pane !== null && detail !== null;
+      },
+      [PLUGIN_ID, CORPUS.topicNames.length],
+      { timeout: 12000, polling: 50 }
+    )
+    .catch(() => {});
+};
+const waitForRepositoriesReady = async (expectedPanel = null) => {
+  await page
+    .waitForFunction(
+      ([pluginId, panel]) => {
+        const scope = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
+        if (!scope) return false;
+        const rows = scope.querySelectorAll("[data-rd-repository]");
+        const shown =
+          scope
+            .querySelector("[data-rd-repository-panel]")
+            ?.getAttribute("data-rd-repository-panel") ?? null;
+        return rows.length > 0 && (panel === null || shown === panel);
+      },
+      [PLUGIN_ID, expectedPanel],
+      { timeout: 12000, polling: 50 }
+    )
+    .catch(() => {});
+};
+await waitForTopicsReady();
+
 const indexRows = await page.evaluate((pluginId) => {
   const nodes = document.querySelectorAll(
     `div[data-plugin-id="${pluginId}"] [data-rd-index-topic]`
@@ -911,6 +1007,7 @@ check("the page still renders after the window change", refreshed);
 // Back to the Topics tab the checks below read — the window control lives on Overview alone.
 await root.locator('[data-rd-view-option="topics"]').click();
 await page.waitForSelector(`div[data-plugin-id] [data-rd-view="topics"]`, { timeout: 10000 });
+await waitForTopicsReady();
 
 // C1 replaced the topic card stack with an index rail and ONE persistent detail. The assertions below are
 // what that composition must be true of. The disclosure they replace (`Read topic` / `Close`), and the
@@ -1246,27 +1343,93 @@ if (geometry === null || geometry.index === null || geometry.detail === null) {
       `main ${Math.round(g.main.w)}px / side rail ${Math.round(g.rail.w)}px = ${(g.main.w / g.rail.w).toFixed(2)}x (needs 1.25x)`
     );
   }
-  // The rail's three cards must all participate in the first screen. The montage review found the opposite:
-  // long activity subjects filled the rail and pushed Notes and Related repositories below the fold, so the
-  // rail read as an activity feed rather than as the topic's context. Asserted where the decision was taken
-  // (1440×900) and skipped elsewhere with the reason — the rail's budget is not proportional to the viewport,
-  // so a smaller reading size is a different question, not a weaker answer to this one.
-  if (g.sideCards.length < 3) {
+  // V1 Phase-4 ruling (DECISIONS §14.10): the rail's sections are **no longer all required to begin within
+  // the first viewport**. The ruled condition is: the primary and second sections stay initially
+  // discoverable; later sections may continue below the fold **provided ordinary page scrolling reaches
+  // them without clipping, overlap, or an unintended nested scroller**. Measured at the reference viewport
+  // the run is at, on the page's own geometry — the card tops, the page scrollport, and what a real page
+  // scroll exposes — never an assumption about how many fit.
+  const railRule = await page.evaluate(
+    ([pluginId, topic]) => {
+      const scope = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
+      const pane = scope?.querySelector(`[data-rd-detail="${topic}"]`);
+      const stack = pane?.querySelector(".rd-side-stack") ?? null;
+      if (stack === null) return null;
+      const box = (node) => {
+        const r = node.getBoundingClientRect();
+        return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, w: r.width };
+      };
+      // The scrollable ancestors between the stack and the document that CAN scroll (the host's own page
+      // scrollport is the intended one; anything else that actually scrolls is an unintended nested
+      // scroller), plus the document viewport scroller — the ordinary page scroll — which is what moves the
+      // page in host layouts where the content is not constrained to an inner port.
+      const scrollables = [];
+      for (let node = stack.parentElement; node && node !== document.documentElement; node = node.parentElement) {
+        const cs = getComputedStyle(node);
+        if (!/auto|scroll/.test(`${cs.overflowX}${cs.overflowY}`)) continue;
+        if (node.scrollHeight <= node.clientHeight + 2) continue;
+        scrollables.push(node);
+      }
+      const doc = document.scrollingElement ?? document.documentElement;
+      const docScrolls = doc.scrollHeight > doc.clientHeight + 2;
+      const before = scrollables.map((node) => node.scrollTop);
+      const beforeY = window.scrollY;
+      const cards = [...stack.querySelectorAll(".rd-side-card")].map(box);
+      // A real page scroll to the bottom, then read the last section's box. Restored afterwards so the rest
+      // of the pass reads the page where it left it.
+      for (const node of scrollables) node.scrollTop = node.scrollHeight;
+      if (docScrolls) window.scrollTo(0, doc.scrollHeight);
+      const lastCard = stack.querySelectorAll(".rd-side-card")[cards.length - 1];
+      const lastAfterScroll = lastCard ? box(lastCard) : null;
+      const outer = scrollables.length ? box(scrollables[0]) : docScrolls ? box(doc) : null;
+      scrollables.forEach((node, i) => {
+        node.scrollTop = before[i];
+      });
+      if (docScrolls) window.scrollTo(0, beforeY);
+      return {
+        viewport: { w: window.innerWidth, h: window.innerHeight },
+        cards,
+        lastAfterScroll,
+        outer,
+        // The nearest scrolling ancestor is the intended host scroller; `outer` is its client rect read after
+        // it was scrolled to its bottom (a scroll container's own rect does not move when its content does).
+        intendedScroller: scrollables[0]
+          ? `${scrollables[0].tagName.toLowerCase()}.${String(scrollables[0].className).trim().split(/\s+/)[0] || "scrollport"}`
+          : docScrolls
+            ? "document"
+            : "none",
+        scrollsSomewhere: scrollables.length > 0 || docScrolls,
+        nestedScrollers: scrollables.length,
+      };
+    },
+    [PLUGIN_ID, CORPUS.topic]
+  );
+  if (railRule === null || railRule.cards.length < 2) {
     skip(
-      "the rail's three cards all begin in the first screen",
-      `this dataset renders ${g.sideCards.length} side card(s), so there is no third card to reach`
-    );
-  } else if (g.viewport.h < 900 || g.viewport.w < 1440) {
-    skip(
-      "the rail's three cards all begin in the first screen",
-      `this run is ${g.viewport.w}×${g.viewport.h}; the first-screen budget is a 1440×900 decision, and the rail's start is set by the host chrome rather than by the viewport`
+      "the rail's primary and second sections begin in the first viewport, and every later section is reached by ordinary page scrolling",
+      `the rail renders ${railRule?.cards?.length ?? 0} side card(s), so there is no second section to require`
     );
   } else {
+    const rr = railRule;
+    const noOverlap = rr.cards.every((card, i) => i === 0 || card.top >= rr.cards[i - 1].bottom - 1);
+    const within = rr.outer === null || rr.cards.every((card) => card.left >= rr.outer.left - 0.5 && card.right <= rr.outer.right + 0.5);
+    const last = rr.cards[rr.cards.length - 1];
+    // Bound reachability by what actually shows the last section: the intended host scrollport's client bottom
+    // when the host constrains the page to an inner port, otherwise the window. `outer` is that port's client
+    // rect; a window-only bound would accept content the port still clips. Never looser than the window.
+    const reachBound = rr.outer ? Math.min(rr.viewport.h, rr.outer.bottom) : rr.viewport.h;
+    const reachable =
+      rr.scrollsSomewhere && rr.lastAfterScroll !== null && rr.lastAfterScroll.bottom <= reachBound + 0.5;
     check(
-      "the rail's three cards all begin in the first screen (the activity list does not push them below the fold)",
-      g.sideCards.every((card) => card !== null && card.top < g.viewport.h),
-      `card tops ${g.sideCards.map((card) => (card === null ? "missing" : Math.round(card.top))).join(" / ")} ` +
-        `of ${g.viewport.h}`
+      "the rail's primary and second sections begin in the first viewport, and every later section is reached by ordinary page scrolling without clipping, overlap or a nested scroller",
+      rr.cards[0].top < rr.viewport.h &&
+        rr.cards[1].top < rr.viewport.h &&
+        rr.cards.every((card) => card.w >= 120) &&
+        noOverlap &&
+        within &&
+        reachable &&
+        rr.nestedScrollers <= 1,
+      `viewport ${rr.viewport.w}×${rr.viewport.h}; primary/second tops ${Math.round(rr.cards[0].top)} / ${Math.round(rr.cards[1].top)}; all tops ${rr.cards.map((card) => Math.round(card.top)).join(" / ")}; last card bottom after a full page scroll ${rr.lastAfterScroll ? Math.round(rr.lastAfterScroll.bottom) : "?"} of ${Math.round(reachBound)} (window ${rr.viewport.h}, intended scroller ${rr.intendedScroller}); sections overlap: ${!noOverlap}; the page can scroll: ${rr.scrollsSomewhere}; within the page scrollport: ${within}; min section width ${Math.round(Math.min(...rr.cards.map((card) => card.w)))}px (needs 120); nested scrolling ancestors: ${rr.nestedScrollers}`
     );
   }
 }
@@ -1466,6 +1629,9 @@ await page.waitForFunction(
   { timeout: 10000 }
 );
 const windowAfterChange = await windowPressed();
+// The window change refetches `get_overview`, so the landing cards are replaced while it lands: the card
+// names read here would be absent mid-refetch. Wait on the cards themselves before reading one.
+await waitForLandingReady(CORPUS.topicIds.length);
 
 const firstTopicCard = landing.topicCards[0];
 // The Topics index row names its topic by *name* (`data-rd-index-topic`), while the landing card carries the
@@ -1482,6 +1648,7 @@ const firstTopicName = await page.evaluate(
 );
 await root.locator(`[data-rd-landing-topic="${firstTopicCard}"] [data-rd-landing-open="topic"]`).click();
 await page.waitForSelector(`div[data-plugin-id] [data-rd-view="topics"]`, { timeout: 10000 });
+await waitForTopicsReady();
 const openedTopic = await page.evaluate((pluginId) => {
   const root = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
   return {
@@ -1504,6 +1671,7 @@ check(
 
 await root.locator('[data-rd-view-option="overview"]').click();
 await page.waitForSelector(`div[data-plugin-id] [data-rd-landing]`, { timeout: 10000 });
+await waitForLandingReady(CORPUS.topicIds.length);
 const windowAfterHome = await windowPressed();
 check(
   "returning to the Overview tab carries the window with it",
@@ -1523,6 +1691,7 @@ await root
   .locator(`[data-rd-landing-repository="${firstRepositoryCard}"] [data-rd-landing-open="repository"]`)
   .click();
 await page.waitForSelector(`div[data-plugin-id] [data-rd-view="repositories"]`, { timeout: 10000 });
+await waitForRepositoriesReady(firstRepositoryName);
 const openedRepository = await page.evaluate((pluginId) => {
   const root = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
   return (
@@ -1549,6 +1718,7 @@ await root.locator(`[data-rd-landing-topic="${firstTopicCard}"] [data-rd-landing
 await page.waitForSelector(`div[data-plugin-id] [data-rd-view="topics"]`, { timeout: 10000 });
 await root.locator('[data-rd-view-option="overview"]').click();
 await page.waitForSelector(`div[data-plugin-id] [data-rd-landing]`, { timeout: 10000 });
+await waitForLandingReady(CORPUS.topicIds.length);
 
 const secondTopicCard = landing.topicCards[1] ?? null;
 if (secondTopicCard !== null) {
@@ -1567,6 +1737,7 @@ if (secondTopicCard !== null) {
   await page.waitForSelector(`div[data-plugin-id] [data-rd-landing]`, { timeout: 10000 });
   await root.locator('[data-rd-view-option="topics"]').click();
   await page.waitForSelector(`div[data-plugin-id] [data-rd-view="topics"]`, { timeout: 10000 });
+  await waitForTopicsReady();
   const afterPlainNav = await page.evaluate((pluginId) => {
     const root = document.querySelector(`div[data-plugin-id="${pluginId}"]`);
     return [
@@ -1612,6 +1783,7 @@ if (windowAtBlockStart) {
 // empty pane aborted the axis-disclosure check on a 30s timeout.
 await root.locator('[data-rd-view-option="topics"]').click();
 await page.waitForSelector(`div[data-plugin-id] [data-rd-view="topics"]`, { timeout: 10000 });
+await waitForTopicsReady();
 const pressedRowName = await page.evaluate(
   (pluginId) =>
     document
@@ -2106,6 +2278,36 @@ if (detailPayload.status !== 200 || detailPayload.axes.length === 0) {
   }
 }
 
+/**
+ * Open an axis's `details[data-rd-axis-more]` disclosure before any of its controls is clicked.
+ *
+ * A control inside a closed `<details>` is not in the accessibility tree, so Playwright's `click` waits the
+ * full 30 s actionability timeout and the pass ABORTS — a lost record, not a verdict. This is the
+ * disclosure-opening prerequisite the pass was missing: the `History` and `Correct` controls both live
+ * inside that disclosure (`src/ui.tsx`, the axis block), so it is opened here and its `open` state awaited on
+ * the element itself (never a sleep) before the control is touched. Used by the read pass's per-axis History
+ * check and by the write pass's axis-correction step.
+ */
+const expandAxisDisclosure = async (card) => {
+  const disclosure = card.locator("details[data-rd-axis-more]").first();
+  await disclosure.waitFor({ state: "attached", timeout: 10000 }).catch(() => {});
+  await disclosure.evaluate(async (node) => {
+    if (node.hasAttribute("open")) return;
+    node.querySelector("summary")?.click();
+    if (node.hasAttribute("open")) return;
+    await new Promise((resolve) => {
+      const observer = new MutationObserver(() => {
+        if (node.hasAttribute("open")) {
+          observer.disconnect();
+          resolve();
+        }
+      });
+      observer.observe(node, { attributes: true, attributeFilter: ["open"] });
+    });
+  });
+  return disclosure;
+};
+
 // Per-axis history expands *inside the axis* — never one merged log for the whole topic. Which axis
 // is chosen comes from the page (the first one carrying notes), and the note/ history separation is
 // probed with that axis's own note text rather than a fixture string.
@@ -2128,6 +2330,9 @@ if (historyAxisTitle === "") {
   const historyCard = root.locator(
     `[data-rd-detail="${CORPUS.topic}"] [data-rd-axis-title="${historyAxisTitle}"]`
   );
+  // The History control lives inside the axis's own closed `<details>`; opening it first is the prerequisite
+  // the pass was missing (a click on a control inside a closed details aborts on the 30 s timeout).
+  await expandAxisDisclosure(historyCard);
   await historyCard.getByRole("button", { name: /^History \(/ }).click();
   await page.waitForTimeout(500);
   const history = await page.evaluate(
@@ -2681,12 +2886,23 @@ const progressRowParity = (rows, prefix) =>
   rows.map((row) => ({ ...row, expected: progressRecency.get(`${prefix}:${row.id}`) ?? null }));
 const axisRowParity = progressRowParity(progressAxesSubject.axes, "axis");
 const problemRowParity = progressRowParity(progressProblemsSubject.problems, "problem");
-/** A row states when, and the when it states is the projection's own `recencyAt`. */
-const progressRowStatesWhen = (row) =>
-  row.context !== "" &&
-  row.context.includes("last activity") &&
-  row.recency !== null &&
-  row.recency === row.expected;
+/**
+ * A row states when, and the when it states is the projection's own `recencyAt`. V1/A3 made the Progress
+ * axis row state the **bare age** (it shares the index-row grammar with the other three rails, whose rows
+ * carry no "last activity" prefix); the age words are still the age of the timestamp the row carries, and
+ * the raw `data-rd-index-recency` is still compared against the projection, so this is the same claim read
+ * off the render the page actually draws rather than a phrase that no longer appears.
+ */
+const progressRowStatesWhen = (row) => {
+  const age = row.expected ? ageWords(row.expected) : null;
+  return (
+    row.context !== "" &&
+    age !== null &&
+    row.context.endsWith(age) &&
+    row.recency !== null &&
+    row.recency === row.expected
+  );
+};
 check(
   "C4: every Progress index row states when it was last active, and its recency is the payload's own",
   axisRowParity.length > 0 && axisRowParity.every(progressRowStatesWhen),
@@ -2758,10 +2974,26 @@ const showOverview = async () => {
 };
 const showProgress = async () => {
   await root.locator('[data-rd-view-option="progress"]').click();
+  // The view container, and its index shell, appear before `get_progress` answers — re-entering Progress
+  // refetches, so a read taken on the container alone sees zero rows against a full projection. Wait on the
+  // page's own row count attribute (or its stated-empty marker) instead, the same readiness discipline the
+  // window control uses above.
   await page
-    .waitForSelector('div[data-plugin-id] [data-rd-view="progress"] [data-rd-progress-index]', {
-      timeout: 10000,
-    })
+    .waitForFunction(
+      (pluginId) => {
+        const index = document.querySelector(
+          `div[data-plugin-id="${pluginId}"] [data-rd-progress-index]`
+        );
+        if (!index) return false;
+        const rows = Number(index.getAttribute("data-rd-progress-index-rows") ?? -1);
+        return (
+          rows > 0 ||
+          index.querySelector("[data-rd-progress-index-empty], [data-rd-problem-index-empty]") !== null
+        );
+      },
+      PLUGIN_ID,
+      { timeout: 12000, polling: 50 }
+    )
     .catch(() => {});
 };
 const overviewWindowPressed = () =>
@@ -4848,21 +5080,110 @@ if (paneGeometry.plan === null || paneGeometry.problems === null) {
     `row ${JSON.stringify(paneGeometry.row)}; plan ${JSON.stringify(paneGeometry.plan)}; problems ${JSON.stringify(paneGeometry.problems)}`
   );
 }
-const bandBoxes = [paneGeometry.repositories, paneGeometry.evidence, paneGeometry.steering];
-if (bandBoxes.some((box) => box === null)) {
+// V1 Phase-4 ruling (DECISIONS §14.10): the support band is **container-responsive**, not three columns at
+// every width. Three columns are required when at least 720 px is available; at 480–719 px two columns with
+// the third wrapping below is permitted; below 480 px one column is permitted — with Repository threads →
+// Evidence → Human steering order preserved, and no clipping, overlap, or unintended nested scroller. The
+// measured 634 px fixture case is therefore acceptable. The rule is read from the band's OWN container width
+// (never the viewport), and the layout is read from where the cards actually render.
+const bandRule = await page.evaluate(() => {
+  const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+  const band = scope?.querySelector("[data-rd-progress-band]") ?? null;
+  if (band === null) return null;
+  const box = (node) => {
+    const r = node.getBoundingClientRect();
+    return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, w: r.width };
+  };
+  const cards = ["[data-rd-progress-repositories]", "[data-rd-progress-evidence]", "[data-rd-progress-steering]"]
+    .map((selector) => band.querySelector(selector))
+    .filter((node) => node !== null)
+    .map((node) => ({
+      kind: node.hasAttribute("data-rd-progress-repositories")
+        ? "repositories"
+        : node.hasAttribute("data-rd-progress-evidence")
+          ? "evidence"
+          : "steering",
+      ...box(node),
+    }));
+  // The scrollable ancestors that CAN scroll (the host's own inner scrollport is the intended one; more than
+  // one is an unintended nested scroller), plus the document viewport scroller — the ordinary page scroll —
+  // which moves the page in host layouts where the content is not constrained to an inner port. The nearest
+  // such ancestor is the **intended** scroller. When the host constrains the page to an inner port, the band
+  // is only genuinely reachable if its bottom lands inside that port's own client rect, not merely inside the
+  // window: the port's bottom sits above the window's, so a window-only bound would accept content the port
+  // still clips. The intended scroller is identified structurally as the nearest scrolling ancestor — the host
+  // exposes no stable selector for it, so naming it is not attempted; the check reports which element it was.
+  const scrollables = [];
+  for (let node = band.parentElement; node && node !== document.documentElement; node = node.parentElement) {
+    const cs = getComputedStyle(node);
+    if (!/auto|scroll/.test(`${cs.overflowX}${cs.overflowY}`)) continue;
+    if (node.scrollHeight <= node.clientHeight + 2) continue;
+    scrollables.push(node);
+  }
+  const intended = scrollables[0] ?? null;
+  const doc = document.scrollingElement ?? document.documentElement;
+  const docScrolls = doc.scrollHeight > doc.clientHeight + 2;
+  const before = scrollables.map((node) => node.scrollTop);
+  const beforeY = window.scrollY;
+  for (const node of scrollables) node.scrollTop = node.scrollHeight;
+  if (docScrolls) window.scrollTo(0, doc.scrollHeight);
+  // The bottom of what actually shows the band: the intended port's client bottom when the host uses one,
+  // otherwise the window. Never looser than the window.
+  const viewportBottom = intended ? Math.min(window.innerHeight, box(intended).bottom) : window.innerHeight;
+  const reachable = box(band).bottom <= viewportBottom + 0.5;
+  scrollables.forEach((node, i) => {
+    node.scrollTop = before[i];
+  });
+  if (docScrolls) window.scrollTo(0, beforeY);
+  return {
+    bandW: box(band).w,
+    viewport: { w: window.innerWidth, h: window.innerHeight },
+    cards,
+    reachable,
+    intendedScroller: intended
+      ? `${intended.tagName.toLowerCase()}.${String(intended.className).trim().split(/\s+/)[0] || "scrollport"}`
+      : "document",
+    viewportBottom,
+    scrollsSomewhere: scrollables.length > 0 || docScrolls,
+    nestedScrollers: scrollables.length,
+  };
+});
+if (bandRule === null || bandRule.cards.length === 0) {
   skip(
-    "C4: Repository threads, Evidence and Human steering share the support band, as three columns of one group",
-    `this subject renders ${bandBoxes.filter((box) => box !== null).length} of the 3 support cards`
+    "C4: the support band is container-responsive — three columns at ≥720px, two at 480–719px, one below, in Repository threads → Evidence → Human steering order",
+    "this subject renders no support band"
   );
 } else {
+  const c = bandRule.bandW;
+  const n = bandRule.cards.length;
+  const tops = [...new Set(bandRule.cards.map((card) => Math.round(card.top)))].sort((a, b) => a - b);
+  const rows = tops.map((top) =>
+    bandRule.cards.filter((card) => Math.round(card.top) === top).sort((a, b) => a.left - b.left)
+  );
+  const firstRow = rows[0].length;
+  const expectedCols = c >= 720 ? Math.min(n, 3) : c >= 480 ? Math.min(n, 2) : 1;
+  const order = [...bandRule.cards]
+    .sort((a, b) => a.top - b.top || a.left - b.left)
+    .map((card) => card.kind);
+  const expectedOrder = ["repositories", "evidence", "steering"].filter((kind) => order.includes(kind));
+  const rowOverlap = rows.some((row) => row.some((card, i) => i > 0 && card.left < row[i - 1].right - 0.5));
+  const colOverlap = rows.some(
+    (row, i) => i > 0 && Math.min(...row.map((card) => card.top)) < Math.max(...rows[i - 1].map((card) => card.bottom)) - 1
+  );
+  const within = bandRule.cards.every((card) => card.left >= 0 && card.right <= bandRule.viewport.w + 0.5);
+  const minWidth = Math.round(Math.min(...bandRule.cards.map((card) => card.w)));
   check(
-    "C4: Repository threads, Evidence and Human steering share the support band, as three columns of one group",
-    paneGeometry.band !== null &&
-      bandBoxes.every((box) => Math.abs(box.top - bandBoxes[0].top) <= 2) &&
-      new Set(bandBoxes.map((box) => box.left)).size === 3 &&
-      paneGeometry.band.top <= Math.min(...bandBoxes.map((box) => box.top)) &&
-      paneGeometry.band.bottom >= Math.max(...bandBoxes.map((box) => box.bottom)),
-    `band ${JSON.stringify(paneGeometry.band)}; cards ${bandBoxes.map((box) => `${box.width}px@x${box.left},y${box.top}`).join(" · ")}`
+    "C4: the support band is container-responsive — three columns at ≥720px, two at 480–719px, one below, in Repository threads → Evidence → Human steering order",
+    firstRow === expectedCols &&
+      JSON.stringify(order) === JSON.stringify(expectedOrder) &&
+      !rowOverlap &&
+      !colOverlap &&
+      minWidth >= 200 &&
+      within &&
+      bandRule.reachable &&
+      bandRule.scrollsSomewhere &&
+      bandRule.nestedScrollers <= 1,
+    `band container ${Math.round(c)}px with ${n} card(s); first row ${firstRow} column(s), the ruled layout expects ${expectedCols}; order ${order.join(" → ")}; row overlap ${rowOverlap}; column overlap ${colOverlap}; min card width ${minWidth}px (needs 200); within the page ${within}; band bottom reachable by a full page scroll ${bandRule.reachable} (bound ${Math.round(bandRule.viewportBottom)} = min(window ${bandRule.viewport.h}, intended scroller ${bandRule.intendedScroller})); the page can scroll: ${bandRule.scrollsSomewhere}; nested scrolling ancestors: ${bandRule.nestedScrollers}`
   );
 }
 
@@ -5342,6 +5663,9 @@ if (WRITE) {
     `axis text: ${withoutEvidenceText.slice(0, 160)}`
   );
 
+  // The Correct control also sits inside the axis's closed `<details>`; open it before clicking, the same
+  // prerequisite the read pass's History check needed.
+  await expandAxisDisclosure(axisCard);
   await axisCard.getByRole("button", { name: "Correct", exact: true }).click();
   await page.waitForTimeout(400);
   const noteText = "parked on purpose while the two papers are submitted";
@@ -5428,7 +5752,9 @@ if (WRITE) {
   await page.getByRole("option", { name: "Confirmed", exact: true }).click();
   await axisCard.getByRole("button", { name: "Save correction", exact: true }).click();
   await page.waitForTimeout(1800);
-  // The notes live under the axis's own history, so read them the way a person would: expand it.
+  // The notes live under the axis's own history, so read them the way a person would: expand it — the
+  // reload above may have remounted the axis and closed its disclosure again.
+  await expandAxisDisclosure(axisCard);
   await axisCard.getByRole("button", { name: /^History \(/ }).click();
   await page.waitForTimeout(500);
   const corrected = await page.evaluate(
@@ -5543,29 +5869,7 @@ if (WRITE) {
       };
     });
   /** The page's own age vocabulary: the words have to be the age of the timestamp beside them. */
-  const ageOf = (iso) => {
-    const then = new Date(iso).getTime();
-    if (Number.isNaN(then)) {
-      return "unknown";
-    }
-    const days = Math.floor((Date.now() - then) / 86_400_000);
-    if (days <= 0) {
-      return "today";
-    }
-    if (days === 1) {
-      return "yesterday";
-    }
-    if (days < 7) {
-      return `${days} days ago`;
-    }
-    if (days < 14) {
-      return "last week";
-    }
-    if (days < 60) {
-      return `${Math.floor(days / 7)} weeks ago`;
-    }
-    return `${Math.floor(days / 30)} months ago`;
-  };
+  const ageOf = ageWords;
 
   const snapshots = {};
   for (const view of ["topics", "people", "repositories", "progress"]) {
@@ -6153,8 +6457,15 @@ if (WRITE) {
           .map((row) => `${row.name} "${row.recency ?? row.recencyText}"`)
           .join(", ")}`
   );
+  // V1/A4 moved the row's age onto this same line (the shared index-row grammar: title on its own line,
+  // then the quiet counts and the age). The counts half is still the rollup's own; the age half is the age of
+  // the row's own timestamp, verified separately just above. So the expected line is both halves together.
+  const c5LineFor = (entry) =>
+    `${c5SupportsLine(entry)} · ${
+      entry?.lastActivityAt ? ageWords(entry.lastActivityAt) : "never"
+    }`;
   const lineMismatch = indexRead.rows
-    .map((row, i) => ({ expected: c5SupportsLine(c5Repositories[i] ?? {}), row }))
+    .map((row, i) => ({ expected: c5LineFor(c5Repositories[i] ?? {}), row }))
     .filter((entry) => entry.expected !== entry.row.meta);
   check(
     "every repository row's second line is the rollup's own numbers, on the lane's own current/terminal split",
@@ -6177,7 +6488,7 @@ if (WRITE) {
     const quietRow = indexRead.rows.find((row) => row.id === quietRepository.repository.id);
     check(
       "a repository with nothing current says so, instead of filing stopped work under the lane's heading",
-      quietRow?.meta === "no topic names it · no current axis",
+      quietRow?.meta === c5LineFor(quietRepository),
       `${quietRepository.repository.fullName}: "${quietRow?.meta ?? "no row"}"`
     );
   }

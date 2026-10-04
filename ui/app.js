@@ -109,6 +109,11 @@ var css = `
      reconcile, not the model to follow. */
   --rd-gap: 8px;
   --rd-gap-block: 12px;
+  /* V1-B/B3 (2026-10-03) — separation between the flat rail sections. A rail is a stack of sections with
+     no boxes between them; at 12px the sections read as one run of text (V1-B B3: the
+     spacing is insufficient to replace the missing card boundaries). This is the larger step the rail
+     wants, and the reviewer's own suggested range (about 20-24px). Not a new box. */
+  --rd-gap-rail: 24px;
   /* V1/A4 (2026-10-03) — one index width. A shrinkable basis of 15rem with a 12rem floor let the rail give
      ground whenever the detail wanted room, so the same rail laid out at a different width in each view and
      long entity names wrapped to three and four lines. One basis, and the rail does not shrink below it:
@@ -138,6 +143,23 @@ var css = `
 [data-plugin-id="research-dashboard"] :focus-visible:focus-visible {
   outline: var(--rd-focus-width) solid var(--rd-focus);
   outline-offset: var(--rd-focus-offset);
+}
+/*
+ * V1 Phase-4 ruling (DECISIONS §14.10) — focus scroll clearance, not a weaker indicator. The shared
+ * indicator above is 2px wide, offset 2px clear of the control's own edge, so it is painted 4px outside
+ * the border box. A real Tab press that brings a control to rest flush against the host scrollport's edge
+ * (measured: fixture 1280×800, a Progress index row at the port's bottom) lets that outline overhang the
+ * scrollport and be cut by its overflow clipping — a defect a keyboard user sees, fixed here by clearance
+ * rather than by changing the shared rule. Six pixels of scroll margin on the controls this page draws
+ * makes the browser's own focus scroll frame the element's margin box, leaving the indicator room on every
+ * side. The scroll-margin property has no layout effect: it only moves where a focus scroll stops.
+ */
+[data-plugin-id="research-dashboard"] button,
+[data-plugin-id="research-dashboard"] summary,
+[data-plugin-id="research-dashboard"] a[href],
+[data-plugin-id="research-dashboard"] input,
+[data-plugin-id="research-dashboard"] [tabindex] {
+  scroll-margin-block: 6px;
 }
 [data-plugin-id="research-dashboard"] .rd-stack { display: grid; gap: var(--rd-gap-block); }
 
@@ -183,17 +205,31 @@ var css = `
     display: grid; gap: 1px; text-align: right; white-space: nowrap;
   }
   [data-plugin-id="research-dashboard"] .rd-age-box > .rd-meta { margin-top: 0; }
-  /* The event band: the prototype's Last event block — an eyebrow over the event's own line, on a soft
-     inset. Rendered only where the payload carries a real event; a card with none states what it does
-     carry rather than being given a fabricated title. */
+  /* The event band: the prototype's Last event block — an eyebrow over the event's own line. Rendered
+     only where the payload carries a real event; a card with none states what it does carry rather than
+     being given a fabricated title.
+     V1-B/B4 (2026-10-03) — it used to be a gray rectangular inset, visually louder than the card it sits
+     in (V1-B B4: "a fairly heavy gray rectangular inset … visually louder than it needs to
+     be"). The prototype integrates the event with a divider and whitespace, so the fill is gone: a
+     hairline above, then the eyebrow and the event's own lines in the card's own whitespace. */
   [data-plugin-id="research-dashboard"] .rd-event-band {
     display: grid; gap: 2px;
-    background: var(--muted, rgba(127, 127, 127, 0.06));
-    border-radius: calc(var(--radius-sm, 6px));
-    padding: 8px 10px;
+    border-top: var(--rd-edge);
+    margin-top: 2px;
+    padding: 8px 0 0;
   }
   [data-plugin-id="research-dashboard"] .rd-event-band .rd-section { font-size: 10px; }
   [data-plugin-id="research-dashboard"] .rd-event-band .rd-meta { margin-top: 0; }
+  /* V1-B/B4 (2026-10-03) — the card's own state line and its blocker, as two lines with a real step
+     between them (the review found them concatenated into one serialized sentence). The counts stay the
+     compact metadata step; the blocked axis is its own line at the card's reading weight. Scoped to the
+     card so it outranks the generic .rd-current-work 2px row gap rather than racing its source order. */
+  [data-plugin-id="research-dashboard"] .rd-landing-card .rd-landing-current { gap: var(--rd-gap-tight); }
+  /* V1-B/B4 — one footer/action geometry for both landing columns: the action sits at the card's right
+     edge, the prototype's card-footer placement, instead of left-aligned under the tags. Both columns
+     carry it, so the two cards' feet read the same. Scoped to the card to outrank .rd-row's own
+     space-between. */
+  [data-plugin-id="research-dashboard"] .rd-landing-card .rd-landing-action { justify-content: flex-end; }
   [data-plugin-id="research-dashboard"] .rd-landing-pills { display: flex; flex-wrap: wrap; gap: 4px; }
   /* The shell title as the way home: the same type as the heading it replaces, with nothing of a tab about
      it — no border, no fill, no pressed state. It underlines on hover and that is the whole affordance. */
@@ -414,7 +450,40 @@ var css = `
   /* The words say what blocks it ("blocked by …"); the colour would say it twice. */
   font-weight: 600;
 }
-[data-plugin-id="research-dashboard"] .rd-window [aria-pressed="true"] { font-weight: 600; }
+/* V1-B/B5 (2026-10-03) — Overview's time-scope control is one segmented track, not a row of peers.
+   The four options used to render as four separate outline buttons inside a wrapping .rd-cluster: at a
+   glance they read as four independent controls competing with the view heading, and at narrow widths
+   they wrapped. The prototype draws one rounded track holding all four options with the pressed one
+   lifted on a light face (contract/prototypes/overview.html .window). This restyles that one control —
+   the window is Overview's alone (DECISIONS section 13) — and it converges on the same joined-switch
+   grammar as .rd-progress-switch rather than inventing a third segmented spelling, which is the drift
+   V1 exists to remove. Every hook the harness reads is untouched: the four buttons, their data-rd-window
+   value, aria-pressed, the group role and aria-label, the disabled wiring and the .rd-window class all
+   stay exactly as they were. */
+[data-plugin-id="research-dashboard"] .rd-window {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: 0;
+  width: fit-content;
+  padding: 3px;
+  border: var(--rd-edge);
+  border-radius: 9px;
+  background: var(--muted, #e5e7eb);
+}
+[data-plugin-id="research-dashboard"] .rd-window [data-rd-window] {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  opacity: 0.72;
+  padding: 5px 12px;
+}
+[data-plugin-id="research-dashboard"] .rd-window [aria-pressed="true"] {
+  background: var(--card, #fff);
+  color: var(--foreground, #171717);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
+  font-weight: 600;
+  opacity: 1;
+}
 [data-plugin-id="research-dashboard"] .rd-views [aria-pressed="true"] { font-weight: 600; }
 /* The Progress index's subject switch: a control over the left column, so it sits with it rather than in
    the toolbar — the page it governs is the same page in both positions. */
@@ -611,6 +680,10 @@ var css = `
   gap: var(--rd-gap-block);
   min-width: 20rem;
   padding: 24px;
+  /* V1 Phase-4 ruling (DECISIONS §14.10) — the support band is container-responsive at exactly 720/480.
+     The band fills this pane's content box, so the pane is the size query container: its inline-size is
+     the band's own width, which is what the ruling's "available" means and what the harness reads. */
+  container-type: inline-size;
 }
 /* V1/A1 — the rd-progress-title rule is gone with the third header path: the pane's title is a CardTitle in
    the shared header now, so this view-local flex wrapper (and its last-child wrap rule) had no caller left. */
@@ -629,7 +702,48 @@ var css = `
   grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
 }
 [data-plugin-id="research-dashboard"] .rd-progress-band {
-  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  /* V1-B/B1 (2026-10-03) — the support band is three columns of one group, not three stacked bands, and
+     the montage review read it as "much flatter" than the rest of the page: 12px between columns and a
+     4px heading-to-content gap. The prototype separates the three into three cards and tints Human
+     steering; the flat version keeps that grouping but needs the gutters and the top step to carry it.
+     So: a real column gutter, a slightly larger top step above the group, and a tighter-to-looser gap
+     inside each column. The steering tint is added below. */
+  /* V1 Phase-4 ruling (DECISIONS §14.10) — the band is container-responsive at exactly 720/480. The
+     auto-fit basis this replaced put the second switch at ~471 px: a 3-card band at 471–479 px rendered
+     TWO columns while the ruled rule the harness enforces reads "below 480 → one column", a real mismatch
+     the record used to explain away. Two exact thresholds cannot both fall out of one equal-gutter
+     auto-fit basis (720 = 3·M + 2·g and 480 = 2·M + g would need g = 0), so the layout is written
+     explicitly with container queries on the pane (container-type: inline-size above): one column
+     below 480; two from 480; three from 720 — each capped at the band's own card count, so a two-card
+     band stays two columns and a subject short of material still collapses instead of holding a column
+     open (conditional sections natural). Gutter 28px, unchanged. */
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: 28px;
+  row-gap: var(--rd-gap-block);
+  padding-top: 14px;
+}
+@container (min-width: 480px) {
+  [data-plugin-id="research-dashboard"] .rd-progress-band:has(> section:nth-of-type(2)) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@container (min-width: 720px) {
+  [data-plugin-id="research-dashboard"] .rd-progress-band:has(> section:nth-of-type(3)) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+/* Each column reads its eyebrow, then its content, with a real step between them. */
+[data-plugin-id="research-dashboard"] .rd-progress-band > section {
+  gap: var(--rd-gap);
+}
+/* Human steering is a different kind of fact from Evidence (a person's constraint, not a document), so it
+   is tinted rather than left identical to the column beside it. It does not stretch to the group's full
+   height — that would make the tint a heavy block; it hugs its own content. */
+[data-plugin-id="research-dashboard"] .rd-progress-band > .rd-progress-steering {
+  align-self: start;
+  background: var(--muted, rgba(127, 127, 127, 0.05));
+  border-radius: 8px;
+  padding: 12px 14px;
 }
 /* The group owns the rule above it; the sections inside it are columns of that group, not stacked bands. */
 [data-plugin-id="research-dashboard"] .rd-progress-row > section,
@@ -898,7 +1012,7 @@ var css = `
 }
 [data-plugin-id="research-dashboard"] .rd-side-stack {
   display: grid;
-  gap: var(--rd-gap-block);
+  gap: var(--rd-gap-rail);
   border-left: var(--rd-rule);
   padding: 0 0 0 12px;
 }
@@ -1333,6 +1447,30 @@ function apply(ctx) {
       onOpen: onOpenEntity,
       type: "problem"
     }) : null));
+  }
+  function ActivityFooter({
+    all,
+    hidden,
+    moreAttr,
+    noteAttr,
+    onToggle,
+    shown,
+    total
+  }) {
+    if (!all && hidden <= 0) {
+      return null;
+    }
+    return /* @__PURE__ */ React.createElement("div", {
+      className: "rd-cluster",
+      ...{ [moreAttr]: String(hidden) }
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta",
+      ...{ [noteAttr]: "true" }
+    }, all ? `all ${total} shown, newest first` : `${shown} of ${total} shown, newest first`), /* @__PURE__ */ React.createElement(Button, {
+      onClick: onToggle,
+      size: "sm",
+      variant: "ghost"
+    }, all ? "Show fewer" : `Show all ${total}`));
   }
   function ViewHeading({ view }) {
     const hint = VIEW_HEADINGS[view];
@@ -1872,17 +2010,15 @@ function apply(ctx) {
       }),
       onOpenEntity,
       windowDays
-    })), railHidden > 0 || railAll ? /* @__PURE__ */ React.createElement("div", {
-      className: "rd-cluster",
-      "data-rd-person-activity-more": String(railHidden)
-    }, /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta",
-      "data-rd-person-activity-note": "true"
-    }, railAll ? `all ${railActivity.length} shown, newest first` : `${railShown.length} of ${railActivity.length} shown, newest first`), /* @__PURE__ */ React.createElement(Button, {
-      onClick: () => setRailAll(!railAll),
-      size: "sm",
-      variant: "ghost"
-    }, railAll ? "Show fewer" : `Show all ${railActivity.length}`)) : null) : /* @__PURE__ */ React.createElement("p", {
+    })), /* @__PURE__ */ React.createElement(ActivityFooter, {
+      all: railAll,
+      hidden: railHidden,
+      moreAttr: "data-rd-person-activity-more",
+      noteAttr: "data-rd-person-activity-note",
+      onToggle: () => setRailAll(!railAll),
+      shown: railShown.length,
+      total: railActivity.length
+    })) : /* @__PURE__ */ React.createElement("p", {
       className: "rd-muted",
       "data-rd-attributable": "false"
     }, "No account is mapped to this person, so no recorded event can be attributed to them. That is a missing link, not an absence of work."), /* @__PURE__ */ React.createElement("span", {
@@ -1989,12 +2125,15 @@ function apply(ctx) {
   }) {
     const stateWords = ["blocked", "active", "draft", "parked", "usable"];
     function currentWorkLine(entry) {
-      const counts = stateWords.filter((state) => (entry.axisCounts[state] ?? 0) > 0).map((state) => `${entry.axisCounts[state]} ${state}`);
-      const blockedAxis = blocked.find((row) => row.topicId === entry.topic.id);
-      if (blockedAxis) {
-        counts.push(`blocked on ${blockedAxis.title}`);
+      const counts = stateWords.filter((state) => (entry.axisCounts[state] ?? 0) > 0).map((state) => `${entry.axisCounts[state]} ${state}`).join(" · ");
+      const blockedAxis = blocked.find((row) => row.topicId === entry.topic.id) ?? null;
+      if (counts === "" && blockedAxis === null) {
+        return null;
       }
-      return counts.length > 0 ? counts.join(" · ") : null;
+      return {
+        blocked: blockedAxis ? `blocked on ${blockedAxis.title}` : null,
+        counts
+      };
     }
     return /* @__PURE__ */ React.createElement("div", {
       className: "rd-landing",
@@ -2053,9 +2192,11 @@ function apply(ctx) {
       }, describeAge(entry.lastActivityAt)), /* @__PURE__ */ React.createElement("span", {
         className: "rd-muted"
       }, "last recorded activity"))), current ? /* @__PURE__ */ React.createElement("p", {
-        className: "rd-current-work",
+        className: "rd-current-work rd-landing-current",
         "data-rd-landing-current-work": entry.topic.id
-      }, current) : null, entry.axes.length > 0 ? /* @__PURE__ */ React.createElement("div", {
+      }, current.counts === "" ? null : /* @__PURE__ */ React.createElement("span", {
+        className: "rd-meta"
+      }, current.counts), current.blocked === null ? null : /* @__PURE__ */ React.createElement("span", null, current.blocked)) : null, entry.axes.length > 0 ? /* @__PURE__ */ React.createElement("div", {
         className: "rd-landing-pills",
         "data-rd-landing-pills": entry.axes.length
       }, entry.axes.slice(0, 3).map((axis) => /* @__PURE__ */ React.createElement("span", {
@@ -2085,7 +2226,7 @@ function apply(ctx) {
         onOpen: onOpenEntity,
         type: "repository"
       }))) : null, /* @__PURE__ */ React.createElement("div", {
-        className: "rd-row"
+        className: "rd-row rd-landing-action"
       }, /* @__PURE__ */ React.createElement(Button, {
         "data-rd-landing-open": "topic",
         onClick: () => onOpenEntity("topic", entry.topic.id),
@@ -2152,7 +2293,7 @@ function apply(ctx) {
         className: "rd-meta",
         "data-rd-landing-axes": entry.repository.id
       }, countLabel(entry.axes.length, "development axis", "development axes")) : null) : null, /* @__PURE__ */ React.createElement("div", {
-        className: "rd-row",
+        className: "rd-row rd-landing-action",
         "data-rd-landing-count-omitted": "d4"
       }, /* @__PURE__ */ React.createElement(Button, {
         "data-rd-landing-open": "repository",
@@ -2236,16 +2377,9 @@ function apply(ctx) {
         label: link.topic.name,
         onOpen: onOpenEntity,
         type: "topic"
-      })), selected.axes.slice(0, 4).map((axis) => /* @__PURE__ */ React.createElement(EntityTag, {
-        compact: true,
-        id: axis.id,
-        key: axis.id,
-        label: axis.title,
-        onOpen: onOpenEntity,
-        type: "axis"
-      })), selected.axes.length > 4 ? /* @__PURE__ */ React.createElement("span", {
-        className: "rd-muted"
-      }, "+", selected.axes.length - 4, " more") : null) : null,
+      })), selected.axes.length > 0 ? /* @__PURE__ */ React.createElement("span", {
+        className: "rd-meta"
+      }, countLabel(selected.axes.length, "development axis", "development axes")) : null) : null,
       title: /* @__PURE__ */ React.createElement(CardTitle, null, selected.repository.fullName)
     }, /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta"
@@ -2297,19 +2431,17 @@ function apply(ctx) {
       topicLabel: selected.topics.find((link) => link.topic.id === item.topicId)?.topic.name ?? null
     })), railActivity.length === 0 ? /* @__PURE__ */ React.createElement("li", {
       className: "rd-muted"
-    }, "No activity recorded yet.") : null), railHidden > 0 || railAll ? /* @__PURE__ */ React.createElement("div", {
-      className: "rd-cluster",
-      "data-rd-repository-activity-more": String(railHidden)
-    }, /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta",
-      "data-rd-repository-activity-note": "true"
-    }, railAll ? `all ${railActivity.length} shown, newest first` : `${railShown.length} of ${railActivity.length} shown, newest first`), /* @__PURE__ */ React.createElement(Button, {
-      onClick: () => {
+    }, "No activity recorded yet.") : null), /* @__PURE__ */ React.createElement(ActivityFooter, {
+      all: railAll,
+      hidden: railHidden,
+      moreAttr: "data-rd-repository-activity-more",
+      noteAttr: "data-rd-repository-activity-note",
+      onToggle: () => {
         setRailAllFor(railAll ? null : selected?.repository.id ?? null);
       },
-      size: "sm",
-      variant: "ghost"
-    }, railAll ? "Show fewer" : `Show all ${railActivity.length}`)) : null), /* @__PURE__ */ React.createElement("section", {
+      shown: railShown.length,
+      total: railActivity.length
+    })), /* @__PURE__ */ React.createElement("section", {
       className: "rd-side-card"
     }, /* @__PURE__ */ React.createElement("h3", {
       className: "rd-side-title"
@@ -2632,19 +2764,17 @@ function apply(ctx) {
       repositoryLabel: repositoryOf(event.repositoryId)?.fullName ?? null,
       topicLabel: event.topicId !== null && event.topicId === activeAxis?.topicId ? activeAxis?.topicName ?? null : null,
       unattributedNote: "no account attributed"
-    }))), feed !== null && (feedHidden > 0 || feedAll) ? /* @__PURE__ */ React.createElement("div", {
-      className: "rd-cluster",
-      "data-rd-progress-feed-more": String(feedHidden)
-    }, /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta",
-      "data-rd-progress-feed-note": "true"
-    }, feedAll ? `all ${feed.events.length} shown, newest first` : `${feedShown.length} of ${feed.events.length} shown, newest first`), /* @__PURE__ */ React.createElement(Button, {
-      onClick: () => {
+    }))), /* @__PURE__ */ React.createElement(ActivityFooter, {
+      all: feedAll,
+      hidden: feedHidden,
+      moreAttr: "data-rd-progress-feed-more",
+      noteAttr: "data-rd-progress-feed-note",
+      onToggle: () => {
         setFeedAllFor(feedAll ? null : activeAxis?.id ?? "");
       },
-      size: "sm",
-      variant: "ghost"
-    }, feedAll ? "Show fewer" : `Show all ${feed.events.length}`)) : null)), axisPlan !== null || openAxisProblems.length > 0 ? /* @__PURE__ */ React.createElement("div", {
+      shown: feedShown.length,
+      total: feed?.events.length ?? 0
+    }))), axisPlan !== null || openAxisProblems.length > 0 ? /* @__PURE__ */ React.createElement("div", {
       className: "rd-progress-row",
       "data-rd-progress-row": "true"
     }, axisPlan ? /* @__PURE__ */ React.createElement("section", {
@@ -3092,31 +3222,27 @@ function apply(ctx) {
       className: "rd-panel rd-topic-detail",
       "data-rd-detail": selectedEntry.topic.name,
       "data-rd-detail-mode": "persistent"
-    }, /* @__PURE__ */ React.createElement("div", {
-      className: "rd-detail-head"
-    }, /* @__PURE__ */ React.createElement("div", {
-      className: "rd-row",
-      "data-rd-detail-header": "true"
-    }, /* @__PURE__ */ React.createElement(CardTitle, null, selectedEntry.topic.name), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-muted"
-    }, selectedEntry.topic.status)), /* @__PURE__ */ React.createElement("div", {
-      className: "rd-cluster rd-tags",
-      "data-rd-detail-context": "true"
-    }, (selectedDetails?.repositories ?? selectedEntry.repositories).map((repository) => /* @__PURE__ */ React.createElement(EntityTag, {
-      id: repository.id,
-      key: repository.id,
-      label: repository.fullName,
-      onOpen: openEntity,
-      type: "repository"
-    })), (selectedDetails?.people ?? selectedEntry.people).map((person) => /* @__PURE__ */ React.createElement(EntityTag, {
-      id: person.id,
-      key: person.id,
-      label: person.displayName,
-      onOpen: openEntity,
-      type: "person"
-    })), (selectedDetails?.repositories ?? selectedEntry.repositories).length === 0 && (selectedDetails?.people ?? selectedEntry.people).length === 0 ? /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta"
-    }, "nobody tagged yet") : null), selectedDetails ? /* @__PURE__ */ React.createElement("div", {
+    }, /* @__PURE__ */ React.createElement(DetailHeader, {
+      badge: /* @__PURE__ */ React.createElement("span", {
+        className: "rd-muted"
+      }, selectedEntry.topic.status),
+      context: /* @__PURE__ */ React.createElement(React.Fragment, null, (selectedDetails?.repositories ?? selectedEntry.repositories).map((repository) => /* @__PURE__ */ React.createElement(EntityTag, {
+        id: repository.id,
+        key: repository.id,
+        label: repository.fullName,
+        onOpen: openEntity,
+        type: "repository"
+      })), (selectedDetails?.people ?? selectedEntry.people).map((person) => /* @__PURE__ */ React.createElement(EntityTag, {
+        id: person.id,
+        key: person.id,
+        label: person.displayName,
+        onOpen: openEntity,
+        type: "person"
+      })), (selectedDetails?.repositories ?? selectedEntry.repositories).length === 0 && (selectedDetails?.people ?? selectedEntry.people).length === 0 ? /* @__PURE__ */ React.createElement("span", {
+        className: "rd-meta"
+      }, "nobody tagged yet") : null),
+      title: /* @__PURE__ */ React.createElement(CardTitle, null, selectedEntry.topic.name)
+    }, selectedDetails ? /* @__PURE__ */ React.createElement("div", {
       className: "rd-detail-claims"
     }, /* @__PURE__ */ React.createElement("div", {
       className: "rd-claim",
@@ -3234,19 +3360,17 @@ function apply(ctx) {
       className: "rd-muted"
     }, "No activity recorded yet.") : null, !selectedDetails ? /* @__PURE__ */ React.createElement("li", {
       className: "rd-muted"
-    }, "Loading this topic…") : null), railHidden > 0 || railAll ? /* @__PURE__ */ React.createElement("div", {
-      className: "rd-cluster",
-      "data-rd-topic-activity-more": String(railHidden)
-    }, /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta",
-      "data-rd-topic-activity-note": "true"
-    }, railAll ? `all ${railActivity.length} shown, newest first` : `${railShown.length} of ${railActivity.length} shown, newest first`), /* @__PURE__ */ React.createElement(Button, {
-      onClick: () => {
+    }, "Loading this topic…") : null), /* @__PURE__ */ React.createElement(ActivityFooter, {
+      all: railAll,
+      hidden: railHidden,
+      moreAttr: "data-rd-topic-activity-more",
+      noteAttr: "data-rd-topic-activity-note",
+      onToggle: () => {
         setRailAllFor(railAll ? null : selectedEntry?.topic.id ?? null);
       },
-      size: "sm",
-      variant: "ghost"
-    }, railAll ? "Show fewer" : `Show all ${railActivity.length}`)) : null, selectedDetails ? /* @__PURE__ */ React.createElement("details", {
+      shown: railShown.length,
+      total: railActivity.length
+    }), selectedDetails ? /* @__PURE__ */ React.createElement("details", {
       className: "rd-narrow-write",
       "data-rd-write": "activity"
     }, /* @__PURE__ */ React.createElement("summary", null, "Record activity"), /* @__PURE__ */ React.createElement("form", {

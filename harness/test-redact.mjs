@@ -125,5 +125,27 @@ console.log(
     (offences.length ? `\n        ${offences.join("\n        ")}` : "")
 );
 
+// --- 3. the transcript emitter's trailing-space rule -------------------------------------------------------
+// A generated PASS/FAIL/SKIP line is printed from one place in `verify-page.mjs` (`emitLine`), and a detail built
+// from rendered text (`text.slice(0, N)`) can end on a space, leaving a trailing blank a reviewer has to flag.
+// The emitter trims it; this asserts the committed **canonical read records** the read pass writes — by its own
+// naming convention — carry none. The write-pass records are a stated boundary, not an exemption: they are
+// regenerated only by a write run, which mutates the fixture, so they are outside this read-record guard.
+const READ_RECORDS = [
+  "docs/corpus/verify-read.txt",
+  "docs/corpus/verify-read-1280x800.txt",
+  "docs/layout-fixtures/verify-fixture-read-1440x900.txt",
+  "docs/layout-fixtures/verify-fixture-read-1280x800.txt",
+];
+const trailing = [];
+for (const rel of READ_RECORDS) {
+  readFileSync(join(REPO, rel), "utf8")
+    .split("\n")
+    .forEach((line, index) => {
+      if (/[ \t]+$/.test(line)) trailing.push(`${rel}:${index + 1}`);
+    });
+}
+check("the canonical read records carry no trailing whitespace", trailing, []);
+
 console.log(`\nredaction: ${failures === 0 ? "all checks passed" : `${failures} failure(s)`}`);
 process.exit(failures === 0 ? 0 : 1);
