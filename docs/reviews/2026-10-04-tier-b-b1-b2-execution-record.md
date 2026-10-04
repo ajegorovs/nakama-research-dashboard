@@ -1,13 +1,19 @@
 # Tier B B1/B2 — montage / prototype-pack normalization — execution record (2026-10-04)
 
+**Status: B1/B2 CLOSED. B3/B4 DEFERRED.** The reviewer's publication condition (the two provenance links) was
+repaired in a docs-only forward commit; see §12 for the final ruling, verbatim, and the condition's closure.
+
 **Unit:** repository hygiene, Tier B, **B1/B2 only** (montage packs + duplicate prototype renders). Taken on
 branch `review/tier-b-b1-b2` off the pinned published checkpoint
 `433950859f0993df2cafd851e57572c9f260d7c2` (`origin/review/v1-accepted`). Precedent:
 [`2026-10-03-repo-hygiene-acceptance-record.md`](2026-10-03-repo-hygiene-acceptance-record.md) (Tier A) and
-`AGENTS.md` § *What is tracked*. Analysis source:
-[`2026-10-04-tier-b-cleanup-proposal.md`](2026-10-04-tier-b-cleanup-proposal.md) +
-[`2026-10-04-tier-b-cleanup-manifest.csv`](2026-10-04-tier-b-cleanup-manifest.csv) (both on
-`review/tier-b-cleanup-plan`, read with `git show` — never re-based onto here).
+`AGENTS.md` § *What is tracked*. Analysis source: the proposal
+[`2026-10-04-tier-b-cleanup-proposal.md`](https://github.com/ajegorovs/nakama-research-dashboard/blob/1a513837b101c3ac643d042d8fe688c15f648434/docs/reviews/2026-10-04-tier-b-cleanup-proposal.md)
+and its
+[`2026-10-04-tier-b-cleanup-manifest.csv`](https://github.com/ajegorovs/nakama-research-dashboard/blob/1a513837b101c3ac643d042d8fe688c15f648434/docs/reviews/2026-10-04-tier-b-cleanup-manifest.csv),
+both pinned to the immutable proposal commit
+`1a513837b101c3ac643d042d8fe688c15f648434` on branch `review/tier-b-cleanup-plan` (read with `git show` —
+never re-based onto here, and never imported onto this branch).
 
 There is no served build to judge: the change is a harness/documentation/tree change, so the judged artifact is
 the **tracked tree** and the gates that read it.
@@ -190,3 +196,35 @@ hashes are unchanged from the base.
   the shared preview on `:3010` was not disturbed** (the equivalence runs used only the committed read-only
   producer inputs and an isolated scratch output tree).
 - **The write-pass producer** (`read-pass.sh` `DEFAULT_SHOTS`) remains deferred exactly as recorded.
+
+## 12. Publication condition and final ruling (closure)
+
+**B1/B2 is CLOSED. B3/B4 remain DEFERRED in full.**
+
+The reviewer's final ruling, verbatim:
+
+> Accept B1/B2 with one publication condition. The execution conforms to the approved Tier B scope: the 56
+> generated montage and duplicate-prototype artifacts are removed, canonical prototype/current evidence is
+> retained, `--prototype-dir` preserves default behavior and correctly normalizes preview generation, old/new
+> generation is proven equivalent across all five views, ignore/recovery negative controls are discriminating,
+> B3/B4 and product follow-ups remain untouched, and product bundles are unchanged. Before final closure,
+> repair the two relative proposal/manifest links in the new execution record so they explicitly reference
+> `review/tier-b-cleanup-plan`; those files are intentionally absent from the execution branch, so the current
+> relative links are broken provenance references. No product, harness-behavior, removal-scope, or further
+> regeneration change is required.
+
+**Condition satisfied.** The two provenance references in this record's header now point at immutable GitHub
+blob URLs on the proposal commit `1a513837b101c3ac643d042d8fe688c15f648434` (branch `review/tier-b-cleanup-plan`),
+replacing the broken branch-relative links:
+
+| Reference | Immutable URL | Blob at proposal commit |
+|---|---|---|
+| `2026-10-04-tier-b-cleanup-proposal.md` | `https://github.com/ajegorovs/nakama-research-dashboard/blob/1a51383…/docs/reviews/2026-10-04-tier-b-cleanup-proposal.md` | `e39ced0044870ac4cb7be332d567d6b643dcc830` |
+| `2026-10-04-tier-b-cleanup-manifest.csv` | `https://github.com/ajegorovs/nakama-research-dashboard/blob/1a51383…/docs/reviews/2026-10-04-tier-b-cleanup-manifest.csv` | `461e8eb6328053065156d7c5e24ad5655887ca2e` |
+
+Both target paths were **verified to exist** at the pinned proposal commit (`git ls-tree`), and both are
+correctly **absent** from this execution branch — so no proposal file was imported, re-based, or added here.
+This closure edit is **documentation-only** (this one tracked file); it leaves the product bundles, the
+harness behaviour, the removal scope, and the tree's generated-artifact state byte-identical to the accepted
+execution. Gates re-run green (§8): `bun run check`, `bun run harness:records`, and `git diff --check`; the
+`ui/app.js` (`3b63f1fb…`) and `actions/actions.js` (`4e5a8be3…`) hashes are unchanged.
