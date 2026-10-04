@@ -42,6 +42,9 @@ const CHECKOUT = path.resolve(
   flag("checkout", process.env.NAKAMA_CHECKOUT ?? path.join(homedir(), "Repos", "nakama"))
 );
 const DATASET = flag("dataset", "corpus");
+// Source fixtures to mount. Defaults to this harness's own `fixtures.json`; callers that own their
+// payload (e2e-render.mjs) pass `--fixtures <path>` so they never overwrite a committed fixture file.
+const FIXTURES = flag("fixtures", path.join(HERE, "fixtures.json"));
 const PORT = flag("port", process.env.PREVIEW_PORT ?? "3010");
 const REBUILD = has("rebuild");
 const WATCH = has("watch");
@@ -92,9 +95,9 @@ if (!SKIP_FIXTURES) {
     { cwd: REPO }
   );
 }
-const fixturesFile = path.join(HERE, "fixtures.json");
+const fixturesFile = path.resolve(SKIP_FIXTURES ? FIXTURES : path.join(HERE, "fixtures.json"));
 if (!existsSync(fixturesFile)) {
-  die("no fixtures — run without --no-fixtures, or run make-fixtures.mjs first.");
+  die(`no fixtures at ${fixturesFile} — run without --no-fixtures, pass --fixtures <file>, or run make-fixtures.mjs first.`);
 }
 
 // ── place the preview into the checkout, and own what we place ─────────────────────────────────────

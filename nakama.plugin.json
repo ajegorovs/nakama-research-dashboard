@@ -819,6 +819,101 @@
         },
         "required": ["text"]
       }
+    },
+    {
+      "key": "ingest_github_activity",
+      "access": "member",
+      "effect": "write",
+      "entry": "actions/actions.js",
+      "exposeAsTool": false,
+      "description": "Collector-only ingest of one externally observed GitHub fact. Not an agent tool and not reachable by a person: the host restricts this action to a trusted collector principal. The server derives the canonical event identity from the structured envelope (provider host + immutable repository id + object identity + event kind) and recomputes the payload digest; enrollment decides the Axis and Topic, and an optional Problem is honoured only through an approved object mapping. The recorded actor is `system`, and the upstream GitHub author is kept as separate provenance without creating a Person. Replay of the same identity and digest inserts nothing; a different digest under the same identity is a structured conflict.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "envelope": {
+            "type": "object"
+          }
+        },
+        "required": ["envelope"]
+      }
+    },
+    {
+      "key": "read_ingest_receipt",
+      "access": "member",
+      "effect": "read",
+      "entry": "actions/actions.js",
+      "exposeAsTool": false,
+      "description": "Collector-only exact-key readback: look up the stored receipt for one canonical external event so a worker that lost a response can confirm whether its write landed before retrying. Reachable only by a trusted collector principal.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "providerHost": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "repositoryId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "eventKind": {
+            "type": "string",
+            "enum": ["pr.merged", "commit.observed"]
+          },
+          "objectId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          }
+        },
+        "required": ["providerHost", "repositoryId", "eventKind", "objectId"]
+      }
+    },
+    {
+      "key": "manage_external_enrollment",
+      "access": "admin",
+      "effect": "write",
+      "entry": "actions/actions.js",
+      "exposeAsTool": false,
+      "description": "Admin-only enrollment management for external evidence. `enroll` binds an immutable repository identity to one existing Axis (the Topic is checked, not trusted); `map` approves one exact object-to-Problem mapping on the enrolled axis. The caller cannot name an arbitrary target: the axis must already exist, and a mapped Problem must belong to that axis. This is the only path that creates mapping authority; no test or worker may assert it inline.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "operation": {
+            "type": "string",
+            "enum": ["enroll", "map"]
+          },
+          "providerHost": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "repositoryId": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "repositoryNodeId": { "type": "string", "maxLength": 120 },
+          "repositoryFullName": { "type": "string", "maxLength": 200 },
+          "defaultBranch": { "type": "string", "maxLength": 255 },
+          "topicId": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "axisId": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "enrollmentId": { "type": "string", "minLength": 1, "maxLength": 100 },
+          "objectKind": { "type": "string", "enum": ["pr", "commit", "issue"] },
+          "objectId": { "type": "string", "minLength": 1, "maxLength": 200 },
+          "problemId": { "type": "string", "minLength": 1, "maxLength": 100 }
+        },
+        "required": ["operation"]
+      }
+    },
+    {
+      "key": "list_external_enrollment",
+      "access": "admin",
+      "effect": "read",
+      "entry": "actions/actions.js",
+      "exposeAsTool": false,
+      "description": "Admin-only list of the active external-evidence enrollments for the organization.",
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      }
     }
   ],
   "skills": [
@@ -844,6 +939,10 @@
       {
         "id": "004-ux-v2-model",
         "path": "migrations/004-ux-v2-model.sql"
+      },
+      {
+        "id": "005-external-evidence",
+        "path": "migrations/005-external-evidence.sql"
       }
     ]
   },

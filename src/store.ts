@@ -169,6 +169,146 @@ export type Activity = {
   recordedAt: string;
 };
 
+/**
+ * The V1 evidence automation vocabulary. Two event kinds only, on purpose: `pr.merged` is an object whose
+ * identity survives title edits and reopening (the PR node id), and `commit.observed` is a full commit SHA
+ * scoped to one immutable repository id. An open PR, an issue or a lifecycle transition has no canonical
+ * identity in this contract yet, so it is refused rather than guessed at (proposal §5, amendment 1).
+ */
+export const EXTERNAL_EVENT_KINDS = ["pr.merged", "commit.observed"] as const;
+export const EXTERNAL_OBJECT_KINDS = ["pr", "commit"] as const;
+export type ExternalEventKind = (typeof EXTERNAL_EVENT_KINDS)[number];
+export type ExternalObjectKind = (typeof EXTERNAL_OBJECT_KINDS)[number];
+
+/** Upstream author, carried as provenance. Never minted into `people`. */
+export type ExternalAuthor = {
+  id?: string;
+  nodeId?: string;
+  login?: string;
+};
+
+/**
+ * Versioned structured envelope. The server derives identity and target from these fields; no field is
+ * trusted to name a Topic, an Axis or a Problem the enrollment did not approve, and there is no free-form
+ * worker `eventKey`.
+ */
+export type ExternalEvidenceEnvelopeV1 = {
+  envelopeVersion: 1;
+  provider: "github";
+  providerHost: string;
+  /** Immutable numeric repository id — the dedupe identity, not the mutable `full_name`. */
+  repositoryId: string;
+  repositoryNodeId?: string;
+  repositoryFullName?: string;
+  eventKind: ExternalEventKind;
+  objectKind: ExternalObjectKind;
+  objectId: string;
+  objectNumber?: number | null;
+  /** Allowlisted immutable semantic fields; the server digests its own view of these. */
+  payload: Record<string, unknown>;
+  /** Worker-supplied canonical payload digest, independently recomputed by the server. */
+  payloadDigest: string;
+  occurredAt?: string;
+  observedAt?: string;
+  sourceUrl?: string;
+  summary?: string;
+  author?: ExternalAuthor;
+  /**
+   * The branch this fact was observed on. It is **not** display metadata: for `commit.observed` it is the
+   * default-branch observation proof, and for `pr.merged` the payload's `baseRefName` must equal the
+   * server-owned enrollment's approved default branch. The worker cannot name an arbitrary branch and have
+   * it accepted — the value is checked against the enrollment, never trusted.
+   */
+  defaultBranch?: string;
+  /**
+   * An explicit request to attach this object to a Problem. It is honoured **only** when an approved
+   * `external_object_mappings` row names the same object; otherwise the envelope is refused. The caller
+   * cannot assert the mapping by setting a flag or an arbitrary target.
+   */
+  problemId?: string;
+};
+
+export type ExternalEnrollment = {
+  id: string;
+  orgId: string;
+  provider: string;
+  providerHost: string;
+  repositoryId: string;
+  repositoryNodeId: string;
+  repositoryFullName: string;
+  /** The server-owned approved default branch. Ingest checks observed-branch evidence against it. */
+  defaultBranch: string;
+  topicId: string;
+  axisId: string;
+  mappingVersion: number;
+  status: "active" | "revoked";
+  createdBy: string;
+  createdAt: string;
+};
+
+export type ExternalObjectMapping = {
+  id: string;
+  enrollmentId: string;
+  objectKind: ExternalObjectKind | "issue";
+  objectId: string;
+  problemId: string;
+  mappingVersion: number;
+  createdBy: string;
+  createdAt: string;
+};
+
+export type ExternalReceipt = {
+  id: string;
+  orgId: string;
+  activityId: string;
+  enrollmentId: string | null;
+  provider: string;
+  providerHost: string;
+  repositoryId: string;
+  eventKind: ExternalEventKind;
+  objectKind: ExternalObjectKind;
+  objectId: string;
+  objectNumber: number | null;
+  canonicalEventKey: string;
+  payloadDigest: string;
+  metadataDigest: string;
+  author: ExternalAuthor;
+  sourceUrl: string;
+  mappingVersion: number;
+  occurredAt: string;
+  observedAt: string;
+  recordedAt: string;
+};
+
+/**
+ * The outcome of one ingest attempt, as a value rather than a thrown error so the HTTP layer can answer the
+ * worker with the right code and the worker can act on the difference.
+ */
+export const EXTERNAL_INGEST_STATUSES = [
+  "inserted",
+  "replayed",
+  "identity_conflict",
+  "digest_mismatch",
+  "unmapped",
+  "rejected",
+] as const;
+export type ExternalIngestStatus = (typeof EXTERNAL_INGEST_STATUSES)[number];
+
+export type ExternalIngestResult = {
+  ok: boolean;
+  status: ExternalIngestStatus;
+  reason: string;
+  receipt: ExternalReceipt | null;
+};
+
+export type ExternalReceiptLookup = {
+  orgId: string;
+  providerHost: string;
+  repositoryId: string;
+  eventKind: ExternalEventKind;
+  objectId: string;
+};
+
 export type Annotation = {
   id: string;
   topicId: string | null;
@@ -413,6 +553,12 @@ export const STORE_ERROR_CODES = [
   "human-authored",
   "invalid-input",
   "invalid-state",
+  /**
+   * A named target (enrollment, axis or problem) does not exist or does not belong where the caller said.
+   * Distinct from `invalid-input` because an external worker should quarantine rather than reshape its
+   * payload when it gets one.
+   */
+  "invalid-target",
   "no-op",
 ] as const;
 
@@ -1461,6 +1607,446 @@ function assertedClaims(input: { state?: unknown }): ReadonlySet<ClaimField> {
   return new Set(input.state === undefined ? [] : (["state"] as const));
 }
 
+type ExternalEnrollmentRow = {
+  id: string;
+  org_id: string;
+  provider: string;
+  provider_host: string;
+  repository_id: string;
+  repository_node_id: string;
+  repository_full_name: string;
+  default_branch: string;
+  topic_id: string;
+  axis_id: string;
+  mapping_version: number;
+  status: string;
+  created_by: string;
+  created_at: string;
+};
+
+type ExternalObjectMappingRow = {
+  id: string;
+  org_id: string;
+  enrollment_id: string;
+  object_kind: string;
+  object_id: string;
+  problem_id: string;
+  mapping_version: number;
+  created_by: string;
+  created_at: string;
+};
+
+type ExternalReceiptRow = {
+  id: string;
+  org_id: string;
+  activity_id: string;
+  enrollment_id: string | null;
+  provider: string;
+  provider_host: string;
+  repository_id: string;
+  event_kind: string;
+  object_kind: string;
+  object_id: string;
+  object_number: number | null;
+  canonical_event_key: string;
+  payload_digest: string;
+  metadata_digest: string;
+  author_id: string;
+  author_node_id: string;
+  author_login: string;
+  source_url: string;
+  mapping_version: number;
+  /** The resolved attribution at insert time: what axis, and which Problem ('' = none). */
+  axis_id: string;
+  problem_id: string;
+  occurred_at: string;
+  observed_at: string;
+  recorded_at: string;
+};
+
+export const EXTERNAL_PAYLOAD_MAX_BYTES = 16_384;
+
+/**
+ * The allowlisted immutable semantic fields per event kind are embodied by the per-kind validators below
+ * (`validatePrPayload` / `validateCommitPayload`): only those fields are digested, every one of them is
+ * required, and each is validated. A display-only field the contract does not name cannot change identity,
+ * and a missing or malformed field is refused rather than digested.
+ */
+
+/** Deterministic JSON: object keys sorted at every depth, so two equal payloads digest equal. */
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
+  }
+  if (value !== null && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value ?? null);
+}
+
+function sha256Hex(value: string): string {
+  return new Bun.CryptoHasher("sha256").update(value).digest("hex");
+}
+
+/**
+ * Structural constants for the V1 identity contract. These are the shapes the contract freezes; a value
+ * that does not match is refused as input, never coerced into something that later looks canonical.
+ */
+const GITHUB_PROVIDER_HOST = "github.com";
+const FULL_SHA_RE = /^[0-9a-f]{40}$/;
+const PR_NODE_ID_RE = /^PR_[A-Za-z0-9_=-]{8,240}$/;
+const NUMERIC_REPOSITORY_ID_RE = /^[0-9]{1,20}$/;
+const ISO_INSTANT_RE =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
+
+/** Byte length, not UTF-16 length: a size bound must measure what the transport sends. */
+function utf8ByteLength(value: string): number {
+  return new TextEncoder().encode(value).length;
+}
+
+function asTrimmedString(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? null : trimmed;
+}
+
+function withinBytes(value: string, max: number): boolean {
+  return utf8ByteLength(value) <= max;
+}
+
+/** An RFC-3339 instant with an explicit zone, and a value `Date` can actually parse back. */
+function isIsoInstant(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    ISO_INSTANT_RE.test(value) &&
+    Number.isFinite(Date.parse(value))
+  );
+}
+
+/** Two timestamps naming the same instant, even when their textual offsets differ. */
+function isSameInstant(a: string, b: string): boolean {
+  const left = Date.parse(a);
+  const right = Date.parse(b);
+  return Number.isFinite(left) && Number.isFinite(right) && left === right;
+}
+
+function isValidRefName(value: string): boolean {
+  if (!withinBytes(value, 255)) {
+    return false;
+  }
+  if (value.startsWith("/") || value.endsWith("/") || value.endsWith(".lock")) {
+    return false;
+  }
+  // eslint-disable-next-line no-control-regex
+  return !/[\u0000-\u0020\u007f~^:?*[\\]|\.\.|\/\//.test(value);
+}
+
+type ExternalPayloadValidation =
+  | { canonical: Record<string, unknown>; ok: true }
+  | { ok: false; reason: string };
+
+/**
+ * Validate and canonicalize a `pr.merged` payload. Every allowlisted field must be present and valid; the
+ * result is `rejected`, not a thrown 500, so a malformed worker envelope is a structured refusal.
+ *
+ * The digest is computed over the **raw** values the worker sent (only the allowlisted keys), so the
+ * server's recomputation agrees with the worker's own digest; the checks above run on trimmed views.
+ */
+function validatePrPayload(input: {
+  objectId: string;
+  objectNumber: number | null;
+  occurredAt: string;
+  payload: Record<string, unknown>;
+}): ExternalPayloadValidation {
+  const { payload } = input;
+  const baseRefName = asTrimmedString(payload.baseRefName);
+  const headRefName = asTrimmedString(payload.headRefName);
+  const mergeCommitOid = asTrimmedString(payload.mergeCommitOid);
+  const mergedAt = asTrimmedString(payload.mergedAt);
+  const prNodeId = asTrimmedString(payload.prNodeId);
+  const number = payload.number;
+  if (!(baseRefName && headRefName && mergeCommitOid && mergedAt && prNodeId)) {
+    return { ok: false, reason: "invalid_pr_payload" };
+  }
+  // F3: reject padded semantic fields outright rather than silently normalizing them. A value with
+  // surrounding whitespace is not the canonical identity the contract freezes, and digesting it raw
+  // (while validating a trimmed view) would let one padded write make every later clean retry conflict.
+  if (
+    payload.baseRefName !== baseRefName ||
+    payload.headRefName !== headRefName ||
+    payload.mergeCommitOid !== mergeCommitOid ||
+    payload.mergedAt !== mergedAt ||
+    payload.prNodeId !== prNodeId
+  ) {
+    return { ok: false, reason: "invalid_pr_payload" };
+  }
+  if (!(withinBytes(baseRefName, 255) && withinBytes(headRefName, 255))) {
+    return { ok: false, reason: "payload_field_too_large" };
+  }
+  if (!PR_NODE_ID_RE.test(prNodeId)) {
+    return { ok: false, reason: "invalid_pr_node_id" };
+  }
+  if (prNodeId !== input.objectId) {
+    return { ok: false, reason: "object_id_payload_mismatch" };
+  }
+  if (!FULL_SHA_RE.test(mergeCommitOid)) {
+    return { ok: false, reason: "invalid_merge_commit_sha" };
+  }
+  if (
+    typeof number !== "number" ||
+    !Number.isInteger(number) ||
+    number <= 0 ||
+    number > 2_000_000_000
+  ) {
+    return { ok: false, reason: "invalid_pr_number" };
+  }
+  if (input.objectNumber === null || input.objectNumber !== number) {
+    return { ok: false, reason: "object_number_payload_mismatch" };
+  }
+  if (!isIsoInstant(mergedAt)) {
+    return { ok: false, reason: "invalid_merged_at" };
+  }
+  if (!isSameInstant(mergedAt, input.occurredAt)) {
+    return { ok: false, reason: "merged_at_occurred_at_mismatch" };
+  }
+  return {
+    canonical: {
+      baseRefName,
+      headRefName,
+      mergeCommitOid,
+      mergedAt,
+      number: payload.number,
+      prNodeId,
+    },
+    ok: true,
+  };
+}
+
+/** Validate and canonicalize a `commit.observed` payload. Full SHA tree/parents, matching timestamps. */
+function validateCommitPayload(input: {
+  objectId: string;
+  occurredAt: string;
+  payload: Record<string, unknown>;
+}): ExternalPayloadValidation {
+  const { payload } = input;
+  const sha = asTrimmedString(payload.sha);
+  const treeOid = asTrimmedString(payload.treeOid);
+  const committedAt = asTrimmedString(payload.committedAt);
+  const parentOids = payload.parentOids;
+  if (!(sha && treeOid && committedAt)) {
+    return { ok: false, reason: "invalid_commit_payload" };
+  }
+  // F3: same strict-rejection rule as the PR payload — a padded semantic field is not canonical.
+  if (
+    payload.sha !== sha ||
+    payload.treeOid !== treeOid ||
+    payload.committedAt !== committedAt
+  ) {
+    return { ok: false, reason: "invalid_commit_payload" };
+  }
+  if (!Array.isArray(parentOids)) {
+    return { ok: false, reason: "invalid_parent_oids" };
+  }
+  if (parentOids.length > 100) {
+    return { ok: false, reason: "payload_field_too_large" };
+  }
+  const seen = new Set<string>();
+  for (const parent of parentOids) {
+    if (typeof parent !== "string" || !FULL_SHA_RE.test(parent)) {
+      return { ok: false, reason: "invalid_parent_oid" };
+    }
+    // F3: a padded parent OID is rejected, not trimmed into the digest.
+    if (parent !== parent.trim()) {
+      return { ok: false, reason: "invalid_parent_oid" };
+    }
+    if (seen.has(parent)) {
+      return { ok: false, reason: "duplicate_parent_oid" };
+    }
+    seen.add(parent);
+  }
+  if (!FULL_SHA_RE.test(sha)) {
+    return { ok: false, reason: "invalid_commit_sha" };
+  }
+  if (!FULL_SHA_RE.test(treeOid)) {
+    return { ok: false, reason: "invalid_tree_sha" };
+  }
+  if (sha !== input.objectId) {
+    return { ok: false, reason: "object_id_payload_mismatch" };
+  }
+  if (!isIsoInstant(committedAt)) {
+    return { ok: false, reason: "invalid_committed_at" };
+  }
+  if (!isSameInstant(committedAt, input.occurredAt)) {
+    return { ok: false, reason: "committed_at_occurred_at_mismatch" };
+  }
+  return {
+    canonical: {
+      committedAt: payload.committedAt,
+      parentOids: payload.parentOids,
+      sha: payload.sha,
+      treeOid: payload.treeOid,
+    },
+    ok: true,
+  };
+}
+
+/** The upstream author is provenance only, but a malformed one is still malformed input. */
+function normalizeExternalAuthor(
+  value: unknown
+): { author: ExternalAuthor; ok: true } | { ok: false } {
+  if (value === undefined || value === null) {
+    return { author: {}, ok: true };
+  }
+  if (typeof value !== "object" || Array.isArray(value)) {
+    return { ok: false };
+  }
+  const record = value as Record<string, unknown>;
+  const author: ExternalAuthor = {};
+  for (const field of ["id", "login", "nodeId"] as const) {
+    const raw = record[field];
+    if (raw === undefined || raw === null) {
+      continue;
+    }
+    if (typeof raw !== "string" || !withinBytes(raw, 200)) {
+      return { ok: false };
+    }
+    author[field] = raw;
+  }
+  return { author, ok: true };
+}
+
+/** A source URL must be an absolute http(s) link on the observed provider host, or absent. */
+function normalizeSourceUrl(
+  value: unknown,
+  providerHost: string
+): { ok: true; url: string } | { ok: false } {
+  if (value === undefined || value === null) {
+    return { ok: true, url: "" };
+  }
+  const raw = asTrimmedString(value);
+  if (!(raw && withinBytes(raw, 500))) {
+    return { ok: false };
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    return { ok: false };
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    return { ok: false };
+  }
+  if (parsed.host.toLowerCase() !== providerHost.toLowerCase()) {
+    return { ok: false };
+  }
+  return { ok: true, url: raw };
+}
+
+/**
+ * The canonical external event identity, derived by the server from structured fields. `objectId` is scoped
+ * by the caller's repository id in the unique index; this string is what a replay matches on. There is no
+ * worker-supplied `eventKey` anywhere in the path.
+ */
+export function externalCanonicalEventKey(
+  eventKind: ExternalEventKind,
+  objectId: string
+): string {
+  return `${eventKind}:${objectId}`;
+}
+
+function externalMetadataDigest(input: {
+  author?: ExternalAuthor;
+  occurredAt?: string;
+  sourceUrl?: string;
+  summary?: string;
+}): string {
+  return sha256Hex(
+    canonicalJson({
+      authorId: input.author?.id ?? "",
+      authorLogin: input.author?.login ?? "",
+      authorNodeId: input.author?.nodeId ?? "",
+      occurredAt: input.occurredAt ?? "",
+      sourceUrl: input.sourceUrl ?? "",
+      summary: input.summary ?? "",
+    })
+  );
+}
+
+function toExternalEnrollment(row: ExternalEnrollmentRow): ExternalEnrollment {
+  return {
+    axisId: row.axis_id,
+    createdAt: row.created_at,
+    createdBy: row.created_by,
+    defaultBranch: row.default_branch,
+    id: row.id,
+    mappingVersion: row.mapping_version,
+    orgId: row.org_id,
+    provider: row.provider,
+    providerHost: row.provider_host,
+    repositoryFullName: row.repository_full_name,
+    repositoryId: row.repository_id,
+    repositoryNodeId: row.repository_node_id,
+    status: row.status === "revoked" ? "revoked" : "active",
+    topicId: row.topic_id,
+  };
+}
+
+function toExternalObjectMapping(
+  row: ExternalObjectMappingRow
+): ExternalObjectMapping {
+  return {
+    createdAt: row.created_at,
+    createdBy: row.created_by,
+    enrollmentId: row.enrollment_id,
+    id: row.id,
+    mappingVersion: row.mapping_version,
+    objectId: row.object_id,
+    objectKind:
+      row.object_kind === "pr" || row.object_kind === "commit"
+        ? row.object_kind
+        : "issue",
+    problemId: row.problem_id,
+  };
+}
+
+function toExternalReceipt(row: ExternalReceiptRow): ExternalReceipt {
+  return {
+    activityId: row.activity_id,
+    author: {
+      id: row.author_id,
+      login: row.author_login,
+      nodeId: row.author_node_id,
+    },
+    canonicalEventKey: row.canonical_event_key,
+    enrollmentId: row.enrollment_id,
+    eventKind:
+      row.event_kind === "commit.observed"
+        ? "commit.observed"
+        : "pr.merged",
+    id: row.id,
+    mappingVersion: row.mapping_version,
+    metadataDigest: row.metadata_digest,
+    objectId: row.object_id,
+    objectKind: row.object_kind === "commit" ? "commit" : "pr",
+    objectNumber: row.object_number,
+    observedAt: row.observed_at,
+    occurredAt: row.occurred_at,
+    orgId: row.org_id,
+    payloadDigest: row.payload_digest,
+    provider: row.provider,
+    providerHost: row.provider_host,
+    recordedAt: row.recorded_at,
+    repositoryId: row.repository_id,
+    sourceUrl: row.source_url,
+  };
+}
+
 export class ResearchStore {
   private readonly db: Database;
   /** Depth of the transaction in flight; >0 means a nested call must join it, not open a second one. */
@@ -1472,8 +2058,17 @@ export class ResearchStore {
     this.db = new Database(databasePath);
     // Every action runs in a fresh child process: configure on every open, never "once at startup".
     this.db.exec("PRAGMA foreign_keys = ON");
-    this.db.exec("PRAGMA journal_mode = WAL");
     this.db.exec(`PRAGMA busy_timeout = ${BUSY_TIMEOUT_MS}`);
+    // journal_mode is persisted in the database file header, so an already-WAL database needs no
+    // switch. Attempting a switch while another connection is mid-recovery fails with
+    // SQLITE_BUSY_RECOVERY, and SQLite does not consult the busy handler for journal-mode changes,
+    // so busy_timeout cannot cover it. Only issue the mode change when the file is not already WAL.
+    const currentMode = (this.db.query("PRAGMA journal_mode").get() as
+      | { journal_mode?: string }
+      | null)?.journal_mode;
+    if (String(currentMode ?? "").toLowerCase() !== "wal") {
+      this.db.exec("PRAGMA journal_mode = WAL");
+    }
   }
 
   close(): void {
@@ -3042,6 +3637,627 @@ export class ResearchStore {
         summary,
         topicId: topicId ?? axis?.topicId ?? null,
       });
+    });
+  }
+
+  // ------------------------------------------------ external evidence ingest
+
+  /**
+   * Records or re-points the single **active** enrollment for one immutable repository identity. This is
+   * server-owned mapping authority: the caller names a repository and an existing Axis, and the Topic is
+   * checked against that axis rather than taken on trust. A re-enrollment updates the fixed target in place
+   * and bumps `mapping_version`; it never touches historical evidence. There is no caller-supplied "trusted"
+   * flag anywhere here.
+   */
+  enrollExternalRepository(input: {
+    orgId: string;
+    provider?: string;
+    providerHost: string;
+    repositoryId: string;
+    repositoryNodeId?: string;
+    repositoryFullName?: string;
+    /** The approved default branch. Required before commit.observed facts can be accepted. */
+    defaultBranch?: string;
+    topicId: string;
+    axisId: string;
+    mappingVersion?: number;
+    createdBy?: string;
+  }): ExternalEnrollment {
+    return this.atomic(() => {
+      const orgId = required(input.orgId, "orgId");
+      const providerHost = required(input.providerHost, "providerHost").toLowerCase();
+      const repositoryId = required(input.repositoryId, "repositoryId");
+      const topicId = required(input.topicId, "topicId");
+      const axisId = required(input.axisId, "axisId");
+      // `undefined` means "leave the stored branch alone" on a re-enroll; "" would clear it.
+      const providedDefaultBranch =
+        input.defaultBranch === undefined
+          ? null
+          : (asTrimmedString(input.defaultBranch) ?? "");
+      if (providedDefaultBranch && !isValidRefName(providedDefaultBranch)) {
+        throw new ResearchStoreError(
+          "defaultBranch is not a valid branch name.",
+          "invalid-input"
+        );
+      }
+      if (!this.getTopic(topicId)) {
+        throw new ResearchStoreError("Topic not found.");
+      }
+      const axis = this.getAxis(axisId);
+      if (!axis) {
+        throw new ResearchStoreError("Axis not found.");
+      }
+      if (axis.topicId !== topicId) {
+        throw new ResearchStoreError("Axis does not belong to this topic.");
+      }
+      const existing = this.db
+        .query(
+          "SELECT * FROM external_enrollments WHERE org_id = ? AND provider_host = ? AND repository_id = ? AND status = 'active' LIMIT 1"
+        )
+        .get(orgId, providerHost, repositoryId) as ExternalEnrollmentRow | null;
+      const mappingVersion =
+        input.mappingVersion ??
+        (existing ? existing.mapping_version + 1 : 1);
+      const defaultBranch = existing
+        ? (providedDefaultBranch ?? existing.default_branch)
+        : (providedDefaultBranch ?? "");
+      const now = nowIso();
+      if (existing) {
+        this.db
+          .query(
+            `UPDATE external_enrollments
+               SET topic_id = ?, axis_id = ?, repository_node_id = ?, repository_full_name = ?,
+                   default_branch = ?, mapping_version = ?, created_by = ?
+             WHERE id = ?`
+          )
+          .run(
+            topicId,
+            axisId,
+            text(input.repositoryNodeId),
+            text(input.repositoryFullName),
+            defaultBranch,
+            mappingVersion,
+            text(input.createdBy),
+            existing.id
+          );
+      } else {
+        this.db
+          .query(
+            `INSERT INTO external_enrollments
+               (id, org_id, provider, provider_host, repository_id, repository_node_id,
+                repository_full_name, default_branch, topic_id, axis_id, mapping_version, status, created_by, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`
+          )
+          .run(
+            crypto.randomUUID(),
+            orgId,
+            text(input.provider) || "github",
+            providerHost,
+            repositoryId,
+            text(input.repositoryNodeId),
+            text(input.repositoryFullName),
+            defaultBranch,
+            topicId,
+            axisId,
+            mappingVersion,
+            text(input.createdBy),
+            now
+          );
+      }
+      const saved = this.db
+        .query(
+          "SELECT * FROM external_enrollments WHERE org_id = ? AND provider_host = ? AND repository_id = ? AND status = 'active' LIMIT 1"
+        )
+        .get(orgId, providerHost, repositoryId) as ExternalEnrollmentRow;
+      return toExternalEnrollment(saved);
+    });
+  }
+
+  /** Approves one exact object→Problem mapping for an enrollment. The Problem must sit on the enrolled axis. */
+  setExternalObjectMapping(input: {
+    orgId: string;
+    enrollmentId: string;
+    objectKind: "pr" | "commit" | "issue";
+    objectId: string;
+    problemId: string;
+    createdBy?: string;
+  }): ExternalObjectMapping {
+    return this.atomic(() => {
+      const orgId = required(input.orgId, "orgId");
+      const enrollmentId = required(input.enrollmentId, "enrollmentId");
+      const objectKind = oneOf(
+        input.objectKind,
+        ["pr", "commit", "issue"] as const,
+        "objectKind"
+      );
+      const objectId = required(input.objectId, "objectId");
+      const problemId = required(input.problemId, "problemId");
+      const enrollment = this.getExternalEnrollmentById(enrollmentId);
+      if (!enrollment || enrollment.status !== "active") {
+        throw new ResearchStoreError("Enrollment not found.", "invalid-target");
+      }
+      // F2: the mapping's organization must match its enrollment's. Per-org databases make this
+      // currently unreachable, but a future shared generation must not resolve a mapping across orgs.
+      if (enrollment.orgId !== orgId) {
+        throw new ResearchStoreError(
+          "Enrollment belongs to another organization.",
+          "invalid-target"
+        );
+      }
+      const problem = this.getProblem(problemId);
+      if (!problem) {
+        throw new ResearchStoreError("Problem not found.", "invalid-target");
+      }
+      if (problem.axisId !== enrollment.axisId) {
+        throw new ResearchStoreError(
+          "Problem does not belong to the enrolled axis.",
+          "invalid-target"
+        );
+      }
+      const existing = this.db
+        .query(
+          "SELECT * FROM external_object_mappings WHERE org_id = ? AND enrollment_id = ? AND object_kind = ? AND object_id = ? LIMIT 1"
+        )
+        .get(orgId, enrollmentId, objectKind, objectId) as
+        | ExternalObjectMappingRow
+        | null;
+      if (existing) {
+        this.db
+          .query(
+            "UPDATE external_object_mappings SET problem_id = ?, mapping_version = mapping_version + 1, created_by = ? WHERE id = ?"
+          )
+          .run(problemId, text(input.createdBy), existing.id);
+      } else {
+        this.db
+          .query(
+            `INSERT INTO external_object_mappings
+               (id, org_id, enrollment_id, object_kind, object_id, problem_id, mapping_version, created_by, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`
+          )
+          .run(
+            crypto.randomUUID(),
+            orgId,
+            enrollmentId,
+            objectKind,
+            objectId,
+            problemId,
+            text(input.createdBy),
+            nowIso()
+          );
+      }
+      const saved = this.db
+        .query(
+          "SELECT * FROM external_object_mappings WHERE org_id = ? AND enrollment_id = ? AND object_kind = ? AND object_id = ? LIMIT 1"
+        )
+        .get(orgId, enrollmentId, objectKind, objectId) as ExternalObjectMappingRow;
+      return toExternalObjectMapping(saved);
+    });
+  }
+
+  getExternalEnrollment(input: {
+    orgId: string;
+    providerHost: string;
+    repositoryId: string;
+  }): ExternalEnrollment | null {
+    const row = this.db
+      .query(
+        "SELECT * FROM external_enrollments WHERE org_id = ? AND provider_host = ? AND repository_id = ? AND status = 'active' LIMIT 1"
+      )
+      .get(
+        input.orgId,
+        input.providerHost.toLowerCase(),
+        input.repositoryId
+      ) as ExternalEnrollmentRow | null;
+    return row ? toExternalEnrollment(row) : null;
+  }
+
+  getExternalEnrollmentById(id: string): ExternalEnrollment | null {
+    const row = this.db
+      .query("SELECT * FROM external_enrollments WHERE id = ?")
+      .get(required(id, "id")) as ExternalEnrollmentRow | null;
+    return row ? toExternalEnrollment(row) : null;
+  }
+
+  listExternalEnrollments(orgId: string): ExternalEnrollment[] {
+    const rows = this.db
+      .query(
+        "SELECT * FROM external_enrollments WHERE org_id = ? AND status = 'active' ORDER BY created_at DESC"
+      )
+      .all(required(orgId, "orgId")) as ExternalEnrollmentRow[];
+    return rows.map(toExternalEnrollment);
+  }
+
+  getExternalObjectMapping(input: {
+    enrollmentId: string;
+    objectKind: "pr" | "commit" | "issue";
+    objectId: string;
+  }): ExternalObjectMapping | null {
+    const row = this.db
+      .query(
+        "SELECT * FROM external_object_mappings WHERE enrollment_id = ? AND object_kind = ? AND object_id = ? LIMIT 1"
+      )
+      .get(
+        input.enrollmentId,
+        input.objectKind,
+        input.objectId
+      ) as ExternalObjectMappingRow | null;
+    return row ? toExternalObjectMapping(row) : null;
+  }
+
+  /**
+   * Exact-key readback: the recovery path for a worker that lost the response to a successful ingest.
+   *
+   * The lookup key is validated to the same identity shapes ingest enforces, so a malformed readback — a
+   * short SHA, a non-numeric repository id, an unknown host — is refused as input rather than silently
+   * answering `not_found`, which could make a worker retry a write whose identity it never had.
+   */
+  readExternalReceipt(input: ExternalReceiptLookup): ExternalReceipt | null {
+    const providerHost = asTrimmedString(input.providerHost)?.toLowerCase() ?? "";
+    const repositoryId = asTrimmedString(input.repositoryId) ?? "";
+    const objectId = asTrimmedString(input.objectId) ?? "";
+    const eventKind = oneOf(input.eventKind, EXTERNAL_EVENT_KINDS, "eventKind");
+    if (providerHost !== GITHUB_PROVIDER_HOST) {
+      throw new ResearchStoreError(
+        "Unsupported provider host for readback.",
+        "invalid-input"
+      );
+    }
+    if (
+      !NUMERIC_REPOSITORY_ID_RE.test(repositoryId) ||
+      BigInt(repositoryId) <= 0n
+    ) {
+      throw new ResearchStoreError(
+        "Invalid repository id for readback.",
+        "invalid-input"
+      );
+    }
+    const validObjectId =
+      eventKind === "commit.observed"
+        ? FULL_SHA_RE.test(objectId)
+        : PR_NODE_ID_RE.test(objectId);
+    if (!validObjectId) {
+      throw new ResearchStoreError(
+        `Invalid object id for ${eventKind} readback.`,
+        "invalid-input"
+      );
+    }
+    const row = this.db
+      .query(
+        `SELECT * FROM external_evidence_receipts
+          WHERE org_id = ? AND provider_host = ? AND repository_id = ?
+            AND canonical_event_key = ? LIMIT 1`
+      )
+      .get(
+        input.orgId,
+        providerHost,
+        repositoryId,
+        externalCanonicalEventKey(eventKind, objectId)
+      ) as ExternalReceiptRow | null;
+    return row ? toExternalReceipt(row) : null;
+  }
+
+  /**
+   * The atomic ingest. Validation, enrollment lookup, default-branch proof, mapping resolution, dedupe,
+   * Activity insert and receipt insert all happen in **one** transaction, so a crash cannot leave an
+   * activity without its receipt or a receipt without its activity.
+   *
+   * Replay of the same canonical identity is not enough on its own: the canonical payload **and** the
+   * provenance metadata (author, upstream event time, source URL, summary) **and** the resolved attribution
+   * (axis and Problem) must all agree, or the attempt is a structured `identity_conflict` that mutates
+   * nothing. `observedAt` is the worker's fetch time and is deliberately excluded from that comparison, so a
+   * legitimate re-fetch replays. Every malformed field is a structured `rejected`, never a thrown 500.
+   */
+  ingestExternalEvidence(input: {
+    orgId: string;
+    /** The authenticated collector principal's id; recorded as the system actor, never as the GitHub author. */
+    collectorId: string;
+    envelope: ExternalEvidenceEnvelopeV1;
+  }): ExternalIngestResult {
+    const orgId = input.orgId;
+    const collectorId = text(input.collectorId) || "collector";
+    return this.atomic(() => {
+      const reject = (
+        status: ExternalIngestStatus,
+        reason: string
+      ): ExternalIngestResult => ({ ok: false, reason, receipt: null, status });
+
+      const raw = input.envelope as unknown;
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+        return reject("rejected", "invalid_envelope");
+      }
+      const env = raw as Record<string, unknown>;
+
+      if (env.envelopeVersion !== 1) {
+        return reject("rejected", "unsupported_envelope_version");
+      }
+      if (env.provider !== "github") {
+        return reject("rejected", "unsupported_provider");
+      }
+      const providerHost = asTrimmedString(env.providerHost)?.toLowerCase() ?? "";
+      const repositoryId = asTrimmedString(env.repositoryId) ?? "";
+      if (!providerHost || !repositoryId) {
+        return reject("rejected", "missing_repository_identity");
+      }
+      if (providerHost !== GITHUB_PROVIDER_HOST) {
+        // V1 accepts GitHub.com only; host is part of identity, so an unknown host is refused, not mapped.
+        return reject("rejected", "unsupported_provider_host");
+      }
+      if (
+        !NUMERIC_REPOSITORY_ID_RE.test(repositoryId) ||
+        BigInt(repositoryId) <= 0n
+      ) {
+        return reject("rejected", "invalid_repository_id");
+      }
+
+      const rawEventKind = env.eventKind;
+      if (
+        typeof rawEventKind !== "string" ||
+        !(EXTERNAL_EVENT_KINDS as readonly string[]).includes(rawEventKind)
+      ) {
+        return reject("rejected", "unsupported_event_kind");
+      }
+      const eventKind = rawEventKind as ExternalEventKind;
+      if (eventKind === "pr.merged" && env.objectKind !== "pr") {
+        return reject("rejected", "object_kind_event_kind_mismatch");
+      }
+      if (eventKind === "commit.observed" && env.objectKind !== "commit") {
+        return reject("rejected", "object_kind_event_kind_mismatch");
+      }
+      const objectKind = env.objectKind as ExternalObjectKind;
+      const objectId = asTrimmedString(env.objectId) ?? "";
+      if (!objectId || !withinBytes(objectId, 200)) {
+        return reject("rejected", "invalid_object_id");
+      }
+      if (objectKind === "commit" && !FULL_SHA_RE.test(objectId)) {
+        // A short SHA is not an identity: it can collide and is not stable input.
+        return reject("rejected", "commit_requires_full_sha");
+      }
+      if (objectKind === "pr" && !PR_NODE_ID_RE.test(objectId)) {
+        return reject("rejected", "invalid_pr_node_id");
+      }
+
+      const occurredAt = asTrimmedString(env.occurredAt) ?? "";
+      if (!isIsoInstant(occurredAt)) {
+        return reject("rejected", "invalid_occurred_at");
+      }
+      // observedAt is the worker's fetch time: validated but excluded from the replay comparison.
+      let observedAt: string;
+      if (env.observedAt === undefined || env.observedAt === null) {
+        observedAt = nowIso();
+      } else if (isIsoInstant(env.observedAt)) {
+        observedAt = env.observedAt;
+      } else {
+        return reject("rejected", "invalid_observed_at");
+      }
+
+      let objectNumber: number | null = null;
+      if (env.objectNumber !== undefined && env.objectNumber !== null) {
+        if (
+          typeof env.objectNumber !== "number" ||
+          !Number.isInteger(env.objectNumber)
+        ) {
+          return reject("rejected", "invalid_object_number");
+        }
+        objectNumber = env.objectNumber;
+      }
+      if (eventKind === "commit.observed" && objectNumber !== null) {
+        return reject("rejected", "object_number_not_applicable");
+      }
+
+      if (
+        env.payload === undefined ||
+        env.payload === null ||
+        typeof env.payload !== "object" ||
+        Array.isArray(env.payload)
+      ) {
+        return reject("rejected", "invalid_payload");
+      }
+      const payload = env.payload as Record<string, unknown>;
+      const validation =
+        eventKind === "pr.merged"
+          ? validatePrPayload({ objectId, objectNumber, occurredAt, payload })
+          : validateCommitPayload({ objectId, occurredAt, payload });
+      if (!validation.ok) {
+        return reject("rejected", validation.reason);
+      }
+      const payloadCanonicalJson = canonicalJson(validation.canonical);
+      if (utf8ByteLength(payloadCanonicalJson) > EXTERNAL_PAYLOAD_MAX_BYTES) {
+        return reject("rejected", "payload_too_large");
+      }
+      const digest = sha256Hex(payloadCanonicalJson);
+      const suppliedDigest =
+        asTrimmedString(env.payloadDigest)?.toLowerCase() ?? "";
+      if (suppliedDigest && suppliedDigest !== digest) {
+        return reject("digest_mismatch", "payload_digest_mismatch");
+      }
+
+      const authorResult = normalizeExternalAuthor(env.author);
+      if (!authorResult.ok) {
+        return reject("rejected", "invalid_author");
+      }
+      const author = authorResult.author;
+
+      const sourceUrlResult = normalizeSourceUrl(env.sourceUrl, providerHost);
+      if (!sourceUrlResult.ok) {
+        return reject("rejected", "invalid_source_url");
+      }
+      const sourceUrl = sourceUrlResult.url;
+
+      let summary = asTrimmedString(env.summary) ?? "";
+      if (summary && !withinBytes(summary, 1000)) {
+        return reject("rejected", "summary_too_large");
+      }
+      if (!summary) {
+        summary =
+          objectKind === "commit"
+            ? `Commit ${objectId.slice(0, 12)} observed`
+            : "PR merged";
+      }
+
+      const observedBranch = asTrimmedString(env.defaultBranch) ?? "";
+
+      const enrollment = this.getExternalEnrollment({
+        orgId,
+        providerHost,
+        repositoryId,
+      });
+      if (!enrollment) {
+        return reject("unmapped", "repository_not_enrolled");
+      }
+      const axis = this.getAxis(enrollment.axisId);
+      if (!axis || axis.topicId !== enrollment.topicId) {
+        return reject("rejected", "enrollment_target_missing");
+      }
+      // Default-branch observation proof: the branch the worker asserts must be the server-owned approved
+      // one, and a `pr.merged` must have merged into it. Without an approved branch nothing defaults.
+      const approvedBranch = enrollment.defaultBranch;
+      if (!approvedBranch) {
+        return reject("rejected", "default_branch_not_configured");
+      }
+      if (!observedBranch) {
+        return reject("rejected", "default_branch_required");
+      }
+      if (observedBranch !== approvedBranch) {
+        return reject("rejected", "default_branch_mismatch");
+      }
+      if (eventKind === "pr.merged" && validation.canonical.baseRefName !== approvedBranch) {
+        return reject("rejected", "pr_base_branch_not_default");
+      }
+
+      // Resolve the optional Problem from approved mapping only. The caller cannot invent a target.
+      let problemId: string | null = null;
+      const mapping = this.getExternalObjectMapping({
+        enrollmentId: enrollment.id,
+        objectId,
+        objectKind,
+      });
+      if (env.problemId !== undefined && env.problemId !== null) {
+        const requested = asTrimmedString(env.problemId) ?? "";
+        if (!(requested && mapping && mapping.problemId === requested)) {
+          return reject("rejected", "object_mapping_mismatch");
+        }
+      }
+      if (mapping) {
+        const problem = this.getProblem(mapping.problemId);
+        if (!problem || problem.axisId !== enrollment.axisId) {
+          return reject("rejected", "mapped_problem_missing");
+        }
+        problemId = mapping.problemId;
+      }
+
+      const canonicalEventKey = externalCanonicalEventKey(eventKind, objectId);
+      const metadataDigest = externalMetadataDigest({
+        author,
+        occurredAt,
+        sourceUrl,
+        summary,
+      });
+      const existing = this.db
+        .query(
+          `SELECT * FROM external_evidence_receipts
+            WHERE org_id = ? AND provider_host = ? AND repository_id = ? AND canonical_event_key = ? LIMIT 1`
+        )
+        .get(
+          orgId,
+          providerHost,
+          repositoryId,
+          canonicalEventKey
+        ) as ExternalReceiptRow | null;
+      if (existing) {
+        const conflict = (reason: string): ExternalIngestResult => ({
+          ok: false,
+          reason,
+          receipt: toExternalReceipt(existing),
+          status: "identity_conflict",
+        });
+        if (existing.payload_digest !== digest) {
+          return conflict("identity_payload_mismatch");
+        }
+        if (existing.metadata_digest !== metadataDigest) {
+          return conflict("identity_metadata_mismatch");
+        }
+        // Resolved attribution must be stable too: a re-pointed enrollment or a newly approved mapping is
+        // a genuine change of meaning, and history is corrected by append, never by replay mutation.
+        if ((existing.axis_id ?? "") !== enrollment.axisId) {
+          return conflict("identity_mapping_mismatch");
+        }
+        if ((existing.problem_id ?? "") !== (problemId ?? "")) {
+          return conflict("identity_mapping_mismatch");
+        }
+        return {
+          ok: true,
+          reason: "already_recorded",
+          receipt: toExternalReceipt(existing),
+          status: "replayed",
+        };
+      }
+
+      const sourceRef =
+        objectKind === "pr" && objectNumber != null
+          ? `PR #${objectNumber}`
+          : objectId.slice(0, 40);
+      const activity = this.insertActivity({
+        actorId: collectorId,
+        // The collector is a service principal, not a person: the GitHub author is separate provenance.
+        actorType: "system",
+        axisId: enrollment.axisId,
+        occurredAt,
+        problemId,
+        // No repository registry row is minted; the immutable repository identity lives on the receipt.
+        repositoryId: null,
+        sourceRef,
+        sourceType: objectKind === "pr" ? "github_pr" : "github_commit",
+        sourceUrl,
+        summary,
+        topicId: enrollment.topicId,
+      });
+      const receiptId = crypto.randomUUID();
+      this.db
+        .query(
+          `INSERT INTO external_evidence_receipts (
+             id, org_id, activity_id, enrollment_id, provider, provider_host, repository_id,
+             event_kind, object_kind, object_id, object_number, canonical_event_key, payload_digest,
+             metadata_digest, author_id, author_node_id, author_login, source_url, mapping_version,
+             axis_id, problem_id, occurred_at, observed_at, recorded_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(
+          receiptId,
+          orgId,
+          activity.id,
+          enrollment.id,
+          text(env.provider) || "github",
+          providerHost,
+          repositoryId,
+          eventKind,
+          objectKind,
+          objectId,
+          objectNumber,
+          canonicalEventKey,
+          digest,
+          metadataDigest,
+          text(author.id),
+          text(author.nodeId),
+          text(author.login),
+          sourceUrl,
+          enrollment.mappingVersion,
+          enrollment.axisId,
+          problemId ?? "",
+          occurredAt,
+          observedAt,
+          activity.recordedAt
+        );
+      const saved = this.db
+        .query(
+          "SELECT * FROM external_evidence_receipts WHERE id = ?"
+        )
+        .get(receiptId) as ExternalReceiptRow;
+      return {
+        ok: true,
+        reason: "recorded",
+        receipt: toExternalReceipt(saved),
+        status: "inserted",
+      };
     });
   }
 

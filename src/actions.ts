@@ -38,6 +38,9 @@ import type { PluginExecutionContext } from "@nakama/core";
 import {
   type ActorType,
   type Axis,
+  EXTERNAL_EVENT_KINDS,
+  type ExternalEvidenceEnvelopeV1,
+  type ExternalEventKind,
   type ReconcileTopicInput,
   ResearchStore,
   ResearchStoreConflictError,
@@ -360,6 +363,110 @@ async function dispatch(
         topicId: topic.id,
       });
       return { activity, ok: true, topic: store.getTopic(topic.id) };
+    }
+
+    // ------------------------------------------------------ external evidence
+    // These four are the collector's contract. They are not agent tools (a human or an agent must never
+    // ingest external evidence by hand), and the host enforces that only a trusted collector principal can
+    // reach them. The ingest path never reads an identity, a target or an "explicit" flag from `input`:
+    // enrollment decides the target, the server derives the canonical identity, and the actor is `system`.
+    case "ingest_github_activity": {
+      const envelope = input.envelope as ExternalEvidenceEnvelopeV1 | undefined;
+      if (!envelope || typeof envelope !== "object") {
+        throw new BusinessRuleError("envelope is required.");
+      }
+      return store.ingestExternalEvidence({
+        // Host-derived actor id; the store records actorType `system` and never the GitHub author.
+        collectorId: context.actor?.id ?? "",
+        envelope,
+        orgId: context.orgId,
+      });
+    }
+
+    case "read_ingest_receipt": {
+      const eventKind = optionalEnum<ExternalEventKind>(
+        input.eventKind,
+        EXTERNAL_EVENT_KINDS,
+        "eventKind"
+      );
+      if (!eventKind) {
+        throw new BusinessRuleError(
+          `eventKind must be one of: ${EXTERNAL_EVENT_KINDS.join(", ")}.`
+        );
+      }
+      const receipt = store.readExternalReceipt({
+        eventKind,
+        objectId: requiredText(input.objectId, "objectId", 200),
+        orgId: context.orgId,
+        providerHost: requiredText(input.providerHost, "providerHost", 120),
+        repositoryId: requiredText(input.repositoryId, "repositoryId", 120),
+      });
+      return receipt
+        ? { ok: true, receipt, status: "found" }
+        : { ok: false, receipt: null, status: "not_found" };
+    }
+
+    case "manage_external_enrollment": {
+      const operation = requiredText(input.operation, "operation", 20);
+      const actor = actorOf(context);
+      if (operation === "enroll") {
+        return {
+          enrollment: store.enrollExternalRepository({
+            axisId: requiredText(input.axisId, "axisId", 100),
+            createdBy: actor.id,
+            orgId: context.orgId,
+            provider: "github",
+            providerHost: requiredText(input.providerHost, "providerHost", 120),
+            repositoryFullName: optionalText(
+              input.repositoryFullName,
+              "repositoryFullName",
+              200
+            ),
+            repositoryId: requiredText(input.repositoryId, "repositoryId", 120),
+            repositoryNodeId: optionalText(
+              input.repositoryNodeId,
+              "repositoryNodeId",
+              120
+            ),
+            defaultBranch: optionalText(
+              input.defaultBranch,
+              "defaultBranch",
+              255
+            ),
+            topicId: requiredText(input.topicId, "topicId", 100),
+          }),
+          ok: true,
+        };
+      }
+      if (operation === "map") {
+        const objectKind = optionalEnum(
+          input.objectKind,
+          ["pr", "commit", "issue"] as const,
+          "objectKind"
+        );
+        if (!objectKind) {
+          throw new BusinessRuleError("objectKind must be one of: pr, commit, issue.");
+        }
+        return {
+          mapping: store.setExternalObjectMapping({
+            createdBy: actor.id,
+            enrollmentId: requiredText(input.enrollmentId, "enrollmentId", 100),
+            objectId: requiredText(input.objectId, "objectId", 200),
+            objectKind,
+            orgId: context.orgId,
+            problemId: requiredText(input.problemId, "problemId", 100),
+          }),
+          ok: true,
+        };
+      }
+      throw new BusinessRuleError("operation must be enroll or map.");
+    }
+
+    case "list_external_enrollment": {
+      return {
+        enrollments: store.listExternalEnrollments(context.orgId),
+        ok: true,
+      };
     }
 
     case "list_topics": {
