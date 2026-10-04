@@ -56,10 +56,15 @@ overwrite a good record with an aborted run's transcript by hand.
 
 3. **Read the failure list, not the count.** Failures name the check and the measured value; a skip names what
    it could not reach and why.
-4. **Archive the record you are superseding** as `*.revision-<n>.txt` named for the instance
-   revision it was taken at (e.g. `verify-read.txt.revision-511.txt`). It belongs to the tag that carries that
-   build, not to the tip, which keeps one canonical record per dataset and viewport. Completion: the old
-   record is readable in history (`git show <tag>:<path>`).
+4. **Archive the record you are superseding** as `*.revision-<n>.txt` named for the instance revision it was
+   taken at (e.g. `verify-read.txt.revision-511.txt`). It belongs to the tag that carries that build, **not to the
+   tip**, which keeps one canonical record per dataset and viewport. Two traps: (a) **not every record header
+   names a revision** — the focus transcripts carry `(release, revision n)`, but the read transcripts carry only a
+   dashboard and a timestamp; a corpus name like `revision-527` can therefore come from the sibling focus record,
+   not from the read file's own header, so never claim a header source you did not check. (b) If the archived copy
+   is **byte-identical to the tag's canonical path** (verify with sha256), the tag already preserves it and it must
+   not sit untracked at the tip — move it out of the working tree (an estate backup), do not delete it and do not
+   add it to the tip. Completion: the superseded record is readable in history (`git show <tag>:<path>`).
 5. **When the fix is a source change, re-take every record it could reach** — and compare the *check
    descriptions and verdicts*, not the raw lines: detail text legitimately moves with the dataset (ids, counts,
    subject names), so "0 differing check descriptions" is the regression claim worth making.
@@ -101,6 +106,56 @@ overwrite a good record with an aborted run's transcript by hand.
    the thing this contract exists to prevent.
 5. **Exit codes are easy to lose in a pipeline.** `bash read-pass.sh … | tail` reports `tail`'s status; capture
    the pass's own exit code when it decides whether a record is replaced.
+6. **A red read pass can be the instrument, not the page — establish a view's readiness before reading
+   it or clicking its controls.** Three verified prerequisites, each a wait on the page's *own* markers
+   (`page.waitForFunction`), never a blanket sleep:
+   - **A control inside a `<details>` disclosure is not in the accessibility tree until its ancestor is open.**
+     The per-axis `History` button (read pass) and the write pass's `Correct` button both live inside
+     `details[data-rd-axis-more]`; clicking one without opening it makes the locator wait 30 s and the run
+     aborts (exit 2). Open it with `expandAxisDisclosure(card)` first — the helper exists for exactly this
+     and must have a call site before any control inside the disclosure is clicked.
+   - **Entering a view triggers its data after the container appears.** The Topics index renders ~1.5 s after
+     `[data-rd-view="topics"]`, so a read taken on the container alone reports "0 index rows" and every check
+     downstream of it cascades red. Wait with `waitForTopicsReady()` (rows + selected row + detail pane +
+     summary claim), `waitForLandingReady()` (landing cards + names) and `waitForRepositoriesReady()` (rows,
+     optionally a named panel).
+   - **A window change replaces the landing cards while `get_overview` refetches**, so a card's name read
+     mid-refetch is `null`. Wait for the cards again before reading one.
+   The assertions still run and still report what they see; the wait only removes the race. Confirm against a
+   direct probe before recording a product failure.
+7. **A committed record may predate the harness that would re-take it.** Check `git log -1` for the record
+   against `git log -1` for `harness/verify-page.mjs`; if the harness moved after the record, the record is not
+   a reproduction of the current check set. Re-taking it then needs the harness change first — do not paper over
+   the mismatch by editing the record. A readiness/disclosure repair *is* a harness change, so records taken
+   before it do not speak for the repaired check set.
+8. **A composition rule can be a *rule* the reviewer owns, not a product defect — encode the ruled condition,
+   and read the component's own container, not the viewport.** A check that demanded "three columns at every
+   width" failed a correct 634 px band; the ruling made the band **container-responsive** (three columns at
+   ≥720 px available, two permitted at 480–719, one permitted below 480, order preserved). The replacement
+   reads the band's *own* `getBoundingClientRect().width`, branches on the ruled thresholds, and asserts the
+   required condition plus no-clipping/overlap and reachability-by-ordinary-scroll — never a fixed count. Before
+   asserting a threshold, measure the component across widths and compare its real switch points with the rule;
+   align the component to the rule **openly** (recorded) or report the mismatch, and never quietly loosen or
+   tighten the assertion to make a run pass. The reachability half must scroll the scroller that actually
+   scrolls (the host port *or* the document viewport) — see `keyboard-focus-pass` pitfall 8.
+   **Two ruled thresholds cannot both be exact under one equal-gutter auto-fit basis** (720 = 3·M + 2·g and
+   480 = 2·M + g would need g = 0). An auto-fit basis tuned so the third-column switch lands at 720 leaves the
+   second-column switch off the 480 floor (measured ~471 px — a *real* mismatch where the rule reads "below 480 →
+   one column", not a permitted tolerance). Write the breakpoints **explicitly** with container queries on the
+   pane (`container-type: inline-size`; the pane's content box must equal the box the assertion measures — verify
+   it, or every threshold is off by the padding), cap each branch at the band's own card count so conditional
+   sections stay natural, and **prove the switch points on the served page** at 479/480 and 719/720 (band width set
+   directly on the container), not merely at the reference widths (634/794).
+9. **An emitted transcript line can carry trailing whitespace — trim at the emitter, and assert the canonical
+   records.** A `PASS`/`FAIL`/`SKIP` line is printed from one place in `verify-page.mjs` (the `emitLine` call
+   inside `check()`/`skip()`), but several checks build their `detail` from rendered text via `text.slice(0, N)`,
+   so a cut landing on a space leaves a trailing blank in a **committed public** transcript (a reviewer flagged
+   exactly this on the fixture read records). Trim at the emitter — presentation-only, it cannot move a
+   description, condition, detail value or verdict — and keep an executable assertion that the canonical read
+   records carry no trailing whitespace (`harness/test-redact.mjs`, run by `harness:records`), so a regression
+   fails a gate rather than waiting for a reviewer. Do not hand-edit a committed transcript to hide it: fix the
+   emitter and regenerate the record; a write-pass record that still carries the old detail is regenerated only by
+   a write run (which mutates the fixture) and is a stated boundary, not an exemption.
 
 ## Verification
 

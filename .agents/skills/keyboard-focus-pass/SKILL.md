@@ -78,6 +78,30 @@ the pass itself.
    Indexing either reports a correct page as unreachable.
 5. **A walk that stops at the first step outside the plugin misreports what comes later.** Say so in the record
    rather than counting it as coverage.
+6. **The focus pass is the gate that reproduces on a fresh local estate — run it first.** Across four
+   dataset×viewport runs it lands clean verdicts (`60·0·0`, `60·0·0`, `64·0·0`) where the read pass aborts
+   (`acceptance-pass` pitfall 6), and the `--negative-control` run proves sensitivity (a removal produced 10
+   failures).
+7. **A control left flush at a scrollport edge clips its own indicator — fix it with scroll clearance, not a
+   weaker indicator.** The measured case was **fixture 1280×800** failing
+   `button.rd-index-item indicator survives its clippers (progress)`: the flagged representative was a Progress
+   row whose bottom sat exactly on the host scrollport edge, so its 2 px outline + 2 px offset (4 px painted
+   outside the border box) overhung and was cut. The clip was **real** (a keyboard user tabbing there sees it;
+   the re-focus in `__fmMeasureActive` does not move it, `rectAfter == focusedRect`) and **positional** — any
+   focusable flush at the boundary trips it. The fix is `scroll-margin-block: 6px` on the controls the plugin
+   draws: it makes the browser's own focus scroll frame the element's margin box, so a real Tab leaves the
+   outline room on every side, and it has no layout effect. The clipper pad the instrument asserts is
+   `ring.width + |gap| + 1` (5 px here), so clearance must exceed it — 6 px clears it on every side. **Do not**
+   weaken the shared 2 px rule, relax the clipper check, or add a `sleep`/programmatic `focus()` to pass; prove
+   the fix with the real-Tab pass at the failing viewport first, then rerun all four passes and the negative
+   control. (`docs/ux-v2/DECISIONS.md` §14.10.)
+8. **A "reached by ordinary page scrolling" check must scroll the scroller that actually scrolls.** The page's
+   reachable-below-the-fold scroll is sometimes the host's inner `overflow-auto` port and sometimes the document
+   viewport (`document.scrollingElement`), depending on the host layout state at that moment — an ancestor walk
+   that only collects `overflow:auto|scroll` ancestors calls a reachable section unreachable in the viewport
+   case. Collect both (ancestors that actually overflow, plus the document scroller when it overflows), scroll
+   the real ones, restore them afterwards, and count only *ancestor* scrollers as "nested" (`≤ 1` is the
+   intended port).
 
 ## Verification
 
