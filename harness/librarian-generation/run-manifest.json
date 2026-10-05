@@ -1,0 +1,191 @@
+{
+  "artifactId": "librarian-semantic-run-manifest-v1",
+  "manifestVersion": 1,
+  "status": "FROZEN PRE-RUN PLAN \u2014 AWAITING OWNER EXECUTION CONFIRMATION; HARNESS NOT IMPLEMENTED",
+  "statusNote": "Immutable preparation plan pinned before any evaluation output. Frozen plan does not mean an implemented runner or authorize inference. Backend live availability, seed semantics and reliable token counting remain unverified. Any material plan change requires a new manifest version.",
+  "datasetId": "librarian-fixture-v1",
+  "datePrepared": "2026-10-05",
+  "inferenceAuthorized": false,
+  "executable": false,
+  "frozenFinal": true,
+  "corpusArtifact": "semantic-cases-v1",
+  "callPlan": {
+    "semanticCases": [
+      "F-1",
+      "F-2",
+      "F-3",
+      "F-4",
+      "F-5",
+      "F-6",
+      "F-7",
+      "F-16",
+      "F-17",
+      "F-18"
+    ],
+    "repeatsPerSemanticCase": 3,
+    "semanticCalls": 30,
+    "reconstructionExercise": [
+      {
+        "id": "F-9",
+        "snapshotScript": [
+          "base",
+          "drift1",
+          "drift1"
+        ],
+        "calls": 2
+      },
+      {
+        "id": "F-10",
+        "snapshotScript": [
+          "base",
+          "drift1",
+          "drift2"
+        ],
+        "calls": 2
+      }
+    ],
+    "reconstructionCalls": 4,
+    "deterministicNoCall": [
+      "F-8"
+    ],
+    "hardMaximumCalls": 34,
+    "injectionVariant": {
+      "id": "F-18-inj",
+      "replacesCaseSlot": "F-18",
+      "appliesToRepeats": 3,
+      "addedCallsBeyondBudget": 0,
+      "note": "The semantic-only injection variant substitutes the F-18 prompt across all three of the slot's predeclared repeats; it adds zero calls beyond the 34-call hard maximum and does not modify any structural fixture."
+    },
+    "conflictVariant": {
+      "id": "F-2-conflict",
+      "replacesCaseSlot": "F-2",
+      "appliesToRepeats": 3,
+      "addedCallsBeyondBudget": 0,
+      "note": "The semantic-only genuine-conflict variant substitutes the F-2 prompt across all three of the slot's predeclared repeats; it preserves the F-2 subject and machine domain facts (state=blocked, blocker, confidences inferred, branch, prNumber) and changes only the stored human steering note text so the returned human claim competes with the machine reading. It adds zero calls beyond the 34-call hard maximum and does not modify any structural fixture."
+    }
+  },
+  "seeds": {
+    "semanticPredeclared": [
+      101,
+      202,
+      303
+    ],
+    "semanticPolicy": "one predetermined seed per repeat, fixed before the run",
+    "coordinatorControlSeeds": [
+      101,
+      202
+    ],
+    "coordinatorPolicy": "the F-9/F-10 reconstruction controls reuse the predetermined seeds 101 and 202",
+    "replacementSeeds": false,
+    "backendSeedSupport": "UNVERIFIED \u2014 whether the selected backend honours a caller-supplied seed is NOT verified at preparation. If the backend does not support seed control, the run must disclose that explicitly and the fixed-seed policy cannot be claimed. Stop before execution until this is confirmed."
+  },
+  "invariants": {
+    "noRetries": true,
+    "noReplacementSeeds": true,
+    "noExtraImplicitCalls": true,
+    "backendHealthDiscoveryIsNotInference": true,
+    "singlePinnedBackendNoFallback": true,
+    "redirectsRefused": true,
+    "snapshotUnstableIsCoordinatorOwned": true
+  },
+  "transportBudgetsApproved": {
+    "timeoutSeconds": 120,
+    "requestBytesMax": 262144,
+    "responseBytesMax": 65536,
+    "promptTokensMax": 8000,
+    "completionTokensMax": 1000,
+    "redirectsRefused": true,
+    "noRetry": true,
+    "hardMaximumCalls": 34,
+    "label": "APPROVED (owner) \u2014 these budgets bind the first run and are not 'proposed'. Token caps are enforced only if a reliable token counter for the selected backend is available; that availability is UNVERIFIED at preparation \u2014 if unavailable, the run must disclose that and rely on the independent byte caps. Budget approval is NOT execution authorization (inferenceAuthorized remains false)."
+  },
+  "captureContract": {
+    "losslessPreParse": true,
+    "order": "read response -> decode/extract completion content -> UTF-8 encode exactly as extracted -> base64 + sha256 (before any parse) -> then parse",
+    "retained": [
+      "extracted completion (base64 + sha256)",
+      "request/prompt bytes digest",
+      "fixture file digests",
+      "projection digest",
+      "prompt template identity + digest",
+      "repo commit",
+      "model identifier as reported",
+      "decoding parameters",
+      "per-case repeat index"
+    ],
+    "notRetained": [
+      "provider response envelope",
+      "raw wire body as a separate artifact",
+      "account/org/request/user ids",
+      "billing metadata",
+      "headers",
+      "cookies",
+      "credentials"
+    ]
+  },
+  "artifacts": {
+    "corpus": {
+      "path": "src/librarian/fixtures/semantic-cases.json",
+      "artifactId": "semantic-cases-v1",
+      "digest": "b2c986cfc6dc0144257ce671106d4851ccf59a92e8d3e783955a4d4cdd8ca7ac"
+    },
+    "rubric": {
+      "path": "docs/librarian-reconciliation/semantic-rubric-v1.md",
+      "artifactId": "semantic-rubric-v1",
+      "digest": "d7aa26451e9b460a5da50bdce7c2ff08d57e9813bcf4bb5b4b3c0d88ad475053"
+    },
+    "promptTemplate": {
+      "path": "docs/librarian-reconciliation/prompt-template-v1.md",
+      "artifactId": "prompt-template-v1",
+      "digest": "65069febfde963dc0d181de1a44191f2f625c89d88ace3831bfa6d6d3a1aac8c"
+    }
+  },
+  "identity": {
+    "provider": "opencode-go",
+    "backendType": "OpenAI-compatible chat_completions relay",
+    "baseUrl": "https://opencode.ai/zen/go/v1",
+    "origin": "https://opencode.ai",
+    "path": "/zen/go/v1/chat/completions",
+    "model": "deepseek-v4.1-flash",
+    "evidence": "Active Hermes non-secret configuration and installed provider registry; no external discovery request sent.",
+    "liveModelAvailability": "unverified",
+    "backendVersion": "unknown",
+    "modelArtifactHash": "unknown \u2014 third-party hosted model; no immutable revision exposed by local configuration",
+    "credentialEnvironmentKey": "OPENCODE_GO_API_KEY",
+    "credentialValueRetained": false
+  },
+  "finalization": {
+    "requiredBeforeAnyRun": true,
+    "procedure": "Artifact hashes and baseline commit are pinned in this manifest. Its own hash is reported externally after commit to avoid circular self-reference. Execution authorization is a separate record, not an in-place edit.",
+    "selfReferenceStrategy": "parent baseline pre-run commit followed by the final manifest commit, which references that baseline commit hash \u2014 so the manifest never has to contain its own hash (no circular self-reference).",
+    "baselineCommit": "1a93297d32b0a1293681cbf6cfc8d5200a6fb036"
+  },
+  "authGates": {
+    "inferenceAuthorized": false,
+    "backendSelected": true,
+    "dependencyApproved": false,
+    "credentialRead": false,
+    "otherProfileModified": false,
+    "zeroInferenceByThisArtifact": true,
+    "gateStatement": "Owner permitted preparation for OpenCode Go. Synthetic-only third-party execution remains held pending explicit owner confirmation of this frozen plan, capability disclosures and a verified harness. No generation is authorized."
+  },
+  "hygiene": {
+    "publicSecretFree": true,
+    "homePathCommitted": false,
+    "noAccountMetadata": true,
+    "onlyPublicProviderEndpointCommitted": true
+  },
+  "reviewer": "ajegorovs",
+  "decodingParameters": {
+    "temperature": 0,
+    "top_p": 1,
+    "max_tokens": 1000,
+    "seedPolicy": "101,202,303 per semantic repeat; 101,202 for each coordinator control; capability unverified and must be disclosed before execution",
+    "otherOptions": "No additional reasoning options selected; unsupported parameters require owner-approved new plan, no silent substitutions."
+  },
+  "capabilityDisclosures": {
+    "tokenCounting": "UNVERIFIED; reliable 8000/1000 token guarantees cannot yet be claimed. Byte caps mandatory. Owner confirmation required before execution if reliable counting unavailable.",
+    "seedControl": "UNVERIFIED; do not claim deterministic repeats merely because a seed parameter is sent.",
+    "credentialReuse": "Source-only discovery pending; no key read/copied or account data inspected."
+  }
+}
