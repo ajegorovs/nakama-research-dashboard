@@ -319,3 +319,85 @@ the concise acceptance record is
   model reasoning evaluation (preparation of a bounded proposal for it is a **documentation-only** action, not
   its authorization); persistence, mutation, approval workflow; scheduling, daemons, polling, monitoring;
   deployment or service restart; any reopening of P1C or the R-series validation.
+
+---
+
+## D-011 — 2026-10-05 · Librarian / Reconciliation V1 offline model semantic-evaluation proposal approved with amendments (durable ruling)
+
+**Decision.** The Librarian / Reconciliation V1 **offline model semantic-evaluation proposal**
+([`../librarian-reconciliation/OFFLINE-SEMANTIC-EVALUATION-PROPOSAL.md`](../librarian-reconciliation/OFFLINE-SEMANTIC-EVALUATION-PROPOSAL.md))
+is **approved with amendments**. The amendments have been incorporated into that proposal and are **binding on
+the first run**. This ruling approves the **envelope**: it selects **no** backend, authorizes **no**
+dependency, and authorizes **no** model invocation. The owner must still **select the inference backend**
+(local is the stated default; external egress is separately authorized) and give an explicit **execution
+go-ahead** before anything runs. The ruling is recorded **verbatim** below; the disposition notes that follow
+are this record's, not additions to the ruling.
+
+**Ruling (verbatim):**
+
+> Librarian/Reconciliation V1 offline model semantic-evaluation proposal approved with amendments. Use an
+> explicitly owner-selected local inference backend by default; external egress remains separately authorized.
+> Before execution, restrict model-generated outcomes so `snapshot_unstable` is coordinator-owned; freeze and
+> hash the human semantic rubric before any model output exists; define a lossless pre-parse capture artifact
+> with immutable prompt/model/run provenance; and enforce an endpoint/redirect/timeout/size transport boundary.
+> The model should receive deterministic coverage metadata together with supported returned evidence, with
+> stored content explicitly treated as data rather than instructions. For the first run, use the ten semantic
+> cases with three predeclared repeats each plus one model-driven F-9 and F-10 reconstruction exercise, for a
+> hard maximum of 34 inference calls and no automatic retries. The semantic milestone closes green only if
+> every required recorded semantic repeat passes the structural contract and the named human review. Real-Axis
+> access, persistence, mutation, monitoring, deployment and P1C/R-series work remain excluded.
+
+**How each amendment lands (see the proposal for detail).**
+
+- **Local inference is the default; external egress is separately authorized.** §2 states the local,
+  owner-owned server as the default transport and keeps any external/API backend behind its **own** explicit
+  authorization and stated egress scope. No specific server, model, port or path is named or inferred.
+- **`snapshot_unstable` is coordinator-owned.** §3.2/§3.3 restrict the **model's** outcome set to
+  `proposal` / `abstained` / `insufficient_evidence`; `snapshot_unstable` is emitted **only** by the
+  construct/recompute coordinator on **B ≠ C**, and a model payload carrying it is an invalid payload
+  (structural failure), never accepted.
+- **The human semantic rubric is frozen and hashed before any output.** §8 plans
+  `docs/librarian-reconciliation/semantic-rubric-v1.md`, committed and **sha256-hash-pinned (with its repo
+  commit) before the first inference call**; per-case PASS criteria are **checkable conditions, not prose**;
+  a later edit is a new version, never an in-place change.
+- **Lossless pre-parse capture with immutable provenance.** §4 decodes and extracts the completion **content**
+  from the **transient** HTTP response, then **UTF-8 encodes it exactly as extracted (unnormalised)** and
+  records those exact bytes **base64-encoded, with a sha256 over those exact bytes computed before any
+  parse**. The captured bytes are the extracted completion, **not** the raw provider envelope or wire body;
+  the raw body is **not** kept as a separate artifact, and no `extracted text == wire bytes` equivalence is
+  claimed. **No complete provider response** and **no account metadata** is retained; provenance pins the repo
+  commit, prompt template, the exact prompt/request bytes digest, the **frozen fixture file digests** (not only
+  the projection digest), the projection digest, and the model identifier plus the **available local artifact
+  hash — or an explicit `unknown`** where none exists.
+- **Transport boundary: endpoint / redirect / timeout / size.** §5 pins the exact origin, path and model;
+  **refuses redirects** (preferred `redirect: "error"`, no fallback — a redirect is a hard transport failure);
+  enforces a **finite timeout** and **request/response byte caps** as a backstop. The concrete proposed
+  defaults — **token caps prompt ≤ 8000 / completion ≤ 1000 (tokens)**, **request ≤ 256 KiB / response ≤
+  64 KiB**, **timeout 120 s** — are **labelled proposed and NOT authorized**.
+- **Deterministic coverage metadata; stored content is data.** §5 passes the model the supported returned
+  evidence together with a **deterministic coverage summary computed from the API's own semantics (never the
+  oracle)**; the delivered `basis`/`coverage` stay **assembler-owned** (the model may not author them); and
+  stored content is **quoted data with no prompt authority**.
+- **The first-run budget.** §9 fixes the call set: ten semantic cases × three predeclared repeats (**30**)
+  with **three predetermined seeds and no replacement seeds** plus one model-driven **F-9** and **F-10**
+  reconstruction exercise, two calls each (**4**) — **hard maximum 34 inference calls, no automatic retries**;
+  a failed repeat is recorded **failed** and does **not** cancel the case's other predeclared repeats; `F-8`
+  is deterministic and contributes no calls.
+- **Green is structural AND human.** §8: the milestone closes green **only if every required recorded semantic
+  repeat passes both the structural contract and the named human review**; a **FAIL**, **`cannot_review`**,
+  **refused** or **malformed** output is **non-green**.
+- **Exclusions unchanged.** Real-Axis access, persistence, mutation, monitoring, deployment and P1C/R-series
+  work remain excluded.
+
+**Open owner selections carried with this ruling (not decided here).** Backend selection (S-1); explicit
+execution authorization; the named human reviewer (a **stable public handle**, independent of the implementer
+and of generation); approval of the frozen `semantic-rubric-v1`; the frozen transport/token defaults; and the
+**unresolved injection-case budget disposition** — a requested **semantic-only** injection check that is
+**not** a change to the original structural fixtures and **not** an increase beyond the 34-call cap. The
+proposal recommends a **within-budget** variant (one eligible case, e.g. a new deterministic `F-18`
+semantic-only projection preserving subject/domain facts and the coverage limitation, frozen separately,
+over its three repeats) but leaves the disposition **open** for the
+owner.
+
+**No execution authorized.** No backend is selected; no dependency is approved; no model is invoked; no
+credential is read; no other profile is modified. Approving D-011 does not approve a run.

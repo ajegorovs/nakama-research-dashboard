@@ -89,5 +89,6 @@ on an empty-evidence axis, refused), not part of `F-5`; the count is **21**, not
 Semantic usefulness and conflict discovery are **not** covered by this acceptance and remain a separate,
 human-reviewed procedure. A bounded, source-grounded proposal for that procedure — implementation and
 bounded model executions under one authorization envelope, real Axis excluded — is
-[`OFFLINE-SEMANTIC-EVALUATION-PROPOSAL.md`](../librarian-reconciliation/OFFLINE-SEMANTIC-EVALUATION-PROPOSAL.md);
-it is a proposal only and authorizes nothing.
+[`OFFLINE-SEMANTIC-EVALUATION-PROPOSAL.md`](../librarian-reconciliation/OFFLINE-SEMANTIC-EVALUATION-PROPOSAL.md).
+That envelope is now **approved with amendments** (durable ruling **D-011**), but execution remains **pending**
+explicit owner backend selection and authorization — it authorizes **no** run and invokes **no** model.

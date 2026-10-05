@@ -3,8 +3,10 @@
 **Status: ACCEPTED (structural / contract only), 2026-10-05 — reviewer ruling D-010.** The concise acceptance
 record is [`../reviews/2026-10-05-librarian-offline-acceptance-record.md`](../reviews/2026-10-05-librarian-offline-acceptance-record.md);
 the durable ruling is [`../evidence-automation/DECISIONS.md`](../evidence-automation/DECISIONS.md) **D-010**.
-A bounded proposal requiring separate authorization for the still-pending **model semantic evaluation** is
-[`OFFLINE-SEMANTIC-EVALUATION-PROPOSAL.md`](OFFLINE-SEMANTIC-EVALUATION-PROPOSAL.md). This report is retained
+A bounded envelope for the still-pending **model semantic evaluation** is
+[`OFFLINE-SEMANTIC-EVALUATION-PROPOSAL.md`](OFFLINE-SEMANTIC-EVALUATION-PROPOSAL.md) — now **approved with
+amendments** (durable ruling **D-011**), while execution still requires the owner's explicit backend selection
+and authorization. This report is retained
 unchanged as the measured history the acceptance speaks for.
 
 One bounded, offline slice: a
@@ -166,8 +168,9 @@ explicit demonstration: a structurally perfect candidate whose oracle verdict is
 `expected-outcomes.json` carries `semantic.status = pending_human_review`; the semantic gate may only be
 marked green by a named human review with recorded evidence, and that review is outside this slice. A
 bounded, source-grounded proposal for the model-driven semantic evaluation is
-[`OFFLINE-SEMANTIC-EVALUATION-PROPOSAL.md`](OFFLINE-SEMANTIC-EVALUATION-PROPOSAL.md) — a proposal only,
-authorizing nothing.
+[`OFFLINE-SEMANTIC-EVALUATION-PROPOSAL.md`](OFFLINE-SEMANTIC-EVALUATION-PROPOSAL.md). That envelope is now
+**approved with amendments** (durable ruling **D-011**); execution remains **pending** explicit owner backend
+selection and authorization, so it authorizes **no** run and invokes **no** model.
 
 ## 7. Limitations (stated, not implied)
 
