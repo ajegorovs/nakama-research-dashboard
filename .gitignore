@@ -20,3 +20,11 @@ docs/ux-v2/fidelity/preview/
 docs/ux-v2/fidelity/**/side-by-side/
 docs/ux-v2/fidelity/fixture/prototype-1440x900/
 docs/ux-v2/fidelity/fixture-tall/prototype-1440x900/
+
+# Python bytecode from harness helper tests
+__pycache__/
+*.pyc
+
+# Librarian semantic-eval generation captures + external run authorization (never committed)
+harness/librarian-generation/capture/
+harness/librarian-generation/run-authorization.json

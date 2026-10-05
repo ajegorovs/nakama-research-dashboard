@@ -443,7 +443,7 @@ function validateConflict(
 
 export type AssembleContext = { reads: number };
 
-type CandidateAssessment = {
+export type CandidateAssessment = {
   outcome: Outcome;
   provenance: string;
   evidenceRefs: ResolvedRef[];
@@ -459,8 +459,12 @@ type CandidateAssessment = {
  * {@link ContractRefusal} or {@link ReferenceResolutionError}. Shared by the stable
  * {@link assembleProposal} and the churn path {@link buildUnstableProposal} so a malformed candidate is
  * refused on **every** path and never silently dropped.
+ *
+ * Exported so the model-driven coordinator can validate a generation **before** any delivery decision —
+ * including a generation that is about to be discarded — so an invalid generation is recorded and
+ * controls (non-green) rather than being masked by a recompute.
  */
-function assessCandidate(
+export function assessCandidate(
   observation: Observation,
   candidate: unknown
 ): CandidateAssessment {

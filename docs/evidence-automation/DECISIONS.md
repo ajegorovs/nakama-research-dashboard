@@ -463,3 +463,116 @@ recording an unavailable seed) and **stop before execution** if unsupported.
   supplies the shape of the identity field, not its value.
 - **Exclusions unchanged.** Real-Axis access, persistence, mutation, monitoring, deployment and P1C/R-series
   work remain excluded (D-008/D-009/D-010/D-011).
+
+---
+
+## D-013 — 2026-10-05 · Librarian / Reconciliation V1 semantic-evaluation *harness implementation and preflight* authorized (owner amendment; no generation)
+
+**Decision.** The owner approves an implementation amendment to the D-011/D-012 envelope: the bounded
+semantic-evaluation **harness** may be implemented, and **non-generation** capability checks may be run —
+against the frozen preparation artifacts — **without authorizing any model invocation**. This record adds
+**no** backend selection beyond the D-012 preparation choice and **no** execution authorization. Inference
+remains unauthorized: the runner refuses generation absent a separate explicit authorization that is **not**
+granted now.
+
+**What was implemented (offline, non-shipped).**
+
+- `src/librarian/prompt.ts` — the pure prompt builder: renders the frozen `prompt-template-v1` text verbatim
+  from a captured supported projection plus the harness-computed coverage summary (the same API-semantics
+  `computeCoverage` the accepted assembler uses). Returned evidence and coverage are rendered as canonical
+  JSON; the builder is a deterministic function of the projection and never reads the oracle, a supplied
+  candidate or a rubric verdict.
+- `src/librarian/model-candidate.ts` — the strict model-payload parser and the lossless pre-parse capture
+  boundary. The model's outcome set is restricted to `proposal` / `abstained` / `insufficient_evidence`;
+  a model-authored `snapshot_unstable` is a structural failure; forbidden and harness/assembler-owned fields
+  are refused; the trusted `provenance` label is injected **outside** the model's text. Capture order is
+  fixed: encode exactly as extracted → base64 + sha256 → **then** parse; a malformed completion is preserved
+  in full.
+- `src/librarian/model-coordinator.ts` — the DESIGN-V1 §7.3 construct → **discard** → recompute coordinator
+  over the generation seam, with hard bounds (**≤ 3 reads, ≤ 2 generations**): read A → generate A → read B;
+  if A = B deliver; if A ≠ B discard the A-candidate (captured, shape-checked) and regenerate from B
+  **before** reading C; if B = C deliver, else emit **coordinator-owned** `snapshot_unstable`.
+- `harness/librarian-generation/run.mjs` — the offline adapter orchestration: `offline` (default; verify the
+  frozen artifacts are byte-unchanged, enumerate the exact 34-call plan, render every prompt — no network) and
+  `preflight` (non-generation capability check). `generate` is refused without an explicit authorization.
+- `harness/librarian-generation/transport_helper.py` — the **Hermes-backed, credential-isolated** Python
+  transport helper (owner amendment: the harness uses the already-installed Hermes runtime). It resolves the
+  backend through `hermes_cli.runtime_provider.resolve_runtime_provider(requested="opencode-go",
+  target_model="deepseek-v4.1-flash")`, verifies provider/base URL/model against the pinned identity before
+  any request (a resolver default cannot redirect), and holds the credential only in memory: it is never
+  printed, logged, copied, written to a file or exported. Transport guards: redirects refused, finite 120 s
+  timeout, request ≤ 256 KiB / decompressed response ≤ 64 KiB, no retry, no fallback host, exact-endpoint
+  allowlist. Exceptions are fixed secret-free codes. `x-opencode-session` carries a deterministic synthetic
+  run-affinity value (no provider/account identifier is committed). Local mock endpoints are reachable only
+  under `--self-test` and only on loopback, so runtime input cannot be arbitrary.
+- Tests: `prompt.test.ts`, `model-candidate.test.ts`, `model-coordinator.test.ts` (deterministic stubs only),
+  `harness/librarian-generation/run-offline.test.mjs`, and `harness/librarian-generation/test_transport_helper.py`
+  (23 guard tests over local mocked HTTP).
+
+**Runtime dependency (documented, not portable).** The transport helper is **not** self-contained: it
+**requires the already-installed Hermes runtime** and imports its existing modules
+(`hermes_cli.runtime_provider`) and the already-present `httpx` (0.28.1). **No new dependency was installed**
+and nothing was added to `package.json` dependencies; the interpreter is resolved from the actual `hermes`
+executable, never from a hardcoded install path or hash. On a machine without an installed Hermes the helper
+is unusable by design.
+
+**Non-generation capability check actually performed (`preflight`).** The pinned runtime resolved to
+`provider=opencode-go`, `base_url=https://opencode.ai/zen/go/v1`, `api_mode=chat_completions`,
+credential source `env:OPENCODE_GO_API_KEY`. The one permitted authenticated GET —
+`https://opencode.ai/zen/go/v1/models` (indicated by the provider source: "live GET /zen/go/v1/models") —
+returned HTTP 200 with **36** model ids; the requested model `deepseek-v4.1-flash` was **observed in the
+list**. No usage/account endpoint was read; no chats, completions or tokenize call was made; capability
+output is sanitized to model ids and support flags and carries **no** account data and **no** provider
+envelope. Seed control and reliable token counting remain **UNVERIFIED**; backend version and model artifact
+hash are **unknown** — the run must disclose these and must not claim them. Model presence in the list is
+observed; absence would not have been proof of a missing model.
+
+**What this amendment does NOT authorize.** No model inference; no real-Axis read; no production-database
+read; no persistence, mutation, approval workflow, schedule, daemon or monitor; no deployment or service
+restart; no reopening of P1C/R-series; no change to any shipped surface. The runner refuses generation
+without an explicit authorization that does not exist now. The `generate` path is implemented but unexercised.
+
+**Frozen artifacts unchanged.** The execution gate for a real run stays closed: `inferenceAuthorized` remains
+false, the frozen rubric/template/corpus and the original structural fixtures are byte-unchanged, and no
+capture of model output was produced. Human semantic review remains pending; no model results are claimed.
+
+**D-013 update — independent-verification findings resolved at the root (2026-10-05).** An independent
+verification of the harness raised findings that were resolved in the implementation, not merely documented:
+
+- **The `generate` path is no longer a refusal-only stub.** `run.mjs` now carries a real, bounded orchestration
+  (`harness/librarian-generation/orchestrate.mjs`) behind a fail-closed gate (`authorization.mjs`): the exact
+  30 semantic repetitions + 4 reconstruction calls (34) are scheduled, the accepted construct → discard →
+  recompute coordinator is wired to a reader over the **frozen synthetic projections** (no live DB), each
+  generation is captured losslessly (base64 + sha256 + provenance + observation/prompt digests) and written
+  exclusively, and a failed repeat is recorded and does not cancel the others — **no retry**. The gate stays
+  **shut**: no `run-authorization.json` record exists, so `--mode generate` exits 3 without contacting a
+  provider. The orchestration is exercised end to end **only** with an in-process mock generator
+  (`run-generation.test.mjs`), never a real model.
+- **The Python helper's `generate` mode is implemented, not a fall-through.** `transport_helper.py` now has
+  `run_generate` (guarded POST, decode/extract, lossless base64 + sha256 capture; the provider envelope is
+  never returned) reached only **after** the gate. The gate validates an external authorization record against
+  the pinned model/endpoint, the 34-call scope, the manifest digest and the corpus/rubric/template digests,
+  plus the env flag and token.
+- **F-9 fail-closed fix (rubric §6/§8).** The coordinator now validates the A-generation against A **before**
+  discarding it, through the strict `assessCandidate` contract — including unknown citations and refused
+  provenance. An invalid discarded A is a recorded structural failure that **controls** (non-green) and is
+  **not** masked by a recompute; no replacement generation is issued from B. The prior test that silently
+  dropped an unknown A was corrected at the root.
+- **Prompt delimiter safety (rubric §5).** Canonical serialization escapes `<` to `\u003c`, so a stored note
+  containing `</returned_evidence>` (or a forged `<coverage>` block) cannot break out of the delimited block;
+  the frozen template text is untouched and parsing the block restores the original content.
+- **Allowlist.** `assert_url_allowlisted` refuses loopback by default and admits it only when the explicit
+  `--self-test` option is passed; production reaches only the pinned endpoints.
+- **Gate coverage.** `librarian:semantic-eval:test` (`harness/librarian-generation/run-tests.mjs`) runs the
+  offline-runner/authorization tests, the end-to-end mock orchestration tests and the Python guard tests — no
+  new dependency.
+
+**Status.** The harness is **integrated and complete for the offline, non-generation envelope only**: its
+orchestration is exercised exclusively against offline mocks and the real inference gate remains closed. No
+genuine inference was performed; the historical non-generation capability check (§ above) is the only network
+call made by this work, and no measurement is re-claimed or invented here.
+
+**Scope note (preexisting working-tree change).** `.agents/skills/acceptance-pass/SKILL.md` was already
+modified in the working tree **before** this harness work (an unrelated reviewer-remote note); this change did
+not touch it and does not include it. It differs from `HEAD` but is excluded from this change set; no
+independent-verification finding attributes a skill edit to this run, and none occurred.
