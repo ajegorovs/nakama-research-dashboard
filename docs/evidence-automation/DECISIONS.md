@@ -107,8 +107,9 @@ semantics.
 The first bounded slice of this direction is now scoped as a **design proposal only** in
 [`../librarian-reconciliation/DESIGN-V1.md`](../librarian-reconciliation/DESIGN-V1.md): one existing
 Axis, observe its deterministic stored evidence, deliver a current-work interpretation as a
-**proposal** with evidence references, explicit `inferred` authority and coverage, and **no
-authoritative mutation**. Axis selection and any human-confirmation step remain separately gated.
+**proposal** with evidence references, an explicit `claimStrength` (`inferred`/`uncertain`) and
+coverage, and **no authoritative mutation**. Axis selection and any human-confirmation step remain
+separately gated.
 
 Recorded as direction, not scope; **no part of this is implemented** and nothing here is
 authorized by the retired validation campaign.
@@ -119,8 +120,13 @@ authorized by the retired validation campaign.
   association; it does not invent hierarchy.
 - **Current-work blocker summaries.** A summary surface states what currently blocks work, with
   facts and proposals clearly distinguished.
-- **Human steering authority.** Every association carries an explicit authority:
-  `confirmed` or `inferred`; human steering is authoritative and is stated, not omitted.
+- **Claim strength vs. human-steering authority (separated).** A proposal carries a **claim strength**
+  (`inferred` | `uncertain`) — the strength of its own claim, **never** authority, **never** the stored
+  `confidence` vocabulary and **never** `confirmed`. **Human-steering authority is a separate precedence
+  rule**, stated explicitly: a human's steering outranks the machine's reading and is never inferred from
+  provenance (`author_type`), stored `confidence`, `created_at` or row order. No field named `authority` is
+  introduced. Aligned by **D-008** to the approved-with-amendments design
+  [`../librarian-reconciliation/DESIGN-V1.md`](../librarian-reconciliation/DESIGN-V1.md).
 - **Operationalization = future period.** Any operational lifetime implies periodic,
   **separately authorized** authenticated production GitHub reads. That is not scheduled now and
   is a distinct owner decision.
@@ -151,3 +157,56 @@ commit/push/integration line narrows to **further** operations). These are docum
 review cycle. The accepted points themselves — plugin actor attribution
 `b34b2525f5bde0bba383c64b350b29a3d742125c`, synchronizer bounded discovery
 `89e4f301ba52788cb98cca8fd4085510b1040f20` — and the historical baselines are unchanged.
+
+---
+
+## D-008 — 2026-10-05 · Librarian / Reconciliation V1 design approved with amendments (durable ruling)
+
+**Decision.** The Librarian / Reconciliation V1 design is **approved with amendments**. The amendments
+have been incorporated into [`../librarian-reconciliation/DESIGN-V1.md`](../librarian-reconciliation/DESIGN-V1.md);
+D-006 is aligned to the claim-strength / authority distinction they require. This ruling authorizes **no**
+implementation, live access, mutation, persistence, scheduling or monitoring, and reopens no R-series
+validation. The ruling is recorded verbatim below.
+
+**Ruling (verbatim):**
+
+> Librarian/Reconciliation V1 design is approved with amendments. D1 reply-only delivery is approved;
+> persistence and confirmation workflows remain deferred. D2 conflict reporting with abstention is approved,
+> including mandatory abstention on unresolved human–human disagreement. D3 committed offline evaluation
+> data first, followed by separately authorized supported reads of one real Axis, is approved. Before
+> implementation, rename the proposal's `authority` field so `inferred/uncertain` denotes claim strength
+> rather than authority; align standing decision D-006 with that distinction; omit uncalibrated model
+> reasoning strength from V1; define typed resolvable evidence references and structured abstention/conflict
+> outcomes; bound snapshot recomputation; and distinguish the librarian's read-only runtime surface from
+> authoritative isolated-test verification of zero mutation. The offline fixture should exercise adversarial
+> semantic branches, not only a happy path. These amendments do not alter the approved one-Axis,
+> proposal-only architecture.
+
+**How each amendment lands (see the design doc for detail).**
+
+- **`authority` → `claimStrength` (`inferred`/`uncertain`).** The proposal field is renamed so the label
+  denotes the strength of the proposal's own claim, not authority over anything; a proposal has no authority.
+  DESIGN-V1 §3.4, §4, §5.2.
+- **D-006 aligned.** D-006's "human steering authority" bullet is rewritten to separate **claim strength**
+  from the **human-steering precedence rule**; see its updated bullet above.
+- **No uncalibrated model reasoning strength.** The `reasoning_strength` field is omitted from V1 entirely;
+  no `authority` field is added.
+- **Typed resolvable evidence references.** A small finite reference grammar (`axis_field`/`problem_field`/
+  `activity`/`annotation`/`state_log`/`plan_step`) grounded in real stored ids and real exposed field names,
+  with a **fail-closed** resolver (unknown ids, scope mismatches and ambiguous variants are
+  refused; identical references are deduplicated; display labels and list indices are never citation
+  identity). DESIGN-V1 §5.5.
+- **Structured abstention / conflict outcomes.** An `outcome` (`proposal`/`abstained`/
+  `insufficient_evidence`/`snapshot_unstable`) plus structured `conflicts[]` (`refs` + `reason`
+  `human_steering_conflict`/`human_human_conflict`); a withheld reading emits no competing text. DESIGN-V1
+  §5.2, §7.
+- **Bounded snapshot recomputation.** A construct→compare (A/B), one reconstruct→compare (B/C), then
+  `snapshot_unstable` with no further reads or recomputes — never a loop. DESIGN-V1 §7.3.
+- **Read-only runtime surface vs. authoritative verification.** The librarian's runtime allowlist is a
+  *surface* property; proof of **zero mutation** comes only from an **isolated DB-snapshot instrumentation
+  harness** that is never an input the librarian reads. DESIGN-V1 §7, §9.
+
+**Offline fixture.** The committed evaluation fixture must exercise **adversarial semantic branches**, not
+only a happy path. The bounded, offline, proposal-only implementation plan — not itself authorizing
+implementation — is [`../librarian-reconciliation/OFFLINE-IMPLEMENTATION-PROPOSAL.md`](../librarian-reconciliation/OFFLINE-IMPLEMENTATION-PROPOSAL.md).
+No implementation is authorized by this entry; a separate authorization request would carry it.
