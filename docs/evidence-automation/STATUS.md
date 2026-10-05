@@ -5,8 +5,10 @@ external synchronizer and isolated validation slice are accepted, including the 
 metadata-digest receipt correction. See the [acceptance record](../reviews/2026-10-04-evidence-automation-v1-acceptance-record.md)
 for the final ruling, verification provenance and boundaries.
 
-Commit/push/integration, production enrollment/backfill, credentials, scheduling, deployment,
-existing-service restart and research-corpus writes remain separately owner-authorized operations.
+**Further operations** — production enrollment/backfill, credentials, scheduling, deployment,
+existing-service restart and research-corpus writes — remain separately owner-authorized. Commit/push and
+integration of the accepted production changes were owner-authorized and are done
+([`DECISIONS.md`](DECISIONS.md) D-007). Publication of this record is owner-authorized.
 
 ## Post-campaign addendum (2026-10-05)
 

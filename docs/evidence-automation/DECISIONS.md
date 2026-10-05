@@ -104,6 +104,12 @@ semantics.
 
 ## D-006 — 2026-10-05 · Product roadmap — Librarian / Reconciliation V1 (design only, NOT implemented)
 
+The first bounded slice of this direction is now scoped as a **design proposal only** in
+[`../librarian-reconciliation/DESIGN-V1.md`](../librarian-reconciliation/DESIGN-V1.md): one existing
+Axis, observe its deterministic stored evidence, deliver a current-work interpretation as a
+**proposal** with evidence references, explicit `inferred` authority and coverage, and **no
+authoritative mutation**. Axis selection and any human-confirmation step remain separately gated.
+
 Recorded as direction, not scope; **no part of this is implemented** and nothing here is
 authorized by the retired validation campaign.
 
@@ -120,3 +126,28 @@ authorized by the retired validation campaign.
   is a distinct owner decision.
 - **Event-driven, no fabricated research.** Usefulness is expected to be natural and event-driven;
   no research is fabricated to justify the feature.
+
+---
+
+## D-007 — 2026-10-05 · P1C integration accepted (durable ruling)
+
+**Decision.** P1C integration is **accepted**. The closeout and the accepted implementation points are
+the current state; no R-series validation is reopened. The ruling is recorded verbatim below.
+
+**Ruling (verbatim):**
+
+> P1C integration accepted. Dashboard actor attribution at `b34b252…` and synchronizer bounded discovery
+> at `89e4f301…` match the accepted production scope. Historical implementation baselines are preserved.
+> The closeout accurately records qualified acceptance, the unknown asynchronous-visibility bound,
+> deferred/unauthorized periodic monitoring, and the separation of R-series validation tooling from
+> product architecture. No R-series validation should be reopened. Two stale current-state sentences in
+> `INTEGRATION-BASELINE.md` and `STATUS.md` should be corrected for handoff clarity; these
+> documentation-only corrections do not block the next milestone.
+
+**What this adds.** The two named stale sentences are corrected in this same change:
+[`INTEGRATION-BASELINE.md`](INTEGRATION-BASELINE.md) (the "next pilot scope" line now records the pilot
+as historical and names the current direction) and [`STATUS.md`](STATUS.md) (the generic
+commit/push/integration line narrows to **further** operations). These are documentation-only and add no
+review cycle. The accepted points themselves — plugin actor attribution
+`b34b2525f5bde0bba383c64b350b29a3d742125c`, synchronizer bounded discovery
+`89e4f301ba52788cb98cca8fd4085510b1040f20` — and the historical baselines are unchanged.

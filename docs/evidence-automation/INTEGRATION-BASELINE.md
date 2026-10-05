@@ -59,4 +59,11 @@ Excluded/preserved outside these commits:
 
 See [acceptance record](../reviews/2026-10-04-evidence-automation-v1-acceptance-record.md) and [contract](CONTRACT.md). Reviewed revision-2 archive SHA256: `2f0dd97a50f859246f230c3474c385b07b7ecf5f79097df0d5fc6f8beab284a2`.
 
-The next owner/reviewer decision is the real `udv-echo-process` pilot scope. This closure does not authorize repository enrollment, research-Axis mapping/backfill, credentials, scheduling, deployment, service restart or evidence writes.
+**Superseded 2026-10-05:** the real `udv-echo-process` single-repository pilot was exercised during the
+P1B/P1C validation campaign and the campaign is closed with qualified acceptance
+([`CAMPAIGN-CLOSE.md`](CAMPAIGN-CLOSE.md), [`DECISIONS.md`](DECISIONS.md) D-001) — the pilot is **historical
+evidence**, not a pending decision. P1C integration is accepted (D-007). The **current next direction is
+Librarian / Reconciliation V1, design only** ([`DECISIONS.md`](DECISIONS.md) D-006,
+[`../librarian-reconciliation/DESIGN-V1.md`](../librarian-reconciliation/DESIGN-V1.md)). This closure does
+not authorize repository enrollment, research-Axis mapping/backfill, credentials, scheduling, deployment,
+service restart or evidence writes; those remain separately owner-authorized.
