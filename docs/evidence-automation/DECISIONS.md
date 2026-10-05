@@ -270,3 +270,52 @@ Problem-scoped steering is assembled only by the page-only Progress projection
   §9.
 - **Renames (planned paths only).** The builder module `proposal.ts` is renamed `assembler.ts` so it is not
   confused with the proposal document it consumes. No real file exists yet.
+
+---
+
+## D-010 — 2026-10-05 · Librarian / Reconciliation V1 offline contract-evaluator slice accepted (durable ruling)
+
+**Decision.** The Librarian / Reconciliation V1 **offline contract-evaluator slice** at
+`afd0dc793e6f031afe2e84d78fb0ce52c4ae93eb` is **accepted** — a **structural (contract) acceptance only**.
+The ruling is recorded **verbatim** below; the disposition notes that follow are this record's, not additions
+to the ruling. The slice's own evidence is
+[`../librarian-reconciliation/OFFLINE-EVALUATION-REPORT.md`](../librarian-reconciliation/OFFLINE-EVALUATION-REPORT.md);
+the concise acceptance record is
+[`../reviews/2026-10-05-librarian-offline-acceptance-record.md`](../reviews/2026-10-05-librarian-offline-acceptance-record.md).
+
+**Ruling (verbatim):**
+
+> Librarian/Reconciliation V1 offline contract-evaluator slice accepted. The implementation at `afd0dc7` is
+> faithful to the owner-authorized offline envelope. Typed citation resolution, structured proposal
+> validation, supported-read isolation, finite snapshot comparison, independent synthetic candidate/oracle
+> inputs, adversarial structural fixtures, discriminating negative controls, and authoritative
+> logical-database non-mutation verification are accepted. The shipped dashboard/product surfaces remain
+> unchanged. The supplied constant-candidate snapshot specialization is accepted **only for this structural
+> offline evaluator** and does not replace the approved model-driven candidate reconstruction protocol.
+> Structural acceptance establishes neither semantic usefulness nor conflict-discovery capability.
+> Problem-scoped steering annotations remain a known supported-read coverage limitation. No live Axis access,
+> model reasoning evaluation, persistence, mutation, monitoring, deployment, or P1C/R-series work is
+> authorized by this acceptance.
+
+**Disposition (this record's — not the ruling's).**
+
+- **Structural only.** Acceptance certifies the contract evaluator's structure over supplied synthetic
+  candidates and the isolated zero-mutation proof. It is **not** a claim of semantic usefulness, semantic
+  faithfulness, or conflict-discovery capability, and it does not move any fixture case's
+  `semantic.status` off `pending_human_review`.
+- **Constant-candidate specialization.** The supplied **constant** candidate — validated exactly once against
+  the final stable observation and **never regenerated** — is accepted **only** as this offline structural
+  evaluator (the disclosed specialization of DESIGN-V1 §7.3, `OFFLINE-IMPLEMENTATION-PROPOSAL` §5). It does
+  **not** replace the approved model-driven candidate **construct → discard → recompute** protocol; reusing
+  the code with a model- or runtime-constructed candidate still requires that protocol under its own future
+  authorization.
+- **F-19 remains a validator limit, not a model result.** F-19 (a structurally valid supplied candidate whose
+  oracle verdict is `reject`) demonstrates that a structural pass is not semantic validity. It is **not**
+  evidence that a model produces semantically bad output, and no later evaluation may present it as a model
+  semantic failure example.
+- **Problem-scoped steering.** It remains a known supported-read coverage limitation (UNKNOWN; a citation to a
+  problem-scoped annotation id fails closed). It is neither returned nor fabricated.
+- **Excluded (no authorization by this acceptance).** Live/deployed/credentialled access; reading a real Axis;
+  model reasoning evaluation (preparation of a bounded proposal for it is a **documentation-only** action, not
+  its authorization); persistence, mutation, approval workflow; scheduling, daemons, polling, monitoring;
+  deployment or service restart; any reopening of P1C or the R-series validation.

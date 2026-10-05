@@ -1,6 +1,13 @@
 # Librarian / Reconciliation V1 — offline evaluation report
 
-**Status: offline implementation; final review pending.** One bounded, offline slice: a
+**Status: ACCEPTED (structural / contract only), 2026-10-05 — reviewer ruling D-010.** The concise acceptance
+record is [`../reviews/2026-10-05-librarian-offline-acceptance-record.md`](../reviews/2026-10-05-librarian-offline-acceptance-record.md);
+the durable ruling is [`../evidence-automation/DECISIONS.md`](../evidence-automation/DECISIONS.md) **D-010**.
+A bounded proposal requiring separate authorization for the still-pending **model semantic evaluation** is
+[`OFFLINE-SEMANTIC-EVALUATION-PROPOSAL.md`](OFFLINE-SEMANTIC-EVALUATION-PROPOSAL.md). This report is retained
+unchanged as the measured history the acceptance speaks for.
+
+One bounded, offline slice: a
 committed synthetic fixture, a deterministic contract evaluator, a fail-closed typed-reference resolver, a
 closed read boundary, contract tests, and an isolated canonical-logical DB-snapshot harness. No runtime,
 tool, bundle, schema, persistence, schedule or live-access change. The real-Axis read remains held for a
@@ -157,7 +164,10 @@ outputs and conflict assessments; it derived no provenance, invoked no model, an
 cannot certify a reading's usefulness and cannot catch an undeclared conflict. The F-19 case is the
 explicit demonstration: a structurally perfect candidate whose oracle verdict is `reject`. Every case in
 `expected-outcomes.json` carries `semantic.status = pending_human_review`; the semantic gate may only be
-marked green by a named human review with recorded evidence, and that review is outside this slice.
+marked green by a named human review with recorded evidence, and that review is outside this slice. A
+bounded, source-grounded proposal for the model-driven semantic evaluation is
+[`OFFLINE-SEMANTIC-EVALUATION-PROPOSAL.md`](OFFLINE-SEMANTIC-EVALUATION-PROPOSAL.md) — a proposal only,
+authorizing nothing.
 
 ## 7. Limitations (stated, not implied)
 
