@@ -8,6 +8,37 @@ for the final ruling, verification provenance and boundaries.
 Commit/push/integration, production enrollment/backfill, credentials, scheduling, deployment,
 existing-service restart and research-corpus writes remain separately owner-authorized operations.
 
+## Post-campaign addendum (2026-10-05)
+
+The P1B/P1C validation campaign is closed with qualified acceptance; no R9 is authorized. See
+[`DECISIONS.md`](DECISIONS.md) (standing decisions, D-001…D-006) and
+[`CAMPAIGN-CLOSE.md`](CAMPAIGN-CLOSE.md) (the close record).
+
+- **Actor attribution (accepted production change).** The shared activity line now states a
+  recorded `system` actor (collector/automation) distinctly from an unmapped human/agent and never
+  derives it from the event's source type (immutable point
+  `b34b2525f5bde0bba383c64b350b29a3d742125c`). Source unit tests pin the decision
+  (`src/ui-attribution.test.ts`), the plugin typecheck and full suite are green, and the built UI
+  bundle matches its source byte-for-byte (`ui/app.js` sha256
+  `41e61ef5891bfd630a1704d26f144880730f3d842f7d81b79426dd48709787fc`, measured 2026-10-05). This
+  **supersedes** the wave-4 "no UI change" statement below, which was accurate for that wave.
+- **Product vs validation harness.** This document and `CONTRACT.md` / `INTEGRATION-BASELINE.md`
+  describe **product semantics only**. The R1→R8 driver (phase gates, dynamic budget, external-IO
+  guard, sealed-driver diagnostics, served-build guard wiring, budget-guard framework) is a
+  **historical validation harness**, not product architecture, and is not shipped (D-005).
+- **Bounded-discovery worker integration (accepted; explicitly not monitoring).** The P1C
+  bounded discovery path — finite, manually started and one-shot by default, for one enrolled
+  repository — is an accepted production change to the external synchronizer. It is deliberately
+  **not** a scheduler, daemon or periodic authenticated production monitor; periodic
+  eventual-monitor semantics remain deferred and unauthorized (D-003). Its integration is
+  committed as the immutable synchronizer point
+  `89e4f301ba52788cb98cca8fd4085510b1040f20` (local-only: the synchronizer repo has no remote, so
+  its archive is available for local transfer, never a push — not already transferred). Dashboard
+  publication of this record is owner-authorized. The worker's
+  `github_source.py` attempt observer is a default-absent, side-effect-free **optional diagnostic
+  seam** (retained so a future offline observation can be phase-local, D-004) — not product
+  monitoring and not part of the shipped R1→R8 driver architecture.
+
 ## Reviewer ruling (verbatim)
 
 > **Evidence Automation V1 design is approved with amendments.** Use a separate deterministic GitHub synchronizer and a minimal atomic plugin ingest/provenance contract; existing general-purpose actions are not sufficient for reliable production ingestion. Canonical external identity and mapping authority are server-owned and independently validated. V1 attribution is explicit-only and corrections are append-only; no heuristic classification or automatic hierarchy/state mutation is permitted. Production ingestion requires a host-enforced ingest-only collector identity; a broad member API key is not approved for real writes. `ajegorovs/udv-echo-process` is approved as the first real source, but the first write validation must target an isolated controlled fixture Axis with one real merged PR and one distinct default-branch commit, no historical backfill, issues, interpretation or scheduling. After replay/crash/idempotency/security E2E acceptance, actual research-Axis enrollment and backfill become separate owner decisions.
