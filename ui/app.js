@@ -1,5 +1,10 @@
 // src/ui.tsx
 var inject = ["slots", "host", "ui", "styles"];
+function activityActorIndication(actorType, hasPerson) {
+  if (hasPerson)
+    return "person";
+  return actorType === "system" ? "system" : "unattributed";
+}
 var STATUS_OPTIONS = [
   { label: "Active", value: "active" },
   { label: "Paused", value: "paused" },
@@ -1405,6 +1410,7 @@ function apply(ctx) {
     topicLabel = null,
     unattributedNote = null
   }) {
+    const actorIndication = activityActorIndication(item.actorType, person !== null);
     return /* @__PURE__ */ React.createElement("li", {
       "data-rd-activity-event": "true",
       ...attrs ?? {}
@@ -1434,12 +1440,15 @@ function apply(ctx) {
       label: axisLabel,
       onOpen: onOpenEntity,
       type: "axis"
-    }) : null, person ? /* @__PURE__ */ React.createElement(EntityTag, {
+    }) : null, actorIndication === "person" && person ? /* @__PURE__ */ React.createElement(EntityTag, {
       id: person.id,
       label: person.displayName,
       onOpen: onOpenEntity,
       type: "person"
-    }) : unattributedNote !== null ? /* @__PURE__ */ React.createElement("span", {
+    }) : actorIndication === "system" && unattributedNote !== null ? /* @__PURE__ */ React.createElement("span", {
+      className: "rd-muted rd-actor",
+      "data-rd-actor": "system"
+    }, "system") : unattributedNote !== null ? /* @__PURE__ */ React.createElement("span", {
       className: "rd-muted"
     }, unattributedNote) : null, item.problemId !== null && problemLabel !== null ? /* @__PURE__ */ React.createElement(EntityTag, {
       id: item.problemId,
@@ -3472,6 +3481,7 @@ function apply(ctx) {
   ctx.slots.register("page", ResearchPage);
 }
 export {
+  activityActorIndication,
   apply,
   inject
 };

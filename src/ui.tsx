@@ -312,6 +312,8 @@ type ProgressIndex = {
  */
 type ProgressEventRow = {
   axisId: string | null;
+  /** The recorded actor's kind. `system` is collector/automation activity and is stated as such. */
+  actorType: string;
   id: string;
   occurredAt: string;
   person: { displayName: string; id: string } | null;
@@ -473,6 +475,24 @@ type Context = {
 };
 
 export const inject = ["slots", "host", "ui", "styles"];
+
+/**
+ * The shared activity line's actor-attribution decision, named so a unit test can pin it without a DOM.
+ *
+ * A mapped person is a person. Collector/automation activity — the store records it `actorType` `system`
+ * and never the GitHub author (`ingest_github_activity`) — is stated as `system`, visibly. Anything else,
+ * including an unmapped human, is unattributed (the caller words that "no account attributed").
+ *
+ * The event's source type never decides this: a github PR or commit is not `system` by virtue of being a
+ * github event. Only the recorded actor kind does.
+ */
+export function activityActorIndication(
+  actorType: string,
+  hasPerson: boolean
+): "person" | "system" | "unattributed" {
+  if (hasPerson) return "person";
+  return actorType === "system" ? "system" : "unattributed";
+}
 
 const STATUS_OPTIONS = [
   { label: "Active", value: "active" },
@@ -2231,6 +2251,8 @@ export function apply(ctx: Context) {
    */
   type ActivityLineItem = {
     axisId: string | null;
+    /** The recorded actor's kind (`human`/`agent`/`system`/`unknown`); drives the actor indication. */
+    actorType: string;
     id: string;
     occurredAt: string;
     problemId: string | null;
@@ -2272,6 +2294,9 @@ export function apply(ctx: Context) {
     /** Where attribution is a fact the view states (the Progress feed), the words to say it in. */
     unattributedNote?: string | null;
   }) {
+    // One decision, one place: mapped → person tag, recorded system → a visible `system` label,
+    // anything else → the caller's unattributed words. The source type is not consulted.
+    const actorIndication = activityActorIndication(item.actorType, person !== null);
     return (
       <li data-rd-activity-event="true" {...(attrs ?? {})}>
         <div className="rd-cluster">
@@ -2306,13 +2331,27 @@ export function apply(ctx: Context) {
               type="axis"
             />
           ) : null}
-          {person ? (
+          {actorIndication === "person" && person ? (
             <EntityTag
               id={person.id}
               label={person.displayName}
               onOpen={onOpenEntity}
               type="person"
             />
+          ) : actorIndication === "system" && unattributedNote !== null ? (
+            /*
+             * Collector/automation activity, stated where the view states attribution (the Progress
+             * feed). It is not "no account attributed" — that would deny the actor that recorded it.
+             * The worker records `actorType` `system` and never a GitHub author (see
+             * `ingest_github_activity`), so the row states the automation, in words, visibly. The
+             * `unattributedNote` guard is the same one the person tag and the words below use: a view
+             * that does not state attribution states none, so the label cannot appear as a one-off in
+             * a view that would show neither a mapped person nor "no account attributed". `rd-actor`
+             * is the hook the rendered-provenance extractor reads; the words are what a reader sees.
+             */
+            <span className="rd-muted rd-actor" data-rd-actor="system">
+              system
+            </span>
           ) : unattributedNote !== null ? (
             <span className="rd-muted">{unattributedNote}</span>
           ) : null}
