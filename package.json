@@ -11,6 +11,7 @@
     "build:watch": "bun build ./src/ui.tsx --outfile ui/app.js --target browser --watch --no-clear-screen",
     "test": "bun test src",
     "check": "bun run typecheck && bun run build && bun test src",
+    "librarian:evaluate": "bun src/librarian/evaluate.ts",
     "harness:read": "bash harness/read-pass.sh",
     "harness:fixture": "bash harness/read-pass.sh --dataset fixture",
     "harness:seed": "bun harness/replay-corpus.mjs",

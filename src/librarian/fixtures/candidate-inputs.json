@@ -1,0 +1,304 @@
+{
+  "datasetId": "librarian-fixture-v1",
+  "label": "SUPPLIED SYNTHETIC CANDIDATES — inputs, never model output. The assembler's input; contains no expected outcomes.",
+  "note": "No model is invoked anywhere. Each candidate is an explicitly labelled input the deterministic evaluator checks structurally. The oracle lives in expected-outcomes.json and is never read during assembly.",
+  "defaultReadOptions": { "historyLimit": 25, "notesLimit": 25 },
+  "cases": [
+    {
+      "id": "F-1",
+      "description": "Clean happy path: axis with branch + PR evidence and one activity, no competing steering.",
+      "subject": { "topicId": "FIX-TOPIC-ALPHA", "axisId": "FIX-AXIS-CLEAN" },
+      "candidate": {
+        "provenance": "supplied-synthetic-candidate",
+        "outcome": "proposal",
+        "claimStrength": "inferred",
+        "text": "Fixture clean workstream is recorded active; the newest recorded event is PR #101 opened for review.",
+        "evidence_refs": [
+          { "variant": "axis_field", "axisId": "FIX-AXIS-CLEAN", "field": "state" },
+          { "variant": "activity", "id": "FIX-ACT-CLEAN-1" }
+        ],
+        "conflicts": []
+      }
+    },
+    {
+      "id": "F-2",
+      "description": "Human steering that competes with the machine reading: abstain, report the conflict, emit no text.",
+      "subject": { "topicId": "FIX-TOPIC-ALPHA", "axisId": "FIX-AXIS-CONTESTED" },
+      "candidate": {
+        "provenance": "supplied-synthetic-candidate",
+        "outcome": "abstained",
+        "evidence_refs": [{ "variant": "annotation", "id": "FIX-ANN-STEER-CONTESTED" }],
+        "conflicts": [
+          {
+            "reason": "human_steering_conflict",
+            "refs": [{ "variant": "annotation", "id": "FIX-ANN-STEER-CONTESTED" }]
+          }
+        ]
+      }
+    },
+    {
+      "id": "F-3",
+      "description": "Two returned human claims disagree with each other: unresolved conflict, abstain, no recency tie-break.",
+      "subject": { "topicId": "FIX-TOPIC-ALPHA", "axisId": "FIX-AXIS-DISPUTED" },
+      "candidate": {
+        "provenance": "supplied-synthetic-candidate",
+        "outcome": "abstained",
+        "evidence_refs": [
+          { "variant": "annotation", "id": "FIX-ANN-DISPUTE-1" },
+          { "variant": "annotation", "id": "FIX-ANN-DISPUTE-2" }
+        ],
+        "conflicts": [
+          {
+            "reason": "human_human_conflict",
+            "refs": [
+              { "variant": "annotation", "id": "FIX-ANN-DISPUTE-1" },
+              { "variant": "annotation", "id": "FIX-ANN-DISPUTE-2" }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "F-4",
+      "description": "Problem-scoped steering claim (canonical target = problem; axis_id/topic_id null) is not returned by get_topic; a citation to it fails closed, and its coverage is an explicit limitation.",
+      "subject": { "topicId": "FIX-TOPIC-ALPHA", "axisId": "FIX-AXIS-PROBLEM" },
+      "candidate": {
+        "provenance": "supplied-synthetic-candidate",
+        "outcome": "proposal",
+        "claimStrength": "inferred",
+        "text": "This text is never emitted because the citation fails closed.",
+        "evidence_refs": [{ "variant": "annotation", "id": "FIX-ANN-PROBLEM-STEER" }],
+        "conflicts": []
+      }
+    },
+    {
+      "id": "F-5",
+      "description": "Empty evidence list: insufficient_evidence, no text, no confirmed.",
+      "subject": { "topicId": "FIX-TOPIC-ALPHA", "axisId": "FIX-AXIS-EMPTY" },
+      "candidate": {
+        "provenance": "supplied-synthetic-candidate",
+        "outcome": "insufficient_evidence",
+        "evidence_refs": [],
+        "conflicts": []
+      }
+    },
+    {
+      "id": "F-5b",
+      "description": "A proposal on an empty-evidence axis is refused (the insufficient-evidence guard can go red).",
+      "subject": { "topicId": "FIX-TOPIC-ALPHA", "axisId": "FIX-AXIS-EMPTY" },
+      "candidate": {
+        "provenance": "supplied-synthetic-candidate",
+        "outcome": "proposal",
+        "claimStrength": "inferred",
+        "text": "An ungrounded proposal that must be refused.",
+        "evidence_refs": [{ "variant": "axis_field", "axisId": "FIX-AXIS-EMPTY", "field": "state" }],
+        "conflicts": []
+      }
+    },
+    {
+      "id": "F-6",
+      "description": "UNKNOWN coverage: the returned note list length equals the requested cap.",
+      "subject": { "topicId": "FIX-TOPIC-ALPHA", "axisId": "FIX-AXIS-BOUNDED" },
+      "readOptions": { "historyLimit": 25, "notesLimit": 2 },
+      "candidate": {
+        "provenance": "supplied-synthetic-candidate",
+        "outcome": "proposal",
+        "claimStrength": "uncertain",
+        "text": "Fixture bounded workstream is recorded active; the returned note list is at the cap so further notes cannot be ruled out.",
+        "evidence_refs": [{ "variant": "axis_field", "axisId": "FIX-AXIS-BOUNDED", "field": "state" }],
+        "conflicts": []
+      }
+    },
+    {
+      "id": "F-7",
+      "description": "Explicit truncated flag from search_dashboard proves PARTIAL (the only source that proves it).",
+      "subject": { "topicId": "FIX-TOPIC-ALPHA", "axisId": "FIX-AXIS-CLEAN" },
+      "companionReads": [
+        { "action": "search_dashboard", "input": { "query": "fixture", "limit": 1 } }
+      ],
+      "candidate": {
+        "provenance": "supplied-synthetic-candidate",
+        "outcome": "proposal",
+        "claimStrength": "inferred",
+        "text": "Fixture clean workstream is recorded active; a companion search was explicitly truncated.",
+        "evidence_refs": [{ "variant": "axis_field", "axisId": "FIX-AXIS-CLEAN", "field": "state" }],
+        "conflicts": []
+      }
+    },
+    {
+      "id": "F-8",
+      "description": "Snapshot stable (A = B): the supplied constant candidate is delivered against the stable A/B observation.",
+      "subject": { "topicId": "FIX-TOPIC-ALPHA", "axisId": "FIX-AXIS-CLEAN" },
+      "snapshotScript": ["base", "base"],
+      "candidate": {
+        "provenance": "supplied-synthetic-candidate",
+        "outcome": "proposal",
+        "claimStrength": "inferred",
+        "text": "Fixture clean workstream is recorded active; the returned bundle was unchanged across the compare.",
+        "evidence_refs": [{ "variant": "axis_field", "axisId": "FIX-AXIS-CLEAN", "field": "state" }],
+        "conflicts": []
+      }
+    },
+    {
+      "id": "F-9",
+      "description": "Snapshot changes once (A != B, B = C): the A snapshot is discarded, the stable B observation is selected, and the supplied constant candidate is delivered against B/C.",
+      "subject": { "topicId": "FIX-TOPIC-ALPHA", "axisId": "FIX-AXIS-CLEAN" },
+      "snapshotScript": ["base", "drift1", "drift1"],
+      "candidate": {
+        "provenance": "supplied-synthetic-candidate",
+        "outcome": "proposal",
+        "claimStrength": "inferred",
+        "text": "Fixture clean workstream is recorded active; the delivered basis is the stable second read.",
+        "evidence_refs": [{ "variant": "axis_field", "axisId": "FIX-AXIS-CLEAN", "field": "state" }],
+        "conflicts": []
+      }
+    },
+    {
+      "id": "F-10",
+      "description": "Snapshot churns (A != B, B != C): snapshot_unstable, no text, no further reads or recomputes.",
+      "subject": { "topicId": "FIX-TOPIC-ALPHA", "axisId": "FIX-AXIS-CLEAN" },
+      "snapshotScript": ["base", "drift1", "drift2"],
+      "candidate": {
+        "provenance": "supplied-synthetic-candidate",
+        "outcome": "proposal",
+        "claimStrength": "inferred",
+        "text": "This text must never be emitted: the snapshot is unstable.",
+        "evidence_refs": [{ "variant": "axis_field", "axisId": "FIX-AXIS-CLEAN", "field": "state" }],
+        "conflicts": []
+      }
+    },
+    {
+      "id": "F-11",
+      "description": "Injected read failure: a hard error, never insufficient_evidence and never absence.",
+      "subject": { "topicId": "FIX-TOPIC-ALPHA", "axisId": "FIX-AXIS-CLEAN" },
+      "injectReadError": true,
+      "candidate": {
+        "provenance": "supplied-synthetic-candidate",
+        "outcome": "proposal",
+        "claimStrength": "inferred",
+        "text": "Never emitted: the read failed.",
+        "evidence_refs": [{ "variant": "axis_field", "axisId": "FIX-AXIS-CLEAN", "field": "state" }],
+        "conflicts": []
+      }
+    },
+    {
+      "id": "F-12",
+      "description": "Invalid reference (unknown id): the proposal is refused (resolver fails closed).",
+      "subject": { "topicId": "FIX-TOPIC-ALPHA", "axisId": "FIX-AXIS-CLEAN" },
+      "candidate": {
+        "provenance": "supplied-synthetic-candidate",
+        "outcome": "proposal",
+        "claimStrength": "inferred",
+        "text": "Never emitted: the citation does not resolve.",
+        "evidence_refs": [{ "variant": "activity", "id": "FIX-ACT-NOT-REAL" }],
+        "conflicts": []
+      }
+    },
+    {
+      "id": "F-13",
+      "description": "Spoofed provenance: the candidate tries to derive provenance from author_type instead of an injected label.",
+      "subject": { "topicId": "FIX-TOPIC-ALPHA", "axisId": "FIX-AXIS-CLEAN" },
+      "candidate": {
+        "provenanceFrom": "author_type",
+        "outcome": "proposal",
+        "claimStrength": "inferred",
+        "text": "Never emitted: provenance is not mintable from a row.",
+        "evidence_refs": [{ "variant": "axis_field", "axisId": "FIX-AXIS-CLEAN", "field": "state" }],
+        "conflicts": []
+      }
+    },
+    {
+      "id": "F-14",
+      "description": "A write attempt from the read-only context is denied before dispatch.",
+      "subject": { "topicId": "FIX-TOPIC-ALPHA", "axisId": "FIX-AXIS-CLEAN" },
+      "mode": "write_denied",
+      "writeKeys": ["reconcile_topic", "record_activity", "add_annotation"],
+      "candidate": null
+    },
+    {
+      "id": "F-15",
+      "description": "A citation by display label or list index (not a typed id/field) is refused.",
+      "subject": { "topicId": "FIX-TOPIC-ALPHA", "axisId": "FIX-AXIS-CLEAN" },
+      "candidate": {
+        "provenance": "supplied-synthetic-candidate",
+        "outcome": "proposal",
+        "claimStrength": "inferred",
+        "text": "Never emitted: a label is not citation identity.",
+        "evidence_refs": ["Clean workstream", 0],
+        "conflicts": []
+      }
+    },
+    {
+      "id": "F-16",
+      "description": "Topic-wide human steering (axisId null, topicId = the subject's topic) is read for the axis, cited with role topic.",
+      "subject": { "topicId": "FIX-TOPIC-BETA", "axisId": "FIX-AXIS-TOPICSTEER" },
+      "candidate": {
+        "provenance": "supplied-synthetic-candidate",
+        "outcome": "proposal",
+        "claimStrength": "uncertain",
+        "text": "Fixture topic-steered workstream is recorded active; a topic-wide human steering claim was returned and cited.",
+        "evidence_refs": [{ "variant": "annotation", "id": "FIX-ANN-TOPIC-STEER" }],
+        "conflicts": []
+      }
+    },
+    {
+      "id": "F-17",
+      "description": "Problem state-history genuinely returned (ProblemDetail.history) is cited with role problem for a problem-specific statement.",
+      "subject": { "topicId": "FIX-TOPIC-ALPHA", "axisId": "FIX-AXIS-PROBLEM" },
+      "candidate": {
+        "provenance": "supplied-synthetic-candidate",
+        "outcome": "proposal",
+        "claimStrength": "inferred",
+        "text": "Fixture problem-steered workstream carries a returned problem whose state history is cited with role problem.",
+        "evidence_refs": [
+          { "variant": "problem_field", "problemId": "FIX-PROBLEM-1", "field": "state" },
+          { "variant": "state_log", "id": "FIX-SL-P4" }
+        ],
+        "conflicts": []
+      }
+    },
+    {
+      "id": "F-18",
+      "description": "UNKNOWN steering coverage (returned notes equal the cap): no blocker change is inferred; an evidence-limited synopsis is offered.",
+      "subject": { "topicId": "FIX-TOPIC-ALPHA", "axisId": "FIX-AXIS-GUARDED" },
+      "readOptions": { "historyLimit": 25, "notesLimit": 2 },
+      "candidate": {
+        "provenance": "supplied-synthetic-candidate",
+        "outcome": "proposal",
+        "claimStrength": "uncertain",
+        "text": "Fixture guarded workstream is recorded active; steering coverage is unknown, so no blocker change is inferred.",
+        "evidence_refs": [{ "variant": "axis_field", "axisId": "FIX-AXIS-GUARDED", "field": "state" }],
+        "conflicts": []
+      }
+    },
+    {
+      "id": "F-19",
+      "description": "Structurally valid, semantically bad: passes every structural contract check; the semantic rejection is recorded in the oracle as pending human review.",
+      "subject": { "topicId": "FIX-TOPIC-ALPHA", "axisId": "FIX-AXIS-CLEAN" },
+      "candidate": {
+        "provenance": "supplied-synthetic-candidate",
+        "outcome": "proposal",
+        "claimStrength": "inferred",
+        "text": "Structurally perfect synthetic candidate that the oracle rejects on semantics.",
+        "evidence_refs": [
+          { "variant": "axis_field", "axisId": "FIX-AXIS-CLEAN", "field": "state" },
+          { "variant": "activity", "id": "FIX-ACT-CLEAN-1" }
+        ],
+        "conflicts": []
+      }
+    },
+    {
+      "id": "F-20",
+      "description": "Provenance is injected, never derived: the evaluator echoes the supplied label verbatim.",
+      "subject": { "topicId": "FIX-TOPIC-ALPHA", "axisId": "FIX-AXIS-CLEAN" },
+      "candidate": {
+        "provenance": "supplied-synthetic-candidate:F-20",
+        "outcome": "proposal",
+        "claimStrength": "inferred",
+        "text": "Fixture clean workstream is recorded active; the injected provenance label is echoed verbatim.",
+        "evidence_refs": [{ "variant": "axis_field", "axisId": "FIX-AXIS-CLEAN", "field": "state" }],
+        "conflicts": []
+      }
+    }
+  ]
+}

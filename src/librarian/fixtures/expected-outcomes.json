@@ -1,0 +1,105 @@
+{
+  "datasetId": "librarian-fixture-v1",
+  "label": "ORACLE — expected structural outcomes + cited support, AWAITING HUMAN REVIEW. Never read by the assembler/builder path; the evaluator opens it only to compare after assembly.",
+  "note": "The semantic verdicts here are the reviewer's hypotheses for a named human review. A deterministic pass over this file is a structural result, not a claim of semantic usefulness.",
+  "cases": {
+    "F-1": {
+      "expect": { "status": "proposal", "outcome": "proposal", "reads": 2 },
+      "citedSupport": ["axis_field:FIX-AXIS-CLEAN:state", "activity:FIX-ACT-CLEAN-1"],
+      "roles": { "axis_field:FIX-AXIS-CLEAN:state": "axis", "activity:FIX-ACT-CLEAN-1": "axis" },
+      "coverage": { "axis_history": "COMPLETE", "axis_notes": "COMPLETE", "problem_scoped_steering": "UNKNOWN" },
+      "semantic": { "status": "pending_human_review", "verdict": "accept", "note": "Grounded synopsis, no causal leap." }
+    },
+    "F-2": {
+      "expect": { "status": "proposal", "outcome": "abstained", "reads": 2, "noText": true, "conflictReasons": ["human_steering_conflict"] },
+      "coverage": { "problem_scoped_steering": "UNKNOWN" },
+      "semantic": { "status": "pending_human_review", "verdict": "accept_abstention", "note": "Human steering governs; competing text withheld." }
+    },
+    "F-3": {
+      "expect": { "status": "proposal", "outcome": "abstained", "reads": 2, "noText": true, "conflictReasons": ["human_human_conflict"] },
+      "coverage": { "problem_scoped_steering": "UNKNOWN" },
+      "semantic": { "status": "pending_human_review", "verdict": "accept_abstention", "note": "Unresolved human-human disagreement; no recency/confidence tie-break." }
+    },
+    "F-4": {
+      "expect": { "status": "refused", "reason": "unknown_id" },
+      "coverage": { "problem_scoped_steering": "UNKNOWN" },
+      "semantic": { "status": "pending_human_review", "verdict": "accept_refusal", "note": "A problem-scoped annotation is not returned; the resolver refuses it rather than fabricating a projection." }
+    },
+    "F-5": {
+      "expect": { "status": "proposal", "outcome": "insufficient_evidence", "reads": 2, "noText": true },
+      "coverage": { "problem_scoped_steering": "UNKNOWN" },
+      "semantic": { "status": "pending_human_review", "verdict": "accept", "note": "Empty evidence; no confirmed, no text." }
+    },
+    "F-5b": {
+      "expect": { "status": "refused", "reason": "proposal_without_evidence" },
+      "semantic": { "status": "pending_human_review", "verdict": "accept_refusal", "note": "The insufficient-evidence guard is load-bearing." }
+    },
+    "F-6": {
+      "expect": { "status": "proposal", "outcome": "proposal", "reads": 2 },
+      "coverage": { "axis_notes": "UNKNOWN" },
+      "semantic": { "status": "pending_human_review", "verdict": "accept", "note": "Cap equality yields UNKNOWN, never COMPLETE or proven PARTIAL." }
+    },
+    "F-7": {
+      "expect": { "status": "proposal", "outcome": "proposal", "reads": 2 },
+      "coverage": { "search": "PARTIAL" },
+      "semantic": { "status": "pending_human_review", "verdict": "accept", "note": "PARTIAL is used only for an explicit truncated flag." }
+    },
+    "F-8": {
+      "expect": { "status": "proposal", "outcome": "proposal", "reads": 2, "digestSource": "A" },
+      "semantic": { "status": "pending_human_review", "verdict": "accept", "note": "Stable A=B." }
+    },
+    "F-9": {
+      "expect": { "status": "proposal", "outcome": "proposal", "reads": 3, "digestSource": "B" },
+      "semantic": { "status": "pending_human_review", "verdict": "accept", "note": "A discarded; delivered against B/C." }
+    },
+    "F-10": {
+      "expect": { "status": "proposal", "outcome": "snapshot_unstable", "reads": 3, "noText": true, "digestSource": "B" },
+      "semantic": { "status": "pending_human_review", "verdict": "accept", "note": "Bounded: no further reads or recomputes." }
+    },
+    "F-11": {
+      "expect": { "status": "read_error", "reads": 1 },
+      "semantic": { "status": "pending_human_review", "verdict": "accept", "note": "A failed read is a hard error, never insufficient_evidence." }
+    },
+    "F-12": {
+      "expect": { "status": "refused", "reason": "unknown_id" },
+      "semantic": { "status": "pending_human_review", "verdict": "accept_refusal", "note": "Unknown id fails closed." }
+    },
+    "F-13": {
+      "expect": { "status": "refused", "reason": "provenance_not_injected" },
+      "semantic": { "status": "pending_human_review", "verdict": "accept_refusal", "note": "Provenance is not mintable from a row." }
+    },
+    "F-14": {
+      "expect": { "status": "write_denied" },
+      "semantic": { "status": "pending_human_review", "verdict": "accept", "note": "Writes are denied before dispatch." }
+    },
+    "F-15": {
+      "expect": { "status": "refused", "reason": "non_typed_reference" },
+      "semantic": { "status": "pending_human_review", "verdict": "accept_refusal", "note": "A label or index is not citation identity." }
+    },
+    "F-16": {
+      "expect": { "status": "proposal", "outcome": "proposal", "reads": 2 },
+      "citedSupport": ["annotation:FIX-ANN-TOPIC-STEER"],
+      "roles": { "annotation:FIX-ANN-TOPIC-STEER": "topic" },
+      "semantic": { "status": "pending_human_review", "verdict": "accept", "note": "Topic-wide steering read for the axis under subject.topicId." }
+    },
+    "F-17": {
+      "expect": { "status": "proposal", "outcome": "proposal", "reads": 2 },
+      "citedSupport": ["problem_field:FIX-PROBLEM-1:state", "state_log:FIX-SL-P4"],
+      "roles": { "problem_field:FIX-PROBLEM-1:state": "problem", "state_log:FIX-SL-P4": "problem" },
+      "semantic": { "status": "pending_human_review", "verdict": "accept", "note": "Problem role, never whole-axis steering; the resolver does not require an axisId." }
+    },
+    "F-18": {
+      "expect": { "status": "proposal", "outcome": "proposal", "reads": 2 },
+      "coverage": { "axis_notes": "UNKNOWN" },
+      "semantic": { "status": "pending_human_review", "verdict": "accept_evidence_limited", "note": "No blocker change inferred; must never assert that no steering exists — evidence-limited synopsis only." }
+    },
+    "F-19": {
+      "expect": { "status": "proposal", "outcome": "proposal", "reads": 2 },
+      "semantic": { "status": "pending_human_review", "verdict": "reject", "note": "Structurally valid, semantically rejected: a structural pass is not semantic validity." }
+    },
+    "F-20": {
+      "expect": { "status": "proposal", "outcome": "proposal", "reads": 2, "provenance": "supplied-synthetic-candidate:F-20" },
+      "semantic": { "status": "pending_human_review", "verdict": "accept", "note": "Injected provenance echoed verbatim; none derived." }
+    }
+  }
+}

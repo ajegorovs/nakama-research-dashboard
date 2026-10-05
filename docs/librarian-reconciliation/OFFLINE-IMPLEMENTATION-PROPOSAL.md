@@ -100,6 +100,18 @@ Paths below are **proposals**, grounded in the current tree (`src/*.test.ts` use
 **Dependencies:** none new. Bun (pinned) and the existing `ResearchStore`, `migrations/` and `bun:sqlite` are
 sufficient. No `node_modules` step beyond `bun install`.
 
+> **Implementation disposition (as built — see `OFFLINE-EVALUATION-REPORT.md`; a recorded disposition, NOT a
+> reviewer-approved deviation).** The bounded A/B/C driver that was built selects the stable observation and
+> validates **one supplied constant candidate** against it — the A observation when A = B, or the B
+> observation on churn (A ≠ B, B = C) — and never against a stale A. It does **not** construct a candidate
+> per read and does **not** regenerate a candidate from B; there is **no model** and no candidate factory in
+> the offline slice. The ≤3-read bound and the stable digest are preserved. This is the disposition of the
+> implemented offline contract slice — an **implementation specialization** of `DESIGN-V1.md` §7.3, **not**
+> a reviewer-approved change to that section's general construct/recompute protocol. Reusing the code with
+> a runtime- or model-constructed candidate still requires that protocol, under its own future
+> authorization. The supplied candidates are structural test inputs: a structural pass over them does not
+> establish semantic usefulness or faithfulness.
+
 ## 6. Deliverables
 
 1. `references.ts` + `assembler.ts` implementing §5.2 and §5.5 of the design — pure, and read-boundary-injected so the core is never handed a store handle.

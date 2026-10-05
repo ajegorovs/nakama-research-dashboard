@@ -310,6 +310,19 @@ involved, a structured **`conflicts[]`** entry — never a prose-only signal.
    state, or abstains and gives that as the reason — and it never asserts that *no steering exists*, only
    that none was **returned**.
 
+> **Scoped footnote to case 3 (snapshot change) above — the implemented offline contract slice (disclosed
+> specialization).** The offline evaluator slice (`OFFLINE-EVALUATION-REPORT.md`) realizes that bounded
+> A→B→C discipline with **one supplied, constant candidate**, validated **exactly once** against the final
+> stable observation — the A observation when A = B, or the B observation on churn (A ≠ B, B = C) — never
+> against a stale A and **never regenerated**. It therefore does **not** perform the general per-read
+> **candidate construction and recomputation** described above (build the candidate from A; on A ≠ B discard
+> it and recompute from B): that slice invokes **no model** and has **no candidate factory**. The safety
+> properties this section requires are preserved — the read count is bounded to **≤3**, no further reads or
+> recomputes follow a `snapshot_unstable`, and the stable digest is kept. **Reusing the implementation with
+> a runtime- or model-constructed candidate still requires the original construct/recompute protocol in this
+> section, under its own future authorization**; the offline slice does not substitute for it. The supplied
+> candidates are structural test inputs, so a structural pass is not a semantic claim.
+
 **Read-only runtime surface vs. authoritative verification.** The librarian's runtime surface is **read-only
 by construction** — its reads reach it only through the read-boundary adapter (§9 M-1, §10) and it is never
 handed a store handle, so it cannot reach a write path. That is a
