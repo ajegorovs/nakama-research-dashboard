@@ -401,3 +401,65 @@ owner.
 
 **No execution authorized.** No backend is selected; no dependency is approved; no model is invoked; no
 credential is read; no other profile is modified. Approving D-011 does not approve a run.
+
+---
+
+## D-012 — 2026-10-05 · Librarian / Reconciliation V1 semantic-evaluation *preparation* authorized (owner ruling; distinct from backend selection and execution)
+
+**Decision.** The owner authorizes **preparation only** for the Librarian / Reconciliation V1 offline model
+semantic evaluation: authoring the human semantic rubric and the textual prompt template (for **freeze at the
+finalization commit**), preparing the `F-18` semantics-only injection projection, and drafting the
+non-executing preparation run manifest. This ruling is the **owner's** and is **distinct** from the D-011
+reviewer ruling: it adds no backend and no call. Preparation is **discovery/preparation, not implementation**:
+no adapter, coordinator, prompt builder or other executable module is authorized, and nothing here is
+implemented or run.
+
+**Recording of the authorization (owner-provided; summarized, not a verbatim D-011-style ruling).** The owner
+(authorized handle supplied by the requester) directed that preparation artifacts be produced now, without any
+model execution. The named human reviewer carried by these artifacts is the stable public handle
+**`ajegorovs`** (owner-provided), **independent of the implementer** and of the generation harness; the
+reviewer identity may be substituted by the owner before the run.
+
+**What this ruling approves.** The preparation artifacts, as drafted at the preparation commit:
+`docs/librarian-reconciliation/semantic-rubric-v1.md`, `docs/librarian-reconciliation/prompt-template-v1.md`,
+`src/librarian/fixtures/semantic-cases.json` (`semantic-cases-v1`), and
+`harness/librarian-generation/run-manifest.json` (preparation form). The owner **adopts the within-budget
+injection disposition**: the new `F-18-inj` semantic-only projection replaces the `F-18` prompt across that
+slot's three predeclared repeats — preserving the `F-18` subject/domain facts and the UNKNOWN coverage
+limitation, with the instruction-like text living in the stored note content, the original structural
+fixtures byte-unchanged, and **zero** calls beyond the 34-call cap.
+
+The owner likewise **adopts the companion within-budget genuine-conflict disposition**: a new `F-2-conflict`
+semantic-only projection replaces the `F-2` prompt across that slot's three predeclared repeats — **preserving
+the `F-2` subject and machine domain facts** (`state=blocked`, `blocker="waiting on a synthetic fixture slot"`,
+confidences `inferred`, `branch=fixture/contested`, `prNumber=202`) and changing **only** the stored text of the
+one returned human `steering` annotation (`FIX-ANN-STEER-CONTESTED`) so the human claim now **genuinely
+competes** with the machine reading. The base `F-2` projection is retained but drives no calls; the original
+structural fixtures stay byte-unchanged, and the variant adds **zero** calls beyond the 34-call cap. Its
+purpose is to exercise the genuine **human–machine conflict** capability that no base-corpus case could
+exercise: a returned human claim must be recognised (`outcome=abstained`, a `human_steering_conflict` citing
+the returned annotation, with no withheld text), while a conflict on base `F-2` remains a hallucinated
+contradiction. The prepared corpus artifact `semantic-cases-v1` therefore carries **both** adopted
+within-budget variants (`F-18-inj` and `F-2-conflict`), each cross-referenced by the frozen rubric and the
+preparation manifest; their exact projection digests are recorded in the corpus and recomputed with the
+repository's own `digestPayload`.
+
+The owner also **approves the first-run budgets** recorded in the preparation manifest: hard maximum **34**
+calls; **prompt ≤ 8000 / completion ≤ 1000 tokens**; **request ≤ 256 KiB / response ≤ 64 KiB**; **120 s**
+timeout; **redirects refused**; **no retries**. These are **approved**, not merely proposed. Whether the
+selected backend supports a caller-supplied **seed** and exposes a **reliable token counter** is
+**UNVERIFIED at preparation**; the run must disclose that (falling back to the independent byte caps and
+recording an unavailable seed) and **stop before execution** if unsupported.
+
+**Disposition (this record's — not a ruling).**
+
+- **Preparation, not execution.** This ruling authorizes **zero** inference. It does **not** select a backend
+  (S-1 remains **OPEN**), does **not** authorize execution (**OPEN**), does **not** read a credential, and
+  modifies no other profile. The owner must still name the inference backend and give an explicit go-ahead,
+  and the rubric/corpus/template hashes must be pinned at the finalization commit, before any run.
+- **Backend identity is intentionally absent from public artifacts.** No model, endpoint, port or path is
+  named here or in any committed preparation artifact; the exact endpoint/config stays outside this public
+  repo and is referenced only by a masked public label plus a future local binding digest. Preparation
+  supplies the shape of the identity field, not its value.
+- **Exclusions unchanged.** Real-Axis access, persistence, mutation, monitoring, deployment and P1C/R-series
+  work remain excluded (D-008/D-009/D-010/D-011).
