@@ -740,3 +740,72 @@ template/corpus remain byte-unchanged, and `run.mjs --mode generate` still exits
 45 Python = 101 pass / 0 fail**. `bun run typecheck` — **PASS** (0 errors). `run.mjs --mode offline` — frozen
 artifacts byte-unchanged, plan **30 + 4 = 34**, 0 model calls. `run.mjs --mode generate` — **REFUSED**
 (`authorization_flag_absent`), exit 3. Full detail in the implementation report's verification table.
+
+---
+
+## D-015 — 2026-10-05 · Semantic-evaluation harness implementation accepted (durable ruling; **execution still stopped, no inference**)
+
+**Decision.** The reviewer's disposition of the D-014 remediation — the semantic-evaluation harness at
+`d3fe088` — is recorded here **verbatim** and is the acceptance. The harness is **accepted as
+implementation-complete for the approved synthetic model-evaluation envelope** (D-011/D-012/D-013/D-014). This
+is a **structural/implementation acceptance only**: it establishes no semantic result and authorizes **no**
+inference. It **amends nothing** in D-011–D-014 and changes no frozen artifact. The reviewer ruling is the
+acceptance; the disposition notes that follow are this record's, not additions to the ruling.
+
+**Ruling (verbatim):**
+
+> **D-014 remediation accepted.** The semantic-evaluation harness at `d3fe088` is implementation-complete for
+> the approved synthetic model-evaluation envelope. The bounded construct/discard/recompute coordinator, frozen
+> prompt/corpus/rubric binding, lossless model-output capture, strict durable evidence-pack export, independent
+> requested/reported model identity handling, credential-isolated transport, third-party egress/capability
+> authorization gates, revision pinning, no-retry 34-call schedule, and fail-closed structural validation are
+> accepted. Offline/mock verification does not constitute semantic acceptance. No genuine inference has yet
+> occurred.
+
+**Implementation identity accepted.** `d3fe088694618498a2ad708752f98538d479168f` (`main`) — the commit the
+ruling names (`d3fe088`). Recording this acceptance changes **no** code, test, manifest, `package.json` or
+shipped surface; the entry and its acceptance record are **documentation only**.
+
+**Measured counts (quoted from the prior harness work — NOT re-derived here).** This acceptance re-runs no
+gate. The counts below are the ones already measured and recorded by the harness work (D-014 supplement; the
+implementation report §5), quoted so a reviewer sees them without opening the report. They are **prior
+measurements, not a new run**, and this record claims no rerun.
+
+| gate | value (prior measurement) |
+|---|---|
+| `bun test src` | **304 pass / 0 fail** (13 files) |
+| harness aggregate `librarian:semantic-eval:test` | **101 pass / 0 fail** (23 offline + 33 generation + 45 Python) |
+| `bun run typecheck` | PASS (0 errors) |
+| `run.mjs --mode generate` | REFUSED (`authorization_flag_absent`), exit 3; no provider contacted |
+
+**Model identity — match, fail-closed; no unknown disposition.** A delivered candidate requires the
+backend-**reported** model id to **equal** the requested id (`modelIdentity = match`). A **mismatch** is always
+non-green, and a bare **unknown** is non-green **unless** an explicit prior owner disposition
+`capabilityDispositions.modelIdentity = "owner_accepted_unknown"` admits it. **No such owner disposition is
+granted.** A present-but-unusable id is classified `invalid`, which no disposition admits (the completion is
+still preserved losslessly and no candidate is delivered).
+
+**Capability + third-party egress — required by the gate, absent in practice; no proof.** The gate requires a
+`capabilityDispositions` block (mandatory `seedControl`, `promptTokenCounting`) and a `thirdPartyEgress`
+approval. **Neither exists** in any committed artifact. No genuine capability is **verified**, and **no
+capability proof artifact exists** under `harness/librarian-generation/capability-proofs/`, so every
+`verified` route refuses. `seedControl` and `promptTokenCounting` remain **UNVERIFIED**; backend version and
+model-artifact hash remain **unknown**.
+
+**Frozen artifacts unchanged.** The frozen run manifest, the synthetic corpus, the semantic rubric and the
+prompt template — and the original structural fixtures — are **byte-unchanged**; no edit to any of them
+accompanies this acceptance.
+
+**Execution remains stopped (no inference).** No provider was contacted, no model was invoked, no model output
+was captured, no capability waiver and no third-party egress was granted, no `run-authorization.json` exists,
+and the runner still exits 3 before any network I/O. Every fixture case's `semantic.status` stays
+`pending_human_review`. Offline/mock verification does **not** constitute semantic acceptance.
+
+**Owner fields still required before any run (separately, and not granted).** An external authorization record
+carrying the `capabilityDispositions` block and the `thirdPartyEgress` approval; the matching env flag + token;
+a matching implementation revision; and the explicit execution go-ahead.
+
+**Scope note (preexisting working-tree change preserved).** `.agents/skills/acceptance-pass/SKILL.md` was
+already dirty in the working tree before this documentation work (sha256
+`36b9ae968d5e929483744b090b6994b1a305ed87dab22cfe186ba00e7cc8eb05`); it is unrelated, is **not** touched, and is
+excluded from this change set.
