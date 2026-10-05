@@ -75,6 +75,53 @@ function drift(raw, mode) {
 }
 
 /**
+ * The observation the coordinator builds for one scheduled entry at one read index. Reused by both the
+ * executor (`createHarness`) and the durable-pack integrity prevalidation, so the exported request is
+ * checked against the **same** builder that produced it — no parallel reimplementation.
+ */
+export function observationForRead(caseId, readIndex, manifest, corpus) {
+  const plan = manifest.callPlan;
+  const projection = projectionFor(caseId, plan, corpus);
+  const reconstruction = (plan.reconstructionExercise ?? []).find((e) => e.id === caseId);
+  const script = (reconstruction && reconstruction.snapshotScript) || ["base", "base"];
+  const raw = drift(rawOf(projection), script[readIndex] ?? "base");
+  return buildObservation(raw, {
+    limits: projection.limits,
+    search: projection.search,
+    subject: projection.subject,
+  });
+}
+
+/**
+ * The exact prompt the coordinator renders for one generation step of a case. Generation `A` is built
+ * from read index 0; generation `B` from read index 1 (the recompute basis). The prompt is derived
+ * through the frozen `renderPrompt`, never re-authored here.
+ */
+export function expectedRequest(caseId, step, manifest, corpus) {
+  const readIndex = step === "B" ? 1 : 0;
+  return renderPrompt(observationForRead(caseId, readIndex, manifest, corpus));
+}
+
+/**
+ * The exact set of inference calls the frozen manifest + corpus must produce: ten semantic cases ×
+ * three predeclared repeats (one generation each, `A = B`) plus the F-9/F-10 reconstruction exercise
+ * (two generations each, `A ≠ B`). Derived from the same `buildSchedule` + observation builder the
+ * executor uses, so a capture set can be checked against it rather than against a hand-copied list.
+ */
+export function expectedCalls(manifest, corpus) {
+  const calls = [];
+  for (const entry of buildSchedule(manifest, corpus)) {
+    const first = observationForRead(entry.caseId, 0, manifest, corpus);
+    const second = observationForRead(entry.caseId, 1, manifest, corpus);
+    const steps = first.digest === second.digest ? ["A"] : ["A", "B"];
+    for (const step of steps) {
+      calls.push({ caseId: entry.caseId, repeat: entry.repeat, seed: entry.seed, step });
+    }
+  }
+  return calls;
+}
+
+/**
  * Build the exact call plan from the frozen manifest. Returns the ordered schedule: ten semantic cases
  * × three predeclared repeats (A = B, one generation each) followed by the F-9/F-10 reconstruction
  * exercise (two generations each). The call total is asserted against the manifest's hard maximum.
@@ -155,6 +202,7 @@ export async function executeSchedule({
   captureDir,
   revision = "unknown",
   runId,
+  allowUnknownModelIdentity = false,
 } = {}) {
   const plan = manifest.callPlan;
   const entries = [];
@@ -183,7 +231,9 @@ export async function executeSchedule({
           caseId: entry.caseId,
           error: { message, reason: "generation_failure" },
           implementationRevision: revision,
-          model,
+          modelIdentity: "unknown",
+          modelReported: "unknown",
+          modelRequested: model,
           observationDigest: request.observation.digest,
           promptDigest: request.prompt.requestDigest,
           provenance: request.provenance,
@@ -198,6 +248,7 @@ export async function executeSchedule({
     };
     try {
       result = await runModelCoordinator({
+        allowUnknownModelIdentity,
         caseId: entry.caseId,
         generate: generateSeam,
         model,

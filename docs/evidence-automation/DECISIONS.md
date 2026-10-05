@@ -576,3 +576,167 @@ call made by this work, and no measurement is re-claimed or invented here.
 modified in the working tree **before** this harness work (an unrelated reviewer-remote note); this change did
 not touch it and does not include it. It differs from `HEAD` but is excluded from this change set; no
 independent-verification finding attributes a skill edit to this run, and none occurred.
+
+---
+
+## D-014 — 2026-10-05 · Semantic-evaluation harness reviewer disposition (bounded corrections) — implementation-ready, **execution still stopped**
+
+**Decision.** The reviewer's disposition of the semantic-evaluation harness is recorded here **verbatim** and
+its four bounded corrections are implemented in the harness (not merely documented). This entry **amends
+nothing** in D-012 (or D-011/D-013): the preparation authorization, the frozen preparation artifacts and the
+"no execution" intent are unchanged. The four corrections are **executable-now** code changes; they do **not**
+authorize a run.
+
+**Ruling (verbatim):**
+
+> Semantic-evaluation harness implementation is technically sound but not yet finally accepted for external
+> execution. The bounded coordinator, mock-tested 34-call schedule, strict candidate validation, prompt
+> isolation, transport guards, credential isolation, no-retry behavior, and offline verification are accepted
+> in principle. Before execution-readiness can be accepted, make model-output evidence durably preserve the
+> approved prompt/run provenance; distinguish the backend-reported model identity from the requested model;
+> and make the explicit owner disposition of unverified seed/token capabilities and third-party egress part of
+> the executable authorization gate. Also make inability to determine the implementation revision fail closed.
+> These are bounded corrections and do not require another architecture/design cycle.
+
+**Owner disposition NOT granted (unchanged).** The owner has **not** granted a capability waiver and has
+**not** granted third-party inference. No `capabilityDispositions` block and no `thirdPartyEgress` approval
+exist in any committed artifact; the gate is a **required** structure that is absent, so the generation path
+stays shut. `inferenceAuthorized` remains false and no model output exists. The unverified capabilities
+(`seedControl`, `promptTokenCounting`) remain UNVERIFIED; backend version and model-artifact hash remain
+unknown.
+
+**How each correction lands (executable, not prose).**
+
+1. **Durable prompt/run provenance — the evidence-pack exporter.**
+   `harness/librarian-generation/export-pack.mjs` turns one completed local (git-ignored) capture directory
+   into a single durable, public-source pack under `docs/librarian-reconciliation/semantic-runs/<runId>/`
+   (`run-manifest.json`, written **last**; `calls.json`). Each call carries the **exact** request messages
+   (`system`/`user` verbatim), their exact UTF-8 bytes and digests, and the **exact** completion bytes
+   (base64 + sha256). Sanitization is a **whitelist** of structural fields and never alters a completion or a
+   prompt; the provider envelope, headers, account ids and the local `run-authorization.json` token are never
+   read or carried. The pack binds the sha256 of the **frozen** run manifest, the frozen corpus/rubric/template
+   digests, the implementation revision, the requested/reported model ids, the decoding parameters
+   (`temperature 0`, `top_p 1`, `max_tokens 1000`) and the predeclared seeds (`101/202/303`). Export is
+   **exclusive and once-only** (an existing pack directory is refused, never merged). A run whose captured
+   count does not equal the plan count is written **non-green** and does not claim a complete count. A
+   report-only hygiene scan flags identity/secret shapes in the decoded data without ever altering it. Code
+   and CLI: `bun run librarian:semantic-eval:export`; the authorized `generate` path exports automatically.
+   The frozen v1 manifest is **not** edited.
+2. **Requested vs backend-reported model identity.** The Python transport now decodes the **reported** model
+   id from the provider response (`_decode_envelope`); an absent id is recorded `unknown`, and a
+   present-but-unusable (non-string/over-long/control-char) id fails closed (`model_identity_invalid`). The
+   capture records `modelRequested`, `modelReported` and a `modelIdentity` verdict; the JS seam propagates the
+   real reported value and never fabricates a match from the request. A **mismatch** is always non-green and a
+   bare **unknown** is non-green unless an explicit prior owner disposition
+   (`capabilityDispositions.modelIdentity = "owner_accepted_unknown"`) admits it. On either, the exact
+   completion is preserved and **no candidate is delivered**.
+3. **Capability + third-party egress in the gate.** Both the JS gate
+   (`authorization.mjs`, `loadAuthorization`) and the Python gate (`transport_helper.generation_authorized`)
+   now **independently** require, in the external record: a `capabilityDispositions` block (mandatory
+   `seedControl` and `promptTokenCounting`; an unverified claim is a plain string, a `verified` claim must be
+   an object with sha256 `proofDigest` + `artifactDigest`, so it cannot be fabricated from prose) and a
+   `thirdPartyEgress` approval (exact `origin`/`baseUrl`/`model`, `syntheticOnly: true`, the 34-call scope, a
+   sha256 artifact digest, and no credential/user/account field). A direct call to either gate cannot bypass
+   the other's requirement — the helper refuses generation before any network I/O, and the runner refuses
+   before spawning the helper.
+4. **Revision fail-closed.** The JS gate no longer skips the revision check when `git rev-parse HEAD` cannot be
+   resolved: an unresolvable revision now **refuses** (`authorization_revision_unavailable`), and the recorded
+   revision must match. The Python gate performs the same resolution itself and refuses on a mismatch or an
+   unresolvable revision; a caller cannot inject a revision (production never passes one).
+
+**Versioned runtime manifest / global immutable binding.** The durable pack's `run-manifest.json` is the
+versioned **runtime** manifest (`packSchema` `librarian-semantic-eval-pack-v1`); it binds the implementation's
+current revision digest, the frozen corpus/template digests and the global immutable frozen-manifest sha, and
+records `requestedBackendVersion`/`backendVersion`/`modelArtifactHash` as `unknown`. The frozen preparation
+manifest remains byte-unchanged; its historical "HARNESS NOT IMPLEMENTED" status is a preparation-time record,
+and the current implementation status lives in the implementation report and here — not by editing a frozen
+artifact.
+
+**Execution remains stopped.** The harness is now **executable** for the four corrections and is exercised
+**only** with offline mocks; no provider was contacted, no model was invoked, no capture of model output was
+produced, and every fixture case's `semantic.status` remains `pending_human_review`. A real run still requires
+(separately, and not granted): an owner record carrying the capability dispositions and the third-party egress
+approval, the env flag + token, a matching revision, and the explicit go-ahead.
+
+---
+
+### D-014 supplement — 2026-10-05 · independent-verification remediation (root fixes; **verified** now requires a bound proof)
+
+**What this is.** A second independent verification of the D-014 implementation raised findings that are
+**resolved at the root** (code, not prose) in the same offline envelope. The D-014 ruling above is preserved
+**verbatim** and unchanged; this supplement records the remediation only. It amends nothing in D-012/D-013 and
+authorizes **no** run.
+
+**Findings and root fixes.**
+
+1. **The durable pack trusted its inputs.** `export-pack.mjs` copied `completionBase64`/`completionBytes`/
+   `completionSha256` without recomputation, used Node's permissive `Buffer.from` for base64, and took the run
+   report's `green` at face value. It now performs **strict integrity prevalidation before any output write**
+   and refuses (fixed `PackIntegrityError`, **no partial pack**) on: a non-canonical base64 (strict
+   decode→encode round-trip), a decoded length ≠ `completionBytes`, a sha256 ≠ `completionSha256`, a request
+   whose canonical encoding does not hash to `promptDigest`, a request/prompt/observation that does not equal
+   what the **frozen prompt builder** renders for the frozen projection (recomputed by the same executor
+   helpers, not copied), a duplicate or unexpected `(caseId, step, repeat, seed)` against the exact 34-call
+   plan, and a **missing or mismatched** frozen artifact. `green` is now computed by the exporter and the
+   report's verdict must **agree** — a fabricated green on an incomplete run is fail-closed non-green. An
+   incomplete run is still written non-green; only an inconsistent/unverifiable run refuses to write. A
+   failure record is permitted without completion bytes **only** with a typed error field, so a missing
+   completion can never be a silent success.
+2. **A present-but-unusable model field destroyed the completion.** The Python transport raised *after*
+   extracting the completion, so an invalid `model` lost the evidence. `_decode_envelope` now returns the
+   **content first** and a classified identity (`present`/`absent`/`invalid`) that never echoes the unusable
+   value; `run_generate` records `modelIdentity: "invalid"`, `modelReported: "unknown"`,
+   `modelIdentityError: "model_identity_invalid"`, `success: false` **while preserving the completion bytes
+   losslessly** (base64 + sha256). The coordinator treats `invalid` as fail-closed (delivering no candidate),
+   and an `owner_accepted_unknown` disposition does **not** admit it. A missing completion is still a hard
+   failure.
+3. **A `verified` capability claim and the third-party egress digest could be fabricated.** A `verified`
+   disposition was validated only as two 64-hex strings, and the egress `artifactDigest` accepted any 64-hex
+   value. Both gates (JS and Python, **independently**) now require a `verified` claim to name a bounded,
+   non-secret JSON proof under `harness/librarian-generation/capability-proofs/` whose own bytes hash to the
+   recorded `proofDigest`, whose identity fields match the pinned provider/endpoint/model, and whose
+   `artifactDigest` equals the **frozen corpus** artifact digest; it must also bind an evidence file (inside
+   the proof directory) by `evidenceSha256`. Proof paths are resolved fail-closed (absolute / `..` / symlink /
+   non-file / over-large are refused before any read), so a malicious record can never read an arbitrary
+   credential file. The egress `artifactDigest` must equal the frozen corpus digest too. This is an **operator
+   interlock**, not a cryptographic owner signature: it detects inconsistency and unbound/forged digests and
+   assumes nothing. **No proof artifact exists today, so every `verified` route refuses**; the plain-string
+   unverified routes (`unverified_owner_accepted`, `unavailable_byte_cap_only`) are unchanged.
+
+4. **The exporter still trusted the recorded structural outcome of a completion.** Even after the prevalidation
+   above, `export-pack.mjs` copied each record's `parsed`/`error`/`assessmentError` and its `discarded`/
+   `provenance`/`modelIdentity` fields without recomputation. An **independent offline probe** demonstrated the
+   gap: a valid 34-call mock capture with a (false) report `green` remained **green** after one completion was
+   replaced by a self-consistent forged record — its `completionBase64`/`completionBytes`/`completionSha256`
+   recomputed so only the *recorded outcome* lied — whose text was either malformed non-JSON or a
+   `{outcome:"snapshot_unstable",…}` payload, with `parsed` forced `true`. The exporter now **re-derives** the
+   structural outcome from the **exact completion bytes**: it decodes them (strict base64 **and** strict UTF-8
+   round-trip), re-runs the frozen `parseModelPayload`, and re-assesses the parsed candidate with
+   `assessCandidate` against the exact frozen observation the coordinator used (no semantic rubric is
+   evaluated). The record's claimed `parsed`/`error`/`assessmentError` must equal the recomputation or the pack
+   is refused (no partial output); a forged `parsed:true`, a fabricated clean assessment over an unknown
+   citation or an unresolved conflict reference, and a non-UTF-8 byte string are all refusals. The injected
+   `provenance` is recomputed from the slot's `(caseId, step, repeat, seed)`, `discarded` from the frozen
+   schedule (an A-generation is discarded only on a churn slot), and a `modelIdentity` of `match` is accepted
+   **only** when the recorded reported id equals the requested id (the real provider cannot be cryptographically
+   proven here, but a non-matching string can be caught). The recomputed outcomes — never the record's — now
+   govern the exporter's own `green`: a completion that failed to parse or was contract-refused is counted and
+   forces non-green. The schedule manifest is consumed **from disk** at `manifestPath`; a caller-supplied
+   `manifest` argument is accepted only when canonically identical to the on-disk manifest
+   (`manifest_argument_mismatch` otherwise), so a manipulated argument cannot diverge from the artifact whose
+   sha256 the pack binds. Legitimate failure captures — a typed error with no completion, or a self-consistent
+   malformed completion carrying its **true** parse error — are still exported, labelled non-green. Both probe
+   variants and the surrounding forgeries (invalid syntax, `snapshot_unstable`, forbidden fields, unknown/
+   conflict references, forged match, non-UTF-8, manifest-argument tamper) are covered by offline negative
+   tests; this finding is **resolved**.
+
+**No owner waiver. No execution.** The owner has granted **no** capability waiver and **no** third-party
+inference; no `run-authorization.json` record and no capability proof were created; no model was invoked and
+no capture of model output was produced. `inferenceAuthorized` remains false, the frozen manifest/rubric/
+template/corpus remain byte-unchanged, and `run.mjs --mode generate` still exits **3**.
+
+**Verified counts (programmatic, current; earlier numbers labelled historical).** `bun test src` — historical
+298 → **304 pass / 0 fail** (13 files). Harness — historical 7 + 7 + 23 = 37 → **23 offline + 33 generation +
+45 Python = 101 pass / 0 fail**. `bun run typecheck` — **PASS** (0 errors). `run.mjs --mode offline` — frozen
+artifacts byte-unchanged, plan **30 + 4 = 34**, 0 model calls. `run.mjs --mode generate` — **REFUSED**
+(`authorization_flag_absent`), exit 3. Full detail in the implementation report's verification table.

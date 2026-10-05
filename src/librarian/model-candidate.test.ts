@@ -101,11 +101,15 @@ describe("model-candidate — fail-closed refusals", () => {
 describe("model-candidate — lossless pre-parse capture", () => {
   const base = {
     caseId: "F-1",
-    model: "deepseek-v4.1-flash",
+    modelIdentity: "match" as const,
+    modelReported: "deepseek-v4.1-flash",
+    modelRequested: "deepseek-v4.1-flash",
     observationDigest: "obs",
     promptDigest: "prompt",
     provenance: PROVENANCE,
     repeat: 0,
+    requestSystem: "SYSTEM-TEXT",
+    requestUser: "USER-TEXT",
     seed: 101 as number | null,
     step: "A" as const,
   };
@@ -164,5 +168,33 @@ describe("model-candidate — lossless pre-parse capture", () => {
     expect(result.capture.seed).toBe(101);
     expect(result.capture.step).toBe("A");
     expect(result.capture.discarded).toBe(false);
+  });
+
+  test("records the requested and reported model identity as distinct fields", () => {
+    const matched = captureGeneration({ ...base, completionText: proposal() });
+    expect(matched.capture.modelRequested).toBe("deepseek-v4.1-flash");
+    expect(matched.capture.modelReported).toBe("deepseek-v4.1-flash");
+    expect(matched.capture.modelIdentity).toBe("match");
+
+    const mismatched = captureGeneration({
+      ...base,
+      completionText: proposal(),
+      modelIdentity: "mismatch",
+      modelReported: "some-other-model",
+    });
+    expect(mismatched.capture.modelRequested).toBe("deepseek-v4.1-flash");
+    expect(mismatched.capture.modelReported).toBe("some-other-model");
+    expect(mismatched.capture.modelIdentity).toBe("mismatch");
+
+    // An absent reported id is recorded as the explicit `unknown`, never fabricated from the request.
+    const unknown = captureGeneration({ ...base, completionText: proposal(), modelIdentity: "unknown", modelReported: "" });
+    expect(unknown.capture.modelReported).toBe("unknown");
+    expect(unknown.capture.modelIdentity).toBe("unknown");
+  });
+
+  test("preserves the exact request messages for the durable pack", () => {
+    const result = captureGeneration({ ...base, completionText: proposal() });
+    expect(result.capture.requestSystem).toBe("SYSTEM-TEXT");
+    expect(result.capture.requestUser).toBe("USER-TEXT");
   });
 });

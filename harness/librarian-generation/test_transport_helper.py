@@ -59,7 +59,9 @@ class _MockHandler(BaseHTTPRequestHandler):
     def do_POST(self):
         if self.path in ("/zen/go/v1/chat/completions", "/chat/completions"):
             completion = '{\n  "outcome": "insufficient_evidence"\n}\n'
-            body = json.dumps({"choices": [{"message": {"content": completion}}]}).encode()
+            body = json.dumps(
+                {"choices": [{"message": {"content": completion}}], "model": th.MODEL}
+            ).encode()
             self._send(200, body, {"Content-Type": "application/json"})
         else:
             self._send(404, b"{}")
@@ -94,11 +96,25 @@ def _valid_record(token: str = "tok") -> dict:
         "artifacts": {
             key: manifest["artifacts"][key]["digest"] for key in ("corpus", "rubric", "promptTemplate")
         },
+        "capabilityDispositions": {
+            "promptTokenCounting": "unavailable_byte_cap_only",
+            "seedControl": "unverified_owner_accepted",
+        },
         "captureBasename": "librarian-semantic-eval-offline",
-        "implementationRevision": "deadbeef",
+        "implementationRevision": th._current_revision(),
         "manifestDigest": th._sha256_file(th.MANIFEST_PATH),
         "model": th.MODEL,
         "scope": {"calls": th.AUTHORIZED_CALL_SCOPE, "endpoint": th.BASE_URL, "model": th.MODEL},
+        "thirdPartyEgress": {
+            "approved": True,
+            # Bound to the frozen corpus artifact digest, never an arbitrary 64-hex value.
+            "artifactDigest": manifest["artifacts"]["corpus"]["digest"],
+            "baseUrl": th.BASE_URL,
+            "calls": th.AUTHORIZED_CALL_SCOPE,
+            "model": th.MODEL,
+            "origin": th.ORIGIN,
+            "syntheticOnly": True,
+        },
         "token": token,
     }
 
@@ -288,6 +304,213 @@ class GenerationGateTests(unittest.TestCase):
         finally:
             os.unlink(path)
 
+    def _authorized_with(self, mutate) -> str:
+        import tempfile
+
+        record = _valid_record("tok")
+        mutate(record)
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
+            json.dump(record, handle)
+            return handle.name
+
+    def _run_gate(self, path) -> tuple[bool, str]:
+        try:
+            return th.generation_authorized(
+                path, env={"LIBRARIAN_SEMANTIC_RUN_AUTHORIZED": "1", "LIBRARIAN_SEMANTIC_RUN_TOKEN": "tok"}
+            )
+        finally:
+            os.unlink(path)
+
+    def test_missing_capability_disposition_refuses(self):
+        path = self._authorized_with(lambda r: r.pop("capabilityDispositions"))
+        ok, reason = self._run_gate(path)
+        self.assertFalse(ok)
+        self.assertEqual(reason, "authorization_capability_dispositions_absent")
+
+    def test_partial_capability_disposition_refuses(self):
+        path = self._authorized_with(lambda r: r.__setitem__("capabilityDispositions", {"seedControl": "unverified_owner_accepted"}))
+        ok, reason = self._run_gate(path)
+        self.assertFalse(ok)
+        self.assertEqual(reason, "authorization_capability_dispositions_absent")
+
+    def test_verified_claim_without_proof_refuses(self):
+        path = self._authorized_with(
+            lambda r: r.__setitem__("capabilityDispositions", {"seedControl": {"status": "verified"}, "promptTokenCounting": "unavailable_byte_cap_only"})
+        )
+        ok, reason = self._run_gate(path)
+        self.assertFalse(ok)
+        self.assertEqual(reason, "authorization_capability_disposition_unverifiable")
+
+    def test_missing_or_bad_third_party_egress_refuses(self):
+        cases = [
+            (lambda r: r.pop("thirdPartyEgress"), "authorization_third_party_egress_absent"),
+            (lambda r: r["thirdPartyEgress"].__setitem__("approved", False), "authorization_third_party_egress_not_approved"),
+            (lambda r: r["thirdPartyEgress"].__setitem__("syntheticOnly", False), "authorization_third_party_egress_not_synthetic_only"),
+            (lambda r: r["thirdPartyEgress"].__setitem__("baseUrl", "https://evil.example.com"), "authorization_third_party_egress_mismatch"),
+            (lambda r: r["thirdPartyEgress"].__setitem__("calls", 33), "authorization_third_party_egress_mismatch"),
+            (lambda r: r["thirdPartyEgress"].__setitem__("artifactDigest", "nothex"), "authorization_third_party_egress_artifact_digest_invalid"),
+            (lambda r: r["thirdPartyEgress"].__setitem__("artifactDigest", "a" * 64), "authorization_third_party_egress_mismatch"),
+            (lambda r: r["thirdPartyEgress"].__setitem__("token", "secret"), "authorization_third_party_egress_credential_field_present"),
+        ]
+        for mutate, expected in cases:
+            path = self._authorized_with(mutate)
+            ok, reason = self._run_gate(path)
+            self.assertFalse(ok, msg=expected)
+            self.assertEqual(reason, expected)
+
+    def test_unresolvable_revision_fails_closed(self):
+        from unittest import mock
+
+        path = self._authorized_with(lambda r: None)
+        with mock.patch.object(th, "_current_revision", return_value=None):
+            ok, reason = self._run_gate(path)
+        self.assertFalse(ok)
+        self.assertEqual(reason, "authorization_revision_unavailable")
+
+    def test_revision_mismatch_refuses(self):
+        path = self._authorized_with(lambda r: r.__setitem__("implementationRevision", "deadbeef"))
+        ok, reason = self._run_gate(path)
+        self.assertFalse(ok)
+        self.assertEqual(reason, "authorization_revision_mismatch")
+
+    # ---- Verified capability proof binding (fail-closed) ------------------------------------------
+
+    def _proof_dir_with(self, mutate_proof=None, mutate_disposition=None):
+        import tempfile
+
+        proof_dir = tempfile.mkdtemp(prefix="librarian-proof-")
+        evidence_path = "seed-evidence.json"
+        with open(os.path.join(proof_dir, evidence_path), "w", encoding="utf-8") as handle:
+            json.dump({"capability": "seedControl", "note": "synthetic"}, handle)
+        manifest = _manifest()
+        proof = {
+            "schema": th.CAPABILITY_PROOF_SCHEMA,
+            "capability": "seedControl",
+            "status": "verified",
+            "provider": manifest["identity"]["provider"],
+            "endpoint": manifest["identity"]["baseUrl"],
+            "model": manifest["identity"]["model"],
+            "timestamp": "2026-10-05T00:00:00.000Z",
+            "evidencePath": evidence_path,
+            "evidenceSha256": th._sha256_file(os.path.join(proof_dir, evidence_path)),
+        }
+        if mutate_proof:
+            mutate_proof(proof, proof_dir)
+        proof_path = "seed-proof.json"
+        with open(os.path.join(proof_dir, proof_path), "w", encoding="utf-8") as handle:
+            json.dump(proof, handle)
+        disposition = {
+            "status": "verified",
+            "artifactDigest": manifest["artifacts"]["corpus"]["digest"],
+            "proofDigest": th._sha256_file(os.path.join(proof_dir, proof_path)),
+            "proofPath": proof_path,
+        }
+        if mutate_disposition:
+            mutate_disposition(disposition)
+        return proof_dir, disposition
+
+    def _gate_with_proof(self, disposition, proof_dir):
+        import tempfile
+
+        record = _valid_record("tok")
+        record["capabilityDispositions"] = {
+            "promptTokenCounting": "unavailable_byte_cap_only",
+            "seedControl": disposition,
+        }
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as handle:
+            json.dump(record, handle)
+            path = handle.name
+        try:
+            return th.generation_authorized(
+                path,
+                env={"LIBRARIAN_SEMANTIC_RUN_AUTHORIZED": "1", "LIBRARIAN_SEMANTIC_RUN_TOKEN": "tok"},
+                proof_dir=proof_dir,
+            )
+        finally:
+            os.unlink(path)
+
+    def _run_proof(self, mutate_proof=None, mutate_disposition=None):
+        import shutil
+
+        proof_dir, disposition = self._proof_dir_with(mutate_proof, mutate_disposition)
+        try:
+            return self._gate_with_proof(disposition, proof_dir)
+        finally:
+            shutil.rmtree(proof_dir, ignore_errors=True)
+
+    def test_verified_claim_refuses_without_a_genuine_proof(self):
+        _, disposition = self._proof_dir_with()
+        # The default proof directory holds no proof: the verified route refuses rather than trusting sha.
+        ok, reason = self._gate_with_proof(disposition, th.DEFAULT_PROOF_DIR)
+        self.assertFalse(ok)
+        self.assertEqual(reason, "authorization_capability_proof_missing")
+
+    def test_proof_path_traversal_is_refused(self):
+        ok, reason = self._run_proof(mutate_disposition=lambda d: d.__setitem__("proofPath", "../../etc/passwd"))
+        self.assertFalse(ok)
+        self.assertEqual(reason, "authorization_capability_proof_path_refused")
+
+    def test_absolute_proof_path_is_refused(self):
+        ok, reason = self._run_proof(mutate_disposition=lambda d: d.__setitem__("proofPath", "/etc/passwd"))
+        self.assertFalse(ok)
+        self.assertEqual(reason, "authorization_capability_proof_path_refused")
+
+    def test_symlinked_proof_file_is_refused(self):
+        import shutil
+
+        proof_dir, disposition = self._proof_dir_with()
+        try:
+            outside = os.path.join(proof_dir, "..", "outside-proof.json")
+            with open(outside, "w", encoding="utf-8") as handle:
+                json.dump({"note": "outside"}, handle)
+            os.symlink(outside, os.path.join(proof_dir, "link.json"))
+            disposition["proofPath"] = "link.json"
+            ok, reason = self._gate_with_proof(disposition, proof_dir)
+            self.assertFalse(ok)
+            self.assertEqual(reason, "authorization_capability_proof_path_refused")
+        finally:
+            shutil.rmtree(proof_dir, ignore_errors=True)
+
+    def test_proof_bound_to_a_different_model_is_refused(self):
+        ok, reason = self._run_proof(mutate_proof=lambda p, _d: p.__setitem__("model", "some-other-model"))
+        self.assertFalse(ok)
+        self.assertEqual(reason, "authorization_capability_proof_mismatch")
+
+    def test_proof_bound_to_a_different_endpoint_is_refused(self):
+        ok, reason = self._run_proof(mutate_proof=lambda p, _d: p.__setitem__("endpoint", "https://evil.example.com"))
+        self.assertFalse(ok)
+        self.assertEqual(reason, "authorization_capability_proof_mismatch")
+
+    def test_proof_for_a_different_capability_is_refused(self):
+        ok, reason = self._run_proof(mutate_proof=lambda p, _d: p.__setitem__("capability", "promptTokenCounting"))
+        self.assertFalse(ok)
+        self.assertEqual(reason, "authorization_capability_proof_mismatch")
+
+    def test_malformed_proof_is_refused(self):
+        ok, reason = self._run_proof(mutate_proof=lambda p, _d: p.__setitem__("schema", "not-a-proof"))
+        self.assertFalse(ok)
+        self.assertEqual(reason, "authorization_capability_proof_malformed")
+
+    def test_proof_digest_mismatch_is_refused(self):
+        ok, reason = self._run_proof(mutate_disposition=lambda d: d.__setitem__("proofDigest", "c" * 64))
+        self.assertFalse(ok)
+        self.assertEqual(reason, "authorization_capability_proof_digest_mismatch")
+
+    def test_unbound_artifact_digest_is_refused(self):
+        ok, reason = self._run_proof(mutate_disposition=lambda d: d.__setitem__("artifactDigest", "b" * 64))
+        self.assertFalse(ok)
+        self.assertEqual(reason, "authorization_capability_proof_mismatch")
+
+    def test_evidence_sha_mismatch_is_refused(self):
+        ok, reason = self._run_proof(mutate_proof=lambda p, _d: p.__setitem__("evidenceSha256", "0" * 64))
+        self.assertFalse(ok)
+        self.assertEqual(reason, "authorization_capability_proof_evidence_mismatch")
+
+    def test_genuine_proof_authorizes(self):
+        ok, reason = self._run_proof()
+        self.assertTrue(ok)
+        self.assertEqual(reason, "authorized")
+
 
 class GeneratePathTests(unittest.TestCase):
     @classmethod
@@ -315,6 +538,80 @@ class GeneratePathTests(unittest.TestCase):
         # No provider envelope, headers or account metadata are echoed.
         self.assertNotIn("choices", text)
         self.assertNotIn("Authorization", text)
+
+    def test_decode_envelope_returns_content_and_classifies_the_reported_model(self):
+        body = json.dumps({"choices": [{"message": {"content": "c"}}], "model": "reported-x"}).encode()
+        content, identity = th._decode_envelope(body)
+        self.assertEqual(content, "c")
+        self.assertEqual(identity["status"], "present")
+        self.assertEqual(identity["reported"], "reported-x")
+        # Absent model -> absent (reported as `unknown` by the caller).
+        content, identity = th._decode_envelope(json.dumps({"choices": [{"message": {"content": "c"}}]}).encode())
+        self.assertIsNone(identity["reported"])
+        self.assertEqual(identity["status"], "absent")
+        # A present-but-unusable model is classified `invalid`, NOT raised: the content is still extracted.
+        content, identity = th._decode_envelope(
+            json.dumps({"choices": [{"message": {"content": "c"}}], "model": 123}).encode()
+        )
+        self.assertEqual(content, "c")
+        self.assertEqual(identity["status"], "invalid")
+        self.assertEqual(identity["error"], "model_identity_invalid")
+
+    def test_decode_envelope_missing_content_is_still_a_failure(self):
+        body = json.dumps({"choices": [{"message": {"role": "assistant"}}], "model": th.MODEL}).encode()
+        with self.assertRaises(th.TransportError) as ctx:
+            th._decode_envelope(body)
+        self.assertEqual(ctx.exception.code, "completion_missing")
+
+    def test_run_generate_preserves_content_losslessly_even_with_an_invalid_model_field(self):
+        precious = "PRECIOUS-\"'\\n\\u0000-COMPLETION \u2603"
+        unusable = "mod\x01el-" + "x" * 400  # over-long and control-characters: unusable
+
+        def post(_url, _headers, _payload, **_kwargs):
+            body = {"choices": [{"message": {"content": precious}}], "model": unusable}
+            return 200, json.dumps(body).encode()
+
+        runtime = {"api_key": "k", "api_mode": "chat_completions", "base_url": th.BASE_URL, "provider": th.PROVIDER}
+        capture = th.run_generate(runtime, {"model": th.MODEL, "system": "s", "user": "u"}, post=post)
+        # Fail-closed classification, but the completion bytes are preserved raw and lossless.
+        self.assertFalse(capture["success"])
+        self.assertEqual(capture["modelIdentity"], "invalid")
+        self.assertEqual(capture["modelReported"], "unknown")
+        self.assertEqual(capture["modelIdentityError"], "model_identity_invalid")
+        raw = th.base64.b64decode(capture["completionBase64"])
+        self.assertEqual(raw, precious.encode("utf-8"))
+        self.assertEqual(capture["completionSha256"], hashlib.sha256(raw).hexdigest())
+        self.assertEqual(capture["completionBytes"], len(raw))
+        # No provider metadata, and the unusable id, are ever echoed.
+        text = json.dumps(capture, sort_keys=True)
+        self.assertNotIn("mod\x01el", text)
+        self.assertNotIn("choices", text)
+        self.assertNotIn("Authorization", text)
+
+    def test_run_generate_reports_matched_mismatched_and_unknown_identity(self):
+        runtime = {"api_key": "k", "api_mode": "chat_completions", "base_url": th.BASE_URL, "provider": th.PROVIDER}
+
+        def post_with(model_value):
+            def _post(_url, _headers, _payload, **_kwargs):
+                body = {"choices": [{"message": {"content": "hi"}}]}
+                if model_value is not None:
+                    body["model"] = model_value
+                return 200, json.dumps(body).encode()
+
+            return _post
+
+        matched = th.run_generate(runtime, {"model": th.MODEL, "system": "s", "user": "u"}, post=post_with(th.MODEL))
+        self.assertEqual(matched["modelIdentity"], "match")
+        self.assertEqual(matched["modelReported"], th.MODEL)
+        self.assertEqual(matched["modelRequested"], th.MODEL)
+
+        mismatched = th.run_generate(runtime, {"model": th.MODEL, "system": "s", "user": "u"}, post=post_with("some-other-model"))
+        self.assertEqual(mismatched["modelIdentity"], "mismatch")
+        self.assertEqual(mismatched["modelReported"], "some-other-model")
+
+        unknown = th.run_generate(runtime, {"model": th.MODEL, "system": "s", "user": "u"}, post=post_with(None))
+        self.assertEqual(unknown["modelIdentity"], "unknown")
+        self.assertEqual(unknown["modelReported"], "unknown")
 
     def test_run_generate_refuses_allowlist_by_default(self):
         runtime = {"api_key": "k", "api_mode": "chat_completions", "base_url": th.BASE_URL, "provider": th.PROVIDER}

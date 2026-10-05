@@ -4,6 +4,10 @@
  * Every generation is an injected **deterministic stub** — no model, no network. The observations are
  * built by the accepted builder from the frozen `semantic-cases-v1` projection, with a labelled synthetic
  * drift to create A/B/C differences, exactly as the accepted evaluator does.
+ *
+ * The generation seam returns the extracted completion **and** the backend-reported model identity
+ * (reviewer disposition D-014). A stub that cannot report a model returns `unknown`; it must never
+ * fabricate a `match` from the request.
  */
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
@@ -64,6 +68,11 @@ function proposalText(id: string): string {
   });
 }
 
+/** A matching structured generation (the backend reports the requested id). */
+function matched(text: string) {
+  return { completionText: text, modelIdentity: "match" as const, modelReported: "deepseek-v4.1-flash" };
+}
+
 type Harness = {
   read: (step: number) => Promise<unknown>;
   observe: (raw: unknown, step: number) => Observation;
@@ -100,7 +109,7 @@ describe("model coordinator — bounded construct/discard/recompute", () => {
       generate: async (request) => {
         generations += 1;
         h.generationRequests.push(request);
-        return proposalText("F-1");
+        return matched(proposalText("F-1"));
       },
       model: "deepseek-v4.1-flash",
       observe: h.observe,
@@ -127,7 +136,7 @@ describe("model coordinator — bounded construct/discard/recompute", () => {
       generate: async (request) => {
         generations += 1;
         seenFor.push(request.step);
-        return proposalText("F-1");
+        return matched(proposalText("F-1"));
       },
       model: "deepseek-v4.1-flash",
       observe: h.observe,
@@ -154,7 +163,7 @@ describe("model coordinator — bounded construct/discard/recompute", () => {
       caseId: "F-1",
       generate: async () => {
         generations += 1;
-        return proposalText("F-1");
+        return matched(proposalText("F-1"));
       },
       model: "deepseek-v4.1-flash",
       observe: h.observe,
@@ -177,7 +186,7 @@ describe("model coordinator — bounded construct/discard/recompute", () => {
     const h = harness("F-1", ["base", "drift1", "drift2"]);
     const result = await runModelCoordinator({
       caseId: "F-1",
-      generate: async () => proposalText("F-1"),
+      generate: async () => matched(proposalText("F-1")),
       model: "deepseek-v4.1-flash",
       observe: h.observe,
       read: h.read,
@@ -190,12 +199,122 @@ describe("model coordinator — bounded construct/discard/recompute", () => {
   });
 });
 
+describe("model coordinator — backend-reported model identity (fail-closed)", () => {
+  test("a matching reported model is green and the capture distinguishes requested vs reported", async () => {
+    const h = harness("F-1", ["base", "base"]);
+    const result = await runModelCoordinator({
+      caseId: "F-1",
+      generate: async () => matched(proposalText("F-1")),
+      model: "deepseek-v4.1-flash",
+      observe: h.observe,
+      read: h.read,
+      repeat: 0,
+      seed: 101,
+    });
+    expect(result.green).toBe(true);
+    expect(result.generations[0].modelRequested).toBe("deepseek-v4.1-flash");
+    expect(result.generations[0].modelReported).toBe("deepseek-v4.1-flash");
+    expect(result.generations[0].modelIdentity).toBe("match");
+  });
+
+  test("a mismatching reported model is non-green, preserves the completion, and delivers no candidate", async () => {
+    const h = harness("F-1", ["base", "base"]);
+    const result = await runModelCoordinator({
+      caseId: "F-1",
+      generate: async () => ({
+        completionText: proposalText("F-1"),
+        modelIdentity: "mismatch",
+        modelReported: "some-other-model",
+      }),
+      model: "deepseek-v4.1-flash",
+      observe: h.observe,
+      read: h.read,
+      repeat: 0,
+      seed: 101,
+    });
+    expect(result.status).toBe("model_mismatch");
+    expect(result.green).toBe(false);
+    expect(result.proposal).toBeNull();
+    expect(result.error?.reason).toBe("model_identity_mismatch");
+    // The exact completion is preserved even though it is not delivered.
+    expect(result.generations).toHaveLength(1);
+    expect(result.generations[0].modelReported).toBe("some-other-model");
+    expect(Buffer.from(result.generations[0].completionBase64, "base64").toString("utf8")).toBe(
+      proposalText("F-1")
+    );
+    // A mismatch is never papered over by a recompute.
+    expect(h.steps).toEqual([0]);
+  });
+
+  test("an invalid (unusable) reported model is non-green, preserves the completion, and is never admitted", async () => {
+    const h = harness("F-1", ["base", "base"]);
+    const result = await runModelCoordinator({
+      // Even an owner-accepted-unknown disposition must not admit a present-but-unusable id.
+      allowUnknownModelIdentity: true,
+      caseId: "F-1",
+      generate: async () => ({
+        completionText: proposalText("F-1"),
+        modelIdentity: "invalid",
+        modelReported: "unknown",
+      }),
+      model: "deepseek-v4.1-flash",
+      observe: h.observe,
+      read: h.read,
+      repeat: 0,
+      seed: 101,
+    });
+    expect(result.status).toBe("model_mismatch");
+    expect(result.green).toBe(false);
+    expect(result.proposal).toBeNull();
+    expect(result.error?.reason).toBe("model_identity_invalid");
+    expect(result.generations).toHaveLength(1);
+    expect(result.generations[0].modelIdentity).toBe("invalid");
+    expect(result.generations[0].modelReported).toBe("unknown");
+    expect(Buffer.from(result.generations[0].completionBase64, "base64").toString("utf8")).toBe(
+      proposalText("F-1")
+    );
+    expect(h.steps).toEqual([0]);
+  });
+
+  test("an absent reported model is unknown and non-green by default; an explicit disposition admits it", async () => {
+    const h = harness("F-1", ["base", "base"]);
+    const absent = () => ({ completionText: proposalText("F-1"), modelIdentity: "unknown" as const, modelReported: "unknown" });
+    const refused = await runModelCoordinator({
+      caseId: "F-1",
+      generate: async () => absent(),
+      model: "deepseek-v4.1-flash",
+      observe: h.observe,
+      read: h.read,
+      repeat: 0,
+      seed: 101,
+    });
+    expect(refused.status).toBe("model_mismatch");
+    expect(refused.green).toBe(false);
+    expect(refused.error?.reason).toBe("model_identity_unknown");
+    expect(refused.generations[0].modelReported).toBe("unknown");
+
+    const h2 = harness("F-1", ["base", "base"]);
+    const allowed = await runModelCoordinator({
+      allowUnknownModelIdentity: true,
+      caseId: "F-1",
+      generate: async () => absent(),
+      model: "deepseek-v4.1-flash",
+      observe: h2.observe,
+      read: h2.read,
+      repeat: 0,
+      seed: 101,
+    });
+    expect(allowed.status).toBe("proposal");
+    expect(allowed.green).toBe(true);
+  });
+});
+
 describe("model coordinator — fail-closed structural failures", () => {
   test("a model-authored snapshot_unstable is a structural failure, never the coordinator outcome", async () => {
     const h = harness("F-1", ["base", "base"]);
     const result = await runModelCoordinator({
       caseId: "F-1",
-      generate: async () => JSON.stringify({ outcome: "snapshot_unstable" }),
+      generate: async () => matched(JSON.stringify({ outcome: "snapshot_unstable" })),
       model: "deepseek-v4.1-flash",
       observe: h.observe,
       read: h.read,
@@ -215,7 +334,7 @@ describe("model coordinator — fail-closed structural failures", () => {
       caseId: "F-1",
       generate: async () => {
         calls += 1;
-        return calls === 1 ? "not json at all" : proposalText("F-1");
+        return matched(calls === 1 ? "not json at all" : proposalText("F-1"));
       },
       model: "deepseek-v4.1-flash",
       observe: h.observe,
@@ -252,7 +371,7 @@ describe("model coordinator — fail-closed structural failures", () => {
       caseId: "F-1",
       generate: async () => {
         calls += 1;
-        return calls === 1 ? unknownCitation : proposalText("F-1");
+        return matched(calls === 1 ? unknownCitation : proposalText("F-1"));
       },
       model: "deepseek-v4.1-flash",
       observe: h.observe,
@@ -276,7 +395,7 @@ describe("model coordinator — fail-closed structural failures", () => {
     const h = harness("F-1", ["base", "base"]);
     const result = await runModelCoordinator({
       caseId: "F-1",
-      generate: async () => "{}",
+      generate: async () => matched("{}"),
       model: "deepseek-v4.1-flash",
       observe: h.observe,
       read: h.read,
@@ -291,7 +410,7 @@ describe("model coordinator — fail-closed structural failures", () => {
     let reads = 0;
     const result = await runModelCoordinator({
       caseId: "F-1",
-      generate: async () => proposalText("F-1"),
+      generate: async () => matched(proposalText("F-1")),
       model: "deepseek-v4.1-flash",
       observe: () => {
         throw new Error("should not observe a failed read");

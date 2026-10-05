@@ -13,6 +13,7 @@
     "check": "bun run typecheck && bun run build && bun test src",
     "librarian:evaluate": "bun src/librarian/evaluate.ts",
     "librarian:semantic-eval": "bun harness/librarian-generation/run.mjs",
+    "librarian:semantic-eval:export": "bun harness/librarian-generation/export-pack.mjs",
     "librarian:semantic-eval:test": "bun harness/librarian-generation/run-tests.mjs",
     "harness:read": "bash harness/read-pass.sh",
     "harness:fixture": "bash harness/read-pass.sh --dataset fixture",

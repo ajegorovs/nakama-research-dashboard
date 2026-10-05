@@ -35,6 +35,7 @@ import {
   captureGeneration,
   type GenerateResult,
   type GenerationCapture,
+  type ModelIdentity,
 } from "./model-candidate";
 import { renderPrompt, type RenderedPrompt, type SupportedProjection } from "./prompt";
 
@@ -46,7 +47,8 @@ export type CoordinatorStatus =
   | "refused"
   | "read_error"
   | "generation_error"
-  | "malformed";
+  | "malformed"
+  | "model_mismatch";
 
 export type GenerationRequest = {
   step: "A" | "B";
@@ -58,21 +60,39 @@ export type GenerationRequest = {
   provenance: string;
 };
 
-/** The generation seam. Returns the **extracted completion text**, exactly as extracted (unnormalised). */
-export type GenerationFn = (request: GenerationRequest) => Promise<string>;
+/**
+ * What a generation seam returns: the extracted completion (unnormalised) plus the backend's own model
+ * identity. The identity verdict is derived by the transport from the response, never from the request —
+ * a seam that cannot read a model must return `"unknown"`, never a fabricated `"match"`.
+ */
+export type GenerationOutput = {
+  completionText: string;
+  /** The model id the backend reported, sanitized and bounded; `"unknown"` when the response carried none. */
+  modelReported: string;
+  modelIdentity: ModelIdentity;
+};
+
+/** The generation seam. Returns the extracted completion text exactly as extracted (unnormalised). */
+export type GenerationFn = (request: GenerationRequest) => Promise<GenerationOutput>;
 
 export type CoordinatorOptions = {
   caseId: string;
   repeat: number;
   /** One predetermined seed for this repeat (fixed before the run), or `null` if unavailable. */
   seed: number | null;
-  /** The model identifier exactly as the backend reports it (recorded, never derived). */
+  /** The model identifier the run requests (the pinned identity). Recorded, never derived. */
   model: string;
   /** One read per step index (0=A, 1=B, 2=C). Only the needed steps are called. */
   read: (step: number) => Promise<unknown>;
   /** Build (and digest) the observation from one raw read. */
   observe: (raw: unknown, step: number) => Observation;
   generate: GenerationFn;
+  /**
+   * When `true`, an `unknown` reported model identity is accepted (allowed by an explicit, prior owner
+   * disposition recorded in the run authorization). When `false` (the default) an `unknown` identity is
+   * fail-closed and non-green. A `mismatch` is **always** non-green regardless of this flag.
+   */
+  allowUnknownModelIdentity?: boolean;
   /** Test-only: overrides the injected provenance composition. Mock metadata is never committed. */
   provenanceFor?: (step: "A" | "B", repeat: number, seed: number | null) => string;
 };
@@ -137,7 +157,7 @@ export async function runModelCoordinator(
     }
     const prompt = renderPrompt(asProjection(observation));
     const prov = provenance(step, options.seed);
-    const completionText = await options.generate({
+    const output = await options.generate({
       caseId: options.caseId,
       observation,
       prompt,
@@ -148,12 +168,16 @@ export async function runModelCoordinator(
     });
     const result = captureGeneration({
       caseId: options.caseId,
-      completionText,
-      model: options.model,
+      completionText: output.completionText,
+      modelIdentity: output.modelIdentity,
+      modelReported: output.modelReported,
+      modelRequested: options.model,
       observationDigest: observation.digest,
       promptDigest: prompt.requestDigest,
       provenance: prov,
       repeat: options.repeat,
+      requestSystem: prompt.system,
+      requestUser: prompt.user,
       seed: options.seed,
       step,
     });
@@ -173,6 +197,12 @@ export async function runModelCoordinator(
     firstGeneration = await generate("A", first);
   } catch (error) {
     return generationError(error, reads, digests, generations);
+  }
+  // The backend-reported model identity is checked **before** the candidate is used: a mismatch (always)
+  // or an undispositioned unknown is fail-closed — the completion is preserved, no candidate is delivered,
+  // and the entry is non-green.
+  if (modelIdentityFailure(firstGeneration.capture, options.allowUnknownModelIdentity)) {
+    return modelIdentityResult(firstGeneration.capture, reads, digests, generations);
   }
 
   // 2. read B, compare A to B.
@@ -202,6 +232,9 @@ export async function runModelCoordinator(
     secondGeneration = await generate("B", second);
   } catch (error) {
     return generationError(error, reads, digests, generations);
+  }
+  if (modelIdentityFailure(secondGeneration.capture, options.allowUnknownModelIdentity)) {
+    return modelIdentityResult(secondGeneration.capture, reads, digests, generations);
   }
 
   // 4. read C, compare B to C.
@@ -236,6 +269,48 @@ export async function runModelCoordinator(
   } catch (error) {
     return refusedOrThrow(error, reads, digests, generations);
   }
+}
+
+/**
+ * `true` when a generation's backend-reported model identity must fail the entry closed: a `mismatch` or
+ * an `invalid` always; an `unknown` unless an explicit prior disposition allowed it. The check happens
+ * **before** any candidate is delivered; the capture (with completion bytes) is preserved.
+ */
+function modelIdentityFailure(capture: GenerationCapture, allowUnknown: boolean | undefined): boolean {
+  if (capture.modelIdentity === "match") return false;
+  if (capture.modelIdentity === "unknown" && allowUnknown === true) return false;
+  return true;
+}
+
+/** The fixed error reason for one non-match model-identity verdict. */
+function modelIdentityReason(identity: GenerationCapture["modelIdentity"]): string {
+  if (identity === "mismatch") return "model_identity_mismatch";
+  if (identity === "invalid") return "model_identity_invalid";
+  return "model_identity_unknown";
+}
+
+/** A recorded, non-green model-identity failure that preserves the capture and delivers no candidate. */
+function modelIdentityResult(
+  capture: GenerationCapture,
+  reads: number,
+  digests: string[],
+  generations: GenerationCapture[]
+): CoordinatorResult {
+  const described = capture.modelIdentity === "invalid" ? "an unusable (invalid) model id" : `model "${capture.modelReported}"`;
+  return {
+    digests,
+    error: {
+      message: `The backend reported ${described} but "${capture.modelRequested}" was requested.`,
+      name: "ModelIdentityError",
+      reason: modelIdentityReason(capture.modelIdentity),
+    },
+    generations,
+    green: false,
+    outcome: null,
+    proposal: null,
+    reads,
+    status: "model_mismatch",
+  };
 }
 
 function finalize(

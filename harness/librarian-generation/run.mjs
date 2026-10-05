@@ -25,6 +25,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from
 import { dirname, join, resolve } from "node:path";
 import { renderPrompt } from "../../src/librarian/prompt.ts";
 import { currentRevision, loadAuthorization } from "./authorization.mjs";
+import { exportPack, packDirFor } from "./export-pack.mjs";
 import { buildSchedule, executeSchedule } from "./orchestrate.mjs";
 
 const HERE = import.meta.dir;
@@ -176,11 +177,24 @@ async function generate() {
       throw error;
     }
     const capture = JSON.parse(result.stdout ?? "{}");
-    return Buffer.from(String(capture.completionBase64 ?? ""), "base64").toString("utf8");
+    const reported = typeof capture.modelReported === "string" && capture.modelReported.length > 0 ? capture.modelReported : "unknown";
+    // The reported identity comes from the transport's decode of the provider response, never the request.
+    // A present-but-unusable model field is classified `invalid` (fail-closed) rather than fabricated.
+    const identity =
+      capture.modelIdentity === "match" || capture.modelIdentity === "mismatch" || capture.modelIdentity === "invalid"
+        ? capture.modelIdentity
+        : "unknown";
+    return {
+      completionText: Buffer.from(String(capture.completionBase64 ?? ""), "base64").toString("utf8"),
+      modelIdentity: identity,
+      modelReported: reported,
+    };
   };
 
   const schedule = buildSchedule(manifest, corpus);
   const report = await executeSchedule({
+    allowUnknownModelIdentity:
+      authorization.record?.capabilityDispositions?.modelIdentity === "owner_accepted_unknown",
     captureDir,
     corpus,
     generate: generateSeam,
@@ -191,9 +205,20 @@ async function generate() {
     schedule,
   });
   writeFileSync(join(captureDir, "report.json"), `${JSON.stringify(report, null, 2)}\n`, { flag: "wx" });
+  // Export the durable, public-source evidence pack once (exclusive); a second export to the same run
+  // directory refuses rather than merging. The pack is written from the completed report only.
+  const pack = exportPack({
+    captureDir,
+    manifest,
+    manifestPath: MANIFEST_PATH,
+    mock: false,
+    packDir: packDirFor(REPO, authorization.record.captureBasename),
+    repo: REPO,
+    runId: authorization.record.captureBasename,
+  });
   console.log(
     `generate: ${report.totalCalls}/${report.hardMaximumCalls} calls; green=${report.green}; ` +
-      `captures=${report.captureCount}; dir=${captureDir}`
+      `captures=${report.captureCount}; dir=${captureDir}; pack=${pack.written ? pack.path : pack.reason}`
   );
   return report.green && report.countsMatch ? 0 : 1;
 }

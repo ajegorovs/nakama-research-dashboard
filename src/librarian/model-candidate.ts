@@ -289,16 +289,47 @@ export function toCandidateInput(
 }
 
 /**
+ * The model-identity verdict for one generation.
+ *
+ * - `match`    the backend-reported id equals the requested (pinned) id;
+ * - `mismatch` the backend reported a **different** id;
+ * - `unknown`  the backend reported no usable model id (absent);
+ * - `invalid`  the backend reported a present-but-unusable id (non-string/over-long/control-char), a
+ *   fail-closed transport classification recorded with a fixed error code.
+ *
+ * Any non-`match` verdict is **fail-closed**: it is recorded with the full completion preserved, the
+ * candidate is not delivered, and the entry is non-green. The verdict is never fabricated from the
+ * requested id — a response that carries no model must not be recorded as a match.
+ */
+export type ModelIdentity = "match" | "mismatch" | "unknown" | "invalid";
+
+/**
  * A lossless, immutable per-generation capture. The completion bytes are the extracted completion,
  * UTF-8 encoded exactly as extracted, recorded base64 + sha256 **before** any parse. Provenance is
  * injected run metadata; the provider envelope, headers, credentials and account ids are never retained.
+ *
+ * The **requested** model (the pinned identity) and the **reported** model (the id the backend returned,
+ * or `unknown`) are distinct fields: the capture preserves both so a reviewer can see the divergence
+ * that a fabricated single field would hide.
  */
 export type GenerationCapture = {
   caseId: string;
   repeat: number;
   step: "A" | "B";
   seed: number | null;
-  model: string;
+  /** The model id the harness requested for this call (the pinned identity). */
+  modelRequested: string;
+  /** The model id the backend **reported**, sanitized and bounded; `"unknown"` when the response carried none. */
+  modelReported: string;
+  /** Whether the backend-reported id equals the requested id. Never inferred when absent. */
+  modelIdentity: ModelIdentity;
+  /**
+   * The exact system message sent for this generation, recorded verbatim (public synthetic template
+   * text). Stored so the durable evidence pack can carry the exact request messages, not just a digest.
+   */
+  requestSystem: string;
+  /** The exact user message sent for this generation, recorded verbatim (public synthetic projection). */
+  requestUser: string;
   observationDigest: string;
   promptDigest: string;
   provenance: string;
@@ -335,12 +366,26 @@ export function captureGeneration(args: {
   repeat: number;
   step: "A" | "B";
   seed: number | null;
-  model: string;
+  /** The model id the harness requested (the pinned identity). */
+  modelRequested: string;
+  /** The model id the backend reported, or `"unknown"` when absent. Recorded verbatim (sanitized upstream). */
+  modelReported: string;
+  /** The verdict derived from the two ids by the transport seam; recorded, never re-derived here. */
+  modelIdentity: ModelIdentity;
+  /** The exact system message sent (public synthetic template text). */
+  requestSystem: string;
+  /** The exact user message sent (public synthetic projection). */
+  requestUser: string;
   observationDigest: string;
   promptDigest: string;
   provenance: string;
 }): GenerateResult {
   const bytes = Buffer.from(args.completionText, "utf8");
+  const reported = typeof args.modelReported === "string" && args.modelReported.length > 0 ? args.modelReported : "unknown";
+  const identity: ModelIdentity =
+    args.modelIdentity === "match" || args.modelIdentity === "mismatch" || args.modelIdentity === "invalid"
+      ? args.modelIdentity
+      : "unknown";
   const base = {
     assessmentError: null as { reason: string; message: string } | null,
     caseId: args.caseId,
@@ -348,11 +393,15 @@ export function captureGeneration(args: {
     completionBytes: bytes.length,
     completionSha256: createHash("sha256").update(bytes).digest("hex"),
     discarded: false,
-    model: args.model,
+    modelIdentity: identity,
+    modelReported: reported,
+    modelRequested: args.modelRequested,
     observationDigest: args.observationDigest,
     promptDigest: args.promptDigest,
     provenance: args.provenance,
     repeat: args.repeat,
+    requestSystem: typeof args.requestSystem === "string" ? args.requestSystem : "",
+    requestUser: typeof args.requestUser === "string" ? args.requestUser : "",
     seed: args.seed,
     step: args.step,
   };

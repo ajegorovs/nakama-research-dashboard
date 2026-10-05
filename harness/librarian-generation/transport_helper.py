@@ -33,6 +33,8 @@ import base64
 import hashlib
 import json
 import os
+import re
+import subprocess
 import sys
 from typing import Any, Callable, Optional
 
@@ -234,6 +236,76 @@ def _decode_completion(envelope: bytes) -> str:
     Only the content string is extracted; the provider envelope is not retained. Decoding JSON is the
     transport's job here; the caller UTF-8 encodes the returned string exactly as extracted.
     """
+    content, _identity = _decode_envelope(envelope)
+    return content
+
+
+_HEX64 = re.compile(r"\A[0-9a-f]{64}\Z")
+# A model id is a bounded, single-token public identifier; anything longer, or carrying control
+# characters/newlines, is not a usable identity. A present-but-unusable id is **classified**, never
+# raised after the completion has already been extracted: the completion is the evidence and is kept.
+_MODEL_ID_MAX = 256
+# A capability proof artifact is a small, non-secret JSON document; a larger file is refused unread.
+PROOF_FILE_MAX_BYTES = 65536
+CAPABILITY_PROOF_SCHEMA = "librarian-capability-proof-v1"
+DEFAULT_PROOF_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "capability-proofs")
+
+# The plain (unverified) dispositions an owner may record for each capability, mirroring the JS gate.
+UNVERIFIED_CAPABILITY_DISPOSITIONS: dict[str, list[str]] = {
+    "promptTokenCounting": ["unavailable_byte_cap_only"],
+    "seedControl": ["unverified_owner_accepted"],
+}
+OPTIONAL_CAPABILITY_DISPOSITIONS: dict[str, list[str]] = {
+    "modelIdentity": ["owner_accepted_unknown"],
+}
+FORBIDDEN_EGRESS_FIELDS = (
+    "apiKey",
+    "authorization",
+    "credential",
+    "credentialValue",
+    "headers",
+    "org",
+    "orgId",
+    "requestId",
+    "token",
+    "user",
+    "userId",
+)
+
+
+def _classify_model_id(raw: Any) -> dict:
+    """Classify a provider ``model`` field without ever raising after the completion is extracted.
+
+    Returns ``{"status", "reported", "error"}``:
+
+    - ``absent``  — no usable id (missing/empty); ``reported`` is ``None`` (the caller records `unknown`);
+    - ``present`` — a bounded single-token id; ``reported`` is the sanitized value;
+    - ``invalid`` — a present-but-unusable id (non-string, over-long or control characters); ``reported``
+      is ``None`` and ``error`` is the fixed code ``model_identity_invalid``.
+
+    The invalid case is classified, **not raised**: the extracted completion is the evidence and must be
+    preserved even when the identity field is unusable. The unusable value itself is never echoed.
+    """
+    if raw is None:
+        return {"error": None, "reported": None, "status": "absent"}
+    if not isinstance(raw, str):
+        return {"error": "model_identity_invalid", "reported": None, "status": "invalid"}
+    value = raw.strip()
+    if not value:
+        return {"error": None, "reported": None, "status": "absent"}
+    if len(value) > _MODEL_ID_MAX or any(ord(ch) < 0x20 for ch in value):
+        return {"error": "model_identity_invalid", "reported": None, "status": "invalid"}
+    return {"error": None, "reported": value, "status": "present"}
+
+
+def _decode_envelope(envelope: bytes) -> tuple[str, dict]:
+    """Extract ``(completion_content, identity)`` from a chat_completions response.
+
+    The **content** is always extracted first; a present-but-unusable ``model`` field does not raise —
+    it is returned as an ``invalid`` identity alongside the preserved content (see
+    :func:`_classify_model_id`). Only a genuinely absent/unreadable completion raises. The provider
+    envelope is never retained.
+    """
     try:
         data = json.loads(envelope.decode("utf-8"))
     except Exception as exc:
@@ -244,7 +316,176 @@ def _decode_completion(envelope: bytes) -> str:
         raise TransportError("completion_missing") from exc
     if not isinstance(content, str):
         raise TransportError("completion_not_text")
-    return content
+    raw_model = data.get("model") if isinstance(data, dict) else None
+    return content, _classify_model_id(raw_model)
+
+
+def _current_revision(repo: Optional[str] = None) -> Optional[str]:
+    """The repository HEAD, or ``None`` when it cannot be resolved.
+
+    Production never accepts a caller-supplied revision: it is resolved from the harness's own repository
+    root. ``repo`` exists only so a test can point the resolution at a hostile/absent location.
+    """
+    if repo is None:
+        repo = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(MANIFEST_PATH))))
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True
+        )
+    except Exception:
+        return None
+    return out.stdout.strip() or None
+
+
+def resolve_proof_path(proof_dir: str, rel: Any) -> tuple[Optional[str], Optional[str]]:
+    """Resolve one proof artifact path under the dedicated proof directory, refusing escape attempts.
+
+    A record is untrusted input: an absolute path, a ``..`` traversal, a symlink, a non-file or an
+    over-large file is refused **before** it is read, so a malicious record can never point the gate at
+    an arbitrary (credential) file. Returns ``(path, None)`` or ``(None, reason_code)``.
+    """
+    if not isinstance(rel, str) or not rel.strip():
+        return None, "authorization_capability_proof_missing"
+    if os.path.isabs(rel) or rel.startswith("~"):
+        return None, "authorization_capability_proof_path_refused"
+    normalized = os.path.normpath(rel)
+    if normalized.startswith("..") or os.path.isabs(normalized):
+        return None, "authorization_capability_proof_path_refused"
+    try:
+        real_base = os.path.realpath(proof_dir)
+    except Exception:
+        return None, "authorization_capability_proof_missing"
+    full = os.path.join(real_base, normalized)
+    if os.path.islink(full):
+        return None, "authorization_capability_proof_path_refused"
+    if not os.path.isfile(full):
+        return None, "authorization_capability_proof_missing"
+    try:
+        if os.path.getsize(full) > PROOF_FILE_MAX_BYTES:
+            return None, "authorization_capability_proof_path_refused"
+        real = os.path.realpath(full)
+    except Exception:
+        return None, "authorization_capability_proof_missing"
+    if not real.startswith(real_base + os.sep):
+        return None, "authorization_capability_proof_path_refused"
+    return real, None
+
+
+def check_capability_proof(value: dict, capability: str, manifest: dict,
+                           proof_dir: str = DEFAULT_PROOF_DIR) -> Optional[str]:
+    """Mechanically validate one ``verified`` capability claim against its bound proof artifact.
+
+    A ``verified`` claim is not prose and not a bare sha: it must name a bounded, non-secret JSON proof
+    under the proof directory whose own bytes hash to the recorded ``proofDigest``, whose capability/
+    provider/endpoint/model match the pinned identity, whose status is ``verified``, and whose recorded
+    ``artifactDigest`` equals the **frozen corpus** artifact digest; it must also name an evidence file
+    (inside the proof directory) whose bytes hash to the recorded ``evidenceSha256``. This is an operator
+    interlock, not a cryptographic owner signature: it detects inconsistency and unbound/forged digests,
+    and assumes nothing — no proof exists today, so every ``verified`` route refuses.
+    """
+    path, err = resolve_proof_path(proof_dir, value.get("proofPath"))
+    if err:
+        return err
+    if _sha256_file(path) != value.get("proofDigest"):
+        return "authorization_capability_proof_digest_mismatch"
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            proof = json.load(handle)
+    except Exception:
+        return "authorization_capability_proof_malformed"
+    if not isinstance(proof, dict):
+        return "authorization_capability_proof_malformed"
+    if proof.get("schema") != CAPABILITY_PROOF_SCHEMA:
+        return "authorization_capability_proof_malformed"
+    if proof.get("status") != "verified":
+        return "authorization_capability_proof_mismatch"
+    if proof.get("capability") != capability:
+        return "authorization_capability_proof_mismatch"
+    identity = manifest.get("identity", {})
+    if (
+        proof.get("provider") != identity.get("provider")
+        or proof.get("endpoint") != identity.get("baseUrl")
+        or proof.get("model") != identity.get("model")
+    ):
+        return "authorization_capability_proof_mismatch"
+    if not isinstance(proof.get("timestamp"), str) or not proof["timestamp"].strip():
+        return "authorization_capability_proof_malformed"
+    evidence_sha = proof.get("evidenceSha256")
+    if not isinstance(evidence_sha, str) or not _HEX64.match(evidence_sha):
+        return "authorization_capability_proof_malformed"
+    corpus_digest = ((manifest.get("artifacts") or {}).get("corpus") or {}).get("digest")
+    if value.get("artifactDigest") != corpus_digest:
+        return "authorization_capability_proof_mismatch"
+    evidence_path, evidence_err = resolve_proof_path(proof_dir, proof.get("evidencePath"))
+    if evidence_err:
+        return "authorization_capability_proof_evidence_mismatch"
+    if _sha256_file(evidence_path) != evidence_sha:
+        return "authorization_capability_proof_evidence_mismatch"
+    return None
+
+
+def _check_disposition(value: Any, allowed: list[str], capability: str, manifest: dict,
+                       proof_dir: str) -> Optional[str]:
+    if isinstance(value, str):
+        return None if value in allowed else "authorization_capability_disposition_invalid"
+    if isinstance(value, dict):
+        if value.get("status") != "verified":
+            return "authorization_capability_disposition_invalid"
+        for key in ("proofDigest", "artifactDigest"):
+            digest = value.get(key)
+            if not isinstance(digest, str) or not _HEX64.match(digest):
+                return "authorization_capability_disposition_unverifiable"
+        if not isinstance(value.get("proofPath"), str) or not value["proofPath"].strip():
+            return "authorization_capability_disposition_unverifiable"
+        return check_capability_proof(value, capability, manifest, proof_dir)
+    return "authorization_capability_disposition_invalid"
+
+
+def check_capability_dispositions(dispositions: Any, manifest: dict,
+                                  proof_dir: str = DEFAULT_PROOF_DIR) -> Optional[str]:
+    if not isinstance(dispositions, dict):
+        return "authorization_capability_dispositions_absent"
+    for name, allowed in UNVERIFIED_CAPABILITY_DISPOSITIONS.items():
+        if name not in dispositions:
+            return "authorization_capability_dispositions_absent"
+        reason = _check_disposition(dispositions[name], allowed, name, manifest, proof_dir)
+        if reason:
+            return reason
+    for name, allowed in OPTIONAL_CAPABILITY_DISPOSITIONS.items():
+        if name in dispositions:
+            reason = _check_disposition(dispositions[name], allowed, name, manifest, proof_dir)
+            if reason:
+                return reason
+    return None
+
+
+def check_third_party_egress(egress: Any, manifest: dict) -> Optional[str]:
+    if not isinstance(egress, dict):
+        return "authorization_third_party_egress_absent"
+    for field in FORBIDDEN_EGRESS_FIELDS:
+        if field in egress:
+            return "authorization_third_party_egress_credential_field_present"
+    identity = manifest.get("identity", {})
+    if egress.get("approved") is not True:
+        return "authorization_third_party_egress_not_approved"
+    if egress.get("syntheticOnly") is not True:
+        return "authorization_third_party_egress_not_synthetic_only"
+    if (
+        egress.get("origin") != identity.get("origin")
+        or egress.get("baseUrl") != identity.get("baseUrl")
+        or egress.get("model") != identity.get("model")
+    ):
+        return "authorization_third_party_egress_mismatch"
+    if egress.get("calls") != AUTHORIZED_CALL_SCOPE:
+        return "authorization_third_party_egress_mismatch"
+    digest = egress.get("artifactDigest")
+    if not isinstance(digest, str) or not _HEX64.match(digest):
+        return "authorization_third_party_egress_artifact_digest_invalid"
+    # The egress artifact digest must bind to the frozen corpus artifact — never an arbitrary 64-hex value.
+    corpus_digest = ((manifest.get("artifacts") or {}).get("corpus") or {}).get("digest")
+    if digest != corpus_digest:
+        return "authorization_third_party_egress_mismatch"
+    return None
 
 
 # ---- Capability checks (non-generation) --------------------------------------------------------------
@@ -326,6 +567,7 @@ def generation_authorized(
     manifest_path: str = MANIFEST_PATH,
     model: str = MODEL,
     env: Optional[dict] = None,
+    proof_dir: str = DEFAULT_PROOF_DIR,
 ) -> tuple[bool, str]:
     """Decide whether generation is authorized, fail-closed. Returns ``(ok, reason_code)``.
 
@@ -373,6 +615,24 @@ def generation_authorized(
         expected = (manifest_artifacts.get(key) or {}).get("digest")
         if not expected or artifacts.get(key) != expected:
             return False, "authorization_artifact_mismatch"
+    # The explicit owner disposition of the unverified capabilities (mandatory).
+    capability_reason = check_capability_dispositions(record.get("capabilityDispositions"), manifest, proof_dir)
+    if capability_reason:
+        return False, capability_reason
+    # The explicit owner approval of synthetic-only third-party egress (mandatory).
+    egress_reason = check_third_party_egress(record.get("thirdPartyEgress"), manifest)
+    if egress_reason:
+        return False, egress_reason
+    # Revision: fail closed when it cannot be determined — never skip the check, and never trust a
+    # caller-supplied revision. The record's revision must match the resolved repository HEAD.
+    reported = record.get("implementationRevision")
+    if not isinstance(reported, str) or not reported.strip():
+        return False, "authorization_revision_unavailable"
+    head = _current_revision()
+    if not head:
+        return False, "authorization_revision_unavailable"
+    if reported != head:
+        return False, "authorization_revision_mismatch"
     return True, "authorized"
 
 
@@ -409,16 +669,39 @@ def run_generate(
     status, envelope = post(
         f"{base_url}{CHAT_SUFFIX}", build_headers(runtime["api_key"]), payload, allow_loopback=allow_loopback
     )
-    content = _decode_completion(envelope)
+    content, identity = _decode_envelope(envelope)
+    requested = str(request.get("model", MODEL))
+    if identity["status"] == "invalid":
+        # A present-but-unusable model field: the completion bytes are still preserved losslessly, but the
+        # identity is classified `invalid` with a fixed error code, success is false, and the caller keeps
+        # the entry non-green and delivers no candidate. The unusable value is never echoed.
+        model_identity = "invalid"
+        model_reported = "unknown"
+        model_identity_error = identity["error"]
+        success = False
+    else:
+        model_identity_error = None
+        success = True
+        if identity["status"] == "absent":
+            model_identity = "unknown"
+            model_reported = "unknown"
+        else:
+            model_reported = identity["reported"]
+            model_identity = "match" if model_reported == requested else "mismatch"
     raw = content.encode("utf-8")
     return {
         "completionBase64": base64.b64encode(raw).decode("ascii"),
         "completionBytes": len(raw),
         "completionSha256": hashlib.sha256(raw).hexdigest(),
         "httpStatus": status,
-        "modelReported": str(request.get("model", MODEL)),
+        # The reported identity is decoded from the provider response, never copied from the request.
+        "modelIdentity": model_identity,
+        "modelIdentityError": model_identity_error,
+        "modelReported": model_reported,
+        "modelRequested": requested,
         "responseBytes": len(envelope),
         "seed": request.get("seed"),
+        "success": success,
     }
 
 
