@@ -3,7 +3,8 @@
 **Status: design approved with amendments (2026-10-05) — NOT implemented.** This document proposes; it
 changes no code, no migration, no bundle and no schema, and performs no live, deployed or credentialled
 access, no monitoring and no operational write. The reviewer approved this design with amendments (durable
-ruling recorded in [`../evidence-automation/DECISIONS.md`](../evidence-automation/DECISIONS.md) **D-008**); the
+ruling recorded in [`../evidence-automation/DECISIONS.md`](../evidence-automation/DECISIONS.md) **D-008**,
+with the later offline-envelope scope corrections recorded there as **D-009**); the
 amendments are incorporated below and do not alter the approved one-Axis, proposal-only architecture. It
 realizes the **first bounded slice** of `DECISIONS.md` **D-006**: deterministic stored facts + agent
 **proposals** over the existing Axis/Problem model, human steering stated explicitly.
@@ -114,12 +115,21 @@ future, separately gated step (§10).
   cap as axis notes;
 - **every** returned human `interpretation`/`steering` claim — not the newest.
 
-**Scope is preserved, never flattened.** `listAnnotations` filters by `topicId`/`axisId` only — **not**
-`problemId` (`src/store.ts:2261-2286`) — and reports no total, so a note whose `problemId` is set (a
-problem-scoped steering claim) still arrives inside the list read for its axis. V1 therefore keys each note
-by its own target fields (`topicId`, `axisId`, `problemId`) and treats a problem-targeted claim as steering
-for **that problem only** — never as whole-axis steering. A note with `axisId` is axis-scoped; a
-`topicId`-only note (`axisId` null) is topic-wide.
+**Scope is preserved, never flattened — and what is *not* returned is stated, not fabricated.** A claim-kind
+annotation carries exactly **one canonical target** — topic **or** axis **or** problem
+(`(topic_id IS NOT NULL) + (axis_id IS NOT NULL) + (problem_id IS NOT NULL) = 1`,
+`migrations/004-ux-v2-model.sql:302-324`) **[CURRENT]**. `listAnnotations({ axisId })` matches only rows whose
+`axis_id` is that axis, and `listTopicNotes` matches `topic_id = ? AND axis_id IS NULL`
+(`src/store.ts:2261-2286,2357-2371`) **[CURRENT]**. A **problem-scoped** `interpretation`/`steering` claim has
+`axis_id` NULL **and** `topic_id` NULL, so it is **returned by neither projection** — it is **not exposed
+through `get_topic`**. V1 therefore keys each **returned** note by its own target fields: a returned note with
+`axisId` is axis-scoped; a returned note with `topicId` and `axisId` null is topic-wide. **Problem-scoped
+steering is not an input V1 receives** — it is an explicit **coverage limitation** (§8), never a projection V1
+fabricates. What *is* genuinely returned about a problem is its **state history** — `ProblemDetail.history`
+(`StateLogEntry[]`, `src/store.ts:1246-1253,2490`) **[CURRENT]** — and that coverage is kept. Problem-scoped
+steering is assembled only by the page-only Progress projection (`ProgressProblemRow.steering`,
+`src/store.ts:5104-5134,5330,1464,534`), which is `get_progress` (`exposeAsTool: false`) and unreachable from
+the agent surface.
 
 ### 5.2 The proposal (reply-only; no schema delta)
 
@@ -203,8 +213,13 @@ resolves to exactly one returned element or the resolver **fails closed**.
   - **`axis`** — `row.axisId` is the subject axis (axis-scoped evidence);
   - **`topic`** — `row.axisId` is null and `row.topicId` is the subject's topic (topic-wide human steering,
     §5.1, §7.4);
-  - **`problem`** — `row.problemId` is one of the subject axis's returned problems (problem-scoped evidence,
-    available even where `row.axisId` is null, e.g. a problem-scoped `state_log` entry).
+  - **`problem`** — `row.problemId` is one of the subject axis's returned problems **and the row is actually
+    returned by a supported read**. In the current projections the only problem-scoped rows returned are the
+    problem's **state-history** entries (`ProblemDetail.history`, `StateLogEntry[]`,
+    `src/store.ts:1246-1253,2490`); a problem-scoped `annotation` is **not returned at all** (§5.1), so its id
+    is absent from the bundle and the resolver **refuses** it. The grammar defines **no problem-annotation
+    role**: the resolver does not assert a problem-annotation capability it cannot read — it rejects an absent
+    id fail-closed rather than fabricating a projection.
 
   The cited role must match how the proposal uses the ref: a `problem`-role ref supports a **problem-specific**
   statement or structured conflict only and is **never** cited as whole-axis evidence or whole-axis steering; a
@@ -336,6 +351,14 @@ returned evidence**. **[CURRENT]** what the projections actually give, per sourc
 - The Progress steering projection (`humanSteeringBy`, cap `PROGRESS_SUPPORT_LIMIT = 10`,
   `src/store.ts:5104-5134,534`) is page-only: `get_progress` is `exposeAsTool: false` — V1 reads human
   steering via `get_topic` `notes`, not that projection.
+- **Problem-scoped steering is a distinct, unboundable coverage gap.** An `interpretation`/`steering` claim
+  aimed at a problem is assembled only by the page-only Progress projection (`ProgressProblemRow.steering`,
+  cap `PROGRESS_SUPPORT_LIMIT = 10`, `src/store.ts:5104-5134,5330,1464,534`), which is `get_progress`
+  (`exposeAsTool: false`) and therefore **unreachable from the agent surface**. `get_topic` returns **no**
+  problem-note list (§5.1), so problem-scoped steering is **neither read by V1 nor provably absent from V1's
+  bundle**: because no supported read returns a problem-annotation list at all, **even a COMPLETE axis-notes
+  list proves nothing about problem-scoped steering**. Per-source coverage for problem-scoped steering is
+  therefore **UNKNOWN** — a **coverage limitation**, never COMPLETE and never a fabricated empty set.
 - External receipts are collector-only (§2) — V1 cites none.
 
 A bounded or **UNKNOWN** source does not, on its own, make the whole result "known partial". When a matching
@@ -363,12 +386,15 @@ rendered as the stored `confidence` or as approval; N-3 empty evidence ⇒ `outc
 (no `confirmed`, no text) when there is nothing to interpret, and a **read error is a hard error, not
 absence**; N-4 a competing human claim is never overwritten/superseded — conflict stated (`reason`
 `human_steering_conflict`), V1 abstains; N-5 two disagreeing human claims ⇒ `reason` `human_human_conflict` +
-abstention, no recency/`confidence`/`author_type` resolution; N-6 a digest mismatch on the bounded
+`human_human_conflict` + abstention, no recency/`confidence`/`author_type` resolution; N-6 a digest mismatch on the bounded
 A→B→C compare ⇒ `outcome` `snapshot_unstable` with **no further reads or recomputes** (never a loop); N-7 a
-spoofed actor/author token cannot mint provenance (`src/store.ts:5633`); N-8 a problem-targeted steering claim
-is never applied as whole-axis steering and topic-wide steering is read (§5.1), and where human-steering
-coverage is UNKNOWN V1 infers no blocker change — only an evidence-limited synopsis or a reasoned abstention
-(§7.4); N-9 a citation by display label, list index or title (not a typed id/field) is refused.
+spoofed actor/author token cannot mint provenance (`src/store.ts:5633`); N-8 a problem-scoped steering claim is
+**never fabricated as returned** and is never applied as whole-axis steering: V1 reports problem-scoped
+steering as an explicit **coverage limitation** (UNKNOWN, §8) and the resolver **refuses** a citation to a
+problem-scoped annotation id (absent from the bundle), while topic-wide steering is read where returned
+(§5.1); where human-steering coverage is UNKNOWN — including problem-scoped steering — V1 infers no blocker
+change, only an evidence-limited synopsis or a reasoned abstention (§7.4); N-9 a citation by display label,
+list index or title (not a typed id/field) is refused.
 
 **Non-mutation / read-enforcement** — M-1 the **runtime** execution reads only through a **read-boundary
 adapter** that dispatches exactly the three read actions (`get_topic`, `get_overview`, `search_dashboard`)
@@ -399,6 +425,7 @@ its own authorization; nothing here performs or authorizes it.
 
 These were the three product decisions the reviewer owned. All three are now **resolved**, not pending; the
 durable ruling is **D-008** in [`../evidence-automation/DECISIONS.md`](../evidence-automation/DECISIONS.md).
+The later, bounded **offline-envelope scope corrections** are recorded as **D-009** in the same file.
 Not reviewer choices, and unchanged by the amendment: confirmation workflow (out of scope, §10); external
 receipts (inaccessible by construction, §8); bundle digest and read-safety (engineering requirements, §7.3).
 
@@ -415,7 +442,11 @@ The amendments that accompany this approval — rename `authority` to `claimStre
 D-006; omit `reasoning_strength`; typed resolvable evidence references; structured abstention/conflict
 outcomes; bounded snapshot recomputation; and the read-only runtime-surface / isolated-verification distinction — are
 incorporated throughout this document. They do **not** alter the approved **one-Axis, proposal-only**
-architecture.
+architecture. The **D-009** offline-envelope corrections — problem-scoped steering is a coverage limitation,
+not a returned projection (§5.1, §5.5, §8, §9 N-8); problem state-history is kept where genuinely returned;
+supplied assessments are inputs with explicit injected provenance; candidate inputs are separate from the
+oracle; and non-mutation proof uses canonical logical DB snapshots — are bounded corrections, not a new design
+decision, and likewise do not alter the architecture.
 
 ## 12. Non-goals
 
@@ -442,5 +473,6 @@ architecture.
 - Skill: `skills/research-coordinator/SKILL.md:12-26,40-46,51-58,63-64,68-71,78-82,87-90,91-93,100-101,105-106`.
 - Roadmap/questions: `docs/V2-PLAN.md:686-711,794-801`; `docs/OPEN-QUESTIONS.md:39-47`;
   `docs/ux-v2/DECISIONS.md:140-144`.
-- Standing decisions: `docs/evidence-automation/DECISIONS.md` D-001…D-008 (D-006 aligned, D-008 records the
-  approval ruling; both cited, and D-006/D-008 edited only in that file, never here).
+- Standing decisions: `docs/evidence-automation/DECISIONS.md` D-001…D-009 (D-006 aligned; D-008 records the
+  design approval ruling; D-009 records the offline-envelope scope corrections — all three cited, and D-006/D-008/D-009
+  edited only in that file, never here).

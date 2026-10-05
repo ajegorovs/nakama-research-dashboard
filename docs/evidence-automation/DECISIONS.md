@@ -210,3 +210,63 @@ validation. The ruling is recorded verbatim below.
 only a happy path. The bounded, offline, proposal-only implementation plan — not itself authorizing
 implementation — is [`../librarian-reconciliation/OFFLINE-IMPLEMENTATION-PROPOSAL.md`](../librarian-reconciliation/OFFLINE-IMPLEMENTATION-PROPOSAL.md).
 No implementation is authorized by this entry; a separate authorization request would carry it.
+
+**Superseded in part by D-009.** D-009 corrects the offline-envelope assumptions this entry's proposal made
+about problem-scoped steering (it is **not** returned by supported reads) and renames/moves some planned
+paths. The D-008 verbatim ruling above is preserved unchanged as the historical design ruling; D-009 owns the
+later, bounded envelope corrections.
+
+---
+
+## D-009 — 2026-10-05 · Librarian / Reconciliation V1 offline envelope approved with scope corrections (durable ruling)
+
+**Decision.** The offline contract-evaluator envelope
+([`../librarian-reconciliation/OFFLINE-IMPLEMENTATION-PROPOSAL.md`](../librarian-reconciliation/OFFLINE-IMPLEMENTATION-PROPOSAL.md))
+is **approved with scope corrections**. The corrections have been incorporated into that proposal and into
+[`../librarian-reconciliation/DESIGN-V1.md`](../librarian-reconciliation/DESIGN-V1.md). This ruling authorizes
+**no** implementation, live access, model reasoning evaluation, mutation, persistence, monitoring or
+R-series work. The ruling is recorded verbatim below.
+
+**Ruling (verbatim):**
+
+> Librarian/Reconciliation V1 offline contract-evaluator proposal is approved with scope corrections. The
+> synthetic adversarial corpus, typed-reference resolver, structured proposal contract, bounded A/B/C snapshot
+> coordinator, closed read adapter, discriminating negative controls and isolated zero-mutation harness are an
+> appropriate first implementation slice. Before implementation, correct the assumption that problem-scoped
+> steering annotations are returned by current supported reads; they are not exposed through `get_topic`, so
+> their absence is an explicit coverage limitation and F-4/F-17 must not fabricate that projection. Keep
+> problem state-history coverage where it is genuinely returned. Treat supplied semantic assessments as inputs,
+> not discoveries of the deterministic evaluator; keep candidate inputs independent from the expected oracle;
+> and use canonical logical DB snapshots for non-mutation proof. These are bounded corrections, not a new
+> design decision. Live Axis access, model reasoning evaluation, persistence, mutation, monitoring and
+> R-series work remain excluded.
+
+**Canonical source verification of the correction.** An `interpretation`/`steering` annotation carries exactly
+one canonical target — topic **or** axis **or** problem — enforced by the one-canonical-target CHECK
+(`migrations/004-ux-v2-model.sql:302-324`). `listAnnotations({ axisId })` matches only rows whose `axis_id`
+is that axis, and `listTopicNotes` matches `topic_id = ? AND axis_id IS NULL` (`src/store.ts:2261-2286,2357-2371`);
+a problem-scoped claim (`axis_id` NULL, `topic_id` NULL) is therefore returned by **neither** projection and
+is **not exposed through `get_topic`**. What a problem *does* genuinely return is its state history
+(`ProblemDetail.history`, `StateLogEntry[]`, `src/store.ts:1246-1253,2490`), and that coverage is kept.
+Problem-scoped steering is assembled only by the page-only Progress projection
+(`ProgressProblemRow.steering`, `src/store.ts:5104-5134,5330,1464,534`), which is `get_progress`
+(`exposeAsTool: false`) and unreachable from the agent surface.
+
+**How each correction lands.**
+
+- **Problem-scoped steering is a coverage limitation, not a projection.** DESIGN-V1 §5.1/§5.5/§8 and the
+  fixture matrix F-4/F-17 are corrected: V1 neither receives nor fabricates a problem-scoped steering
+  projection, and a citation to a problem-scoped annotation id is refused (absent from the bundle).
+- **Problem state-history kept where returned.** `ProblemDetail.history` remains a citable, returned source
+  (typed role `problem`).
+- **Supplied assessments are inputs, not discoveries.** The deterministic evaluator checks supplied, injected
+  candidate/conflict assessments; it does not parse free text or "discover" semantics. Provenance is injected
+  explicitly. OFFLINE-IMPLEMENTATION-PROPOSAL §7.
+- **Candidate inputs separated from the oracle.** Supplied candidates live in `candidate-inputs.json`; the
+  expected oracle in `expected-outcomes.json` is **never read** by the builder/assembler — the evaluator
+  compares only after assembly. OFFLINE-IMPLEMENTATION-PROPOSAL §5, §7.
+- **Canonical logical DB snapshots.** Zero-mutation proof compares canonical logical content (schema, user
+  tables' row counts and rows in a canonical sorted order), never SQLite/WAL bytes. OFFLINE-IMPLEMENTATION-PROPOSAL
+  §9.
+- **Renames (planned paths only).** The builder module `proposal.ts` is renamed `assembler.ts` so it is not
+  confused with the proposal document it consumes. No real file exists yet.
