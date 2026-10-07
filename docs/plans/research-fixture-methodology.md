@@ -16,11 +16,11 @@ record and are not superseded, amended or re-litigated here.** The earlier accep
 the ratification of the four inferred claims, the withdrawal of the false missing-summary finding, and
 the acceptance of the page-only verification qualification — stands.
 
-The first exercise's own reported deviations all reduce to one root cause: **the seed packet specified
-*content* but not the *evidence, ordering and provenance discipline* needed to seed it faithfully.** In
-particular it requested confirmed claims in the initial reconciliation while scheduling their supporting
-activities for later calls, in a product that requires same-transaction evidence. This methodology closes
-that gap before the next seed and keeps the follow-up a **separate track**, as the PR #3 closeout states.
+The first exercise exposed interacting packet, procedure, execution and product-contract weaknesses;
+no single root cause is established for all findings. One established sequencing defect requested confirmed
+claims in the initial reconciliation while scheduling supporting activities for later calls. Future research
+must distinguish missing instructions, workload decomposition, worker deviations and backend limitations.
+This methodology addresses that investigation as a **separate track**, as the PR #3 closeout states.
 
 ## 2. Informational blocks — required / optional / unavailable
 
@@ -77,9 +77,11 @@ These are **two different mutation programs** and must not be conflated:
   unavailable assignment and all evidence rules (§2–§4) apply from the first write, because nothing can be
   assumed to exist.
 - **Retained-fixture amendment** — corrects or enriches an *existing, accepted* fixture (the one PR #3
-  retained). An amendment is **append-only and idempotent**: it re-reads the current version, adds only
-  what the sources support, and never silently rewrites an accepted record. A correction to a published
-  acceptance record lives in a **new document**, not in a force-push (published history is not rewritten).
+  retained). An amendment is **explicitly approved and idempotent**: it re-reads the current version,
+  adds only what sources support, and may correct existing links, dates or positions only through an
+  approved before/after delta. Do not duplicate events to simulate corrections. Preserve stronger human
+  steering and historical acceptance records; those constraints do not prohibit authorized fixture edits.
+  A correction to a published acceptance record lives in a **new document**, not in a force-push.
 
 A session must state which program it is running before its first write, and must not carry a baseline
 seed's empty-start assumptions into an amendment (or vice versa).
@@ -113,7 +115,7 @@ until **WP-G** (the mutation gate review) is accepted.
 | **WP1** | Verify each finding against exact sources | read-only | findings doc §A; the public source pins | per-finding verified / refuted / unresolved, with the exact source cited | every F-row is classified; unresolved rows are named, not guessed |
 | **WP2** | Reconcile retained-fixture links (F01, F02, F04, F14) | read-only | WP1 output; current fixture readback | a link-delta proposal: what is missing, with sources | delta is source-backed and deduped |
 | **WP3** | Design the baseline-seed packet | design only | WP1–WP2; §2–§4 of this doc | a seed packet with every field classified and evidence sequenced atomically | packet passes the §6 gates on paper |
-| **WP4** | Design the retained-fixture amendment packet | design only | WP2; §5 | an append-only, idempotent amendment plan | amendment does not rewrite accepted records |
+| **WP4** | Design the retained-fixture amendment packet | design only | WP2; §5 | an approved, idempotent before/after amendment plan | amendment preserves historical evidence and explicitly approves fixture corrections |
 | **WP5** | Author reconciliation/verification checks | read-only | WP3–WP4 | executable checks for the seed/amendment invariants | a green run can go red (negative control present) |
 | **WP6** | Fresh zero-context guide validation (§9) | read-only | this doc + the authoring skill | a validation report from an agent given only the guide | the guide is executable with no prior context |
 | **WP-G** | Mutation gate review | review | WP1–WP6 | an accept/reject of any write authorization | **owner authorization required before any write** |
