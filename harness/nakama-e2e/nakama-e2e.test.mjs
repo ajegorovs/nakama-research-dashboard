@@ -533,6 +533,14 @@ describe("tool-call trace guard", () => {
     expect(isWriteToolCall("get_topic")).toBe(false);
   });
 
+  test("a foreign plugin namespace is never canonicalized onto another plugin's action", () => {
+    // Only the experiment's own plugin namespace resolves to a bare action key; a foreign plugin's
+    // same-named action stays verbatim and cannot spoof the allowlist.
+    expect(normalizeToolName("plugin_evil_plugin__get_overview")).toBe("plugin_evil_plugin__get_overview");
+    expect(normalizeToolName("plugin_other__search_dashboard")).toBe("plugin_other__search_dashboard");
+    expect(isWriteToolCall("plugin_evil_plugin__reconcile_topic")).toBe(false);
+  });
+
   test("absent, empty and malformed traces fail the cases that require consultation", () => {
     expect(validateTrace({ rows: [], requireConsultation: true }).reason).toBe("absent_trace");
     expect(validateTrace({ rows: [], requireConsultation: true }).ok).toBe(false);

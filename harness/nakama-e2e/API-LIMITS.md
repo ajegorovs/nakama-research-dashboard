@@ -66,10 +66,25 @@ These are not size limits; they are ordering/identity rules that the artifact an
 
 ## get_topic (read options)
 
-`topicId ≤100`, `topicName ≤120`, `historyLimit` 1–100, `notesLimit` 1–100, `activityLimit` 1–100,
-`activitySinceDays` 1–365, `includeAnnotations` boolean. The `notesLimit` cap is the **coverage mechanic**
-for N-4/N-5: a note list returned at the cap means axis-note coverage is UNKNOWN, so a missing note is not
-evidence of absence.
+`topicId ≤100`, `topicName ≤120`, `axisId ≤100` (stable id; scopes the read to one workstream),
+`historyLimit` 1–100, `notesLimit` 1–100, `activityLimit` 1–100, `activitySinceDays` 1–365,
+`includeAnnotations` boolean. The `notesLimit` cap is the **coverage mechanic** for N-4/N-5: a note list
+returned at the cap means axis-note coverage is UNKNOWN, so a missing note is not evidence of absence. The
+scoped `axisId` read carries this explicitly: `coverage.<collection>.{limit,limitScope,returned,total,truncated,absent}`
+distinguishes a collection that is empty (`absent`) from one with rows left out (`truncated`).
+
+`limitScope` names the unit `limit` bounds, so a caller never infers `returned <= limit` from `limit` alone:
+
+| collection | limitScope | meaning |
+| --- | --- | --- |
+| `history` | `collection` | `historyLimit` bounds the collection; `returned <= limit` |
+| `notes` | `collection` | `notesLimit` bounds the collection; `returned <= limit` |
+| `evidence` | `per-source` | `EVIDENCE_ITEM_LIMIT` (5) bounds each source (activities, again notes); `returned` may exceed `limit` |
+| `problemNotes` | `per-problem` | `notesLimit` bounds each problem; `returned` is the sum across problems and may exceed `limit` |
+
+Under `axisId`, only `historyLimit` and `notesLimit` apply. `includeAnnotations`, `activityLimit` and
+`activitySinceDays` belong to the topic-wide branch and are **ignored** (accepted by the schema, no effect) —
+do not treat their presence as support in a scoped read.
 
 ## record_activity
 

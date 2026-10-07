@@ -8,7 +8,7 @@
  *
  * Source anchors (read at implementation time):
  *   - reconcile_topic  nakama.plugin.json:122-639   (the single write path)
- *   - get_topic        nakama.plugin.json:46-85     (read options: notesLimit/historyLimit 1..100)
+ *   - get_topic        nakama.plugin.json:46-90     (read options: axisId scoping, notesLimit/historyLimit 1..100)
  *   - record_activity  nakama.plugin.json:648-709
  *   - actions.ts:67-131  (host-side re-checks: optionalText/requiredText/optionalInt/optionalEnum)
  *   - actions.ts:155-165 (topicName <= 120), :185-193 (axisTitle <= 160)
@@ -137,6 +137,7 @@ export const RECONCILE_TOPIC_SCHEMA = S.object({
 export const GET_TOPIC_SCHEMA = S.object({
   topicId: S.string(100, 1),
   topicName: S.string(120, 1),
+  axisId: S.string(100, 1),
   activityLimit: S.int(1, 100),
   activitySinceDays: S.int(1, 365),
   historyLimit: S.int(1, 100),

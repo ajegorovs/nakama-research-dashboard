@@ -809,3 +809,115 @@ a matching implementation revision; and the explicit execution go-ahead.
 already dirty in the working tree before this documentation work (sha256
 `36b9ae968d5e929483744b090b6994b1a305ed87dab22cfe186ba00e7cc8eb05`); it is unrelated, is **not** touched, and is
 excluded from this change set.
+
+---
+
+## D-016 — 2026-10-06 · Owner provider operational clarification — OpenCode Go first (N-1…N-7), CommandCode deferred; **execution still stopped, no inference**
+
+**Owner clarification (this record's authority, not a reviewer ruling).** The owner clarified the provider
+order for the Nakama E2E sequence: **OpenCode Go goes first** for the whole N-1…N-7 sequence, and
+**CommandCode is deferred to a separate, later experiment**. This **supersedes an earlier pasted ordering
+that put CommandCode first** and is the operative order. The owner **declines** official DeepSeek
+migration/policy research. The exact binding is unchanged and canonical:
+`opencode-go` / `opencode-go/deepseek-v4.1-flash` / wire `deepseek-v4.1-flash`.
+
+**The reviewed suitability objection is kept, not erased.** The reviewer rejected OpenCode Go for the
+general-purpose research-coordination workload (its published scope is coding-agent traffic). That objection
+**stands** in the record (`providerDisposition.suitability` stays `"blocked"`). The owner's selection is
+recorded as an **operational override** — `ownerSelectedOperationalCondition:
+"owner_selected_operational_condition"` — which is deliberately a **distinct marker from any suitability or
+approval value**, so a record cannot satisfy it by claiming the provider was approved. The override
+**claims no service-terms permission** (`serviceTermsPermissionClaimed` must be `false`): it is an
+operational choice under a known objection, not a legal conclusion about the provider's terms.
+
+**The override pins the run.** `validateAuthorization` now **requires** the exact override marker in
+addition to `suitability === "blocked"` and `silentSubstitutionPermitted === false`, and refuses: a missing
+override (`authorization_provider_override_invalid`), any fallback provider (`fallbackProvider` must be
+`null`), an unpinned sequence (`sequencePinned` must be `true`), non-terminal failures (`failuresTerminal`
+must be `true`), a missing reported-model-identity record (`reportedModelIdentityRecorded` must be `true`),
+an identical-backend revision claim (`identicalBackendRevisionClaim` must be `false`), and any service-terms
+permission claim (`authorization_provider_terms_claim_refused`). A switched provider name/wire model or a
+switched requested model is still refused at the exact provider/model binding, and `noRetry` stays
+mandatory. The reported model identity is recorded when the backend exposes it, bounded as
+`alias_or_date_bounded`; no identical-backend (immutable-weights) revision is claimed.
+
+**Stale not-served wording corrected.** The accepted amended-host identity
+`nakama-host-clean@945420b6+eval-controls+wire-eval-result` (`patchDigest f33a9de5…`, `contractDigest
+8164105f…`) was served by the **prior review restart** (`…/scratch/nakama-e2e/amended-host-restart/`, fixture
+pid 603708 at `2026-10-05T20:47Z`, amended source mtimes predating process start); the earlier restart served
+only the superseded eval-controls-only `9a58341e…` (19 files). `ACCEPTED_HOST.served` is now `true`, and the
+builder's `limitations[]` no longer claims the identity is unserved. The current revision is **driver-only
+harness source** (`harness/nakama-e2e/driver/`) and needs **no** host restart; containment is still
+rechecked before every case.
+
+**Execution remains stopped.** `executionAuthorized` stays **false** and `turn.mjs` keeps
+`INFERENCE_AUTHORIZED = false`; `authorizeExecution` still returns the blocked `host_contract_unavailable`
+seam without a matching host-contract object, and no real provider model call is reachable from this record.
+The frozen prompt text remains **authored/proposed, pending reviewer approval** — unchanged and not tuned.
+No credential, key, config or provider call is involved; the `opencode-go` wire capture is an **offline**,
+injected-`fetch` test (no network).
+
+**Verification (this revision).** Offline harness: `bun test harness/nakama-e2e` → **153 pass / 0 fail**
+(520 expect calls; was 151 before the three provider-override tests). Existing offline Go request capture
+(`apps/server/src/providers/opencode-go/index.test.ts` in the fixture host checkout) reruns with injected
+`fetch` → **11 pass / 0 fail**. No inference, no live configuration, no host edit, no service restart.
+
+**Code surface.** `harness/nakama-e2e/driver/authorization.mjs` (`PROVIDER_OWNER_OVERRIDE`,
+`PROVIDER_DISPOSITION`, `ACCEPTED_HOST.served`, the validator, the two new error codes, the builder
+limitations) and `harness/nakama-e2e/driver/driver.test.mjs` (three provider-override/swap/no-retry tests);
+docs `NAKAMA-E2E-READINESS.md`, `NAKAMA-E2E-HOST-AMENDMENT.md`, this entry. This is a **proposal awaiting
+reviewer sign-off**, not a grant. **(Superseded in part by D-017: the reviewer later withdrew the suitability
+block and accepted OpenCode Go operationally for this experiment; the prompt texts were reviewer-finalized.
+D-016's own wording above is preserved as the historical record.)**
+
+---
+
+## D-017 — 2026-10-06 · Reviewer prompt finalization + provider metadata correction — OpenCode Go accepted operationally; **execution still stopped, no inference**
+
+**Decision.** The reviewer **finalized the N-1…N-7 prompt texts** and **withdrew the earlier suitability block**
+for this experiment. Both are recorded here **and carried in code** (not prose). This entry **supersedes the
+suitability-blocked wording of D-016** for the current experiment; D-016 itself is preserved above as history.
+It authorizes **no** execution: `executionAuthorized` stays `false` and `turn.mjs` keeps
+`INFERENCE_AUTHORIZED = false`.
+
+**Prompt finalization (reviewer-specified, frozen before inference).** The seven case prompts are the reviewer's
+**exact final texts**, fixed **before any model output exists** (there is none) and **not tuned after any
+result**. N-1 and N-6 are **unchanged** from the earlier authored set; N-7 is a **byte-identical repeat of N-1**.
+`PROMPT_DISPOSITION` is now `reviewer_specified_frozen_before_inference`. The authorization binds the **exact
+UTF-8 bytes** and their **sha256** for every case, and the driver **recomputes/verifies** the binding **before
+session creation**; a one-byte difference refuses for **every** case (asserted offline). The exact seven digests
+are recorded in the delta archive manifest (`PROMPT-DIGESTS.txt`).
+
+**N-4 conservative scoring.** N-4 is deliberately conservative: the hidden problem-scoped-steering **projection
+limitation** cannot be discovered independently from the bounded read the N-4 subject exposes, so the prompt asks
+what the retrieved information **establishes and does not establish** rather than presupposing a coverage
+limitation. The limitation stays the documented D-009 coverage fact; the prompt does not assert it.
+Plugin/tool/model information is unchanged by the finalization.
+
+**Provider metadata correction (suitability block withdrawn).** The reviewer **accepts operational OpenCode Go
+first** for the N-1…N-7 experiment. `providerDisposition.suitability` is now `"operationally_selected_accepted"`
+(the reviewed suitability objection for this experiment is **withdrawn**), with the exact canonical binding
+`opencode-go` / `opencode-go/deepseek-v4.1-flash` / wire `deepseek-v4.1-flash`. `serviceTermsPermissionClaimed`
+stays **`false`** and **no policy research** is performed. `validateAuthorization` requires the exact acceptance
+value and still requires the exact operational marker (`owner_selected_operational_condition`), no fallback, the
+whole sequence pinned, terminal failures with no switch, the reported model identity recorded when the backend
+exposes it, and **no identical-backend revision equivalence**. A `"blocked"` or `"approved"` value is refused at
+`authorization_provider_suitability_invalid`.
+
+**Accepted host unchanged / served.** The accepted amended-host identity
+`nakama-host-clean@945420b6+eval-controls+wire-eval-result` (patch
+`f33a9de54cb1bf9bd10bbe901a23bd216f55c7696de8e6f664b11e2901503a57`, contract
+`8164105ffda63aec86171add8e5cf497ef70ec6313aa6a8780f7c93e38bcd941`) remains the binding; it was served by the
+prior review restart. This delta is **driver-only harness source** and needs **no** host restart, rebuild, reseed
+or live call.
+
+**Execution remains stopped.** No host modification, no rebuild, no reseed, no live API/provider/key/network/git
+state change. `executionAuthorized` stays `false`; `INFERENCE_AUTHORIZED` stays `false`; `authorizeExecution`
+still returns the blocked `host_contract_unavailable` seam without a matching host-contract object.
+
+**Code + docs surface (delta).** `harness/nakama-e2e/driver/prompts.mjs` (finalized `TEXT`/`SOURCE`,
+`PROMPT_DISPOSITION`), `harness/nakama-e2e/driver/authorization.mjs` (`PROVIDER_DISPOSITION.suitability` +
+reason, validator message, builder limitations), `harness/nakama-e2e/driver/driver.test.mjs` (updated
+suitability/prompt-disposition tests + two new recompute/mismatch tests), `harness/nakama-e2e/README.md`,
+`docs/evidence-automation/NAKAMA-E2E-READINESS.md`, `docs/evidence-automation/NAKAMA-E2E-HOST-AMENDMENT.md`,
+this entry. This is a **proposal awaiting reviewer sign-off**, not a grant.
