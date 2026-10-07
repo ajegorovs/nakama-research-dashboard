@@ -142,6 +142,16 @@ function clampLimit(value, fallback, max) {
   }
   return Math.min(Math.max(Math.trunc(value), 1), max);
 }
+function collectionCoverage(limit, returned, total, limitScope) {
+  return {
+    absent: total === 0,
+    limit,
+    limitScope,
+    returned,
+    total,
+    truncated: total > returned
+  };
+}
 function isTopicStatus(value) {
   return typeof value === "string" && TOPIC_STATUSES.includes(value);
 }
@@ -759,8 +769,9 @@ class ResearchStore {
     const rows = this.db.query(`SELECT * FROM annotations
          WHERE (? IS NULL OR topic_id = ?)
            AND (? IS NULL OR axis_id = ?)
+           AND (? IS NULL OR problem_id = ?)
          ORDER BY created_at DESC, rowid DESC
-         LIMIT ?`).all(options?.topicId ?? null, options?.topicId ?? null, options?.axisId ?? null, options?.axisId ?? null, limit);
+         LIMIT ?`).all(options?.topicId ?? null, options?.topicId ?? null, options?.axisId ?? null, options?.axisId ?? null, options?.problemId ?? null, options?.problemId ?? null, limit);
     return rows.map(toAnnotation);
   }
   listTopicRepositories(topicId) {
@@ -914,6 +925,64 @@ class ResearchStore {
         notes,
         people: this.listTopicPeople(topic.id),
         repositories: this.listTopicRepositories(topic.id),
+        topic
+      };
+    });
+  }
+  getAxisWorkstream(topicId, axisId, options) {
+    return this.snapshot(() => {
+      const topic = this.getTopic(required(topicId, "topicId"));
+      if (!topic) {
+        throw new ResearchStoreError("Topic not found.");
+      }
+      const axis = this.getAxis(required(axisId, "axisId"));
+      if (!axis) {
+        throw new ResearchStoreError("Axis not found.");
+      }
+      if (axis.topicId !== topic.id) {
+        throw new ResearchStoreError("Axis does not belong to this topic.");
+      }
+      const historyLimit = clampLimit(options?.historyLimit, DEFAULT_AXIS_HISTORY_LIMIT, MAX_AXIS_HISTORY_LIMIT);
+      const notesLimit = clampLimit(options?.notesLimit, DEFAULT_ANNOTATION_LIMIT, MAX_ANNOTATION_LIMIT);
+      const evidence = this.axisEvidence(axis);
+      const history = this.listActivity({ axisId: axis.id, limit: historyLimit });
+      const notes = this.listAnnotations({ axisId: axis.id, limit: notesLimit }).filter((note) => note.problemId === null);
+      const problems = this.listProblems(axis.id);
+      const problemDetails = problems.map((problem) => ({
+        ...problem,
+        history: this.stateHistory("problem_id", problem.id),
+        notes: this.listAnnotations({ limit: notesLimit, problemId: problem.id }),
+        people: this.listProblemPeople(problem.id),
+        planStepTitle: problem.planStepId ? this.getPlanStep(problem.planStepId)?.title ?? null : null,
+        repositories: this.listProblemRepositories(problem.id)
+      }));
+      const axisDetail = {
+        ...axis,
+        evidence,
+        history,
+        notes,
+        people: this.listAxisPeople(axis.id),
+        plan: this.planForAxis(axis.id),
+        problems: problemDetails,
+        repositories: this.listAxisRepositories(axis.id),
+        stateHistory: this.stateHistory("axis_id", axis.id)
+      };
+      const count = (sql, value) => this.db.query(sql).get(value).n;
+      const axisActivityTotal = count("SELECT count(*) AS n FROM activities WHERE axis_id = ?", axis.id);
+      const axisNoteTotal = count("SELECT count(*) AS n FROM annotations WHERE axis_id = ? AND problem_id IS NULL", axis.id);
+      const evidenceTotal = (axis.branch.trim() ? 1 : 0) + (axis.prNumber !== null || axis.prUrl.trim() ? 1 : 0) + axisActivityTotal + count("SELECT count(*) AS n FROM annotations WHERE axis_id = ?", axis.id);
+      const problemNoteTotal = problems.reduce((sum, problem) => sum + count("SELECT count(*) AS n FROM annotations WHERE problem_id = ?", problem.id), 0);
+      const problemNotesReturned = problemDetails.reduce((sum, problem) => sum + (problem.notes?.length ?? 0), 0);
+      return {
+        axis: axisDetail,
+        axisId: axis.id,
+        coverage: {
+          evidence: collectionCoverage(EVIDENCE_ITEM_LIMIT, evidence.length, evidenceTotal, "per-source"),
+          history: collectionCoverage(historyLimit, history.length, axisActivityTotal, "collection"),
+          notes: collectionCoverage(notesLimit, notes.length, axisNoteTotal, "collection"),
+          problemNotes: collectionCoverage(notesLimit, problemNotesReturned, problemNoteTotal, "per-problem")
+        },
+        generatedAt: nowIso(),
         topic
       };
     });
@@ -3150,6 +3219,16 @@ async function dispatch(input, context, store) {
     }
     case "get_topic": {
       const topic = requireTopic(store, input);
+      const scopedAxis = resolveAxis(store, topic, input);
+      if (scopedAxis) {
+        return {
+          ok: true,
+          ...store.getAxisWorkstream(topic.id, scopedAxis.id, {
+            historyLimit: optionalInt(input.historyLimit, "historyLimit", 1, 100),
+            notesLimit: optionalInt(input.notesLimit, "notesLimit", 1, 100)
+          })
+        };
+      }
       const includeAnnotations = input.includeAnnotations !== false;
       const detail = store.getTopicDetail(topic.id, {
         activityLimit: optionalInt(input.activityLimit, "activityLimit", 1, 100),

@@ -42,7 +42,7 @@
       "effect": "read",
       "entry": "actions/actions.js",
       "exposeAsTool": true,
-      "description": "Everything recorded about one topic (by topicId or topicName): its fields, every development axis with full metadata (kind, branch, PR, state, current state, blocker, per-claim confidence, people, repositories), each axis's own evidence — the branch, PR, activities and notes that could back its claims, the same set the write rule accepts — its own history and its own notes, plus the topic's people, repositories, activity log and notes. `annotations` is the topic-level note list (`notes` is the same list; a note belonging to an axis is under that axis's `notes`). Read the version it returns if you intend to write the topic back.",
+      "description": "Everything recorded about one topic (by topicId or topicName): its fields, every development axis with full metadata (kind, branch, PR, state, current state, blocker, per-claim confidence, people, repositories), each axis's own evidence — the branch, PR, activities and notes that could back its claims, the same set the write rule accepts — its own history and its own notes, plus the topic's people, repositories, activity log and notes. `annotations` is the topic-level note list (`notes` is the same list; a note belonging to an axis is under that axis's `notes`). Pass `axisId` (a stable axis id from this call or get_overview) to scope the read to ONE workstream instead: the return is `topic`, `axis` (that axis in full — state and confidence, evidence, its own history and notes, its plan, and its problems with each problem's own problem-scoped `notes`), and `coverage` — per-collection `{ limit, limitScope, returned, total, truncated, absent }`: `limitScope` names what `limit` bounds (`collection` = `returned` never exceeds it; `per-source` for `evidence`, `per-problem` for `problemNotes`, where `returned` is a bounded-per-unit sum and CAN exceed `limit`), and `absent` (an empty collection) is never mistaken for `truncated` (rows exist beyond what was returned). Under `axisId` only `historyLimit` and `notesLimit` apply — `includeAnnotations`, `activityLimit` and `activitySinceDays` are ignored, not honored. Sibling axes are not returned, so scope to a workstream before reading its notes rather than filtering the topic-wide payload. An unknown axisId, or one belonging to another topic, is refused. Read the version it returns if you intend to write the topic back.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -56,6 +56,11 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 120
+          },
+          "axisId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
           },
           "activityLimit": {
             "type": "integer",

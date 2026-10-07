@@ -19,7 +19,16 @@ Tools (assign them to the profile alongside this skill) — the whole agent surf
   to asking several narrow questions.
 - `plugin_research_dashboard__get_topic` — one topic in full, by `topicId` or `topicName`: fields,
   axes with branch/PR/state/blocker and per-claim confidence, repositories, people, activity,
-  annotations. It returns the topic's `version`.
+  annotations. It returns the topic's `version`. Pass `axisId` to scope the read to **one workstream**
+  instead: you then get `axis` (that axis in full, its problems each with their own problem-scoped
+  `notes`) and `coverage` — per-collection `{limit, limitScope, returned, total, truncated, absent}`.
+  `limitScope` says what `limit` bounds: `collection` (the returned count never exceeds the limit)
+  for `history`/`notes`, but `per-source` for `evidence` and `per-problem` for `problemNotes`, where
+  `returned` is a sum and can exceed `limit`. Read `truncated` (rows exist beyond what was returned),
+  not the `returned <= limit` assumption, and never read an empty collection (`absent`) as omitted.
+  Under `axisId` only `historyLimit` and `notesLimit` apply; `includeAnnotations`, `activityLimit`
+  and `activitySinceDays` are ignored. Sibling axes are
+  not returned; an `axisId` that is unknown or belongs to another topic is refused.
 - `plugin_research_dashboard__search_dashboard` — substring search across topics, axes, activity and
   annotations; each hit says which field matched. Use it before creating anything.
 - `plugin_research_dashboard__reconcile_topic` — **the single write path** for a topic update.

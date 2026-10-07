@@ -549,3 +549,48 @@ Use milestone-based review and lightweight session-end reporting. Visual polish 
 roadmap: further product work should improve operational usefulness and be separately scoped. This ruling does
 not authorize an evidence-ingestion pipeline inside this plugin repository, publication, merge, service restart
 or `AGENTS.md` edits. Contributor procedure: `.agents/skills/acceptance-pass/SKILL.md`.
+
+---
+
+## 16. `get_topic` scopes to one workstream on a stable axis id (2026-10-07)
+
+The direct-use finding: a topic-wide `get_topic` returns **every** axis's notes, so a caller that cares about
+one workstream has no way to ask for just it, and a problem's own notes were not exposed at all. The chosen
+boundary is the smallest that answers both, and keeps every existing caller working:
+
+- **`get_topic` gains an optional `axisId`** (stable id). Absent, the return is the topic-wide detail,
+  **byte-shape unchanged** — no new top-level key, and problem objects still carry no `notes`. `axisTitle`
+  is deliberately not accepted: the scoped read names a stable id.
+- **Present, the read is a workstream**: `{ok, generatedAt, topic, axisId, axis, coverage}`. `axis` is that
+  axis in full — state and confidence, evidence, its own history and notes, its plan, and its problems each
+  with their own problem-scoped `notes`. Sibling axes are never built, so a note filed under another axis
+  cannot leak into the answer, and a problem-scoped note is not duplicated into the axis's note list.
+- **Coverage is explicit per collection**: `coverage.<evidence|history|notes|problemNotes>` is
+  `{limit, limitScope, returned, total, truncated, absent}`. `limitScope` names what `limit` bounds
+  (`collection` for `history`/`notes`, so `returned <= limit`; `per-source` for `evidence`, where
+  `EVIDENCE_ITEM_LIMIT` caps each source and `returned` may exceed `limit`; `per-problem` for
+  `problemNotes`, where `notesLimit` caps each problem and `returned` is a sum that may exceed `limit`),
+  so a caller never infers `returned <= limit` from `limit` alone. `absent` (the collection is empty)
+  and `truncated` (`total > returned`: rows exist beyond what was returned) are separate facts, so a
+  missing row is never read as an omitted one. The `notes` total excludes problem-scoped notes (counted
+  under `problemNotes`), so each collection agrees with itself.
+- **Scoped option applicability**: with `axisId`, only `historyLimit` and `notesLimit` apply.
+  `includeAnnotations`, `activityLimit` and `activitySinceDays` are topic-wide-branch options and are
+  **ignored** under `axisId` (accepted by the schema, no effect) — documented rather than silently
+  implied supported.
+- **Validation ownership**: the action boundary resolves the axis and refuses an unknown id (`Axis not
+  found.`) or one belonging to another topic (`Axis does not belong to this topic.`), both `invalid-input`;
+  `ResearchStore.getAxisWorkstream` repeats the check as a public seam.
+- **Boundary**: the topic-wide shape is preserved for compatibility, so an unscoped read still routes a
+  problem-scoped note that carried a topic link into the topic-level `notes`; the scoped read is where problem
+  notes are surfaced. The frozen N-4 E2E case asserts an unscoped `get_topic` never returns the
+  problem-scoped steering note — still true — but the scoped read now does return it under its problem, so
+  N-4's "hidden coverage limitation" reads differently under `axisId` and needs its own ruling before any
+  evaluation re-run.
+
+Landed in `src/store.ts`, `src/actions.ts`, `nakama.plugin.json`, the shipped `skills/research-coordinator`,
+the E2E `API-LIMITS.md`/`limits.mjs`, with action tests. `coverage.limit` is made unambiguous by the added
+`limitScope` field (`collection` / `per-source` / `per-problem`) so a caller never assumes `returned <= limit`;
+the topic-wide contract keeps `limit` unchanged. Served on the isolated fixture at
+`0.2.0+dev.64a201410338` (`actions/actions.js` sha256 `25900ac1…`, store generation unchanged); Layout Demo
+left on `0.2.0+dev.164ccaafbca4` (rev 20, untouched).

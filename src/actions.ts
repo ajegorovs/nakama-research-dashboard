@@ -284,6 +284,27 @@ async function dispatch(
 
     case "get_topic": {
       const topic = requireTopic(store, input);
+      // A stable axis id scopes the read to **one workstream**: the axis in full (state and confidence,
+      // evidence, its own history and notes, its plan, its problems with their problem-scoped notes),
+      // plus explicit per-collection coverage. Sibling axes are never built, so their notes cannot leak
+      // into the answer. The axis is resolved (and validated against this topic) at the action
+      // boundary; omitted, the read is the topic-wide detail it has always been.
+      //
+      // Scoped option applicability: with `axisId` present the read is bounded by `historyLimit` and
+      // `notesLimit` only. `includeAnnotations`, `activityLimit` and `activitySinceDays` apply to the
+      // topic-wide branch and are **ignored** here — a scoped workstream carries its own whole history
+      // and is not filtered by a topic-wide annotation toggle or activity window. They are accepted by
+      // the schema but have no effect under `axisId`; do not read their presence as support.
+      const scopedAxis = resolveAxis(store, topic, input);
+      if (scopedAxis) {
+        return {
+          ok: true,
+          ...store.getAxisWorkstream(topic.id, scopedAxis.id, {
+            historyLimit: optionalInt(input.historyLimit, "historyLimit", 1, 100),
+            notesLimit: optionalInt(input.notesLimit, "notesLimit", 1, 100),
+          }),
+        };
+      }
       const includeAnnotations = input.includeAnnotations !== false;
       // The detail view is one call by contract: full axis metadata with each axis's own history,
       // notes and evidence, plus the topic's own log and notes (C5).

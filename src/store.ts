@@ -725,6 +725,28 @@ function clampLimit(value: unknown, fallback: number, max: number): number {
   return Math.min(Math.max(Math.trunc(value), 1), max);
 }
 
+/**
+ * Fold `(limit, returned, total, limitScope)` into the coverage shape; see `CollectionCoverage`.
+ *
+ * `truncated` is `total > returned` regardless of scope: it says rows exist that were not returned,
+ * which is exactly what a per-source or per-problem limit can also cause.
+ */
+function collectionCoverage(
+  limit: number,
+  returned: number,
+  total: number,
+  limitScope: CoverageLimitScope
+): CollectionCoverage {
+  return {
+    absent: total === 0,
+    limit,
+    limitScope,
+    returned,
+    total,
+    truncated: total > returned,
+  };
+}
+
 export function isTopicStatus(value: unknown): value is TopicStatus {
   return (
     typeof value === "string" &&
@@ -1250,6 +1272,12 @@ export type ProblemDetail = Problem & {
   /** Evidence links, in no hierarchy: a problem concerns these codebases, it does not own them. */
   repositories: Repository[];
   people: Person[];
+  /**
+   * Problem-scoped notes (every annotation that names this problem). Populated only by the scoped
+   * `getAxisWorkstream` read — the topic-wide `get_topic` keeps its historical shape and leaves it
+   * absent, so a legacy caller's payload gains no key.
+   */
+  notes?: Annotation[];
 };
 
 /** One topic in depth, in a single call. */
@@ -1271,6 +1299,70 @@ export type TopicDetail = {
     /** Axes that carry no evidence at all — where a `confirmed` claim is impossible by rule. */
     axesWithoutEvidence: number;
   };
+};
+
+/**
+ * What unit a collection's `limit` bounds — the fact that makes `limit` unambiguous:
+ *
+ * - `"collection"` — the limit bounds this collection directly, so `returned <= limit`; a returned
+ *   count at the limit means rows beyond it may exist.
+ * - `"per-source"` — the limit bounds each **source** that feeds the collection, not the collection.
+ *   `evidence` draws `EVIDENCE_ITEM_LIMIT` from activities *and* again from notes (plus at most two
+ *   structural items), so `returned` can exceed `limit` (e.g. 5 + 5 + 2 = 12 against a limit of 5).
+ * - `"per-problem"` — the limit bounds each **problem's** own slice; the collection is their sum, so
+ *   `returned` can exceed `limit` (e.g. two problems of two notes each return 4 against a limit of 2).
+ *
+ * Only `"collection"` guarantees `returned <= limit`; a caller must never assume that bound for the
+ * other two, and `truncated` (`total > returned`) remains the only fact that says rows were left out.
+ */
+export type CoverageLimitScope = "collection" | "per-source" | "per-problem";
+
+/**
+ * One bounded collection's coverage: what came back, how many rows the scope really holds, and
+ * whether rows exist beyond what was returned. `absent` (nothing exists) and `truncated` (rows exist
+ * beyond what was returned) are separate facts on purpose — a reader must never read an omitted row
+ * as a missing one.
+ */
+export type CollectionCoverage = {
+  /** The cap applied. Read `limitScope` for the unit: a collection, each source, or each problem. */
+  limit: number;
+  /** What `limit` bounds. Only `"collection"` implies `returned <= limit`; see `CoverageLimitScope`. */
+  limitScope: CoverageLimitScope;
+  /** Rows returned in this payload. */
+  returned: number;
+  /** Rows that exist for this scope — the true count, not the returned page. */
+  total: number;
+  /** True when `total > returned`: rows exist beyond what was returned. */
+  truncated: boolean;
+  /** True when the collection is genuinely empty (`total === 0`) — absent, not omitted. */
+  absent: boolean;
+};
+
+/** The per-collection coverage a scoped axis workstream reports. */
+export type AxisWorkstreamCoverage = {
+  /** Evidence line (structural branch/PR, then capped activities and notes). `limitScope: per-source`. */
+  evidence: CollectionCoverage;
+  /** The axis's own activity rows. `limitScope: collection`. */
+  history: CollectionCoverage;
+  /** Notes filed on the axis itself. `limitScope: collection`; problem notes count under `problemNotes`. */
+  notes: CollectionCoverage;
+  /** Problem-scoped notes across every problem. `limitScope: per-problem`, so `returned` is a sum. */
+  problemNotes: CollectionCoverage;
+};
+
+/**
+ * One axis as a **self-contained workstream**, in a single call: the axis in full (its state and
+ * confidence, evidence, own history, plan, and its problems with their problem-scoped notes). Sibling
+ * axes are never present, so a note filed under another axis cannot appear; the caller passed a stable
+ * axis id, and that is the whole scope. `coverage` states, per collection, whether a limit trimmed the
+ * answer (`truncated`) or the collection is simply empty (`absent`).
+ */
+export type AxisWorkstream = {
+  generatedAt: string;
+  topic: Topic;
+  axisId: string;
+  axis: AxisDetail;
+  coverage: AxisWorkstreamCoverage;
 };
 
 /** A topic as a rollup names it: enough to link and label it, not a second copy of the topic. */
@@ -2261,6 +2353,7 @@ export class ResearchStore {
   listAnnotations(options?: {
     topicId?: string;
     axisId?: string;
+    problemId?: string;
     limit?: number;
   }): Annotation[] {
     const limit = clampLimit(
@@ -2273,6 +2366,7 @@ export class ResearchStore {
         `SELECT * FROM annotations
          WHERE (? IS NULL OR topic_id = ?)
            AND (? IS NULL OR axis_id = ?)
+           AND (? IS NULL OR problem_id = ?)
          ORDER BY created_at DESC, rowid DESC
          LIMIT ?`
       )
@@ -2281,6 +2375,8 @@ export class ResearchStore {
         options?.topicId ?? null,
         options?.axisId ?? null,
         options?.axisId ?? null,
+        options?.problemId ?? null,
+        options?.problemId ?? null,
         limit
       ) as AnnotationRow[];
     return rows.map(toAnnotation);
@@ -2528,6 +2624,129 @@ export class ResearchStore {
         notes,
         people: this.listTopicPeople(topic.id),
         repositories: this.listTopicRepositories(topic.id),
+        topic,
+      };
+    });
+  }
+
+  /**
+   * One axis as a self-contained workstream: the axis in full — state and confidence, evidence, its
+   * own activity history, its plan, and its problems **with their problem-scoped notes** — plus explicit
+   * per-collection coverage. Sibling axes are never built, so a note filed under another axis cannot
+   * reach the caller; scoping to one stable axis id is the whole point of the read.
+   *
+   * Each coverage entry names what its `limit` bounds (`limitScope`): `history` and `notes` are bounded
+   * collections (`returned <= limit`), `evidence` is capped **per source** and `problemNotes` **per
+   * problem**, so those two `returned` counts can exceed `limit`. `truncated` (`total > returned`) is
+   * the fact that says rows were left out, and it holds under every scope.
+   *
+   * The validation is deliberately repeated from the action boundary: a `ResearchStore` is a public
+   * seam, so an unknown axis and an axis belonging to another topic are refused here too rather than
+   * trusting every caller to have resolved them.
+   */
+  getAxisWorkstream(
+    topicId: string,
+    axisId: string,
+    options?: { historyLimit?: number; notesLimit?: number }
+  ): AxisWorkstream {
+    return this.snapshot(() => {
+      const topic = this.getTopic(required(topicId, "topicId"));
+      if (!topic) {
+        throw new ResearchStoreError("Topic not found.");
+      }
+      const axis = this.getAxis(required(axisId, "axisId"));
+      if (!axis) {
+        throw new ResearchStoreError("Axis not found.");
+      }
+      if (axis.topicId !== topic.id) {
+        throw new ResearchStoreError("Axis does not belong to this topic.");
+      }
+      const historyLimit = clampLimit(
+        options?.historyLimit,
+        DEFAULT_AXIS_HISTORY_LIMIT,
+        MAX_AXIS_HISTORY_LIMIT
+      );
+      const notesLimit = clampLimit(
+        options?.notesLimit,
+        DEFAULT_ANNOTATION_LIMIT,
+        MAX_ANNOTATION_LIMIT
+      );
+
+      const evidence = this.axisEvidence(axis);
+      const history = this.listActivity({ axisId: axis.id, limit: historyLimit });
+      // A problem-scoped note is surfaced under its problem, so it is kept out of the axis's own list
+      // rather than shown twice.
+      const notes = this.listAnnotations({ axisId: axis.id, limit: notesLimit }).filter(
+        (note) => note.problemId === null
+      );
+      const problems = this.listProblems(axis.id);
+      const problemDetails: ProblemDetail[] = problems.map((problem) => ({
+        ...problem,
+        history: this.stateHistory("problem_id", problem.id),
+        notes: this.listAnnotations({ limit: notesLimit, problemId: problem.id }),
+        people: this.listProblemPeople(problem.id),
+        planStepTitle: problem.planStepId
+          ? (this.getPlanStep(problem.planStepId)?.title ?? null)
+          : null,
+        repositories: this.listProblemRepositories(problem.id),
+      }));
+
+      const axisDetail: AxisDetail = {
+        ...axis,
+        evidence,
+        history,
+        notes,
+        people: this.listAxisPeople(axis.id),
+        plan: this.planForAxis(axis.id),
+        problems: problemDetails,
+        repositories: this.listAxisRepositories(axis.id),
+        stateHistory: this.stateHistory("axis_id", axis.id),
+      };
+
+      // The true counts behind the returned pages. `axisNoteTotal` excludes problem-scoped notes (they
+      // are counted under `problemNotes`), so each collection's total matches what it returns.
+      const count = (sql: string, value: string): number =>
+        (this.db.query(sql).get(value) as { n: number }).n;
+      const axisActivityTotal = count(
+        "SELECT count(*) AS n FROM activities WHERE axis_id = ?",
+        axis.id
+      );
+      const axisNoteTotal = count(
+        "SELECT count(*) AS n FROM annotations WHERE axis_id = ? AND problem_id IS NULL",
+        axis.id
+      );
+      // The evidence line is the one definition of "this axis has evidence", so its total is every row
+      // that could contribute: the structural branch/PR, the axis's activities and its notes.
+      const evidenceTotal =
+        (axis.branch.trim() ? 1 : 0) +
+        (axis.prNumber !== null || axis.prUrl.trim() ? 1 : 0) +
+        axisActivityTotal +
+        count("SELECT count(*) AS n FROM annotations WHERE axis_id = ?", axis.id);
+      const problemNoteTotal = problems.reduce(
+        (sum, problem) =>
+          sum + count("SELECT count(*) AS n FROM annotations WHERE problem_id = ?", problem.id),
+        0
+      );
+      const problemNotesReturned = problemDetails.reduce(
+        (sum, problem) => sum + (problem.notes?.length ?? 0),
+        0
+      );
+
+      return {
+        axis: axisDetail,
+        axisId: axis.id,
+        coverage: {
+          evidence: collectionCoverage(EVIDENCE_ITEM_LIMIT, evidence.length, evidenceTotal, "per-source"),
+          history: collectionCoverage(historyLimit, history.length, axisActivityTotal, "collection"),
+          notes: collectionCoverage(notesLimit, notes.length, axisNoteTotal, "collection"),
+          problemNotes: collectionCoverage(
+            notesLimit,
+            problemNotesReturned,
+            problemNoteTotal,
+            "per-problem"
+          ),
+        },
+        generatedAt: nowIso(),
         topic,
       };
     });

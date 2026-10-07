@@ -1946,3 +1946,322 @@ describe("U4 — Progress reads the model as the store computes it", () => {
     ]);
   });
 });
+
+/**
+ * The scoped `get_topic` read.
+ *
+ * The finding this pins: a topic-wide read returns every axis's notes, so a caller that cares about one
+ * axis has no way to ask for just it, and a problem's own notes were not exposed at all. These tests fix
+ * the smallest boundary that answers that — an optional stable `axisId` — and assert both halves: the
+ * scoped return (selection, sibling exclusion, problem notes, coverage) and the untouched legacy shape.
+ */
+describe("get_topic scoped workstream", () => {
+  type AxisRef = { id: string; title: string };
+  type Coverage = {
+    limit: number;
+    limitScope: "collection" | "per-source" | "per-problem";
+    returned: number;
+    total: number;
+    truncated: boolean;
+    absent: boolean;
+  };
+
+  /** One topic, three axes (Alpha notes+problem, Beta a note, Gamma empty), and a problem note. */
+  async function seedWorkstream(path: string) {
+    const created = await call(
+      "reconcile_topic",
+      {
+        axes: [{ title: "Alpha axis" }, { title: "Beta axis" }, { title: "Gamma axis" }],
+        topicName: "Workstream scope",
+      },
+      { path }
+    );
+    const axes = created.axes as AxisRef[];
+    const idOf = (title: string) => axes.find((axis) => axis.title === title)?.id as string;
+    const topicId = (created.topic as { id: string }).id;
+    const alphaId = idOf("Alpha axis");
+    const betaId = idOf("Beta axis");
+    const gammaId = idOf("Gamma axis");
+
+    // A note on each of Alpha and Beta: Beta's is the sibling a scoped Alpha read must not return.
+    await call(
+      "reconcile_topic",
+      {
+        annotations: [
+          { axisId: alphaId, text: "alpha note" },
+          { axisId: betaId, text: "beta sibling note" },
+        ],
+        topicId,
+      },
+      { path }
+    );
+
+    // A problem on Alpha, then a note that names only the problem.
+    const withProblem = await call(
+      "reconcile_topic",
+      { problems: [{ axisId: alphaId, statement: "alpha problem" }], topicId },
+      { path }
+    );
+    const problemId = (withProblem.problems as Array<{ id: string }>)[0]?.id as string;
+    await call(
+      "reconcile_topic",
+      { annotations: [{ problemId, text: "problem-scoped note" }], topicId },
+      { path }
+    );
+
+    return { alphaId, betaId, gammaId, problemId, topicId };
+  }
+
+  test("scopes to the selected axis and returns no sibling note", async () => {
+    const path = freshDatabase();
+    const { alphaId, topicId } = await seedWorkstream(path);
+
+    const result = await call("get_topic", { topicId, axisId: alphaId }, { path });
+    expect(result.ok).toBe(true);
+    // The scoped read is a workstream, not a narrowed topic detail: no sibling axes, no topic-wide
+    // note list to leak one.
+    expect(result.axes).toBeUndefined();
+    expect(result.annotations).toBeUndefined();
+
+    const axis = result.axis as { id: string; notes: Array<{ text: string }> };
+    expect(axis.id).toBe(alphaId);
+    const noteTexts = axis.notes.map((note) => note.text);
+    expect(noteTexts).toContain("alpha note");
+    expect(noteTexts).not.toContain("beta sibling note");
+  });
+
+  test("reaches a problem's own notes, and keeps them off the axis", async () => {
+    const path = freshDatabase();
+    const { alphaId, problemId, topicId } = await seedWorkstream(path);
+
+    const result = await call("get_topic", { topicId, axisId: alphaId }, { path });
+    const axis = result.axis as {
+      notes: Array<{ text: string }>;
+      problems: Array<{ id: string; notes: Array<{ text: string }> }>;
+    };
+    // The problem note was never exposed before; now it is reachable, under its problem...
+    const problem = axis.problems.find((row) => row.id === problemId);
+    expect(problem?.notes.map((note) => note.text)).toEqual(["problem-scoped note"]);
+    // ...and not duplicated into the axis's own note list.
+    expect(axis.notes.map((note) => note.text)).not.toContain("problem-scoped note");
+  });
+
+  test("refuses an axis id that belongs to another topic", async () => {
+    const path = freshDatabase();
+    const a = await call(
+      "reconcile_topic",
+      { axes: [{ title: "Only axis" }], topicName: "Topic A" },
+      { path }
+    );
+    const aTopicId = (a.topic as { id: string }).id;
+    const b = await call(
+      "reconcile_topic",
+      { axes: [{ title: "Other axis" }], topicName: "Topic B" },
+      { path }
+    );
+    const bAxisId = (b.axes as AxisRef[])[0]?.id as string;
+
+    const result = await call("get_topic", { topicId: aTopicId, axisId: bAxisId }, { path });
+    expect(result.ok).toBe(false);
+    expect(result.kind).toBe("invalid-input");
+    expect(String(result.error)).toMatch(/does not belong to this topic/);
+  });
+
+  test("refuses an axis id that does not exist", async () => {
+    const path = freshDatabase();
+    const { topicId } = await seedWorkstream(path);
+
+    const result = await call("get_topic", { topicId, axisId: "no-such-axis" }, { path });
+    expect(result.ok).toBe(false);
+    expect(result.kind).toBe("invalid-input");
+    expect(String(result.error)).toMatch(/Axis not found/);
+  });
+
+  test("coverage tells an absent collection from a capped one", async () => {
+    const path = freshDatabase();
+    const { alphaId, betaId, gammaId, topicId } = await seedWorkstream(path);
+    // Alpha already carries one axis note; two more make three, so a notesLimit of two must bite.
+    await call(
+      "reconcile_topic",
+      {
+        annotations: [
+          { axisId: alphaId, text: "alpha note two" },
+          { axisId: alphaId, text: "alpha note three" },
+        ],
+        topicId,
+      },
+      { path }
+    );
+
+    const capped = await call(
+      "get_topic",
+      { axisId: alphaId, notesLimit: 2, topicId },
+      { path }
+    );
+    const cappedCoverage = (capped.coverage as { notes: Coverage }).notes;
+    expect(cappedCoverage).toMatchObject({
+      absent: false,
+      limit: 2,
+      returned: 2,
+      total: 3,
+      truncated: true,
+    });
+
+    // Gamma has no notes, no activity and no problems: empty is a fact (`absent`), never `truncated`.
+    const empty = await call("get_topic", { axisId: gammaId, notesLimit: 2, topicId }, { path });
+    const emptyCoverage = empty.coverage as {
+      evidence: Coverage;
+      history: Coverage;
+      notes: Coverage;
+      problemNotes: Coverage;
+    };
+    expect(emptyCoverage.notes).toMatchObject({
+      absent: true,
+      returned: 0,
+      total: 0,
+      truncated: false,
+    });
+    expect(emptyCoverage.history.truncated).toBe(false);
+    expect(emptyCoverage.history.absent).toBe(true);
+
+    // And the sibling Beta read shows its own note only — Gamma's emptiness is not Beta's.
+    const beta = await call("get_topic", { axisId: betaId, topicId }, { path });
+    const betaAxis = beta.axis as { notes: Array<{ text: string }> };
+    expect(betaAxis.notes.map((note) => note.text)).toEqual(["beta sibling note"]);
+  });
+
+  test("coverage names the limit unit, so returned may exceed limit (per-source / per-problem)", async () => {
+    const path = freshDatabase();
+    const created = await call(
+      "reconcile_topic",
+      { axes: [{ branch: "feat/alpha", title: "Alpha axis" }], topicName: "Limit scope" },
+      { path }
+    );
+    const alphaId = (created.axes as AxisRef[])[0]?.id as string;
+    const topicId = (created.topic as { id: string }).id;
+
+    // Five activities is exactly the per-source evidence cap, so the evidence line (one structural
+    // branch + five capped activities + one axis note) returns 7 against a limit of 5.
+    await call(
+      "reconcile_topic",
+      {
+        activities: [1, 2, 3, 4, 5].map((n) => ({
+          axisId: alphaId,
+          sourceType: "manual",
+          summary: `activity ${n}`,
+        })),
+        topicId,
+      },
+      { path }
+    );
+
+    // Two problems, each with two problem-scoped notes, plus one axis note. A per-problem notesLimit of
+    // 2 returns 2 per problem — the problemNotes collection returns 4 against a limit of 2, untruncated.
+    const withProblems = await call(
+      "reconcile_topic",
+      {
+        problems: [
+          { axisId: alphaId, statement: "problem one" },
+          { axisId: alphaId, statement: "problem two" },
+        ],
+        topicId,
+      },
+      { path }
+    );
+    const problemIds = (withProblems.problems as Array<{ id: string }>).map((p) => p.id);
+    await call(
+      "reconcile_topic",
+      {
+        annotations: [
+          { axisId: alphaId, text: "axis note" },
+          ...problemIds.flatMap((problemId) => [
+            { problemId, text: "problem note one" },
+            { problemId, text: "problem note two" },
+          ]),
+        ],
+        topicId,
+      },
+      { path }
+    );
+
+    const result = await call(
+      "get_topic",
+      { axisId: alphaId, notesLimit: 2, topicId },
+      { path }
+    );
+    const coverage = result.coverage as {
+      evidence: Coverage;
+      history: Coverage;
+      notes: Coverage;
+      problemNotes: Coverage;
+    };
+    const axis = result.axis as {
+      evidence: unknown[];
+      history: unknown[];
+      notes: unknown[];
+      problems: Array<{ id: string; notes: unknown[] }>;
+    };
+
+    // Each unit is named, so a caller never infers `returned <= limit` from `limit` alone.
+    expect(coverage.history.limitScope).toBe("collection");
+    expect(coverage.notes.limitScope).toBe("collection");
+    expect(coverage.evidence.limitScope).toBe("per-source");
+    expect(coverage.problemNotes.limitScope).toBe("per-problem");
+
+    // Only a collection-scoped limit bounds the returned count.
+    expect(coverage.history.returned).toBeLessThanOrEqual(coverage.history.limit);
+    expect(coverage.notes.returned).toBeLessThanOrEqual(coverage.notes.limit);
+
+    // Per-source: the limit caps each source, so the collection's returned count exceeds it.
+    expect(coverage.evidence.limit).toBe(5);
+    expect(coverage.evidence.returned).toBeGreaterThan(coverage.evidence.limit);
+
+    // Per-problem: two problems at a limit of two return four, and nothing was left out.
+    expect(coverage.problemNotes).toMatchObject({
+      absent: false,
+      limit: 2,
+      limitScope: "per-problem",
+      returned: 4,
+      total: 4,
+      truncated: false,
+    });
+    expect(coverage.problemNotes.returned).toBeGreaterThan(coverage.problemNotes.limit);
+
+    // Serialized consistency: every coverage `returned` equals what the payload actually carries.
+    expect(coverage.evidence.returned).toBe(axis.evidence.length);
+    expect(coverage.history.returned).toBe(axis.history.length);
+    expect(coverage.notes.returned).toBe(axis.notes.length);
+    expect(coverage.problemNotes.returned).toBe(
+      axis.problems.reduce((sum, problem) => sum + problem.notes.length, 0)
+    );
+  });
+
+  test("refuses a limit below the floor (absence is not a limit of zero)", async () => {
+    const path = freshDatabase();
+    const { alphaId, topicId } = await seedWorkstream(path);
+
+    const result = await call("get_topic", { axisId: alphaId, notesLimit: 0, topicId }, { path });
+    expect(result.ok).toBe(false);
+    expect(result.kind).toBe("invalid-input");
+  });
+
+  test("the topic-wide read keeps its legacy shape", async () => {
+    const path = freshDatabase();
+    const { topicId } = await seedWorkstream(path);
+
+    const result = await call("get_topic", { topicId }, { path });
+    expect(result.ok).toBe(true);
+    // No axisId: the same topic-wide detail, all axes present, and none of the scoped fields.
+    expect((result.axes as unknown[]).length).toBe(3);
+    expect(result.axis).toBeUndefined();
+    expect(result.coverage).toBeUndefined();
+    expect(result.annotations).toBeDefined();
+    // Legacy problems carry no `notes` key at all — the scoped addition does not leak into this shape.
+    const axes = result.axes as Array<{ problems: Array<Record<string, unknown>> }>;
+    for (const axis of axes) {
+      for (const problem of axis.problems) {
+        expect("notes" in problem).toBe(false);
+      }
+    }
+  });
+});
