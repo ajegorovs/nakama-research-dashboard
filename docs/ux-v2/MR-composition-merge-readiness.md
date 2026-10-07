@@ -145,7 +145,7 @@ Reseed, using the hardened wipe (explicit target only) and the fixture seeder:
 
 | Step | Result |
 |---|---|
-| wipe, dry run | target `--data-root /mnt/otrais/data/nakama-fixture --org org_706c…`; active generation `g4ccd1f76…`; would zero 3 topics / 3 repositories / 8 axes / 9 activities / … |
+| wipe, dry run | target `--data-root /mnt/<estate>/data/nakama-fixture --org org_706c…`; active generation `g4ccd1f76…`; would zero 3 topics / 3 repositories / 8 axes / 9 activities / … |
 | wipe, applied | `foreign_key_check: clean`, `integrity_check: ok`, **all 16 plugin tables at 0 rows** |
 | re-apply the fixture seed | `now: 2 topics, 7 axes, 2 people, 3 repositories, 1 blocked` — the documented fixture shape |
 | post-reseed read, fixture 1440×900 | **`identity: expected fixture · 2 topic(s) (2 fixture-named, 0 write residue) · observed fixture markers only`**; **180 pass / 0 fail / 1 skip** — identical to the acceptance record |

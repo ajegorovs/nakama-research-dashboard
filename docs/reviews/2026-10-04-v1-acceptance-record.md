@@ -248,12 +248,13 @@ single space and trailing whitespace stripped, over every line of each file:
   restarted.
 - **The write-pass records are a stated, non-blocking boundary.** `docs/layout-fixtures/verify-fixture-write.txt`,
   `docs/layout-fixtures/verify-fixture-read-post-write-1440x900.txt` and `docs/corpus/verify-write.txt` carry the
-  same emitter detail's trailing space from runs taken before this fix, and they quote their shots by a
+  same emitter detail's trailing space from runs taken before this fix. They quoted their shots by a
   machine-specific mount path (`/mnt/<estate>/…`) for the same reason — the pre-fix emitter printed the absolute
-  `OUT`. They are regenerated only by a **write pass, which mutates the fixture** (and is out of both conditions'
-  scope); the emitter fix means the next write run is clean, and the home-path guard's public-tree predicate is
-  scoped to home roots, so the mount path is stated here rather than silently exempted. They are not hand-edited —
-  a committed transcript is a measurement, not prose.
+  `OUT`; those quoted paths have since been rewritten **presentation-only** to the repo-relative form the fixed
+  emitter now writes, and the records guard asserts the mount-path class as well (a later change, noted here so
+  this sentence does not read as still current). They are regenerated only by a **write pass, which mutates the
+  fixture** (and is out of both conditions' scope); the emitter fix means the next write run is clean. The
+  transcripts are otherwise untouched — a committed transcript is a measurement, not prose.
 - **The two non-blocking follow-ups are untouched**, per the verdict: People metadata density and long
   Repository-name wrapping (DECISIONS §14.6 / §14.8).
 - **Tier B cleanup is not started here.** The owner's stated order (close V1 → Tier B) leaves Tier B to a

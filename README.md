@@ -304,8 +304,10 @@ records; its `--negative-control` mode proves the measure can see a removed indi
 no committed artifact carries a **live endpoint**: what `read-pass.sh` writes into a transcript header and what
 the palette check prints for its PASS line both go through `harness/redact.mjs` — loopback verbatim, anything
 identifying (`http://100.x`, a MagicDNS name, `.local`, this machine's hostname) replaced by
-`<box>.<tailnet>.ts.net` with port and path kept, public hosts left alone — and the suite scans every text file
-under `docs/` for anything the rule would have redacted. A record carrying a live endpoint fails the check that
+`<box>.<tailnet>.ts.net` with port and path kept, public hosts left alone — a quoted filesystem path is
+likewise a label, written repo-relative inside the repo and behind a placeholder (`<scratch>/<name>`,
+`/mnt/<machine-storage>/`) outside it — and the suite scans the whole public tree for anything the rule would
+have redacted. A record carrying a live endpoint fails the check that
 gates the next one.
 
 **Synthetic edge states** — on a *second* fresh instance, same env file pointed at it:

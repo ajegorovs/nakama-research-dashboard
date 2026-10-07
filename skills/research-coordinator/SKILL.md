@@ -26,6 +26,10 @@ Tools (assign them to the profile alongside this skill) — the whole agent surf
   for `history`/`notes`, but `per-source` for `evidence` and `per-problem` for `problemNotes`, where
   `returned` is a sum and can exceed `limit`. Read `truncated` (rows exist beyond what was returned),
   not the `returned <= limit` assumption, and never read an empty collection (`absent`) as omitted.
+  The axis-scoped `notes` collection is filtered to notes filed on the axis itself **in the read, before
+  `limit`** — a multi-target note that also names a problem belongs to that problem (surfaced under
+  `problemNotes`) and does not consume an axis-notes slot, so `returned` matches the collection's own
+  `total`. The topic-wide read (no `axisId`) keeps its historical shape.
   Under `axisId` only `historyLimit` and `notesLimit` apply; `includeAnnotations`, `activityLimit`
   and `activitySinceDays` are ignored. Sibling axes are
   not returned; an `axisId` that is unknown or belongs to another topic is refused.
@@ -37,6 +41,12 @@ Tools (assign them to the profile alongside this skill) — the whole agent surf
 The plugin id's hyphen becomes an underscore in tool names (`plugin_<id>__<key>`, `-` → `_`). They are
 discovered through `find_tools` — search by "research" or the action name, then call them on the next
 model call.
+
+Loading this skill does **not** itself make the tools callable. Tool assignment and skill assignment are
+separate: **assign the five tools to the profile alongside this skill**, and confirm they are assigned rather
+than merely *described*. A prompt that only lists the tool names (a systemPrompt workaround) advertises them
+without assigning them — the model can then describe a call it cannot dispatch, and a read that looks grounded
+came from nothing.
 
 How to work:
 

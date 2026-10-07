@@ -13,9 +13,9 @@ Checked first, because the answer is not the obvious one.
 
 | Thing | What it is | Does it serve this plugin? |
 |---|---|---|
-| `nakama` container, `100.x:4310` | the **vendor's** Nakama test instance (`ghcr.io/ahmadrosid/nakama:latest`), deployed 2026-09-25 to read its design; data root `/mnt/otrais/data/nakama` | **No.** Its data root has `agent/ orgs/ sqlite/ runtime/ config.ini` and **no plugin records at all** — the research dashboard was never installed there |
-| `/mnt/otrais/data/nakama-dev` | the dev instance's data root; `plugins/research-dashboard/` holds releases from 2026-09-30/10-01 (`0.1.0+dev.*`) | It *would*, but **no dev instance is running** right now; the releases present are pre-v2 builds |
-| `/mnt/otrais/repos/nakama/packages/plugins/research-dashboard/` | the **vendored artifact** in the Nakama checkout — the source of the bundled "official-style" plugin the server loads | **Yes** — this is what a dev instance loads, and what the isolated acceptance instances install from |
+| `nakama` container, `100.x:4310` | the **vendor's** Nakama test instance (`ghcr.io/ahmadrosid/nakama:latest`), deployed 2026-09-25 to read its design; data root `/mnt/<estate>/data/nakama` | **No.** Its data root has `agent/ orgs/ sqlite/ runtime/ config.ini` and **no plugin records at all** — the research dashboard was never installed there |
+| `/mnt/<estate>/data/nakama-dev` | the dev instance's data root; `plugins/research-dashboard/` holds releases from 2026-09-30/10-01 (`0.1.0+dev.*`) | It *would*, but **no dev instance is running** right now; the releases present are pre-v2 builds |
+| `/mnt/<estate>/repos/nakama/packages/plugins/research-dashboard/` | the **vendored artifact** in the Nakama checkout — the source of the bundled "official-style" plugin the server loads | **Yes** — this is what a dev instance loads, and what the isolated acceptance instances install from |
 | isolated instances `:4500` (corpus) / `:4400` (fixture) | the two acceptance instances, own data roots, own web dev servers | **Yes** — these produced every record in this repo |
 
 So the honest statement is: **there is no always-on estate service serving this plugin.** The served copies are

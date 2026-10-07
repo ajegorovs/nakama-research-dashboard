@@ -10,8 +10,8 @@ the current build **does not reproduce the prototypes' page composition** in sev
 
 | | |
 |---|---|
-| Review UI (the owner's URL) | `http://<box>.<tailnet>.ts.net:3003/plugins/research-dashboard` — Vite dev web from `/mnt/otrais/repos/nakama`, bound to the tailnet address, proxying the dev instance |
-| Its backend | dev Nakama on `127.0.0.1:4399` (data root `/mnt/otrais/data/nakama-dev`) |
+| Review UI (the owner's URL) | `http://<box>.<tailnet>.ts.net:3003/plugins/research-dashboard` — Vite dev web from `/mnt/<estate>/repos/nakama`, bound to the tailnet address, proxying the dev instance |
+| Its backend | dev Nakama on `127.0.0.1:4399` (data root `/mnt/<estate>/data/nakama-dev`) |
 | Documented "Dashboard" in `services/nakama/README.md` | `http://<box>.<tailnet>.ts.net:4310` — the **Docker** instance, which answers **"This plugin isn't available"**: it has never carried this plugin. That README row is wrong for this plugin and is corrected. |
 
 **Before:** the instance was serving `version 0.2.0+dev.f3eff70d4eae`, `revision 321` — a **pre-U6** build

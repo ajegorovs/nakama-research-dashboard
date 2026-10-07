@@ -12,7 +12,7 @@
  * `packages/ui/src/index.ts` and `packages/core/src/index.ts` resolve. This run is authoritative.
  *
  * Usage:
- *   bun harness/typecheck-host.mjs [--checkout /mnt/otrais/repos/nakama]
+ *   bun harness/typecheck-host.mjs [--checkout <nakama checkout>]
  *   (or set NAKAMA_CHECKOUT)
  *
  * Exit code is non-zero when a file **in this repository** fails to typecheck. Diagnostics reported inside
@@ -32,11 +32,19 @@ function argValue(flag) {
   return index === -1 ? null : (process.argv[index + 1] ?? null);
 }
 
-const checkout = resolve(
-  argValue("--checkout") ??
-    process.env.NAKAMA_CHECKOUT ??
-    "/mnt/otrais/repos/nakama"
-);
+// The checkout is local to the machine that runs the instances, so it is required rather than defaulted:
+// a public repo must not carry a machine's own path, and a guessed checkout would silently typecheck the
+// wrong host types. Pass --checkout or set NAKAMA_CHECKOUT.
+const checkoutArg = argValue("--checkout") ?? process.env.NAKAMA_CHECKOUT;
+if (!checkoutArg) {
+  console.error(
+    "typecheck-host: no Nakama checkout given.\n" +
+      "This check needs a checkout (it is what makes the real host types resolvable).\n" +
+      "Pass --checkout <path> or set NAKAMA_CHECKOUT."
+  );
+  process.exit(2);
+}
+const checkout = resolve(checkoutArg);
 const hostUi = join(checkout, "packages/ui/src/index.ts");
 const hostCore = join(checkout, "packages/core/src/index.ts");
 

@@ -30,6 +30,7 @@ import {
   redactEndpoint,
   unredactedEndpoints,
   unredactedHomePaths,
+  unredactedMountPaths,
 } from "./redact.mjs";
 
 const REPO = fileURLToPath(new URL("..", import.meta.url));
@@ -147,6 +148,33 @@ check(
   []
 );
 
+// --- 1c. the mount-path rule -------------------------------------------------------------------------------
+// The third class: a quoted storage mount names the machine as a home path does. The rule is the **schema**
+// `/mnt/<machine-storage>/` — a concrete segment is identity, a placeholder is not — so the fixture uses a
+// made-up storage name (never this host's) and both sides of the narrowing are exercised.
+const MOUNT = `${"/"}mnt`;
+const MOUNT_DETECT = [
+  ["a data root under a concrete mount", `--data-root ${MOUNT}/storage-pool/data --org org_x`],
+  ["a checkout under a concrete mount", `vendored from ${MOUNT}/storage-pool/repos/nakama`],
+];
+for (const [description, input] of MOUNT_DETECT) {
+  check(`detect mount: ${description}`, unredactedMountPaths(input).length > 0, true);
+}
+check(
+  "detect mount: the placeholder schema and a bare mount are not offences",
+  unredactedMountPaths(
+    `${MOUNT}/<machine-storage>/data · ${MOUNT}/<estate>/services · ${MOUNT}/.../x · a mount under ${MOUNT}`
+  ),
+  []
+);
+process.env.PUBLIC_RECORDS_MOUNT_ALLOW = "storage-pool";
+check(
+  "detect mount: a configured allow-list segment is tolerated",
+  unredactedMountPaths(`--data-root ${MOUNT}/storage-pool/data`),
+  []
+);
+delete process.env.PUBLIC_RECORDS_MOUNT_ALLOW;
+
 // --- 2. the record guard -----------------------------------------------------------------------------------
 // The whole **public tree**, not just `docs/`: the reviewer's ask is that no committed artifact carries a live
 // endpoint, and a hardcoded address in `src/` or the harness would be the same leak. Two files are excluded by
@@ -188,15 +216,19 @@ const files = walk(REPO).filter((path) => {
 });
 const offences = [];
 const homeOffences = [];
+const mountOffences = [];
 for (const path of files) {
   const text = readFileSync(path, "utf8");
   const found = unredactedEndpoints(text);
   if (found.length) offences.push(`${relative(REPO, path)}: ${found.slice(0, 4).join(", ")}`);
   const homes = unredactedHomePaths(text);
   if (homes.length) homeOffences.push(`${relative(REPO, path)}: ${homes.slice(0, 4).join(", ")}`);
+  const mounts = unredactedMountPaths(text);
+  if (mounts.length) mountOffences.push(`${relative(REPO, path)}: ${mounts.slice(0, 4).join(", ")}`);
 }
 if (offences.length) failures += 1;
 if (homeOffences.length) failures += 1;
+if (mountOffences.length) failures += 1;
 const inDocs = files.filter((path) => relative(REPO, path).startsWith("docs/")).length;
 console.log(
   `${offences.length ? "FAIL" : "PASS"}  the committed tree carries no live endpoint — ` +
@@ -208,6 +240,11 @@ console.log(
   `${homeOffences.length ? "FAIL" : "PASS"}  the committed tree carries no identity-bearing home path — ` +
     `${files.length} text file(s) scanned` +
     (homeOffences.length ? `\n        ${homeOffences.join("\n        ")}` : "")
+);
+console.log(
+  `${mountOffences.length ? "FAIL" : "PASS"}  the committed tree carries no machine storage mount — ` +
+    `${files.length} text file(s) scanned` +
+    (mountOffences.length ? `\n        ${mountOffences.join("\n        ")}` : "")
 );
 
 // --- 3. the transcript emitter's trailing-space rule -------------------------------------------------------

@@ -72,7 +72,7 @@ have implied they did. The owner's decision: **the prototypes are the target.**
 
 | | |
 |---|---|
-| Review URL | `http://<box>.<tailnet>.ts.net:3003/plugins/research-dashboard` — Vite dev web from `/mnt/otrais/repos/nakama`, tailnet-bound, proxying the dev Nakama on `127.0.0.1:4399`. Both halves are permanent enable-on-boot user units (`nakama-dev-instance.service`, `nakama-review-web.service`), so the surface survives a reboot |
+| Review URL | `http://<box>.<tailnet>.ts.net:3003/plugins/research-dashboard` — Vite dev web from `/mnt/<estate>/repos/nakama`, tailnet-bound, proxying the dev Nakama on `127.0.0.1:4399`. Both halves are permanent enable-on-boot user units (`nakama-dev-instance.service`, `nakama-review-web.service`), so the surface survives a reboot |
 | Served build | `0.2.0+dev.ae3049008d5f`, revision 329, `lifecycleState=enabled` — verified through that URL, not assumed |
 | Not the review surface | the Docker instance on `:4310` answers *"This plugin isn't available"* and never carried the plugin (the estate README said otherwise; corrected) |
 

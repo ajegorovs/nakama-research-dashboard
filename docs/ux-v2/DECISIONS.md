@@ -267,6 +267,12 @@ elsewhere" and left it in place, and the reviewer caught it as a privacy regress
   live endpoint fails the check that has to pass before the next handoff.
 - **The real endpoint stays in the estate** — compose env files and runtime config, which are git-local by design
   and are not the public artifact.
+- **A quoted path is a label too.** A committed artifact that quotes a filesystem path must resolve for a reader
+  with a clone, and must not carry the machine it ran on: a path **inside** the repository is written
+  repo-relative; one **outside** becomes `<scratch>/<name>`; a machine's home root (`/home/<name>/`,
+  `/Users/<name>/`) or storage mount (`/mnt/<name>/`) becomes a placeholder — the schema is
+  `/mnt/<machine-storage>/`, never the machine's own name. A concrete mount segment can be tolerated explicitly
+  with `PUBLIC_RECORDS_MOUNT_ALLOW`. `harness/test-redact.mjs` asserts all three classes over the public tree.
 - **History is not rewritten to satisfy this rule.** The scrub applies to the tree and the diff; where a leak
   exists in already-published history it is *reported* with its commit count, and the decision to rewrite is
   explicit — never implicit, never a force-push.

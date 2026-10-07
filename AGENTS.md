@@ -215,6 +215,38 @@ harness-coupled while that area is in active visual use.
   pre-composition baseline; `ux-v2-composition-complete` marks the phase close).
 - **Never force-push `main`.** It is the published source of truth and reviewers work from it.
 
+## Plan-first tasks and draft PRs
+
+New coherent work is planned before it is implemented, on a **branch per task**, so a reviewer can
+judge the intent before the diff and a fresh session can resume from the PR alone. This is the default
+for a new task; it is not a ceremony for a one-line fix.
+
+- **One branch, one task.** Each coherent change gets its own branch off `main` (the skills and path
+  hygiene for one area is one task; an unrelated fix gets its own branch and its own PR). Never commit
+  or work directly on `main`.
+- **Plan first, and commit the plan.** The plan is minimalist and versioned — goal, scope, acceptance
+  criteria, explicit exclusions — under `docs/plans/<date>-<slug>.md`. It is a public, tracked,
+  sanitized record like every other document here. Machine- and service-specific operational detail
+  (instance parameter sets, env keys, private paths) is an *appendix* that stays in the ignored
+  `.hermes/plans/` scratch, never in the committed plan.
+- **Open the PR as a draft right after the plan commit**, so the plan is the PR's first reviewable
+  artefact and the diff grows against a stated intent.
+- **The PR body states scope, acceptance and exclusions** — what the PR does, how it is judged done,
+  and what it deliberately leaves out (the *Boundaries are stated, not implied* rule at PR scale).
+- **Commits stay incremental and evidence-bearing** (see *Evidence discipline* and *Commits and tags*);
+  nothing lands unmeasured.
+- **Resume a task in a fresh session from the PR** — its diff, the committed plan and the review
+  comments — not from session memory. The PR is the durable handoff.
+- **Mark ready for review once the gates pass** (`bun run check`, plus the relevant `harness:*` suite),
+  and **merge only after review, at the exact head that passed CI**; do not enable auto-merge ahead of
+  the reviewed head.
+- **A manual or fixture-evidence PR carries the approved packet and the findings, never a database
+  snapshot.** Commit the seed procedure and the transcript that reproduce the state; the live store is
+  local and stays local.
+- **Forward-looking by design.** A completed, published stage is not retrofitted with a branch or PR,
+  and published history is not rewritten to conform (see *Public-record hygiene*). A new task starts
+  the loop again.
+
 ## Skills
 
 Contributor procedures live in **`.agents/skills/`** — the cross-client Agent Skills layout (`SKILL.md` plus

@@ -24,6 +24,13 @@
  * directory layout. The rule is the same shape: a path **inside the repository** becomes repo-relative (it
  * addresses the same file from a clone, so the linkage a reviewer wants survives and no identity does); a path
  * **outside** it becomes `<scratch>/<name>`, keeping the basename for linkage and hiding where the work ran.
+ *
+ * A path an artifact quotes is judged in three classes, each a label rather than an address: a quoted
+ * **home root** (`/home/<name>/`, `/Users/<name>/` — `unredactedHomePaths`) and a quoted **storage mount**
+ * (`/mnt/<name>/` — `unredactedMountPaths`) are identity, while a path *inside* the repository is
+ * repo-relative. In both identity classes a placeholder segment (`<user>`, `<estate>`, `<machine-storage>`,
+ * `...`) identifies nobody and is kept: the schema is `/mnt/<machine-storage>/`, never the machine's own
+ * storage name.
  */
 
 import { hostname } from "node:os";
@@ -181,6 +188,38 @@ export function unredactedHomePaths(text) {
   const found = new Set();
   for (const match of decodeEntities(text).matchAll(HOME_PATH)) {
     if (!PLACEHOLDER_USERS.has(match[1].toLowerCase())) found.add(match[0]);
+  }
+  return [...found];
+}
+
+/**
+ * A **storage mount** a path in a public artifact quotes — the third class, the sibling of the home path.
+ * A quoted `--data-root /mnt/<estate>/…` names where the work ran just as a home path does, so the rule has
+ * the same shape: a **concrete** mount segment is identity; a placeholder segment (`<estate>`,
+ * `<machine-storage>`, `...`) identifies nobody, which is why a record may write `/mnt/<estate>/…`.
+ *
+ * The set of tolerated concrete segments is configurable — `PUBLIC_RECORDS_MOUNT_ALLOW`, a comma-separated
+ * list — for a product that legitimately ships a fixed `/mnt/<name>/` path. The default tolerates none: the
+ * schema is `/mnt/<machine-storage>/`, never the machine's own storage name. Angle-bracket segments cannot
+ * match the character class, so a placeholder is skipped by construction.
+ *
+ * @param {string} text
+ * @returns {string[]} the offending mount paths, de-duplicated, in first-seen order
+ */
+const MOUNT_PATH = /\/mnt\/([^/\s"'`()<>[\]]+)\//g;
+export function unredactedMountPaths(text) {
+  const allow = new Set(
+    String(process.env.PUBLIC_RECORDS_MOUNT_ALLOW ?? "")
+      .split(",")
+      .map((segment) => segment.trim().toLowerCase())
+      .filter(Boolean)
+  );
+  const found = new Set();
+  for (const match of decodeEntities(text).matchAll(MOUNT_PATH)) {
+    const segment = match[1].toLowerCase();
+    if (/^[.…]+$/.test(segment)) continue; // an ellipsis placeholder, e.g. `/mnt/.../`
+    if (allow.has(segment)) continue;
+    found.add(match[0]);
   }
   return [...found];
 }
