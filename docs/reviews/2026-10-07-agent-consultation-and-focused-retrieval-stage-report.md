@@ -346,3 +346,10 @@ shows no history for it), so that file is **added**, not edited.
 
 **Records-guard count at execution time.** The guard reports **245** text files scanned (was 244 at §10.4 record
 time); the extra file is this stage's own acceptance record, present in the tree at execution.
+
+**Publication (2026-10-07, appended).** `main` was subsequently **pushed** at `5a62749`; the reviewer returned
+**APPROVE — QUALIFIED CLOSURE / PUBLICATION ACCEPTED**, superseding the stage-close `REQUEST CHANGES`, and one
+bounded, offline correction (the scoped axis-note `problem_id IS NULL` pre-`LIMIT` filter) followed — it does
+**not** invalidate this stage's live acceptance and required **no new inference**. Recorded in full in the
+[acceptance record](./2026-10-07-agent-consultation-and-focused-retrieval-acceptance-record.md) §9; §11's
+"publication remains pending" sentence describes the pre-publication moment only.
