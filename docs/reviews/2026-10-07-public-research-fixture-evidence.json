@@ -1,0 +1,136 @@
+{
+  "auditAt": "2026-10-07T14:44:51.740Z",
+  "fixtureVersion": "0.4.31",
+  "providerConfigured": true,
+  "overviewCounts": {
+    "topics": 2,
+    "axes": 6,
+    "repositories": 3,
+    "people": 1,
+    "topicsByStatus": {
+      "active": 2,
+      "paused": 0,
+      "completed": 0,
+      "archived": 0
+    }
+  },
+  "axesByState": {
+    "active": 1,
+    "draft": 0,
+    "blocked": 0,
+    "parked": 0,
+    "completed": 0,
+    "abandoned": 0,
+    "usable": 5
+  },
+  "expectedCounts": {
+    "topics": 2,
+    "axes": 6,
+    "repositories": 3,
+    "people": 1
+  },
+  "countsMatch": true,
+  "perAxis": {
+    "High-rate optical acquisition": {
+      "kind": "feature",
+      "state": "usable",
+      "currentStateLen": 237,
+      "currentStateAbsent": false,
+      "blockerLen": 0,
+      "problemCount": 0
+    },
+    "UDV sparse-analysis validation": {
+      "kind": "test",
+      "state": "usable",
+      "currentStateLen": 239,
+      "currentStateAbsent": false,
+      "blockerLen": 0,
+      "problemCount": 0
+    },
+    "UDV acquisition automation": {
+      "kind": "experiment",
+      "state": "usable",
+      "currentStateLen": 271,
+      "currentStateAbsent": false,
+      "blockerLen": 0,
+      "problemCount": 0
+    },
+    "Grablink diagnostics and sustained-rate validation": {
+      "kind": "investigation",
+      "state": "active",
+      "currentStateLen": 0,
+      "currentStateAbsent": true,
+      "blockerLen": 144,
+      "problemCount": 1
+    },
+    "Research dashboard and focused retrieval": {
+      "kind": "feature",
+      "state": "usable",
+      "currentStateLen": 200,
+      "currentStateAbsent": false,
+      "blockerLen": 0,
+      "problemCount": 0
+    },
+    "Agent consultation and automation evidence": {
+      "kind": "test",
+      "state": "usable",
+      "currentStateLen": 196,
+      "currentStateAbsent": false,
+      "blockerLen": 0,
+      "problemCount": 2
+    }
+  },
+  "packetCompare": {
+    "pass": 22,
+    "fail": 2,
+    "failedLabels": [
+      "Grablink diagnostics and sustained-rate validation scoped plan.summary",
+      "Grablink diagnostics and sustained-rate validation scoped plan steps order"
+    ]
+  },
+  "planOrder": {
+    "authored": [
+      "Wire CaptureStats into the callback and save path.",
+      "Measure callback duration, effective FPS, save duration and disk throughput.",
+      "Read relevant driver/drop counters and surface diagnostics.",
+      "Run sustained 300–350 FPS and full-buffer-to-disk validation."
+    ],
+    "getProgress_axis4_summary": "Complete camera-connected validation and production diagnostics for sustained high-rate acquisition.",
+    "getProgress_axis4_steps": [
+      "Wire CaptureStats into the callback and save path.",
+      "Measure callback duration, effective FPS, save duration and disk throughput.",
+      "Read relevant driver/drop counters and surface diagnostics.",
+      "Run sustained 300–350 FPS and full-buffer-to-disk validation."
+    ],
+    "scopedGetTopic_axis4_summary": null,
+    "scopedGetTopic_axis4_steps": [
+      "Read relevant driver/drop counters and surface diagnostics.",
+      "Wire CaptureStats into the callback and save path.",
+      "Run sustained 300–350 FPS and full-buffer-to-disk validation.",
+      "Measure callback duration, effective FPS, save duration and disk throughput."
+    ],
+    "getProgress_matches_authored": true,
+    "scopedGetTopic_matches_authored": false
+  },
+  "servedUi": {
+    "appjsSha256": "41e61ef5891bfd630a1704d26f144880730f3d842f7d81b79426dd48709787fc",
+    "actionsJsStatus": 404
+  },
+  "retainedTrace": {
+    "messageCount": 63,
+    "distinctToolNames": [
+      "find_tools",
+      "plugin_research_dashboard__get_overview",
+      "plugin_research_dashboard__get_topic",
+      "plugin_research_dashboard__reconcile_topic",
+      "plugin_research_dashboard__record_activity",
+      "plugin_research_dashboard__search_dashboard"
+    ]
+  },
+  "evidenceScope": "Independent audit sanitized measurement extract; raw transport evidence remains local. Not an acceptance verdict.",
+  "parentPacketVerifier": {
+    "pass": 27,
+    "fail": 2,
+    "exitCode": 1
+  }
+}
