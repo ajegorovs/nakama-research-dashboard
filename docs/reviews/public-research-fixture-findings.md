@@ -31,16 +31,18 @@
 | F04 | required | The consultation axis lacks evidence; two problems lack repositories | reviewer hypothesis | Problems without a repository link are unattributable to a source | Inspect the problem records' `repositoryFullNames`; capture the source document/commit |
 | F05 | required | An agenda event is dated to the ingestion day rather than its historical source date | reviewer hypothesis | Substituting ingestion for publication dates rewrites history | Verify the source pin's own date before any correction; the pin, not the ingestion, is authoritative |
 | F06 | required | Historical research appears "active today" | reviewer hypothesis | Recency that reflects record touches, not research, is misleading | Separate domain activity from record touch; inspect the projection/recency mechanism before labelling it a defect |
-| F07 | required | Topic/repository factual descriptions are absent | reviewer hypothesis | Without descriptions a reader cannot tell what a topic is about | Harvest factual README/`about` text; descriptions must be source text, not paraphrase, and approved before write |
-| F08 | optional→required | The diagnostics axis's `currentState` is intentionally absent, though the source could support a conservative factual state | reviewer hypothesis | A blank state can be honest (nothing approved) or a gap (source supports more) | If the source supports a conservative factual state, propose exact candidate wording for approval; otherwise leave blank |
-| F09 | required | Repository metadata is skeletal (public URL, default branch, pin, source docs) | reviewer hypothesis | Skeletal identity metadata weakens provenance | Verify the model supports the fields, then populate from the public source |
+| F07 | required (when the public source is available) | Repository factual descriptions (public URL, default branch, README/`about` text) are absent | reviewer hypothesis | Without descriptions a reader cannot tell what a repository is | Harvest the source's own README/`about` text; descriptions must be source text, not paraphrase |
+| F07b | optional | Topic descriptions are editorial and may legitimately be absent until a human approves wording | intentional | An absent topic description is honest, not a defect; it is a human claim, not harvested text | Leave blank unless a human authors and approves it (cf. F16) |
+| F08 | optional | The diagnostics axis's `currentState` is intentionally absent, though the source could support a conservative factual state | reviewer hypothesis | A blank state can be honest (nothing approved) or a gap (source supports more) | If the source supports a conservative factual state, propose exact candidate wording for approval; otherwise leave blank |
+| F09 | required | Repository identity fields are skeletal (public URL, default branch, source docs) | reviewer hypothesis | Skeletal identity metadata weakens provenance | Verify the model supports the fields, then populate from the public source |
+| F09b | unavailable | The repository model carries no **pin** field for the repo's source pin | reviewer hypothesis | Without a pin, exact provenance of a repository's content cannot be stated | Confirm the exposed contract; if the model truly lacks the field, record the gap — never fabricate a pin |
 | F10 | required | Evidence lacks convenient public URLs | reviewer hypothesis | A claim a clone cannot follow is hard to trust | Capture a `sourceUrl` for PR/commit/document records, public only |
 | F11 | optional | PR evidence is attributed to the agent, possibly conflating recorder with upstream author | reviewer hypothesis | Misattribution misrepresents authorship | Do not manufacture an account mapping; report the attribution boundary instead |
 | F12 | required | Ordered plan steps carry null positions | verified | An authored order that is not encoded cannot be relied on | Encode explicit `position` values on seed; the ordering is then a stored claim, not a projection side-effect |
 | F13 | unavailable | Plan provenance is not a first-class visible field | reviewer hypothesis | A plan with no visible source is hard to audit | Confirm the exposed contract; if the model truly lacks the field, record it as a stated model gap (unavailable), not a fabrication |
-| F14 | unavailable | Problems have zero linked events though the source supports some | verified | A problem's evidence cannot be attached through the event tool | Confirm the `record_activity` schema gap (a declared-but-unsupported `problemId`); record the limitation, never a workaround |
-| F15 | accepted limitation | A person's activity is empty without a mapped account | verified | Empty activity can read as idleness when it is unattributability | Report `attributable=false`, never "idle"; this is a manual-ingestion limitation |
-| F16 | intentional | Human-approved topic summaries are absent | intentional | A topic summary is a human editorial claim, not harvested text | Preserve as blank unless a human authors it |
+| F14 | unavailable | Problems have zero linked events though the source supports some | verified | A problem's evidence cannot be attached through the event tool | Two paths differ: an **existing** problem's `problemId` is reconcilable through the problem object (a versioned mutation), but `record_activity` carries no field for a **new** problem title reference, so attaching an event to a problem through the event tool is unavailable. Record the schema gap; never a workaround |
+| F15 | unavailable | A person's activity is empty without a mapped account | verified | Empty activity can read as idleness when it is unattributability | Report `attributable=false`, never "idle"; the account mapping is a stated manual-ingestion limitation the model cannot represent |
+| F16 | optional | Human-approved topic summaries are absent | intentional | A topic summary is a human editorial claim, not harvested text | Preserve as blank unless a human authors it |
 | F17 | required | A shorthand overstated a sustained/full-buffer result | reviewer hypothesis | An overstated capability is a false claim | Verify against the source wording; preserve the conservative blocker until the source confirms more |
 
 ## B. UI observations and proposals
@@ -55,8 +57,8 @@ wrong thing. They are listed so the observation is not lost.
 | U02 | Semantic correctness | Zero-event problems/axes label a creation/update fallback as "last activity" | reviewer hypothesis (recency-fallback mechanism is a code claim) |
 | U03 | Presentation | Topic current-state stays line-clamped even with the axis disclosure expanded | observed symptom (CSS cause separately verified) |
 | U04 | Duplication | A single problem appears in both the current-problem and open-problems regions of one axis | observed |
-| U05 | Information architecture | Whether the Overview needs repository cards, versus compact topic status plus quiet repo metadata | design proposal only |
-| U06 | Graphic proposal | Discrete daily activity bars (7/14/30-day) rather than smooth curves | design proposal only |
+| U05 | Information architecture | Whether the Overview's repository presence should be compact topic status plus quiet repo metadata instead of the current repository cards/regions | design proposal only |
+| U06 | Graphic proposal | Discrete daily activity bars (7/14/30-day) as the activity readout | design proposal only (the current readout is textual age/count, not a chart) |
 | U07 | Visual hierarchy | Pills equate state/confidence/repo/topic/person; repeated inferred/version/history/correct/empty prose adds noise | design proposal only |
 | U08 | Density proposal | Nested cards / empty supporting sections compete with the useful plan | design proposal only |
 | U09 | Reachability | Missing account/about/activity/axes machinery dominates the person's context | observed |
@@ -66,7 +68,7 @@ wrong thing. They are listed so the observation is not lost.
 Reviewer-supplied visual references, recorded by **name only** (the capture pack itself is local reviewer
 material and is not committed here). A bare filename exists at more than one reference viewport; a
 citation must name the viewport it was judged at. The reviewer's **minimum working set** was: the
-Overview full view, both topic full views, the dashboard repository top view, and the two unresolved
+Overview full view, both topic full views, the dashboard repository top view, and the two reviewer-held
 JPGs below.
 
 | Reference (name) | Relates to |
@@ -79,17 +81,31 @@ JPGs below.
 | `repositories__repo-3-udv-echo-process__top.png` | F07, F09 |
 | `people__person-1__full.png` | F02, F15, U09 |
 
-### Unresolved reviewer references (explicit)
+### Reviewer-attested anchors
 
-Two references were cited **verbatim** by the reviewer but were **not supplied** and are **not present**
-in the capture pack:
+Anchors the reviewer's own captures establish, kept distinct from design proposals:
+
+- The **Overview** full view shows two activity regions side by side — a **Topic activity** column and a
+  **Repository activity** column — each with **textual** age/count readouts and **no chart graphic**.
+  (`overview__overview__full.png`)
+- Repository presence **is** on the Overview (the Repository activity region). Removing repository
+  cards/regions (U05) and replacing the readout with **discrete daily bars** (U06) are **proposals**,
+  never observations of the current UI.
+
+### Reviewer-held references (not in this repo)
+
+Two references were named **verbatim** by the reviewer; they are **reviewer-provided material inspected
+externally by the reviewer**. They are **not** in this repo's committed capture pack and were **not**
+inspected by the agent that wrote this document — and they are **not absent**: they are held by the
+reviewer.
 
 - `progress_axes.jpg`
 - `problems.jpg`
 
-Their findings (`F04`/`F14`, `F05`/`F06`/`U02`, `U04`, `U08`) are recorded as **unresolved external
-references**. This document does **not** substitute the available PNGs for them and does **not** claim
-they were inspected; the findings they support remain provisional on those two files being produced.
+Their findings (`F04`/`F14`, `F05`/`F06`/`U02`, `U04`, `U08`) rest on the **reviewer's** inspection of
+those two files. This document does **not** substitute the available PNGs for them and does **not** claim
+to have inspected them; those findings remain **reviewer-attested**, with the agent's own inspection
+outstanding.
 
 ### Nonvisual findings explicitly retained
 

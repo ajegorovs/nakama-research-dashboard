@@ -37,7 +37,7 @@ first.
 | Program | Target | Assumption |
 |---|---|---|
 | **Baseline seed** | a fresh, empty target | nothing exists; every required field must be sourced from the first write |
-| **Retained-fixture amendment** | an accepted fixture | the fixture exists; the amendment is **append-only and idempotent**, never rewriting an accepted record |
+| **Retained-fixture amendment** | an accepted fixture | the fixture exists; the amendment is **explicitly approved and idempotent** — it may make approved before/after corrections, but never rewrites a published historical acceptance record |
 
 Do not carry empty-start assumptions into an amendment, or an existing-record assumption into a seed.
 
@@ -59,10 +59,12 @@ For each required field, name the **source**. For each unavailable one, name the
    `reconcile_topic` transaction** as the claims they back. `record_activity` is for later arrivals.
 3. **Immutable source refs and dates.** Record the public source and the source's **own** date. Never
    substitute the ingestion/recording date for a document's publication date; keep day-only dates day-only;
-   quote a pinned commit by its pin.
+   quote a pinned commit by its pin. When a document carries **no explicit date**, date it by the **last
+   file-touch commit at or before the pin** and record that basis and its precision; a PR or commit event
+   carries its **own** event date.
 4. **Dedup and versions.** `get_overview` for the baseline, `search_dashboard` per name, and
-   `expectedVersion` on every write; on `conflict`, re-read and decide — never overwrite blindly.
-   `truncated` is not `absent`.
+   `expectedVersion` on **existing versioned mutations** (a fresh create has no version to check); on
+   `conflict`, re-read and decide — never overwrite blindly. `truncated` is not `absent`.
 
 ## Procedure
 
@@ -91,12 +93,14 @@ package, and reports ambiguity/gaps. Fix the skill from that report and re-run. 
 1. **Confirmed-at-seed.** Requesting `confirmed` claims in the initial reconciliation while scheduling
    their activities for later calls produces refusals and ad-hoc downgrades. Sequence evidence with the
    claim.
-2. **Ingestion date as source date.** A document with no supplied date gets the recording time, which is
-   **not** its publication date. Omit rather than substitute; report the precision limit.
+2. **Ingestion date as source date.** A document with no explicit date must **not** get the recording
+   time. Date it by the **last file-touch commit at or before the pin** and record that basis and its
+   precision; never invent a time-of-day.
 3. **Null positions.** Relying on the read projection to convey "authored order" is not an ordering
    contract. Encode explicit `position` values.
-4. **Problem evidence.** The event tool advertises a problem link it cannot carry. Record the limitation;
-   do not improvise a workaround.
+4. **Problem evidence.** An **existing** problem's `problemId` is reconciled through the problem object,
+   but `record_activity` carries no field for a **new** problem reference — so attaching an event to a
+   problem through the event tool is unavailable. Record the limitation; do not improvise a workaround.
 5. **Attribution.** A person with no mapped account is `attributable=false`, **not** "idle".
 6. **Designing around a suspect fixture.** Never fold UI design into a fixture whose data linking is under
    review; settle the data first (UI is a separate, deferred track).
