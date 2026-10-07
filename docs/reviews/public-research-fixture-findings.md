@@ -152,26 +152,30 @@ proof of the mechanism would be a category error, so each is marked *reviewer hy
 > [`wp1-public-research-fixture-verification-evidence.json`](wp1-public-research-fixture-verification-evidence.json).
 > **All 21 rows verified; 0 refuted; 0 unresolved.** The *Status* column above was the reviewer's
 > pre-verification label; the *WP1* column below is the post-verification disposition. WP1 performs no
-> fixture correction and authorizes no WP2+.
+> fixture correction and authorizes no WP2+. Fixture-internal record ids are referred to by
+> **semantic label**, not raw id prefix; public repo/pin/commit refs are kept. **"Verified" is a
+> classification, not a defect headline**: for the optional/absent rows (F07b, F08, F15, F16) it means
+> the observed absence or accepted-optional state is established (an honest blank or stated boundary,
+> **not** a confirmed defect); a causal mechanism is confirmed only where source/contract supports it.
 
 | ID | Reviewer Status (§A, unchanged) | WP1 disposition | WP1 evidence (pin file:line or readback field) |
 |---|---|---|---|
 | F01 | reviewer hypothesis | **verified** (fixture data gap, not a UI filter) | dashboard repo `axes:[]`, `activityCount:0`; infra axes `repositories:[]`, event `repositoryId:null`; `store.ts:3405,3413` |
 | F02 | reviewer hypothesis | **verified** | person `axes`=4 (experimental only); infra axes `people:[]`; `axis_people` link-set |
-| F03 | reviewer hypothesis | **verified** (agenda linked elsewhere) | axis `601021c8` `evidence:0`; `docs/AGENDA.md` evidence on sibling `77835376` |
-| F04 | reviewer hypothesis | **verified** | axis `02e0b505` `evidence:0`; problems `49ee4cf1`,`ef92b518` `repositories:[]`; source commit `5a62749` on sibling axis |
-| F05 | reviewer hypothesis | **verified** | AGENDA event `occurredAt`==`recordedAt`==2026-10-07T14:32:13.984Z; source date 2026-09-24 (`44ba1a4`) |
+| F03 | reviewer hypothesis | **verified** (agenda linked elsewhere) | diagnostics axis `evidence:0`; `docs/AGENDA.md` evidence on the sibling high-rate-optical-acquisition axis |
+| F04 | reviewer hypothesis | **verified** | consultation axis `evidence:0`; its two problems `repositories:[]`; source commit `5a62749` on the sibling research-dashboard axis |
+| F05 | reviewer hypothesis | **verified** | AGENDA event `occurredAt`==`recordedAt`==2026-10-07T14:32:13.984Z; source commit ts known `2026-09-24T11:33:25+03:00` (`44ba1a4`); day-only `2026-09-24` is chosen precision, not inherent |
 | F06 | reviewer hypothesis | **verified** (mechanism; narrowed) | `ui.tsx:4232,4248,4519` label `recencyAt`; fallback `store.ts:5252,5438,5553` vs honest `lastActivityAt` `:5257,5444,5566` |
 | F07 | reviewer hypothesis | **verified** | all repos `url/description/defaultBranch:''`; model `store.ts:112–120`; READMEs at pins |
 | F07b | intentional | **verified** (absence; intentional) | both topics `description:''`, `summary:''` |
-| F08 | reviewer hypothesis | **verified** (absence; candidate deferred to WP4) | axis `601021c8` `currentState:''`, `currentStateConfidence:null` |
+| F08 | reviewer hypothesis | **verified** (absence; candidate deferred to WP4) | diagnostics axis `currentState:''`, `currentStateConfidence:null` |
 | F09 | reviewer hypothesis | **verified** (split) | url/branch/description representable but empty; "source docs" has no Repository field |
 | F09b | reviewer hypothesis | **verified (unavailable)** | no `pin` on Repository type/DDL/manifest/types |
-| F10 | reviewer hypothesis | **verified** | all event `sourceUrl:''`; model `migrations/002:164` |
-| F11 | reviewer hypothesis | **verified** (boundary) | events `actorType:'agent'`; `Activity` no upstream-author field `store.ts:152–170`; author slot only on collector path |
-| F12 | verified | **verified** | axis `601021c8` 4 steps all `position:null`; model `migrations/004:142` |
+| F10 | reviewer hypothesis | **verified** (event URL absent/supported; problem provenance not representable) | all event `sourceUrl:''`; model `migrations/002:164`; `Problem` type `store.ts:336–348` has **no `sourceUrl` field**, so problem provenance is a model boundary, not a blank field |
+| F11 | reviewer hypothesis | **verified** (boundary) | events `actorType:'agent'` (single recorder actor id withheld); `Activity` no upstream-author field `store.ts:152–170`; author slot only on collector path; upstream authors human (names/emails withheld) |
+| F12 | verified | **verified** | diagnostics axis plan 4 steps all `position:null`; model `migrations/004:142` |
 | F13 | reviewer hypothesis | **verified (unavailable); narrowed** | `Plan` `store.ts:351–358` has authorship, no content provenance; `plans` DDL `migrations/004:121–133` |
-| F14a | verified | **verified** (supported capability, required field) | manifest `activities[].problemId`; `store.ts:5837,6599–6609`; problem `0d586e71` 0 events |
+| F14a | verified | **verified** (supported capability, required field) | manifest `activities[].problemId`; `store.ts:5837,6599–6609`; existing diagnostics-axis problem 0 events |
 | F14b | verified | **verified (unavailable)** | no title handle; write order `5806`→`5929`; FK `migrations/004:351`; `PRAGMA foreign_keys` `store.ts:2152` |
 | F14c | verified | **verified (schema defect)** | manifest description advertises `problemId`; schema omits it (`additionalProperties:false`); `actions.ts:361–387` drops it |
 | F15 | accepted limitation | **verified** (optional/accepted) | `attributable=Boolean(nakamaUserId)` `store.ts:3330`; `lastActivityAt` gated `:3333–3335` |

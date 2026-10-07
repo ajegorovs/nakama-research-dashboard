@@ -1,10 +1,11 @@
 {
   "artifact": "WP1 public-research fixture verification — sanitized structured evidence",
   "status": "wp1-executed-read-only-owner-authorized",
-  "scope": "read-only: three read actions over direct HTTP, git reads at frozen pins, credentialed UI asset GET, session-selection active-org only; no domain write/inference/deploy/repair/merge",
+  "scope": "read-only: three read actions over direct HTTP, git reads at frozen pins, credentialed direct UI-asset GET, session-selection active-org only; no domain write/inference/deploy/repair/merge",
   "sanitized": {
     "loopback": "127.0.0.1 kept verbatim",
-    "withheld": ["target org id/name -> <targetOrg>", "auth identities", "host-specific absolute paths"],
+    "withheld": ["target org id/name -> <targetOrg>", "recorder actor id -> <recorder actor> (single recorder actor)", "host-specific absolute paths"],
+    "labels": ["fixture-internal record ids (axis/problem/event/topic) replaced with semantic labels"],
     "kept": ["public GitHub owner/repo slugs", "pins", "public PR/commit refs", "loopback endpoints"]
   },
   "pins": {
@@ -20,7 +21,9 @@
   },
   "fixture_readback_digest_sha256": "f823676ca28818abbec38d07b9951af34cab3bb84dc5bec895bad360f301c226",
   "served_asset": {
-    "route": "GET /v1/plugins/ui/<targetOrg>/research-dashboard/app.js",
+    "method": "direct HTTP GET of the exact org-scoped asset path (node fetch), NOT a captured browser request",
+    "browser_route_correspondence": "carried from prior WP0 attempt-4 browser page-load (browser requested the plugin root with ?import&revision=9&version=..., URL orgId == target); not re-observed in this WP1 run",
+    "route": "GET /v1/plugins/ui/<targetOrg>/research-dashboard/app.js (and root)",
     "http": 200,
     "bytes": 154598,
     "sha256": "41e61ef5891bfd630a1704d26f144880730f3d842f7d81b79426dd48709787fc",
@@ -36,40 +39,42 @@
     },
     "person": {"attributable": false, "nakamaUserId": null, "axisCount": 4, "recentActivity": 0},
     "axes": {
-      "e5850ea7": {"repos": [], "evidence": 3, "problems": 0, "plan": null, "currentState_present": true, "commits": ["95ec34e", "da7996b", "5a62749"]},
-      "02e0b505": {"repos": [], "evidence": 0, "problems": 2, "problems_with_repos": 0, "plan": null, "currentState_present": true},
-      "77835376": {"repos": ["Grablink"], "evidence": 2, "includes": ["docs/AGENDA.md", "PR #1"]},
-      "937c7417": {"repos": ["udv"], "evidence": 1, "includes": ["PR #67"]},
-      "39b9cd3a": {"repos": ["udv"], "evidence": 2, "includes": ["PR #69", "PR #44"]},
-      "601021c8": {"repos": ["Grablink"], "evidence": 0, "problems": 1, "problem_repo_linked": true, "plan_steps": 4, "positions_all_null": true, "currentState": "", "currentStateConfidence": null, "blocker_present": true}
+      "research_dashboard_and_focused_retrieval": {"repos": [], "evidence": 3, "problems": 0, "plan": null, "currentState_present": true, "commits": ["95ec34e", "da7996b", "5a62749"]},
+      "agent_consultation_and_automation_evidence": {"repos": [], "evidence": 0, "problems": 2, "problems_with_repos": 0, "plan": null, "currentState_present": true},
+      "high_rate_optical_acquisition": {"repos": ["Grablink"], "evidence": 2, "includes": ["docs/AGENDA.md", "PR #1"]},
+      "udv_sparse_analysis_validation": {"repos": ["udv"], "evidence": 1, "includes": ["PR #67"]},
+      "udv_acquisition_automation": {"repos": ["udv"], "evidence": 2, "includes": ["PR #69", "PR #44"]},
+      "grablink_diagnostics_and_sustained_rate_validation": {"repos": ["Grablink"], "evidence": 0, "problems": 1, "problem_repo_linked": true, "plan_steps": 4, "positions_all_null": true, "currentState": "", "currentStateConfidence": null, "blocker_present": true}
     },
-    "events": {"sourceUrl_all_empty": true, "actorType_all": "agent", "actorId_all": "user_admin", "repositoryId_all_null": true},
-    "agenda_event": {"id": "180d7453", "axis": "77835376", "occurredAt": "2026-10-07T14:32:13.984Z", "recordedAt": "2026-10-07T14:32:13.984Z", "sourceRef": "docs/AGENDA.md", "sourceType": "repo_document", "agenda_source_date_at_or_before_pin": "2026-09-24", "agenda_file_touch_commit": "44ba1a43da78c8f572f042f1af4850f3b64790cb"}
+    "events": {"sourceUrl_all_empty": true, "actorType_all": "agent", "actorId_all": "withheld (single recorder actor)", "repositoryId_all_null": true},
+    "problems": {"sourceUrl_field_present": false, "note": "Problem type (store.ts:336-348) and readback problem objects carry no sourceUrl field; problem provenance is not representable"},
+    "agenda_event": {"label": "the AGENDA event", "axis": "high_rate_optical_acquisition", "occurredAt": "2026-10-07T14:32:13.984Z", "recordedAt": "2026-10-07T14:32:13.984Z", "sourceRef": "docs/AGENDA.md", "sourceType": "repo_document", "agenda_source_commit_ts_known": "2026-09-24T11:33:25+03:00", "agenda_source_date_used": "2026-09-24", "agenda_date_precision": "day-only is a chosen precision, not inherent (commit timestamp known to the second with offset)", "agenda_file_touch_commit": "44ba1a43da78c8f572f042f1af4850f3b64790cb"}
   },
   "findings": {
-    "F01": {"verdict": "verified", "kind": "fixture-data-gap", "evidence": "dashboard repo axes [] activity 0 lastActivityAt null; infra axes carry 3 commits but repositories [] and event repositoryId null; store.ts:3405,3413 derive repo activity via links"},
+    "F01": {"verdict": "verified", "kind": "fixture-data-gap", "evidence": "dashboard repo axes [] activity 0 lastActivityAt null; the two infra axes carry 3 commits but repositories [] and event repositoryId null; store.ts:3405,3413 derive repo activity via links"},
     "F02": {"verdict": "verified", "evidence": "person axes = 4 experimental only; infra axes people empty; linked to infra topic not axes; stored link-set not filter"},
-    "F03": {"verdict": "verified", "evidence": "axis 601021c8 evidence 0 while blocker/problem/plan exist; docs/AGENDA.md evidence recorded on sibling axis 77835376"},
-    "F04": {"verdict": "verified", "evidence": "axis 02e0b505 evidence 0; problems 49ee4cf1/ef92b518 repositories []; source docs/commit 5a62749 recorded on sibling axis e5850ea7"},
-    "F05": {"verdict": "verified", "evidence": "AGENDA event occurredAt == recordedAt == ingestion (2026-10-07T14:32:13.984Z); source date at/before pin = 2026-09-24 (44ba1a4, day-only)"},
+    "F03": {"verdict": "verified", "evidence": "diagnostics axis evidence 0 while blocker/problem/plan exist; docs/AGENDA.md evidence recorded on sibling high-rate-optical-acquisition axis"},
+    "F04": {"verdict": "verified", "evidence": "consultation axis evidence 0; its two problems repositories []; source docs/commit 5a62749 recorded on sibling research-dashboard-and-focused-retrieval axis"},
+    "F05": {"verdict": "verified", "evidence": "AGENDA event occurredAt == recordedAt == ingestion (2026-10-07T14:32:13.984Z); source commit ts known 2026-09-24T11:33:25+03:00 (44ba1a4); day-only 2026-09-24 is chosen precision, not inherent"},
     "F06": {"verdict": "verified", "kind": "mechanism", "evidence": "ui.tsx:4232,4248,4519 label recencyAt as 'last activity'; recencyAt falls back to record touch store.ts:5252,5438,5553; honest lastActivityAt store.ts:5257,5444,5566 null with no events; distinct"},
     "F07": {"verdict": "verified", "evidence": "all repos url/description/defaultBranch ''; model supports (store.ts:112-120; migrations/002:41-48); README text available at pins"},
-    "F07b": {"verdict": "verified", "kind": "absence-intentional", "evidence": "both topics description '' and summary ''"},
-    "F08": {"verdict": "verified", "kind": "absence;candidate-deferred", "evidence": "axis 601021c8 currentState '' and currentStateConfidence null; other axes present; model supports field; candidate wording is WP4"},
+    "F07b": {"verdict": "verified", "kind": "absence-intentional", "evidence": "both topics description '' and summary ''; honest blank, not defect"},
+    "F08": {"verdict": "verified", "kind": "absence;candidate-deferred", "evidence": "diagnostics axis currentState '' and currentStateConfidence null; other axes present; model supports field; verified claim is observed absence (class optional), candidate wording is WP4"},
     "F09": {"verdict": "verified", "kind": "split", "evidence": "url/defaultBranch/description representable but empty; 'source docs' has no Repository field"},
     "F09b": {"verdict": "verified", "kind": "unavailable", "evidence": "no pin field on Repository type/DDL/manifest/types; migrations/005 has repository_node_id/default_branch but no pin"},
-    "F10": {"verdict": "verified", "evidence": "all event sourceUrl ''; model supports (migrations/002:164; manifest activities[].sourceUrl); public URLs available"},
-    "F11": {"verdict": "verified", "kind": "boundary", "evidence": "events actorType agent; Activity no upstream-author field store.ts:152-170; upstream authors human (Grablink PR#1 aleksandrs jegorovs; UDV PR#44/67/69 ajegorovs); author slot only on collector ingest path, not the five tools"},
-    "F12": {"verdict": "verified", "evidence": "axis 601021c8 plan 4 steps all position null; model supports migrations/004:142; migrations/004:118-119 no synthesis"},
+    "F10": {"verdict": "verified", "kind": "event-URL-absent-supported; problem-provenance-not-representable", "evidence": "all event sourceUrl ''; model supports activity URL (migrations/002:164; manifest activities[].sourceUrl); public URLs available so absent event URL is a supported-but-empty gap; Problem type store.ts:336-348 and readback problem objects have NO sourceUrl field, so problem provenance is not representable (model boundary), not a blank field"},
+    "F11": {"verdict": "verified", "kind": "boundary", "evidence": "events actorType agent with single recorder actor id (withheld); Activity no upstream-author field store.ts:152-170; upstream authors human (public commit authors in Grablink/UDV; names/emails withheld); author slot only on collector ingest path, not the five tools"},
+    "F12": {"verdict": "verified", "evidence": "diagnostics axis plan 4 steps all position null; model supports migrations/004:142; migrations/004:118-119 no synthesis"},
     "F13": {"verdict": "verified", "kind": "unavailable;narrowed", "evidence": "Plan store.ts:351-358 has authorType/authorId but no provenance/source; plans DDL migrations/004:121-133 no source; authorship first-class, content provenance unavailable"},
-    "F14a": {"verdict": "verified", "kind": "supported-capability/required-field", "evidence": "manifest activities[].problemId declared; store.ts:5837 forwards; store.ts:6599-6609 resolves existing problem; existing problem 0d586e71 has 0 linked events"},
+    "F14a": {"verdict": "verified", "kind": "supported-capability/required-field", "evidence": "manifest activities[].problemId declared; store.ts:5837 forwards; store.ts:6599-6609 resolves existing problem; existing diagnostics-axis problem has 0 linked events"},
     "F14b": {"verdict": "verified", "kind": "unavailable", "evidence": "no title handle (problems created by statement); activities problemId is id-only; write order activities store.ts:5806 before problems store.ts:5929; FK migrations/004:351; PRAGMA foreign_keys ON store.ts:2152; pre-existence required"},
     "F14c": {"verdict": "verified", "kind": "schema-defect", "evidence": "manifest record_activity description advertises problemId; inputSchema omits it with additionalProperties:false; dispatch actions.ts:361-387 never reads input.problemId; store supports it"},
-    "F15": {"verdict": "verified", "kind": "optional-accepted", "evidence": "attributable = Boolean(nakamaUserId) store.ts:3330; lastActivityAt gated store.ts:3333-3335 null; UI renders missing-link not idle"},
-    "F16": {"verdict": "verified", "kind": "absence-intentional", "evidence": "both topics summary ''"},
+    "F15": {"verdict": "verified", "kind": "optional-accepted", "evidence": "attributable = Boolean(nakamaUserId) store.ts:3330; lastActivityAt gated store.ts:3333-3335 null; UI renders missing-link not idle; verified claim is accepted-optional boundary"},
+    "F16": {"verdict": "verified", "kind": "absence-intentional", "evidence": "both topics summary ''; honest blank, not defect"},
     "F17": {"verdict": "verified", "evidence": "shorthand five-tool-exercise.md:134 'sustained full-buffer complete'; source AGENDA reports partial saves 652/1028 frames and lists sustained 300-350 FPS as future work; conservative blocker five-tool-exercise.md:140 stands"}
   },
   "counts": {"verified": 21, "refuted": 0, "unresolved": 0, "rows": 21},
+  "classification_note": "'verified' means the observation/absence/accepted-optional state is established; for optional/absent rows (F07b, F08, F15, F16) this is an honest blank or stated boundary, NOT a confirmed defect; a causal mechanism is confirmed only where source/contract supports it (F06, F13, F14b, F14c).",
   "cross_check_incorporated": {
     "source": ".hermes/scratch/wp1-contract-crosscheck.md (local, not committed)",
     "reverified_here": ["F06 fallback/label lines", "F09 source-docs-not-field", "F11 collector vs manual author path", "F13 authorship vs provenance", "F14b FK/write-order/rollback"],
@@ -80,6 +85,7 @@
     "reviewer-held images progress_axes.jpg/problems.jpg not inspected (not in repo)",
     "UI rows U01-U09 out of WP1 scope (deferred)",
     "viewer-refusal (<member) untested; member access used",
+    "served-asset measurement is a direct HTTP byte fetch, not a captured browser request; browser-route correspondence carried from prior WP0 attempt-4 page-load",
     "no fixture correction/link-delta/packet/repair performed"
   ],
   "boundaries": ["read-only; no WP2+ authorization; ledger preserved with appended WP1 dispositions"]
