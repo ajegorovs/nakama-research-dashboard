@@ -13,7 +13,10 @@
 - **Class** — the informational disposition of the missing/observed content:
   **required** (must be present and source-backed; absence is a defect), **optional** (may legitimately be
   absent; absence is honest, not a defect), or **unavailable** (the product model or toolset cannot
-  represent it; recorded as a stated limitation, never fabricated).
+  represent it; recorded as a stated limitation, never fabricated). These are the only three field
+  dispositions; **"supported" is not a fourth** — where a row names a *supported* capability (F14a) it
+  states the status of a **tool path**, reported alongside a required/optional/unavailable disposition,
+  never replacing it.
 - **Status** — what is actually established: *verified* (a measurement or retained record supports it),
   *reviewer hypothesis* (a reviewer causal claim, **not yet independently verified** — the fixture
   exercise itself did not confirm the mechanism), *intentional* (approved to stay as-is),
@@ -40,8 +43,10 @@
 | F11 | optional | PR evidence is attributed to the agent, possibly conflating recorder with upstream author | reviewer hypothesis | Misattribution misrepresents authorship | Do not manufacture an account mapping; report the attribution boundary instead |
 | F12 | required | Ordered plan steps carry null positions | verified | An authored order that is not encoded cannot be relied on | Encode explicit `position` values on seed; the ordering is then a stored claim, not a projection side-effect |
 | F13 | unavailable | Plan provenance is not a first-class visible field | reviewer hypothesis | A plan with no visible source is hard to audit | Confirm the exposed contract; if the model truly lacks the field, record it as a stated model gap (unavailable), not a fabrication |
-| F14 | unavailable | Problems have zero linked events though the source supports some | verified | A problem's evidence cannot be attached through the event tool | `reconcile_topic.activities[].problemId` supports an existing problem; no title-like reference targets a newly generated problem in that call. `record_activity` omits `problemId` entirely. Record the schema gap; never a workaround |
-| F15 | unavailable | A person's activity is empty without a mapped account | verified | Empty activity can read as idleness when it is unattributability | Report `attributable=false`, never "idle"; the account mapping is a stated manual-ingestion limitation the model cannot represent |
+| F14a | required | Problems have zero linked events though the source supports some (an existing problem) | verified | A problem's evidence cannot be attached through the event tool for an existing problem | **Supported capability.** `reconcile_topic.activities[].problemId` targets an **existing** problem; the field is **required** where the source backs such a link. Not a fourth disposition — the capability is *supported*, the field disposition is *required* |
+| F14b | unavailable | A newly generated problem cannot be targeted by title in the same call | verified | An initial topic cannot attach evidence to a problem it creates in one transaction | **Unavailable.** No title-like reference targets a newly generated problem in the same `reconcile_topic` call; record the limitation, never a workaround |
+| F14c | unavailable | `record_activity` cannot target any problem | verified | A subsequent event cannot be attached to a problem at all | **Schema defect.** `record_activity` omits `problemId` entirely, so it targets no problem; record the schema defect, never a workaround |
+| F15 | optional | A person's activity is empty without a mapped account | accepted limitation | Empty activity can read as idleness when it is unattributability | The account mapping is **representable** in the model but **missing fixture context**; an absent mapping is honest, not a defect. Report `attributable=false`, **never** "idle" |
 | F16 | optional | Human-approved topic summaries are absent | intentional | A topic summary is a human editorial claim, not harvested text | Preserve as blank unless a human authors it |
 | F17 | required | A shorthand overstated a sustained/full-buffer result | reviewer hypothesis | An overstated capability is a false claim | Verify against the source wording; preserve the conservative blocker until the source confirms more |
 
@@ -118,7 +123,7 @@ reviewer.
 - `progress_axes.jpg`
 - `problems.jpg`
 
-Their findings (`F04`/`F14`, `F05`/`F06`/`U02`, `U04`, `U08`) rest on the **reviewer's** inspection of
+Their findings (`F04`/`F14a`, `F05`/`F06`/`U02`, `U04`, `U08`) rest on the **reviewer's** inspection of
 those two files. This document does **not** substitute the available PNGs for them and does **not** claim
 to have inspected them; those findings remain **reviewer-attested**, with the agent's own inspection
 outstanding.

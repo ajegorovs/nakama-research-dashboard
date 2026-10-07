@@ -34,14 +34,22 @@ papered over with invention.**
 | **optional** | may legitimately be absent | honest, not a defect | leave blank; state that it is deliberately unset |
 | **unavailable** | the product model or toolset cannot represent it | a stated limitation | record the limitation; **never** fabricate a workaround |
 
+These are exactly **three field dispositions**. **"Supported" is not a fourth one** — it is a *capability
+status* reported about a **tool path**, alongside the field's disposition, never in place of it. The
+F14a case below is the worked example: its field disposition is **required** while its capability is
+**supported**.
+
 Worked examples from the retained fixture: repository factual descriptions are **required when the public
 source is available** (F07); topic descriptions and human-approved summaries are **optional** (F07b, F16 —
 blank by design); an axis's deliberately-absent `currentState` is **optional** (F08); a plan step's
 `position` is **required** (its absence is the F12 defect); a first-class visible plan-provenance field is
 **unavailable** if the exposed contract lacks it (F13); a repository **pin** field is **unavailable** if
-the repository model does not carry it (F09b); an unattributable person is **unavailable** (F15); and
-activities may target an **existing** problem via `reconcile_topic.activities[].problemId`, but cannot
-target a newly generated problem by title in the same call; `record_activity` omits `problemId` (F14).
+the repository model does not carry it (F09b); a person with no mapped account is an **optional**
+accepted limitation (F15 — the mapping is *representable*, the fixture context is *missing*; report
+`attributable=false`, never "idle"); and problem evidence splits three ways (F14): targeting an
+**existing** problem through `reconcile_topic.activities[].problemId` is a **required** field on a
+**supported** capability (F14a), targeting a **newly generated** problem by title in the same call is
+**unavailable** (F14b), and `record_activity` omitting `problemId` entirely is a **schema defect** (F14c).
 
 ## 3. Per-issue discipline — WHY and HOW
 
@@ -93,14 +101,13 @@ These are **two different mutation programs** and must not be conflated:
 A session must state which program it is running before its first write, and must not carry a baseline
 seed's empty-start assumptions into an amendment (or vice versa).
 
-## 6. Gates before any mutation
+## 6. Gates around a mutation
 
-No fixture write proceeds until **all** of these hold. A gate that cannot be met stops the session and is
-reported, not worked around.
+No fixture write proceeds until **all** of these pre-write gates hold. A gate that cannot be met stops
+the session and is reported, not worked around.
 
 1. **Explicit target chosen.** The organization/instance that will host the write is selected explicitly
-   and recorded; a helper that could bind a default target is not used. Both un-targeted stores are
-   confirmed unchanged after.
+   and recorded; a helper that could bind a default target is not used.
 2. **Served build established.** The serving build is verified by measurement (the served asset, by
    digest), not by a reinstall's own output.
 3. **Every proposed field classified.** Each field carries a required/optional/unavailable disposition
@@ -109,6 +116,15 @@ reported, not worked around.
 5. **Dedup pass done and versions captured** (§4.4).
 6. **Source refs and dates are immutable and public** (§4.3); nothing private is committed.
 7. **Public-record hygiene** applied to anything the run would publish — labels, never live endpoints.
+
+### Post-write readback (after the mutation, not a pre-write gate)
+
+Once the write has run, confirm the **un-targeted store(s) are unchanged** — and do it **by their own
+readback measurement**, not by DB file byte identity. A write to the target store can legitimately
+rewrite shared SQLite pages without altering any un-targeted content, so a byte-identity comparison
+would fire false alarms; evidence for this check is limited to measurements. This check is a **post-write
+readback**, deliberately not one of the pre-write gates above (the state it inspects exists only after
+the mutation).
 
 ## 7. Staged research work packages (ready to dispatch)
 
@@ -119,18 +135,22 @@ until **WP-G** (the mutation gate review) is accepted.
 
 | ID | Objective | Scope | Inputs | Output | Gate to pass before the next |
 |---|---|---|---|---|---|
-| **WP0** | Fresh zero-context methodology/skill validation (§9) | read-only | this doc; the authoring skill; a clone of the public sources and their pins | a validation report exercising representative read-only steps with no prior conversational/project memory, adequate checkout/docs, public GitHub and read-only dashboard access | guide gaps are corrected and the fresh validation passes before WP1 output is relied on |
+| **WP0** | Fresh zero-context methodology/skill validation (§9) | read-only | this doc; the authoring skill; a clone of the public sources and their pins | a validation report exercising representative read-only steps with no prior conversational/project memory, adequate checkout/docs, public GitHub and read-only dashboard access | guide gaps are corrected and the fresh validation passes before WP1 output is relied on — **and a passing report is not permission for WP1: explicit owner authorization is required after WP0** |
 | **WP1** | Verify each finding against exact sources | read-only | findings doc §A; the public source pins | per-finding verified / refuted / unresolved, with the exact source cited | every F-row is classified; unresolved rows are named, not guessed |
 | **WP2** | Reconcile retained-fixture links (F01, F02, F04) | read-only | WP1 output; current fixture readback | a link-delta proposal: what is missing, with sources | delta is source-backed and deduped |
 | **WP3** | Design the baseline-seed packet | design only | WP1–WP2; §2–§4 of this doc | a seed packet with every field classified and evidence sequenced atomically | packet passes the §6 gates on paper |
-| **WP4** | Design the retained-fixture amendment packet | design only | WP2; §5 | an approved, idempotent before/after amendment plan | amendment preserves historical evidence and explicitly approves fixture corrections |
+| **WP4** | Design the retained-fixture amendment packet covering **every verified correctable fixture finding** — evidence links, source dates, identity metadata, `currentState`, public URLs, plan `position`s and wording — not only relationships | design only | WP1, WP2, §5 | an approved, idempotent before/after amendment plan with a delta per correctable finding | amendment preserves historical evidence and explicitly approves each fixture correction |
 | **WP5** | Author reconciliation/verification checks | read-only | WP3–WP4 | executable checks for the seed/amendment invariants | a green run can go red (negative control present) |
 | **WP-G** | Mutation gate review | review | WP0–WP5 | an accept/reject of any write authorization | **owner authorization required before any write** |
 
-F14 is deliberately **not** in WP2: `reconcile_topic.activities[].problemId` can target an existing
-problem, but there is no title-like reference for newly generated problems in that call.
-`record_activity` omits `problemId` entirely. Verify these boundaries in WP1 and retain the product
-finding rather than implying relationship enrichment repairs the contract.
+F14 is deliberately **not** in WP2's link-delta: it splits three ways. **F14a** —
+`reconcile_topic.activities[].problemId` **can** target an **existing** problem: a *supported* capability
+whose field disposition is **required** where the source backs the link. **F14b** — there is **no**
+title-like reference for a **newly generated** problem in the same call (**unavailable**). **F14c** —
+`record_activity` omits `problemId` entirely, a **schema defect** that leaves that event tool unable to
+target **any** problem. Verify all three boundaries in WP1 and retain the product finding rather than
+implying relationship enrichment repairs the contract. "Supported" here is a capability status, not a
+fourth field disposition.
 
 UI work is **not** in this package set (see §8).
 
@@ -155,16 +175,21 @@ and must pass before WP1 output is relied on:
 1. An agent with **zero prior context** is given the authoring skill, this document, and **adequate
    access** to checkout/docs, public GitHub sources/pins and read-only dashboard state. No prior
    conversational/project memory is supplied; necessary source access is not withheld.
-2. It attempts representative WP1 read-only steps as preflight validation (not the authoritative WP1 run) and reports where the guide
-   was ambiguous, wrong or missing a step.
+2. It attempts representative WP1 read-only steps as preflight validation (not the authoritative WP1
+   run) and reports where the guide was ambiguous, wrong or missing a step.
 3. The guide is corrected from that report; the validation is re-run on the corrected guide.
 4. The validation report is retained as evidence, including the failures.
+5. **A passing WP0 is not authorization for WP1.** A green WP0 report says only that the guide is
+   runnable; it is **not** automatic permission to run the authoritative WP1 research. The owner must
+   explicitly authorize WP1 *after* WP0 passes. Neither WP0 nor WP1 is executed by this plan.
 
 The authoring skill is marked **initial / unvalidated** until this pass has been run and recorded.
 
 ## 10. Boundaries
 
 - This is a plan; it performs no write and makes no acceptance claim.
+- It executes **neither WP0 nor WP1**: a passing WP0 report is not permission for the authoritative WP1
+  run, which needs explicit owner authorization.
 - It does not reopen or amend any earlier acceptance record.
 - Where a capability is unavailable, the methodology records the limitation rather than inventing a
   path around it.

@@ -49,6 +49,11 @@ Assign each proposed field exactly one disposition:
 - **optional** — may legitimately be absent; leave blank and say so.
 - **unavailable** — the model/toolset cannot represent it; record the limitation, never fabricate.
 
+There are exactly **three** field dispositions. **"Supported" is not a fourth one** — it is a
+*capability status* reported about a **tool path**, alongside the field's disposition, never in place of
+it. A field can be **required** in disposition while riding a **supported** capability: F14a is the
+worked case (an existing problem's evidence link is required, and `problemId` supports attaching it).
+
 For each required field, name the **source**. For each unavailable one, name the boundary.
 
 ## Evidence rules
@@ -78,21 +83,24 @@ For each required field, name the **source**. For each unavailable one, name the
    - `record_activity` per *subsequent* event;
    - clean up on any `truncated` read by paging, not by assuming empty.
 4. **Read back and reconcile.** Re-read topic-wide and axis-scoped; check counts programmatically (never
-   from memory); confirm no un-targeted store changed.
+   from memory). **After** the write, confirm the un-targeted store(s) are unchanged by their **own
+   readback measurement** — not by DB file byte identity: a write to the target store can rewrite shared
+   SQLite pages without changing any un-targeted content, so byte identity would fire false alarms. This
+   check is **post-write**, not a pre-write gate.
 5. **Label the run** — baseline seed or amendment — and stage it for the mutation-gate review. A fixture
    write needs **owner authorization**; a green local run is not that authorization.
 
 ## Validation (WP0, before WP1)
 
-WP0 is a fresh zero-context validation before authoritative WP1 research, not merely an access check.
-Provide checkout/docs, public GitHub and read-only dashboard capabilities without prior conversational
-or project memory. Exercise representative read-only steps, repair guide gaps and rerun before reliance.
-
-## Validation (required before trusting this skill)
-
-A fresh, **zero-context** session is given this skill and the plan and nothing else, attempts one work
-package, and reports ambiguity/gaps. Fix the skill from that report and re-run. Until then this skill is
-*initial*, and any output claiming to follow it must carry that caveat.
+WP0 is a fresh zero-context validation before authoritative WP1 research, not merely an access check. The
+session is given this skill, the plan, and **no prior conversational or project memory**, but with the
+**capabilities the work needs**: an adequate checkout/docs copy, public GitHub access and read-only
+dashboard access. It exercises **representative WP1 read-only steps**, reports where the guide was
+ambiguous, wrong or missing a step, the guide is corrected from that **report**, and the validation is
+re-run on the corrected guide before any reliance. Until this pass is run and recorded, this skill is
+*initial / unvalidated*, and any output claiming to follow it must carry that caveat. A passing WP0
+report is **not** authorization for the authoritative WP1 run — the owner must authorize WP1 explicitly
+after WP0 passes. Neither WP0 nor WP1 is executed by this skill.
 
 ## Pitfalls
 
@@ -104,9 +112,17 @@ package, and reports ambiguity/gaps. Fix the skill from that report and re-run. 
    precision; never invent a time-of-day.
 3. **Null positions.** Relying on the read projection to convey "authored order" is not an ordering
    contract. Encode explicit `position` values.
-4. **Problem evidence.** `reconcile_topic.activities[].problemId` can target an existing problem. There
-   is no title-like target for a newly generated problem in the same call. `record_activity` omits
-   `problemId` entirely; Record the limitation; do not improvise a workaround.
-5. **Attribution.** A person with no mapped account is `attributable=false`, **not** "idle".
+4. **Problem evidence (F14).** Three distinct cases, not one:
+   - **F14a — supported capability.** `reconcile_topic.activities[].problemId` **can** target an
+     **existing** problem. The capability is *supported*; the field disposition is **required** where the
+     source backs such a link. "Supported" is the capability status, not a fourth disposition.
+   - **F14b — unavailable.** There is **no** title-like reference that targets a **newly generated**
+     problem in the same `reconcile_topic` call. Record the limitation; do not improvise a workaround.
+   - **F14c — schema defect.** `record_activity` omits `problemId` entirely, so that event tool cannot
+     target **any** problem. Record the schema defect; do not improvise a workaround.
+5. **Attribution (F15), optional accepted limitation.** A person with an empty activity feed and no
+   mapped account is reported `attributable=false`, **never** "idle". The account mapping is
+   *representable* in the model but is **missing fixture context**, so the disposition is **optional**
+   (honest, not a defect) and accepted as a limitation — not fabricated and not read as inactivity.
 6. **Designing around a suspect fixture.** Never fold UI design into a fixture whose data linking is under
    review; settle the data first (UI is a separate, deferred track).
