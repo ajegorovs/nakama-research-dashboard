@@ -114,13 +114,20 @@ and store code (`src/actions.ts`, `src/store.ts`).
 | `get_overview` counts | `counts.{topics,axes,repositories,people}`, `counts.topicsByStatus` | nested records: `topics[].topic`, `people[].person`, `repositories[].repository` — not flat |
 | `get_overview` per topic | `topics[].{topic,axes,people,repositories,axisCounts,activityCount,lastActivityAt}` | pages the whole front page in one call |
 | `get_topic` topic-wide | `topic`, `axes[]`, `axisCounts`, `activity`, `notes`, `counts` | per axis: `plan`, `problems[]`, `evidence[]`, `history[]`, `notes[]`, `repositories[]` |
-| `get_topic` scoped (`axisId`) | the same axis object under `axes[0]`, plus `coverage` | one workstream; `activityLimit`/`activitySinceDays` are ignored under `axisId` |
-| **plan** (both `get_topic` forms) | `axes[].plan` = `{ plan: {…, summary}, steps: [{position, state, title, …}] }` or `null` | so the summary is `axes[].plan.plan.summary` and the order is `axes[].plan.steps[].position`; `position: null` means unordered (F12) |
+| `get_topic` scoped (`axisId`) | `{ ok, axis, axisId, coverage, generatedAt, topic }` — the axis object under **`axis` (singular)**; there is **no `axes` array** | one workstream; `activityLimit`/`activitySinceDays` are ignored under `axisId` |
+| **plan**, topic-wide | `axes[].plan` = `{ plan: {…, summary}, steps: [{position, state, title, …}] }` or `null` | summary `axes[].plan.plan.summary`; order `axes[].plan.steps[].position`; `position: null` means unordered (F12) |
+| **plan**, scoped (`axisId`) | `axis.plan` = the same shape | summary `axis.plan.plan.summary`; order `axis.plan.steps[].position` |
 | `search_dashboard` | `{ok, query, axes[], topics[], activities[], annotations[], truncated, limit}` | a match-field list per hit |
 
 **Distinguish the page-only projection.** The Progress view reads `get_progress`, whose axis rows
 carry a **flattened** plan — `axes.axes[].plan` = `{id, summary, steps, stepsDone}`. That is the
 page's own projection, **not** the `get_topic` readback shape; a verifier reads `get_topic`.
+
+**Tool schemas are not on the live surface.** `GET /v1/tools` lists the plugin's tools by *name* but
+carries **no `inputSchema`**, so it cannot settle any declared-input question (e.g. the F14
+`problemId` cases). Read the declaration at its source instead — the manifest `nakama.plugin.json`
+and the action definitions in `src/actions.ts` — and do **not** treat `/v1/tools` as the schema
+source.
 
 ## Served-build identity — exact org, by the actual asset
 
@@ -130,16 +137,20 @@ the browser actually received. Two cautions:
 - It is **not org-aware**: it navigates to `<dashboard>/plugins/research-dashboard` and takes the
   first `/v1/plugins/ui/` resource the **active** org loads. It never asserts the asset's `orgId`
   equals the target org, so **its default cannot be trusted** for an exact-org identity.
-- The served asset route is `GET /v1/plugins/ui/<orgId>/research-dashboard/app.js` — the plugin UI
-  **root** (the path is `<orgId>/<plugin>/<asset>`, **not** `…/ui/app.js`, which 404s). The route
-  requires the path `orgId` to equal the session's active org, and member role or above.
+- The route is `GET /v1/plugins/ui/<orgId>/research-dashboard/<asset>`. The page actually fetches the
+  plugin **root** asset — `…/research-dashboard/?import&revision=<n>&version=<v>` — and the root, the
+  bare `…/research-dashboard/`, and `…/research-dashboard/app.js` all serve **byte-identical**
+  content (a legacy `…/ui/app.js` suffix 404s). The route requires the path `orgId` to equal the
+  session's active org, and member role or above.
 - Preconditions: `NAKAMA_DASHBOARD` set to the **dashboard origin** (not the API port), credentials,
   and a cached Chromium.
 
 **Exact-org recipe.** Log in, select the target org, load the plugin page, take the actual
 `/v1/plugins/ui/<targetOrgId>/…` asset URL the browser fetched (page context carries the real URL),
-read it with credentials, hash it, and **assert the URL's `orgId` is the target**. Quote that
-sha256 as the served identity.
+read it with credentials, hash it, and **assert the URL's `orgId` is the target**. Do **not**
+substitute a literal guessed `app.js` path — the browser's actual fetch is the plugin **root**, and
+the **sha256 is the authoritative identity**; the `app.js` path only happens to resolve to the same
+bytes. Quote that sha256 as the served identity.
 
 ## Operational capability handoff (contract)
 
@@ -172,8 +183,11 @@ report is **not** authorization for the authoritative WP1 run — the owner must
 after WP0 passes. Neither WP0 nor WP1 is executed by this skill. The initial run is retained as
 `docs/reviews/wp0-research-fixture-validation-initial.md`; it was **not a gate pass**, the guide was
 corrected from it (see *Read-only access*, *Readback shapes*, *Served-build identity* and
-*Operational capability handoff* above), and the run must be repeated on the corrected guide — with
-the local handoff — before any output is relied on.
+*Operational capability handoff* above). The re-run on that corrected guide is retained as
+`docs/reviews/wp0-research-fixture-validation-rerun.md`; it is **also INCOMPLETE — not a gate pass**:
+it exposed one **material** readback defect (the scoped `get_topic` axis is under `axis` singular, not
+`axes[0]`) that this skill and the plan are now corrected for, so the run must be **repeated once
+more on the corrected guide** — with the local handoff — before any output is relied on.
 
 ## Pitfalls
 

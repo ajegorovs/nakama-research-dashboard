@@ -185,9 +185,14 @@ and must pass before WP1 output is relied on:
 
 The initial WP0 run is retained as [`docs/reviews/wp0-research-fixture-validation-initial.md`](../reviews/wp0-research-fixture-validation-initial.md).
 It is **not a gate pass**: representative read-only probes succeeded, but the guide was not runnable
-from the supplied docs alone, so the guide was corrected (§11) and the run must be **repeated** on
-the corrected guide before WP1 output is relied on. The authoring skill stays **initial / unvalidated**
-until that corrected re-run is recorded.
+from the supplied docs alone, so the guide was corrected (§11) and the run repeated. The re-run on
+that corrected guide is retained as
+[`docs/reviews/wp0-research-fixture-validation-rerun.md`](../reviews/wp0-research-fixture-validation-rerun.md);
+it is **also INCOMPLETE — not a gate pass**: it exposed one **material** readback defect (the scoped
+`get_topic` axis is under `axis` singular, not `axes[0]`) that §11 and the authoring skill are now
+corrected for, so the run must be **repeated once more on the corrected guide** before WP1 output is
+relied on. The authoring skill stays **initial / unvalidated** until a clean corrected re-run is
+recorded.
 
 ## 10. Boundaries
 
@@ -229,12 +234,23 @@ tools are reachable by direct HTTP as documented in [`docs/PLATFORM-CONTEXT.md`]
 
 **Served-build identity — exact org, by the actual asset.** `harness/served-build-guard.mjs` is
 browser-driven and **not org-aware** (it hashes whatever the active org served), so it cannot be
-trusted as the default for a specific org. The served asset route is
-`GET /v1/plugins/ui/<orgId>/research-dashboard/app.js` (the UI **root**; `…/ui/app.js` 404s), and the
-path `orgId` must equal the session's active org. The exact-org recipe: log in, select the target
-org, load the plugin page, take the actual `/v1/plugins/ui/<targetOrgId>/…` asset URL the browser
-fetched, read it with credentials, hash it, and assert the URL's `orgId` is the target.
+trusted as the default for a specific org. The route is
+`GET /v1/plugins/ui/<orgId>/research-dashboard/<asset>`; the page actually fetches the plugin **root**
+asset (`…/research-dashboard/?import&revision=…&version=…`), and the root, the bare
+`…/research-dashboard/` and `…/research-dashboard/app.js` serve **byte-identical** content (a legacy
+`…/ui/app.js` suffix 404s). The path `orgId` must equal the session's active org. The exact-org
+recipe: log in, select the target org, load the plugin page, take the actual
+`/v1/plugins/ui/<targetOrgId>/…` asset URL the browser fetched — the **sha256 digest is the
+authoritative identity**, not a literal guessed `app.js` path — read it with credentials, hash it,
+and assert the URL's `orgId` is the target.
 
-The readback field paths (`get_overview` nested records; `get_topic` `axes[].plan.plan.summary` /
-`axes[].plan.steps[].position`; the `get_progress` page-only projection) are tabulated in the
-authoring skill's **Readback shapes** section.
+**Tool input schemas are not read from the live surface.** `GET /v1/tools` lists the plugin tools by
+name but carries **no `inputSchema`**; declared inputs (the F14 `problemId` question in particular)
+are settled from the manifest `nakama.plugin.json` and the action definitions in `src/actions.ts`,
+never inferred from a tool-discovery listing.
+
+The readback field paths (`get_overview` nested records; topic-wide `get_topic`
+`axes[].plan.plan.summary` / `axes[].plan.steps[].position`; scoped `get_topic` the axis under
+**`axis` (singular)** with `axis.plan.plan.summary` / `axis.plan.steps[].position`; the
+`get_progress` page-only projection) are tabulated in the authoring skill's **Readback shapes**
+section.
