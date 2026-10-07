@@ -75,7 +75,10 @@ cause of "the fix is in the code but not on the page":
 1. `bun run check` — build and tests together; the gates are not optional.
 2. `./vendor/vendor-into-nakama.sh <nakama checkout>` — places the built output into the checkout the instances
    install from.
-3. `bun harness/reinstall-plugin.mjs --env-file <instance env file>` — mints the release and rebinds the org.
+3. `bun harness/reinstall-plugin.mjs --env-file <instance env file> --org-id <org id>` — mints the release and
+   rebinds the named org. **Name the organization explicitly** (`--org-id` / `--org-name`, or `NAKAMA_ORG_ID` /
+   `NAKAMA_ORG_NAME`): on a multi-org account the helper refuses rather than rebinding `orgs[0]`, which is how a
+   fixture reinstall once rebound the wrong organization. A single-org account still falls back to its only org.
 4. **Verify with the guard**, not with the reinstall's own output:
    `bun harness/served-build-guard.mjs` (it fetches the asset the browser actually fetches). If it still reports
    the previous release, restart that instance's web and API units and re-check — do not conclude the change

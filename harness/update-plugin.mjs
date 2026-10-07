@@ -15,6 +15,7 @@
  * Idempotent in the useful sense: with no pending migration it reports that and changes nothing.
  */
 import { loadEnvFileArg } from "./env-file.mjs";
+import { parseOrgSelector, selectOrgId } from "./org-selection.mjs";
 import { readFileSync } from "node:fs";
 import { Database } from "bun:sqlite";
 import { dirname, join } from "node:path";
@@ -94,11 +95,19 @@ if (login.status !== 200) {
 }
 const csrf = jar.get("nakama_csrf");
 const orgs = await call("/v1/auth/orgs");
-const orgId = orgs.body?.orgs?.[0]?.id;
-if (!csrf || !orgId) {
-  console.error("update-plugin: missing csrf cookie or organization");
+// Resolve the target organization explicitly; a multi-org account without a selector is refused before the
+// reinstall request (the historical `orgs[0]` default bound the wrong organization).
+const selection = selectOrgId(orgs.body?.orgs, parseOrgSelector());
+if (!csrf || !selection.ok) {
+  console.error(`update-plugin: ${csrf ? selection.message : "missing csrf cookie"}`);
   process.exit(2);
 }
+const orgId = selection.id;
+console.log(
+  `update-plugin: target organization ${orgId}` +
+    (selection.name ? ` (${selection.name})` : "") +
+    `, matched by ${selection.matchedBy}`
+);
 const headers = { "x-csrf-token": csrf, "x-org-id": orgId };
 
 const before = (await call(`/v1/plugins/${PLUGIN_ID}`, undefined, headers)).body ?? {};

@@ -270,12 +270,15 @@ consecutive runs per dataset produce identical transcripts apart from the `# gen
 `bun run build` and `vendor/vendor-into-nakama.sh`, mint a release from the vendored checkout with:
 
 ```bash
-bun run harness:reinstall -- --env-file /tmp/nakama-review.env
+bun run harness:reinstall -- --env-file /tmp/nakama-review.env --org-id org_…
 ```
 
 It reads the installed revision, reinstalls with it as the guard, and prints the version change — or says so
 plainly when the vendored bytes are identical to the release already installed, which is the case where a pass
-would otherwise silently measure the previous build.
+would otherwise silently measure the previous build. **Name the target organization** (`--org-id` / `--org-name`,
+or `NAKAMA_ORG_ID` / `NAKAMA_ORG_NAME`): on a multi-org account the helper refuses rather than rebinding
+`orgs[0]` — which is how a fixture reinstall once rebound the wrong organization. A single-org account still
+falls back to its only organization. The same selector applies to `install-plugin.mjs` and `update-plugin.mjs`.
 
 **Corpus** (the real, public dataset) — seeded by replaying the committed transcript, which is the
 corpus's own record:
@@ -441,7 +444,8 @@ bun harness/update-plugin.mjs --env-file /tmp/review.env --data-root /path/to/na
 `update-plugin.mjs` drives `POST /v1/plugins/official/<id>/reinstall` ("reload a bundled official plugin
 while preserving organization data"), waits for the install to settle, and — with `--data-root` — prints the
 old and new generation with their row counts, so "did my data survive" is answered by the run rather than
-by hope.
+by hope. It takes the same explicit organization selector as `reinstall-plugin.mjs` (`--org-id` / `--org-name`,
+or `NAKAMA_ORG_ID` / `NAKAMA_ORG_NAME`), and refuses a multi-org account with no selector.
 
 **Vendor first, or you will ship the previous build.** The reinstall installs from the checkout's vendored
 copy, so running `update-plugin.mjs` on its own after a `src/` change mints a new release, bumps the revision

@@ -85,7 +85,7 @@ anything; if the estate is genuinely absent here, reconstructing a fresh instanc
    ```bash
    env NAKAMA_URL=http://127.0.0.1:4399 \
        NAKAMA_EMAIL="$NAKAMA_SEED_ADMIN_EMAIL" NAKAMA_PASSWORD="$NAKAMA_SEED_ADMIN_PASSWORD" \
-       bun harness/reinstall-plugin.mjs --env-file <instance env file>
+       bun harness/reinstall-plugin.mjs --env-file <instance env file> --org-id <org id>
    ```
 
    Completion: it prints an old → new `0.2.0+dev.<digest>` and a revision. **That print is not evidence** — it

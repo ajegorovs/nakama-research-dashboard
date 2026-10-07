@@ -21,6 +21,7 @@
  * the instance's config dir; restarting the server reloads that copy, not the checkout).
  */
 import { loadEnvFileArg } from "./env-file.mjs";
+import { parseOrgSelector, selectOrgId } from "./org-selection.mjs";
 
 loadEnvFileArg();
 
@@ -86,11 +87,19 @@ if (!csrf) {
 }
 // /v1/auth/orgs must be called without x-org-id; everything else needs it.
 const orgs = await call("/v1/auth/orgs");
-const orgId = orgs.body?.orgs?.[0]?.id;
-if (!orgId) {
-  console.error("install-plugin: no organization on this account");
+// Resolve the target organization explicitly; a multi-org account without a selector is refused before any
+// install/enable request (the historical `orgs[0]` default bound the wrong organization).
+const selection = selectOrgId(orgs.body?.orgs, parseOrgSelector());
+if (!selection.ok) {
+  console.error(`install-plugin: ${selection.message}`);
   process.exit(2);
 }
+const orgId = selection.id;
+console.log(
+  `install-plugin: target organization ${orgId}` +
+    (selection.name ? ` (${selection.name})` : "") +
+    `, matched by ${selection.matchedBy}`
+);
 const headers = { "x-csrf-token": csrf, "x-org-id": orgId };
 
 const catalog = await call("/v1/plugins/official", undefined, headers);

@@ -1,7 +1,12 @@
 /**
  * Mint a fresh `+dev.<digest>` release from the vendored checkout and serve it on a running instance.
  *
- *   bun harness/reinstall-plugin.mjs --env-file /tmp/nakama-review.env
+ *   bun harness/reinstall-plugin.mjs --env-file /tmp/nakama-review.env --org-id org_...
+ *
+ * The target organization is named explicitly (`--org-id` / `--org-name`, or `NAKAMA_ORG_ID` /
+ * `NAKAMA_ORG_NAME`): the historical `orgs[0]` default silently rebound the wrong organization on a
+ * multi-org account. A single-org account still falls back to its only organization; a multi-org account
+ * without an explicit selector is refused **before** any reinstall is sent (see `org-selection.mjs`).
  *
  * The loop after a plugin source change is **rebuild → vendor → reinstall**, and only the last step makes the
  * instance serve the new bytes: the server reads the plugin from `<checkout>/packages/plugins/<id>`, and a
@@ -14,6 +19,7 @@
  * Prints the resulting version/revision so a transcript can quote the release the checks ran against.
  */
 import { loadEnvFileArg } from "./env-file.mjs";
+import { parseOrgSelector, selectOrgId } from "./org-selection.mjs";
 
 loadEnvFileArg();
 
@@ -77,11 +83,19 @@ if (!csrf) {
 }
 // /v1/auth/orgs must be called without x-org-id; everything else needs it.
 const orgs = await call("/v1/auth/orgs");
-const orgId = orgs.body?.orgs?.[0]?.id;
-if (!orgId) {
-  console.error("reinstall-plugin: no organization on this account");
+// Resolve the target organization explicitly, and refuse before any mutating request: the historical
+// `orgs[0]` default rebound the wrong organization on a multi-org account.
+const selection = selectOrgId(orgs.body?.orgs, parseOrgSelector());
+if (!selection.ok) {
+  console.error(`reinstall-plugin: ${selection.message}`);
   process.exit(2);
 }
+const orgId = selection.id;
+console.log(
+  `reinstall-plugin: target organization ${orgId}` +
+    (selection.name ? ` (${selection.name})` : "") +
+    `, matched by ${selection.matchedBy}`
+);
 const headers = { "x-csrf-token": csrf, "x-org-id": orgId };
 
 const before = (await call(`/v1/plugins/${PLUGIN_ID}`, undefined, headers)).body ?? {};
