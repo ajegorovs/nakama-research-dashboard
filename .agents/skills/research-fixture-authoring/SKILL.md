@@ -14,10 +14,11 @@ metadata:
 
 # Research-fixture authoring
 
-> **Status: initial, unvalidated procedure (v0.1.0).** Written from the post-mortem of a first fixture
-> exercise, but **not yet run end-to-end by a zero-context session**. Treat it as a proposal to be
-> validated (see *Validation*) before its output is relied on. The governing plan is
-> [`docs/plans/research-fixture-methodology.md`](../../../docs/plans/research-fixture-methodology.md).
+> **Status: read-only preflight validated, authoring not yet execution-validated (v0.1.0).** The
+> read-only WP0 preflight passed at commit `a2e4931` (see *Validation*); the **baseline seed/amendment
+> authoring path is not yet execution-validated** — no write has been exercised, so the procedure is
+> **not validated end-to-end**. Treat any authoring output as a proposal to be validated. The governing
+> plan is [`docs/plans/research-fixture-methodology.md`](../../../docs/plans/research-fixture-methodology.md).
 
 ## When to Use
 
@@ -146,14 +147,16 @@ the browser actually received. Two cautions:
 - The route is `GET /v1/plugins/ui/<orgId>/research-dashboard/<asset>`. The page actually fetches the
   plugin **root** asset — `…/research-dashboard/?import&revision=<n>&version=<v>` — and the root, the
   bare `…/research-dashboard/`, and `…/research-dashboard/app.js` all serve **byte-identical**
-  content (a legacy `…/ui/app.js` suffix 404s). The route requires the path `orgId` to equal the
-  session's active org, and member role or above.
+  content (a legacy `…/ui/app.js` suffix 404s). The route requires member role or above and a
+  **valid** path `orgId` (a bogus path org 404s), but a **direct GET does not enforce** that the path
+  `orgId` equals the session's active org — the **page** requests the **active org's** asset.
 - Preconditions: `NAKAMA_DASHBOARD` set to the **dashboard origin** (not the API port), credentials,
   and a cached Chromium.
 
 **Exact-org recipe — including the active-org selection the earlier wording omitted.** The login
-default active org is **not necessarily** the target, so the route's path `orgId` must be made to
-match it. Select the target explicitly with `POST /v1/auth/active-org`, body
+default active org is **not necessarily** the target, so the browser's asset request must be steered
+to the target by selecting it as the session's active org. Select the target explicitly with
+`POST /v1/auth/active-org`, body
 `{"orgId": "<target org id>"}`, CSRF-protected (`x-csrf-token` = the `nakama_csrf` cookie); the
 response echoes the new active org (`activeOrgId`). **Assert HTTP 200 and that the returned id is
 exactly the target**, and **never** select `orgs[0]`. This changes **session-selection state only**
@@ -208,10 +211,20 @@ it exposed one **material** readback defect (the scoped `get_topic` axis is unde
 retained as `docs/reviews/wp0-research-fixture-validation-attempt-3.md`; it is **also INCOMPLETE — not a
 gate pass**: every representative step succeeded, but two **required-route** transport gaps remained —
 the action response is wrapped as `{ invocationId, result }` (readback paths must be rooted at
-`result`), and the exact-org recipe did not name the `POST /v1/auth/active-org` selection step. Both are
-now corrected here, so the run must be **repeated once more on the corrected guide** — with the local
-handoff — before any output is relied on. Only a gap on a **required** route blocks; an optional
-refinement does not.
+`result`), and the exact-org recipe did not name the `POST /v1/auth/active-org` selection step. Both
+were corrected here and in the plan, and the run repeated. The re-run on that twice-corrected guide is
+retained as `docs/reviews/wp0-research-fixture-validation-attempt-4.md`; it is the **latest and
+passing** WP0 report — every required read-only path measured clean, the served-asset identity
+established by digest at the exact org, and **no material required-route defect**. Its one residual
+finding is a **non-blocking rationale wording** correction (a direct GET does not enforce path-org ==
+session active org; the page fetches the active org's asset), fixed above with **no recipe change**.
+Only a gap on a **required** route blocks; an optional refinement does not.
+
+**This skill's status: the read-only preflight is validated at `a2e4931`; the baseline seed/amendment
+authoring path is not yet execution-validated** — no write has been exercised, so the procedure is not
+validated end-to-end. A passing WP0 report is **not** authorization for the authoritative WP1 run —
+the owner must authorize WP1 explicitly after WP0 passes. Neither WP0 nor WP1 is executed by this
+skill.
 
 ## Pitfalls
 
