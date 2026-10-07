@@ -109,6 +109,12 @@ HTTP read — documented in [`docs/PLATFORM-CONTEXT.md`](../../../docs/PLATFORM-
 The response shapes are not obvious; the readback below is the contract, verified from the action
 and store code (`src/actions.ts`, `src/store.ts`).
 
+**Unwrap the action envelope first.** The direct-HTTP action route returns
+`{ invocationId, result }` (the host's `InvokePluginActionResponse`); the domain payload
+(`{ok, counts, axes, …}`) is under **`result`**. Read every field path below from `result` (e.g.
+`result.counts.topics`, `result.axis`), **check the HTTP status and `result.ok`**, and surface a
+failure — **never** fall back silently to an empty read when the shape is unexpected or `ok` is false.
+
 | Read | Field paths | Notes |
 |---|---|---|
 | `get_overview` counts | `counts.{topics,axes,repositories,people}`, `counts.topicsByStatus` | nested records: `topics[].topic`, `people[].person`, `repositories[].repository` — not flat |
@@ -145,12 +151,21 @@ the browser actually received. Two cautions:
 - Preconditions: `NAKAMA_DASHBOARD` set to the **dashboard origin** (not the API port), credentials,
   and a cached Chromium.
 
-**Exact-org recipe.** Log in, select the target org, load the plugin page, take the actual
-`/v1/plugins/ui/<targetOrgId>/…` asset URL the browser fetched (page context carries the real URL),
-read it with credentials, hash it, and **assert the URL's `orgId` is the target**. Do **not**
-substitute a literal guessed `app.js` path — the browser's actual fetch is the plugin **root**, and
-the **sha256 is the authoritative identity**; the `app.js` path only happens to resolve to the same
-bytes. Quote that sha256 as the served identity.
+**Exact-org recipe — including the active-org selection the earlier wording omitted.** The login
+default active org is **not necessarily** the target, so the route's path `orgId` must be made to
+match it. Select the target explicitly with `POST /v1/auth/active-org`, body
+`{"orgId": "<target org id>"}`, CSRF-protected (`x-csrf-token` = the `nakama_csrf` cookie); the
+response echoes the new active org (`activeOrgId`). **Assert HTTP 200 and that the returned id is
+exactly the target**, and **never** select `orgs[0]`. This changes **session-selection state only**
+(read-only against the fixture), **not** a domain mutation; restore the previous selection afterward
+if the handoff contract requires it. For pure `x-org-id` read calls (the three read actions) **no
+active-org switch is needed** — the header selects the org per request.
+
+Then log in, load the plugin page, take the actual `/v1/plugins/ui/<targetOrgId>/…` asset URL the
+browser fetched (page context carries the real URL), read it with credentials, hash it, and **assert
+the URL's `orgId` is the target**. Do **not** substitute a literal guessed `app.js` path — the
+browser's actual fetch is the plugin **root**, and the **sha256 is the authoritative identity**; the
+`app.js` path only happens to resolve to the same bytes. Quote that sha256 as the served identity.
 
 ## Operational capability handoff (contract)
 
@@ -164,7 +179,10 @@ must state:
    (`NAKAMA_EMAIL` / `NAKAMA_PASSWORD`, the CSRF cookie name); values by reference only.
 4. **Fixture mode** — whether the target is empty (baseline seed) or **already seeded** to the
    expected shape.
-5. **Exact scoped read transport** — the direct-HTTP route above, with explicit org + CSRF.
+5. **Exact scoped read transport** — the direct-HTTP route above, with explicit org + CSRF, **the
+   `{ invocationId, result }` envelope it returns** (unwrapped before field paths), and the
+   `POST /v1/auth/active-org` step for the browser exact-org recipe (session selection only, never
+   `orgs[0]`).
 6. **Source pins** — the frozen public commit pins.
 7. **Browser support** — a cached Chromium for the served-build guard; no restarts.
 
@@ -186,8 +204,14 @@ corrected from it (see *Read-only access*, *Readback shapes*, *Served-build iden
 *Operational capability handoff* above). The re-run on that corrected guide is retained as
 `docs/reviews/wp0-research-fixture-validation-rerun.md`; it is **also INCOMPLETE — not a gate pass**:
 it exposed one **material** readback defect (the scoped `get_topic` axis is under `axis` singular, not
-`axes[0]`) that this skill and the plan are now corrected for, so the run must be **repeated once
-more on the corrected guide** — with the local handoff — before any output is relied on.
+`axes[0]`) that this skill and the plan are now corrected for. The re-run on that corrected guide is
+retained as `docs/reviews/wp0-research-fixture-validation-attempt-3.md`; it is **also INCOMPLETE — not a
+gate pass**: every representative step succeeded, but two **required-route** transport gaps remained —
+the action response is wrapped as `{ invocationId, result }` (readback paths must be rooted at
+`result`), and the exact-org recipe did not name the `POST /v1/auth/active-org` selection step. Both are
+now corrected here, so the run must be **repeated once more on the corrected guide** — with the local
+handoff — before any output is relied on. Only a gap on a **required** route blocks; an optional
+refinement does not.
 
 ## Pitfalls
 

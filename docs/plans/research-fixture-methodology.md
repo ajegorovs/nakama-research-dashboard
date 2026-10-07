@@ -190,9 +190,23 @@ that corrected guide is retained as
 [`docs/reviews/wp0-research-fixture-validation-rerun.md`](../reviews/wp0-research-fixture-validation-rerun.md);
 it is **also INCOMPLETE — not a gate pass**: it exposed one **material** readback defect (the scoped
 `get_topic` axis is under `axis` singular, not `axes[0]`) that §11 and the authoring skill are now
-corrected for, so the run must be **repeated once more on the corrected guide** before WP1 output is
-relied on. The authoring skill stays **initial / unvalidated** until a clean corrected re-run is
-recorded.
+corrected for. The re-run on that corrected guide is retained as
+[`docs/reviews/wp0-research-fixture-validation-attempt-3.md`](../reviews/wp0-research-fixture-validation-attempt-3.md);
+it is **also INCOMPLETE — not a gate pass**: every representative step succeeded and the served
+identity was established by measurement, but two **required-route** transport gaps remained — the
+direct-HTTP action response is wrapped as `{ invocationId, result }` (the readback tables gave the
+field paths at the top level), and the browser exact-org recipe did not name how to set the session's
+active org. Both are now corrected in §11 and the authoring skill, so the run must be **repeated once
+more on the corrected guide** before WP1 output is relied on. The authoring skill stays **initial /
+unvalidated** until a clean corrected re-run is recorded.
+
+Only a gap on a **required** route blocks the gate. A missing or wrong step that a zero-context
+session needs to complete a required transport — the action-response envelope, the explicit
+active-org selection, and the actual served-asset check — is **material** and keeps WP0 INCOMPLETE;
+an **optional** refinement (clearer wording, a convenience that does not change a required read)
+does not. The final re-run is scoped to exactly those required checks: the read transport and its
+`{ invocationId, result }` unwrap, the explicit active-org selection (no `orgs[0]`), and the actual
+served-asset path/digest assertion.
 
 ## 10. Boundaries
 
@@ -232,14 +246,34 @@ tools are reachable by direct HTTP as documented in [`docs/PLATFORM-CONTEXT.md`]
   `nakama_csrf` cookie; the route requires member role or above (viewers refused);
 - only the three read actions are called — **no inference, no `reconcile_topic`/`record_activity`**.
 
+**The action response is wrapped — unwrap `result` first.** The route returns
+`{ invocationId, result }` (`InvokePluginActionResponse` in the host contract); the domain payload
+(`{ ok, counts, axes, … }`) is under **`result`**, not at the top level. Read every documented field
+path from `result` (e.g. `result.counts.topics`, `result.axis`), **check the HTTP status and
+`result.ok`**, and surface a failure — **never** fall back silently to an empty read when the shape
+is unexpected or `ok` is false.
+
 **Served-build identity — exact org, by the actual asset.** `harness/served-build-guard.mjs` is
 browser-driven and **not org-aware** (it hashes whatever the active org served), so it cannot be
 trusted as the default for a specific org. The route is
 `GET /v1/plugins/ui/<orgId>/research-dashboard/<asset>`; the page actually fetches the plugin **root**
 asset (`…/research-dashboard/?import&revision=…&version=…`), and the root, the bare
 `…/research-dashboard/` and `…/research-dashboard/app.js` serve **byte-identical** content (a legacy
-`…/ui/app.js` suffix 404s). The path `orgId` must equal the session's active org. The exact-org
-recipe: log in, select the target org, load the plugin page, take the actual
+`…/ui/app.js` suffix 404s). The path `orgId` must equal the session's active org.
+
+**Selecting the target as the session's active org (the step the recipe used to omit).** The login
+default active org is **not necessarily** the target. Select it explicitly with
+`POST /v1/auth/active-org`, body `{"orgId": "<target org id>"}`, CSRF-protected
+(`x-csrf-token` = the `nakama_csrf` cookie). The response echoes the new active org (`activeOrgId`):
+**assert HTTP 200 and that the returned id is exactly the target** and **never** select `orgs[0]`.
+Only then load the plugin page — the route requires the path `orgId` to equal the session's active
+org — and take the asset URL the browser actually fetched, asserting its `orgId` is the target
+before hashing. This changes **session selection state only** (read-only against the fixture), **not**
+a domain mutation; restore the previous selection afterward if the handoff contract requires it. For
+pure `x-org-id` read calls (the three read actions above) **no active-org switch is needed** — the
+header selects the org per request.
+
+The exact-org recipe: log in, select the target as the active org (above), load the plugin page, take the actual
 `/v1/plugins/ui/<targetOrgId>/…` asset URL the browser fetched — the **sha256 digest is the
 authoritative identity**, not a literal guessed `app.js` path — read it with credentials, hash it,
 and assert the URL's `orgId` is the target.
