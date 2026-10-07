@@ -821,6 +821,13 @@ class ResearchStore {
          LIMIT ?`).all(topicId, clampLimit(limit, DEFAULT_ANNOTATION_LIMIT, MAX_ANNOTATION_LIMIT));
     return rows.map(toAnnotation);
   }
+  listAxisNotes(axisId, limit) {
+    const rows = this.db.query(`SELECT * FROM annotations
+         WHERE axis_id = ? AND problem_id IS NULL
+         ORDER BY created_at DESC, rowid DESC
+         LIMIT ?`).all(axisId, clampLimit(limit, DEFAULT_ANNOTATION_LIMIT, MAX_ANNOTATION_LIMIT));
+    return rows.map(toAnnotation);
+  }
   axisEvidence(axis) {
     const items = [];
     const branch = axis.branch.trim();
@@ -946,7 +953,7 @@ class ResearchStore {
       const notesLimit = clampLimit(options?.notesLimit, DEFAULT_ANNOTATION_LIMIT, MAX_ANNOTATION_LIMIT);
       const evidence = this.axisEvidence(axis);
       const history = this.listActivity({ axisId: axis.id, limit: historyLimit });
-      const notes = this.listAnnotations({ axisId: axis.id, limit: notesLimit }).filter((note) => note.problemId === null);
+      const notes = this.listAxisNotes(axis.id, notesLimit);
       const problems = this.listProblems(axis.id);
       const problemDetails = problems.map((problem) => ({
         ...problem,

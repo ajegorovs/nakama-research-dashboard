@@ -2466,6 +2466,32 @@ export class ResearchStore {
     return rows.map(toAnnotation);
   }
 
+  /**
+   * Notes filed on the axis itself, with problem-scoped notes excluded **in SQL, before `LIMIT`**.
+   *
+   * `listAnnotations({ axisId })` orders and limits in one statement, so a multi-target note — one that
+   * names both this axis and a problem, a legitimate plain note — would consume one of the limit's slots
+   * and a genuine axis note would be crowded out of the page; a post-query `.filter` can only drop the
+   * row it already spent a slot on, so it cannot repair the count. Applying `problem_id IS NULL` before
+   * the bound keeps `returned` equal to what the collection's own total counts. Problem-scoped notes are
+   * not lost: they are surfaced under their problem (`problemNotes`), and the topic-wide `listAnnotations`
+   * read keeps its historical shape.
+   */
+  listAxisNotes(axisId: string, limit?: number): Annotation[] {
+    const rows = this.db
+      .query(
+        `SELECT * FROM annotations
+         WHERE axis_id = ? AND problem_id IS NULL
+         ORDER BY created_at DESC, rowid DESC
+         LIMIT ?`
+      )
+      .all(
+        axisId,
+        clampLimit(limit, DEFAULT_ANNOTATION_LIMIT, MAX_ANNOTATION_LIMIT)
+      ) as AnnotationRow[];
+    return rows.map(toAnnotation);
+  }
+
   // ------------------------------------------------------- evidence & detail
 
   /**
@@ -2675,10 +2701,11 @@ export class ResearchStore {
       const evidence = this.axisEvidence(axis);
       const history = this.listActivity({ axisId: axis.id, limit: historyLimit });
       // A problem-scoped note is surfaced under its problem, so it is kept out of the axis's own list
-      // rather than shown twice.
-      const notes = this.listAnnotations({ axisId: axis.id, limit: notesLimit }).filter(
-        (note) => note.problemId === null
-      );
+      // rather than shown twice. The exclusion is applied **in SQL, before the limit** (`listAxisNotes`):
+      // a multi-target note that names both this axis and a problem would otherwise spend one of
+      // `notesLimit`'s slots and crowd a genuine axis note out of the page, leaving `returned` short of
+      // the collection's own total.
+      const notes = this.listAxisNotes(axis.id, notesLimit);
       const problems = this.listProblems(axis.id);
       const problemDetails: ProblemDetail[] = problems.map((problem) => ({
         ...problem,

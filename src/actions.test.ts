@@ -2245,6 +2245,74 @@ describe("get_topic scoped workstream", () => {
     expect(result.kind).toBe("invalid-input");
   });
 
+  test("the axis note cap excludes problem-scoped notes in SQL, before the limit", async () => {
+    const path = freshDatabase();
+    const created = await call(
+      "reconcile_topic",
+      { axes: [{ title: "Crowded axis" }], topicName: "Pre-limit filter" },
+      { path }
+    );
+    const axisId = (created.axes as AxisRef[])[0]?.id as string;
+    const topicId = (created.topic as { id: string }).id;
+
+    // One problem, so a plain note can legally name **both** the axis and the problem. Such a note
+    // belongs to the axis but is surfaced under its problem; the axis collection must not show it, and
+    // must not let it spend a `notesLimit` slot either.
+    const withProblem = await call(
+      "reconcile_topic",
+      { problems: [{ axisId, statement: "crowding problem" }], topicId },
+      { path }
+    );
+    const problemId = (withProblem.problems as Array<{ id: string }>)[0]?.id as string;
+
+    // Insertion order fixes the newest-first order (created_at, then rowid as the tiebreak): the three
+    // axis-only notes first (C oldest, A newest), then two newer multi-target notes. The axis-only page
+    // is therefore A, B, C — and the two mult-target notes are the ones that would crowd it.
+    await call(
+      "reconcile_topic",
+      {
+        annotations: [
+          { axisId, text: "axis note C" },
+          { axisId, text: "axis note B" },
+          { axisId, text: "axis note A" },
+          { axisId, problemId, text: "crowding note one" },
+          { axisId, problemId, text: "crowding note two" },
+        ],
+        topicId,
+      },
+      { path }
+    );
+
+    const result = await call("get_topic", { axisId, notesLimit: 2, topicId }, { path });
+    const coverage = result.coverage as { notes: Coverage; problemNotes: Coverage };
+    const axis = result.axis as {
+      notes: Array<{ text: string }>;
+      problems: Array<{ id: string; notes: Array<{ text: string }> }>;
+    };
+
+    // The two limit slots go to genuine axis notes, not to the newer multi-target notes that a
+    // post-query `.filter` would have dropped *after* they consumed the slots. `returned` equals the
+    // capped page; `total` counts every axis-only note and matches the coverage predicate
+    // (`axis_id = ? AND problem_id IS NULL`).
+    expect(coverage.notes).toMatchObject({
+      absent: false,
+      limit: 2,
+      limitScope: "collection",
+      returned: 2,
+      total: 3,
+      truncated: true,
+    });
+    expect(axis.notes.map((note) => note.text)).toEqual(["axis note A", "axis note B"]);
+
+    // The multi-target notes are not lost: both are retrievable under their problem.
+    const problem = axis.problems.find((row) => row.id === problemId);
+    expect(problem?.notes.map((note) => note.text)).toEqual([
+      "crowding note two",
+      "crowding note one",
+    ]);
+    expect(coverage.problemNotes.returned).toBe(2);
+  });
+
   test("the topic-wide read keeps its legacy shape", async () => {
     const path = freshDatabase();
     const { topicId } = await seedWorkstream(path);
