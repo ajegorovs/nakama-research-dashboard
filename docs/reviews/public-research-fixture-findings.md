@@ -29,18 +29,18 @@
 | F02 | required | The person carries only four axes, no infrastructure axes | reviewer hypothesis | A person↔axis link set that omits axes misrepresents who did the work | Inspect the person's link set against the six axes; verify the link mechanism (not a display filter) |
 | F03 | required | The diagnostics axis has no evidence though an agenda-backed blocker/problem/plan exists | reviewer hypothesis | Evidence-free claims read as unbacked; the agenda may be linked elsewhere | Trace the agenda item's provenance; confirm whether it was recorded against another axis, or genuinely omitted |
 | F04 | required | The consultation axis lacks evidence; two problems lack repositories | reviewer hypothesis | Problems without a repository link are unattributable to a source | Inspect the problem records' `repositoryFullNames`; capture the source document/commit |
-| F05 | required | An agenda event is dated to the ingestion day rather than its historical source date | reviewer hypothesis | Substituting ingestion for publication dates rewrites history | Verify the source pin's own date before any correction; the pin, not the ingestion, is authoritative |
+| F05 | required | An agenda event is dated to the ingestion day rather than its historical source date | reviewer hypothesis | Substituting ingestion for publication dates rewrites history | Use an explicit document date, else the last file-touch commit at/before the pin; retain date basis and precision, not the pin commit date by default |
 | F06 | required | Historical research appears "active today" | reviewer hypothesis | Recency that reflects record touches, not research, is misleading | Separate domain activity from record touch; inspect the projection/recency mechanism before labelling it a defect |
 | F07 | required (when the public source is available) | Repository factual descriptions (public URL, default branch, README/`about` text) are absent | reviewer hypothesis | Without descriptions a reader cannot tell what a repository is | Harvest the source's own README/`about` text; descriptions must be source text, not paraphrase |
 | F07b | optional | Topic descriptions are editorial and may legitimately be absent until a human approves wording | intentional | An absent topic description is honest, not a defect; it is a human claim, not harvested text | Leave blank unless a human authors and approves it (cf. F16) |
 | F08 | optional | The diagnostics axis's `currentState` is intentionally absent, though the source could support a conservative factual state | reviewer hypothesis | A blank state can be honest (nothing approved) or a gap (source supports more) | If the source supports a conservative factual state, propose exact candidate wording for approval; otherwise leave blank |
 | F09 | required | Repository identity fields are skeletal (public URL, default branch, source docs) | reviewer hypothesis | Skeletal identity metadata weakens provenance | Verify the model supports the fields, then populate from the public source |
-| F09b | unavailable | The repository model carries no **pin** field for the repo's source pin | reviewer hypothesis | Without a pin, exact provenance of a repository's content cannot be stated | Confirm the exposed contract; if the model truly lacks the field, record the gap — never fabricate a pin |
+| F09b | unavailable | The repository model carries no **pin** field for the repo's source pin | reviewer hypothesis | Without a pin, exact provenance of a repository's content cannot be stated | Require the immutable pin in the seed/evidence manifest; confirm it is unavailable as first-class Repository state, never fabricate a dashboard field |
 | F10 | required | Evidence lacks convenient public URLs | reviewer hypothesis | A claim a clone cannot follow is hard to trust | Capture a `sourceUrl` for PR/commit/document records, public only |
 | F11 | optional | PR evidence is attributed to the agent, possibly conflating recorder with upstream author | reviewer hypothesis | Misattribution misrepresents authorship | Do not manufacture an account mapping; report the attribution boundary instead |
 | F12 | required | Ordered plan steps carry null positions | verified | An authored order that is not encoded cannot be relied on | Encode explicit `position` values on seed; the ordering is then a stored claim, not a projection side-effect |
 | F13 | unavailable | Plan provenance is not a first-class visible field | reviewer hypothesis | A plan with no visible source is hard to audit | Confirm the exposed contract; if the model truly lacks the field, record it as a stated model gap (unavailable), not a fabrication |
-| F14 | unavailable | Problems have zero linked events though the source supports some | verified | A problem's evidence cannot be attached through the event tool | Two paths differ: an **existing** problem's `problemId` is reconcilable through the problem object (a versioned mutation), but `record_activity` carries no field for a **new** problem title reference, so attaching an event to a problem through the event tool is unavailable. Record the schema gap; never a workaround |
+| F14 | unavailable | Problems have zero linked events though the source supports some | verified | A problem's evidence cannot be attached through the event tool | `reconcile_topic.activities[].problemId` supports an existing problem; no title-like reference targets a newly generated problem in that call. `record_activity` omits `problemId` entirely. Record the schema gap; never a workaround |
 | F15 | unavailable | A person's activity is empty without a mapped account | verified | Empty activity can read as idleness when it is unattributability | Report `attributable=false`, never "idle"; the account mapping is a stated manual-ingestion limitation the model cannot represent |
 | F16 | optional | Human-approved topic summaries are absent | intentional | A topic summary is a human editorial claim, not harvested text | Preserve as blank unless a human authors it |
 | F17 | required | A shorthand overstated a sustained/full-buffer result | reviewer hypothesis | An overstated capability is a false claim | Verify against the source wording; preserve the conservative blocker until the source confirms more |
@@ -80,6 +80,22 @@ JPGs below.
 | `repositories__repo-1-grablink-full-sequence-acquisi__top.png` | F07, F09 |
 | `repositories__repo-3-udv-echo-process__top.png` | F07, F09 |
 | `people__person-1__full.png` | F02, F15, U09 |
+
+### Per-reference visual anchors (reviewer-attested)
+
+| Reference | Visible observation |
+|---|---|
+| `overview__overview__full.png` | Topic activity and Repository activity columns; textual counts/ages; Nakama repository appears inactive while infrastructure topic has events |
+| `repositories__repo-2-nakama-research-dashboard__top.png` | No current work / no linked axes / no recorded activity |
+| `people__person-1__full.png` | Infrastructure topic present but no corresponding person axes; unmapped account and sparse attributable activity |
+| `topics__topic-1-experimental-research__full.png` | Diagnostics says no progress note / no evidence; long current-state text clipped despite expanded disclosure |
+| `topics__topic-2-research-infrastructure__full.png` | Consultation axis evidence sparse; repeated pills and low-value metadata |
+| `repositories__repo-1-grablink-full-sequence-acquisi__top.png` | Weak/absent repository description and sparse identity context |
+| `repositories__repo-3-udv-echo-process__top.png` | Weak/absent repository description and sparse identity context |
+| `progress_axes.jpg` | Single Grablink problem shown as current problem and again as open-problem entry; plan surrounded by nested/low-information sections |
+| `problems.jpg` | Three problems, sparse repository/evidence context, zero events alongside last activity today |
+
+These anchors preserve observations, not independently established causes or source timestamps.
 
 ### Reviewer-attested anchors
 

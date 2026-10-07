@@ -40,8 +40,8 @@ blank by design); an axis's deliberately-absent `currentState` is **optional** (
 `position` is **required** (its absence is the F12 defect); a first-class visible plan-provenance field is
 **unavailable** if the exposed contract lacks it (F13); a repository **pin** field is **unavailable** if
 the repository model does not carry it (F09b); an unattributable person is **unavailable** (F15); and
-linking a **new** problem to an event is **unavailable** (F14) — though an **existing** problem's
-`problemId` is reconciled through the problem object.
+activities may target an **existing** problem via `reconcile_topic.activities[].problemId`, but cannot
+target a newly generated problem by title in the same call; `record_activity` omits `problemId` (F14).
 
 ## 3. Per-issue discipline — WHY and HOW
 
@@ -119,18 +119,18 @@ until **WP-G** (the mutation gate review) is accepted.
 
 | ID | Objective | Scope | Inputs | Output | Gate to pass before the next |
 |---|---|---|---|---|---|
-| **WP0** | Confirm adequate access to the inputs | read-only | this doc; the authoring skill; a clone of the public sources and their pins | a statement that every source a package needs is reachable | every input is reachable from the clone and the guide alone; nothing required lives only in a conversation |
+| **WP0** | Fresh zero-context methodology/skill validation (§9) | read-only | this doc; the authoring skill; a clone of the public sources and their pins | a validation report exercising representative read-only steps with no prior conversational/project memory, adequate checkout/docs, public GitHub and read-only dashboard access | guide gaps are corrected and the fresh validation passes before WP1 output is relied on |
 | **WP1** | Verify each finding against exact sources | read-only | findings doc §A; the public source pins | per-finding verified / refuted / unresolved, with the exact source cited | every F-row is classified; unresolved rows are named, not guessed |
 | **WP2** | Reconcile retained-fixture links (F01, F02, F04) | read-only | WP1 output; current fixture readback | a link-delta proposal: what is missing, with sources | delta is source-backed and deduped |
 | **WP3** | Design the baseline-seed packet | design only | WP1–WP2; §2–§4 of this doc | a seed packet with every field classified and evidence sequenced atomically | packet passes the §6 gates on paper |
 | **WP4** | Design the retained-fixture amendment packet | design only | WP2; §5 | an approved, idempotent before/after amendment plan | amendment preserves historical evidence and explicitly approves fixture corrections |
 | **WP5** | Author reconciliation/verification checks | read-only | WP3–WP4 | executable checks for the seed/amendment invariants | a green run can go red (negative control present) |
-| **WP6** | Fresh zero-context guide validation (§9) | read-only | this doc + the authoring skill | a validation report from an agent given only the guide | the guide is executable with no prior context |
-| **WP-G** | Mutation gate review | review | WP1–WP6 | an accept/reject of any write authorization | **owner authorization required before any write** |
+| **WP-G** | Mutation gate review | review | WP0–WP5 | an accept/reject of any write authorization | **owner authorization required before any write** |
 
-F14 is deliberately **not** in WP2: linking an **existing** problem to its evidence is a versioned
-reconcile on the problem object, while `record_activity` cannot carry a **new** problem reference — the
-F14 limitation is recorded as a schema gap, not reconciled as a link delta.
+F14 is deliberately **not** in WP2: `reconcile_topic.activities[].problemId` can target an existing
+problem, but there is no title-like reference for newly generated problems in that call.
+`record_activity` omits `problemId` entirely. Verify these boundaries in WP1 and retain the product
+finding rather than implying relationship enrichment repairs the contract.
 
 UI work is **not** in this package set (see §8).
 
@@ -149,13 +149,13 @@ UI work is **not** in this package set (see §8).
 
 ## 9. Validation of this guide — fresh zero-context
 
-A procedure is not trustworthy until someone who did not write it can run it. Before any package's output
-is relied on:
+A procedure is not trustworthy until someone who did not write it can run it. This validation is WP0
+and must pass before WP1 output is relied on:
 
 1. An agent with **zero prior context** is given the authoring skill, this document, and **adequate
-   access** to the public sources and their pins (WP0) — and nothing else, with no conversation with the
-   author.
-2. It attempts a package (WP1, after WP0's access check, is the natural first) and reports where the guide
+   access** to checkout/docs, public GitHub sources/pins and read-only dashboard state. No prior
+   conversational/project memory is supplied; necessary source access is not withheld.
+2. It attempts representative WP1 read-only steps as preflight validation (not the authoritative WP1 run) and reports where the guide
    was ambiguous, wrong or missing a step.
 3. The guide is corrected from that report; the validation is re-run on the corrected guide.
 4. The validation report is retained as evidence, including the failures.

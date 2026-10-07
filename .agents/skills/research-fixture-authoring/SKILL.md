@@ -82,6 +82,12 @@ For each required field, name the **source**. For each unavailable one, name the
 5. **Label the run** — baseline seed or amendment — and stage it for the mutation-gate review. A fixture
    write needs **owner authorization**; a green local run is not that authorization.
 
+## Validation (WP0, before WP1)
+
+WP0 is a fresh zero-context validation before authoritative WP1 research, not merely an access check.
+Provide checkout/docs, public GitHub and read-only dashboard capabilities without prior conversational
+or project memory. Exercise representative read-only steps, repair guide gaps and rerun before reliance.
+
 ## Validation (required before trusting this skill)
 
 A fresh, **zero-context** session is given this skill and the plan and nothing else, attempts one work
@@ -98,9 +104,9 @@ package, and reports ambiguity/gaps. Fix the skill from that report and re-run. 
    precision; never invent a time-of-day.
 3. **Null positions.** Relying on the read projection to convey "authored order" is not an ordering
    contract. Encode explicit `position` values.
-4. **Problem evidence.** An **existing** problem's `problemId` is reconciled through the problem object,
-   but `record_activity` carries no field for a **new** problem reference — so attaching an event to a
-   problem through the event tool is unavailable. Record the limitation; do not improvise a workaround.
+4. **Problem evidence.** `reconcile_topic.activities[].problemId` can target an existing problem. There
+   is no title-like target for a newly generated problem in the same call. `record_activity` omits
+   `problemId` entirely; Record the limitation; do not improvise a workaround.
 5. **Attribution.** A person with no mapped account is `attributable=false`, **not** "idle".
 6. **Designing around a suspect fixture.** Never fold UI design into a fixture whose data linking is under
    review; settle the data first (UI is a separate, deferred track).
