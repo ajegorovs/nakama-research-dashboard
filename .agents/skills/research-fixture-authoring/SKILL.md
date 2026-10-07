@@ -90,6 +90,75 @@ For each required field, name the **source**. For each unavailable one, name the
 5. **Label the run** — baseline seed or amendment — and stage it for the mutation-gate review. A fixture
    write needs **owner authorization**; a green local run is not that authorization.
 
+## Read-only access (no agent turn)
+
+WP0/WP1 verify **read-only with no LLM messages**. The read tools are also reachable by direct
+HTTP read — documented in [`docs/PLATFORM-CONTEXT.md`](../../../docs/PLATFORM-CONTEXT.md):
+
+- `POST /v1/plugins/<plugin>/actions/{get_overview,get_topic,search_dashboard}` with body `{input}`.
+- Select the organization **explicitly** with `x-org-id: <org id>`; never let a helper pick
+  `orgs[0]`. The request is a state-changing verb, so it carries CSRF: `x-csrf-token` = the
+  `nakama_csrf` cookie minted at login.
+- The route requires **member** role or above (viewers are refused); the plugin layer decides what
+  a member may do.
+- **No inference, no domain write:** call only the three read actions. `reconcile_topic` and
+  `record_activity` are never issued by a read-only verification.
+
+## Readback shapes
+
+The response shapes are not obvious; the readback below is the contract, verified from the action
+and store code (`src/actions.ts`, `src/store.ts`).
+
+| Read | Field paths | Notes |
+|---|---|---|
+| `get_overview` counts | `counts.{topics,axes,repositories,people}`, `counts.topicsByStatus` | nested records: `topics[].topic`, `people[].person`, `repositories[].repository` — not flat |
+| `get_overview` per topic | `topics[].{topic,axes,people,repositories,axisCounts,activityCount,lastActivityAt}` | pages the whole front page in one call |
+| `get_topic` topic-wide | `topic`, `axes[]`, `axisCounts`, `activity`, `notes`, `counts` | per axis: `plan`, `problems[]`, `evidence[]`, `history[]`, `notes[]`, `repositories[]` |
+| `get_topic` scoped (`axisId`) | the same axis object under `axes[0]`, plus `coverage` | one workstream; `activityLimit`/`activitySinceDays` are ignored under `axisId` |
+| **plan** (both `get_topic` forms) | `axes[].plan` = `{ plan: {…, summary}, steps: [{position, state, title, …}] }` or `null` | so the summary is `axes[].plan.plan.summary` and the order is `axes[].plan.steps[].position`; `position: null` means unordered (F12) |
+| `search_dashboard` | `{ok, query, axes[], topics[], activities[], annotations[], truncated, limit}` | a match-field list per hit |
+
+**Distinguish the page-only projection.** The Progress view reads `get_progress`, whose axis rows
+carry a **flattened** plan — `axes.axes[].plan` = `{id, summary, steps, stepsDone}`. That is the
+page's own projection, **not** the `get_topic` readback shape; a verifier reads `get_topic`.
+
+## Served-build identity — exact org, by the actual asset
+
+`harness/served-build-guard.mjs` logs in, lets the page fetch the plugin UI asset, and hashes what
+the browser actually received. Two cautions:
+
+- It is **not org-aware**: it navigates to `<dashboard>/plugins/research-dashboard` and takes the
+  first `/v1/plugins/ui/` resource the **active** org loads. It never asserts the asset's `orgId`
+  equals the target org, so **its default cannot be trusted** for an exact-org identity.
+- The served asset route is `GET /v1/plugins/ui/<orgId>/research-dashboard/app.js` — the plugin UI
+  **root** (the path is `<orgId>/<plugin>/<asset>`, **not** `…/ui/app.js`, which 404s). The route
+  requires the path `orgId` to equal the session's active org, and member role or above.
+- Preconditions: `NAKAMA_DASHBOARD` set to the **dashboard origin** (not the API port), credentials,
+  and a cached Chromium.
+
+**Exact-org recipe.** Log in, select the target org, load the plugin page, take the actual
+`/v1/plugins/ui/<targetOrgId>/…` asset URL the browser fetched (page context carries the real URL),
+read it with credentials, hash it, and **assert the URL's `orgId` is the target**. Quote that
+sha256 as the served identity.
+
+## Operational capability handoff (contract)
+
+WP0/WP1 need read-only capability the committed docs deliberately do **not** carry. A local
+(git-ignored) handoff supplies it; the docs carry this **contract**, never the values. The handoff
+must state:
+
+1. **Instance URLs** — the API base and the dashboard origin (loopback).
+2. **Explicit target org** — its **id and name**; never `orgs[0]`.
+3. **Read-only credential source** — the env-file **path** and the **key names** used
+   (`NAKAMA_EMAIL` / `NAKAMA_PASSWORD`, the CSRF cookie name); values by reference only.
+4. **Fixture mode** — whether the target is empty (baseline seed) or **already seeded** to the
+   expected shape.
+5. **Exact scoped read transport** — the direct-HTTP route above, with explicit org + CSRF.
+6. **Source pins** — the frozen public commit pins.
+7. **Browser support** — a cached Chromium for the served-build guard; no restarts.
+
+Private paths, org ids and credentials belong to the local handoff only.
+
 ## Validation (WP0, before WP1)
 
 WP0 is a fresh zero-context validation before authoritative WP1 research, not merely an access check. The
@@ -100,7 +169,11 @@ ambiguous, wrong or missing a step, the guide is corrected from that **report**,
 re-run on the corrected guide before any reliance. Until this pass is run and recorded, this skill is
 *initial / unvalidated*, and any output claiming to follow it must carry that caveat. A passing WP0
 report is **not** authorization for the authoritative WP1 run — the owner must authorize WP1 explicitly
-after WP0 passes. Neither WP0 nor WP1 is executed by this skill.
+after WP0 passes. Neither WP0 nor WP1 is executed by this skill. The initial run is retained as
+`docs/reviews/wp0-research-fixture-validation-initial.md`; it was **not a gate pass**, the guide was
+corrected from it (see *Read-only access*, *Readback shapes*, *Served-build identity* and
+*Operational capability handoff* above), and the run must be repeated on the corrected guide — with
+the local handoff — before any output is relied on.
 
 ## Pitfalls
 

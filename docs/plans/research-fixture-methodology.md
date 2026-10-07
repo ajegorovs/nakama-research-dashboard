@@ -135,7 +135,7 @@ until **WP-G** (the mutation gate review) is accepted.
 
 | ID | Objective | Scope | Inputs | Output | Gate to pass before the next |
 |---|---|---|---|---|---|
-| **WP0** | Fresh zero-context methodology/skill validation (§9) | read-only | this doc; the authoring skill; a clone of the public sources and their pins | a validation report exercising representative read-only steps with no prior conversational/project memory, adequate checkout/docs, public GitHub and read-only dashboard access | guide gaps are corrected and the fresh validation passes before WP1 output is relied on — **and a passing report is not permission for WP1: explicit owner authorization is required after WP0** |
+| **WP0** | Fresh zero-context methodology/skill validation (§9) | read-only | this doc; the authoring skill; the local operational capability handoff (§11); a clone of the public sources and their pins | a validation report exercising representative read-only steps with no prior conversational/project memory, adequate checkout/docs, public GitHub and read-only dashboard access | guide gaps are corrected and the fresh validation passes before WP1 output is relied on — **and a passing report is not permission for WP1: explicit owner authorization is required after WP0** |
 | **WP1** | Verify each finding against exact sources | read-only | findings doc §A; the public source pins | per-finding verified / refuted / unresolved, with the exact source cited | every F-row is classified; unresolved rows are named, not guessed |
 | **WP2** | Reconcile retained-fixture links (F01, F02, F04) | read-only | WP1 output; current fixture readback | a link-delta proposal: what is missing, with sources | delta is source-backed and deduped |
 | **WP3** | Design the baseline-seed packet | design only | WP1–WP2; §2–§4 of this doc | a seed packet with every field classified and evidence sequenced atomically | packet passes the §6 gates on paper |
@@ -183,7 +183,11 @@ and must pass before WP1 output is relied on:
    runnable; it is **not** automatic permission to run the authoritative WP1 research. The owner must
    explicitly authorize WP1 *after* WP0 passes. Neither WP0 nor WP1 is executed by this plan.
 
-The authoring skill is marked **initial / unvalidated** until this pass has been run and recorded.
+The initial WP0 run is retained as [`docs/reviews/wp0-research-fixture-validation-initial.md`](../reviews/wp0-research-fixture-validation-initial.md).
+It is **not a gate pass**: representative read-only probes succeeded, but the guide was not runnable
+from the supplied docs alone, so the guide was corrected (§11) and the run must be **repeated** on
+the corrected guide before WP1 output is relied on. The authoring skill stays **initial / unvalidated**
+until that corrected re-run is recorded.
 
 ## 10. Boundaries
 
@@ -194,3 +198,43 @@ The authoring skill is marked **initial / unvalidated** until this pass has been
 - Where a capability is unavailable, the methodology records the limitation rather than inventing a
   path around it.
 - Until an explicit target and owner authorization exist, no fixture is written.
+
+## 11. Operational capability handoff and read-only access
+
+The committed docs deliberately carry **no live endpoint, org id, path or secret**. A zero-context
+WP0/WP1 session nonetheless needs read-only capability, so it is supplied by an **explicit
+operational capability handoff** — a **local, git-ignored** file (private paths, ids and credentials
+belong there, never here). This section states the contract; the values live in the handoff.
+
+**The handoff must state:**
+
+1. **Instance URLs** — the API base and the dashboard origin (loopback).
+2. **Explicit target org** — its **id and name**; never a helper's `orgs[0]` default.
+3. **Read-only credential source** — the mode-600 env file's **path** and the **key names** used
+   (`NAKAMA_EMAIL` / `NAKAMA_PASSWORD`, the CSRF cookie name); values by reference only.
+4. **Fixture mode** — whether the target is empty (baseline seed) or **already seeded** to the
+   expected shape.
+5. **Exact scoped read transport** — the direct-HTTP read route below.
+6. **Source pins** — the frozen public commit pins.
+7. **Browser support** — a cached Chromium for the served-build guard; no restarts.
+
+**Read-only tool access (no agent turn).** WP0/WP1 verify read-only with no LLM messages. The read
+tools are reachable by direct HTTP as documented in [`docs/PLATFORM-CONTEXT.md`](../PLATFORM-CONTEXT.md):
+
+- `POST /v1/plugins/research-dashboard/actions/{get_overview,get_topic,search_dashboard}` with body
+  `{input}`;
+- org selected **explicitly** with `x-org-id`, and CSRF carried as `x-csrf-token` = the
+  `nakama_csrf` cookie; the route requires member role or above (viewers refused);
+- only the three read actions are called — **no inference, no `reconcile_topic`/`record_activity`**.
+
+**Served-build identity — exact org, by the actual asset.** `harness/served-build-guard.mjs` is
+browser-driven and **not org-aware** (it hashes whatever the active org served), so it cannot be
+trusted as the default for a specific org. The served asset route is
+`GET /v1/plugins/ui/<orgId>/research-dashboard/app.js` (the UI **root**; `…/ui/app.js` 404s), and the
+path `orgId` must equal the session's active org. The exact-org recipe: log in, select the target
+org, load the plugin page, take the actual `/v1/plugins/ui/<targetOrgId>/…` asset URL the browser
+fetched, read it with credentials, hash it, and assert the URL's `orgId` is the target.
+
+The readback field paths (`get_overview` nested records; `get_topic` `axes[].plan.plan.summary` /
+`axes[].plan.steps[].position`; the `get_progress` page-only projection) are tabulated in the
+authoring skill's **Readback shapes** section.
