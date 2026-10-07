@@ -164,9 +164,10 @@ exactly the target**, and **never** select `orgs[0]`. This changes **session-sel
 if the handoff contract requires it. For pure `x-org-id` read calls (the three read actions) **no
 active-org switch is needed** — the header selects the org per request.
 
-Then log in, load the plugin page, take the actual `/v1/plugins/ui/<targetOrgId>/…` asset URL the
-browser fetched (page context carries the real URL), read it with credentials, hash it, and **assert
-the URL's `orgId` is the target**. Do **not** substitute a literal guessed `app.js` path — the
+Then log in, select the target as the active org (above), load the plugin page, take the actual
+`/v1/plugins/ui/<targetOrgId>/…` asset URL the browser fetched (page context carries the real URL),
+read it with credentials, hash it, and **assert the URL's `orgId` is the target**. Do **not**
+substitute a literal guessed `app.js` path — the
 browser's actual fetch is the plugin **root**, and the **sha256 is the authoritative identity**; the
 `app.js` path only happens to resolve to the same bytes. Quote that sha256 as the served identity.
 

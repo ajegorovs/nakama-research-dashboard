@@ -141,3 +141,44 @@ proof of the mechanism would be a category error, so each is marked *reviewer hy
   produce this document.
 - Reviewer summaries are preserved as intentionally blank; no description text is invented.
 - Correct the data (or establish that it needs no correction) **before** any redesign decision.
+
+## E. WP1 verification dispositions (appended)
+
+> **Appended, not an amendment.** The §A reviewer findings and their *Status* column are preserved
+> **unchanged above**. This section records the **WP1** source-by-source verification (read-only,
+> owner-authorized) against the frozen public pins and the current targeted fixture readback. Full
+> evidence, source refs and measurement digests are in
+> [`wp1-public-research-fixture-verification.md`](wp1-public-research-fixture-verification.md) and
+> [`wp1-public-research-fixture-verification-evidence.json`](wp1-public-research-fixture-verification-evidence.json).
+> **All 21 rows verified; 0 refuted; 0 unresolved.** The *Status* column above was the reviewer's
+> pre-verification label; the *WP1* column below is the post-verification disposition. WP1 performs no
+> fixture correction and authorizes no WP2+.
+
+| ID | Reviewer Status (§A, unchanged) | WP1 disposition | WP1 evidence (pin file:line or readback field) |
+|---|---|---|---|
+| F01 | reviewer hypothesis | **verified** (fixture data gap, not a UI filter) | dashboard repo `axes:[]`, `activityCount:0`; infra axes `repositories:[]`, event `repositoryId:null`; `store.ts:3405,3413` |
+| F02 | reviewer hypothesis | **verified** | person `axes`=4 (experimental only); infra axes `people:[]`; `axis_people` link-set |
+| F03 | reviewer hypothesis | **verified** (agenda linked elsewhere) | axis `601021c8` `evidence:0`; `docs/AGENDA.md` evidence on sibling `77835376` |
+| F04 | reviewer hypothesis | **verified** | axis `02e0b505` `evidence:0`; problems `49ee4cf1`,`ef92b518` `repositories:[]`; source commit `5a62749` on sibling axis |
+| F05 | reviewer hypothesis | **verified** | AGENDA event `occurredAt`==`recordedAt`==2026-10-07T14:32:13.984Z; source date 2026-09-24 (`44ba1a4`) |
+| F06 | reviewer hypothesis | **verified** (mechanism; narrowed) | `ui.tsx:4232,4248,4519` label `recencyAt`; fallback `store.ts:5252,5438,5553` vs honest `lastActivityAt` `:5257,5444,5566` |
+| F07 | reviewer hypothesis | **verified** | all repos `url/description/defaultBranch:''`; model `store.ts:112–120`; READMEs at pins |
+| F07b | intentional | **verified** (absence; intentional) | both topics `description:''`, `summary:''` |
+| F08 | reviewer hypothesis | **verified** (absence; candidate deferred to WP4) | axis `601021c8` `currentState:''`, `currentStateConfidence:null` |
+| F09 | reviewer hypothesis | **verified** (split) | url/branch/description representable but empty; "source docs" has no Repository field |
+| F09b | reviewer hypothesis | **verified (unavailable)** | no `pin` on Repository type/DDL/manifest/types |
+| F10 | reviewer hypothesis | **verified** | all event `sourceUrl:''`; model `migrations/002:164` |
+| F11 | reviewer hypothesis | **verified** (boundary) | events `actorType:'agent'`; `Activity` no upstream-author field `store.ts:152–170`; author slot only on collector path |
+| F12 | verified | **verified** | axis `601021c8` 4 steps all `position:null`; model `migrations/004:142` |
+| F13 | reviewer hypothesis | **verified (unavailable); narrowed** | `Plan` `store.ts:351–358` has authorship, no content provenance; `plans` DDL `migrations/004:121–133` |
+| F14a | verified | **verified** (supported capability, required field) | manifest `activities[].problemId`; `store.ts:5837,6599–6609`; problem `0d586e71` 0 events |
+| F14b | verified | **verified (unavailable)** | no title handle; write order `5806`→`5929`; FK `migrations/004:351`; `PRAGMA foreign_keys` `store.ts:2152` |
+| F14c | verified | **verified (schema defect)** | manifest description advertises `problemId`; schema omits it (`additionalProperties:false`); `actions.ts:361–387` drops it |
+| F15 | accepted limitation | **verified** (optional/accepted) | `attributable=Boolean(nakamaUserId)` `store.ts:3330`; `lastActivityAt` gated `:3333–3335` |
+| F16 | intentional | **verified** (absence; intentional) | both topics `summary:''` |
+| F17 | reviewer hypothesis | **verified** (shorthand overstated) | shorthand `five-tool-exercise.md:134`; source AGENDA reports partial 652/1028-frame saves + sustained as future work; blocker `:140` stands |
+
+An independent read-only **contract-only** cross-check (local, uncommitted) was also re-verified here;
+its boundaries are kept and its F14b "not even by id" claim is stated with its pre-existence/FK
+precondition rather than as an absolute. **No finding in §A was refuted.** No WP2+ work is performed
+or authorized by this section.
