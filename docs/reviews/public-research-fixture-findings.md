@@ -629,3 +629,50 @@ to resolve the real host types. It is a documented limitation, not a green claim
 - No fixture/domain write, no inference, no service/deploy, no product/UI edit, no WP3 seed, no WP4
   amendment, no merge. Every write still awaits **explicit owner authorization** and a **granted**
   WP-G — which this entry does **not** grant.
+
+## P. WP-G packet scope — reviewer REQUEST CHANGES, corrections applied (appended 2026-10-08)
+
+> **Appended, not an amendment.** §A–§O above are preserved unchanged. This section records the external
+> reviewer's **REQUEST CHANGES** on the **scope** of the WP-G decision/review packet
+> ([`wp-g-mutation-gate-decision-packet.md`](../plans/wp-g-mutation-gate-decision-packet.md)) and the
+> documentation corrections applied. It is **not a verbatim reviewer transcript**: the **verdict line is
+> exact** and the corrections are **summarized**, never quoted as the reviewer's own words. **Docs only:**
+> no decision is settled, no write authorization is granted, the two scopes stay **unapproved**, and
+> **WP0–WP5 remain accepted** (§O). No fixture/domain write, no `reconcile_topic`/`record_activity`, no
+> inference, no new research, no service/deploy/restart, no product/UI change, no harness change, **no
+> WP3 seed, no WP4 amendment, no merge**.
+
+**Verdict: REQUEST CHANGES (WP-G packet, scope; docs-only).** The packet's two mutation programs were
+conflated in several decision categories and its target/authorization was framed as blanket. Fifteen
+scope corrections were applied to the packet and cross-referenced here; **no decision category is
+settled** and the **current, corrected packet is the reviewed artifact**.
+
+| # | Correction | Applied in (packet) |
+|---|---|---|
+| 1 | **SCOPE-BASELINE target is a fresh target *verified empty*.** It is **never** the retained org; **no reset/clear/re-seed** is permitted to reach emptiness, and a **nonempty** target **STOPS** the session. | §1, §5.1, §8 stop conditions |
+| 2 | **D1 is scoped.** SCOPE-BASELINE resolves **all six** axis→repository roles; SCOPE-RETAINED touches **only the missing axes 5/6** — axes **1–4 are untouched, no new role changes**. | §3 D1 |
+| 3 | **D3 is SCOPE-RETAINED only.** In SCOPE-BASELINE the axis-4 `blocker` is **fixed `confirmed` and evidence-backed same-transaction** (not an open choice). | §3 D3 |
+| 4 | **D4 is SCOPE-RETAINED only.** The baseline's **initial 8 events are fixed**; any **later** baseline problem-evidence pass is a **separate operation under a new design** — its counts are **not part of this authorization**. | §3 D4 |
+| 5 | **D6 is scoped.** In SCOPE-BASELINE the **three problem→repo links (incl. both consultation)** are **required and cannot be withheld** — the baseline is **not green if unsatisfied**; SCOPE-RETAINED is **confirm/withhold**, and a **withhold leaves F04 a known residual**. | §3 D6, §4.1, §8 |
+| 6 | **D2 (F08) is scoped.** SCOPE-BASELINE defaults **blank (an accepted WP3 deviation)**; populating it is a **separate, explicitly-approved design choice**, with **counts/claims expectations updated**, and the retained choice **is not silently reused**; SCOPE-RETAINED carries **its own wording/confidence**. | §3 D2, §4.1 |
+| 7 | **The decision form is split per scope.** Each form carries its **own exact target** (private org id, scope-bound, **no heuristic labels**) and its **own write authorization bound to that scope's resolved decisions/payload/version** — **no blanket field**. | §10 |
+| 8 | **Public sanitized labels only.** The **future exact org ids** live in the **local (git-ignored) operational handoff**; **no actual secret ids** appear in the public packet. | §1, §3 D5, §10 |
+| 9 | **D4 "leave" = accept the residual gap / no evidence mutation** — F03 and F14a are **known residuals, not corrected**. Mandatory relationships (D1/D6) vs evidence placement (D4) are **kept separate**; the contradictory "…never *whether* the required link exists" framing is **withdrawn**; F04's repo links are **independent** of D4. | §3 D4, §3 D6 |
+| 10 | **Partial-commit semantics (baseline).** T1 committed / T2 failed → target **nonempty → STOP writes**; **log the exact committed transaction**; **fresh readback**; **never blind-re-run**; creation **resume only under explicit scoped authorization from the measured state** (dedup / `expectedVersion` / expected existence); an **ambiguous activity transport is not retried** until readback **proves it was not inserted**; an **unsupported update has no rollback**. | §5.1, §6, §8 |
+| 11 | **Retained multi-call partial commits remain.** Stop, **record** and **verify** — **no implicit rollback** is assumed. | §6 |
+| 12 | **Status/approvals excluded.** The current packet is the **reviewed** artifact; the decisions are **not ready** and **no approval is recorded**. | §0, §11 |
+| 13 | **Recommendations table scoped.** The **five** framing is corrected to **six decision categories (D1–D6)**, each **scoped**, **not** one global independent set; **blanket authorization removed everywhere**. | §3 intro, §9, §10, §11 |
+| 14 | **Payload templates, metrics, roles and target counts made consistent** with #1–#13 (six axis→repo role links; three required problem→repo links; per-scope targets). | §4.1, §5.1, §8, §9 |
+| 15 | **Crossrefs checked** — the packet's internal cross-references and its links to the WP3/WP4 designs and this ledger resolve. | whole packet |
+
+**Counts after the correction:** the packet carries **six decision categories (D1–D6)**, each **scoped**
+(D1: baseline all six / retained axes 5–6; D2: baseline blank / retained own; D3: retained only;
+D4: retained only; D5: one target per scope; D6: baseline required / retained confirm-withhold); the
+baseline writes **six axis→repo role links** and **three problem→repo links**; **both scopes remain
+unapproved**; **zero** decisions settled; **zero** harness changes.
+
+**Authorization boundaries (unchanged).** WP0–WP5 remain **accepted**. WP-G stays **entered for
+planning/review only, with no execution authorization**; both scopes are **unapproved**; every write still
+needs the explicit human choices **and** that scope's explicit owner write authorization. **No** fixture/
+domain write, no `reconcile_topic`/`record_activity`, no inference, no service/deploy/restart, no
+product/UI change, no WP3 seed, no WP4 amendment, and no merge is performed or authorized by this entry.
