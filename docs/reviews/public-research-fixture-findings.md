@@ -992,15 +992,25 @@ owner authorization; a passing execution is **not** authorization for the next w
 > inference, no service/deploy/restart, no product/UI/harness/source change, no merge. Public labels and
 > sanitized references only.
 
+> **Reviewer wording corrections (applied before acceptance).** On review of PR #5, before the supplement
+> was accepted, two wording fixes were applied with **no change to any measured result**: (1) the
+> DOM-vs-payload comparison is a **string** comparison (411 characters), so it is stated **text-exact**,
+> not *byte-exact* — a DOM string's `.length` is a character/code-unit count, the same unit confusion the
+> bytecount erratum corrects; (2) the clamp classification no longer asserts *"not a product defect"* —
+> whether a two-line clamp is a product/UX defect worth changing is **deferred to a separate product
+> decision**. The [supplement](2026-10-08-f08-visual-verification-supplement.md) carries the same
+> correction. Full-text readability remains **NOT PASS**; the clamp, persistence/DOM presence and the
+> bytecount erratum remain **verified**.
+
 **F08 visual verification (measured 2026-10-08T20:04:23Z, `http://127.0.0.1:3003`, plugin
 `research-dashboard`, org label `Public Research Exercise`, build `0.2.0+dev.78af5cbb87b4` rev `9`).**
 
 | Item | Result |
 |---|---|
-| F08 `currentState` DOM presence | **present, byte-exact** (411 chars, `exact: true`) |
+| F08 `currentState` DOM presence | **present, text-exact** (411 chars, `exact: true`) |
 | Visual full-text readability | **✘ CLIPPED to 2 lines** — `clientHeight 39px` / `scrollHeight 117px`, `-webkit-line-clamp: 2`; visible 153 chars, hidden 258 |
 | After "More on this axis" (real click) | **still clipped** — `fullTextBecameVisuallyReadable: false` |
-| Classification | **expected existing axis-reading CSS**, **not** a regression of the F08 write, **not** a product defect |
+| Classification | **existing shared CSS behavior; not introduced by the F08 write; not a write regression.** Whether the two-line clamp is a product/UX defect worth changing is **deferred to a separate product decision** |
 | Product/UI fix | **none made or proposed** (observational record) |
 | Representative shot | [`../screenshots/f08-axis4-expanded.png`](../screenshots/f08-axis4-expanded.png) — sanitized (plugin card only; public labels) |
 
@@ -1017,7 +1027,7 @@ bytes.**
 
 | Item | Disposition |
 |---|---|
-| F08 visual state | **VISUAL PRESENT** (DOM-exact) · **full-text readability NOT PASS** (2-line clamp) · **accepted** (existing CSS, not a write defect) |
+| F08 visual state | **VISUAL PRESENT** (DOM text-exact) · **full-text readability NOT PASS** (2-line clamp) · **accepted** (existing shared CSS behavior; not introduced by the F08 write; not a write regression) |
 | Bytecount | **corrected**: actual asset **154598 bytes**; `154417` was a char count mislabeled (sha unchanged `41e61ef5…`) |
 | Mutation | **UNCHANGED** — this supplement adds no read or write; observational only |
 | Product/UI fix | **none** |

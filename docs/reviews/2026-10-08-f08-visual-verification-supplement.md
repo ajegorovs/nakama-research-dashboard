@@ -45,7 +45,7 @@ The diagnostics-axis `currentState` (F08) was populated at `currentStateConfiden
 | Check | Result |
 |---|---|
 | DOM presence of the 411-char `currentState` | **PRESENT** |
-| DOM text byte-exact vs the bundle §3.1 string | **EXACT** — 411 chars, `exact: true` |
+| DOM text vs the bundle §3.1 string | **text-exact** — 411 chars, `exact: true` |
 | Visual full-text readability | **✘ CLIPPED to 2 lines** |
 
 Measured geometry of the reading box (computed style `display:flow-root`, `-webkit-line-clamp:2`,
@@ -69,10 +69,10 @@ edit form.
 **Parent native-vision confirmation.** Independent native visual inspection (vision) of the expanded shot
 confirms the current-state sentence is truncated **mid-word**: it ends `…a 2000-fram…`.
 
-**Classification.** DOM presence ✔ / exact payload ✔ / **visual full-text readability ✘ (2-line clamp)**.
-This is the **expected existing behaviour of the shared axis-reading grammar**
-(`-webkit-line-clamp: 2; overflow: hidden`), **not a regression introduced by the F08 write** and **not a
-defect in the write**. The text genuinely reaches the DOM; the reader simply cannot see all of it in place.
+**Classification.** DOM presence ✔ / text-exact payload ✔ / **visual full-text readability ✘ (2-line clamp)**.
+The clamp is **existing shared CSS behavior; not introduced by the F08 write; not a write regression.**
+Whether the two-line clamp is a product/UX defect worth changing is **deferred to a separate product
+decision.** The text genuinely reaches the DOM; the reader simply cannot see all of it in place.
 **No product/UI fix is made or proposed by this supplement** — it is an observational record.
 
 One representative sanitized shot is committed as final supplement evidence (not a montage):
