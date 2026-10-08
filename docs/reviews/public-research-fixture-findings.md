@@ -568,3 +568,64 @@ write, no inference, no service/deploy, no product/UI edit, no WP3 seed, no WP4 
 entry** and no merge was performed; the six axis→repository roles, the F08 wording, the optional blocker
 restoration, the evidence strategy and the proposed target **remain undecided**, and no role or default is
 chosen here.
+
+## O. WP5 external reviewer acceptance and the WP-G planning entry (appended 2026-10-08)
+
+> **Appended, not an amendment.** §A–§N above are preserved unchanged. This section records the
+> external reviewer's **acceptance of the WP5 executable checks**, stages **WP0–WP5 as accepted**, and
+> records that **WP-G (the mutation gate) is entered for planning/review only — with no execution
+> authorization**. It is **not a verbatim reviewer transcript**: no verbatim reviewer message is
+> available to commit, so the **verdict line is recorded exactly and the dispositions are summarized**;
+> the summary must not be quoted as the reviewer's own words, and **no citation is invented**.
+
+**Verdict: WP5 ACCEPTED (harness-only, read-only).** The WP5 executable checks at head
+`77c8f5b0e1845a28cc4f606946f4d0e46e177882` are accepted: the checks are validated against an
+**isolated throwaway store** and each can go **red** on an injected defect; a green run is reachable
+only through **test-only** decisions; and the default run is honestly **not green** (BLOCKED) while the
+five parameter gates are unapproved. **The authoring/mutation path remains NOT execution-validated** —
+no write to any target has been exercised. **Harness/doc only:** no fixture/domain write, no
+`reconcile_topic`/`record_activity` against any target, no inference, no new research, no
+service/deploy/restart, no product/UI change, no WP3 seed, no WP4 amendment, **no merge**.
+
+### O.1 Work-package stage (WP0–WP5 accepted)
+
+| WP | Stage | Basis |
+|---|---|---|
+| WP0 | **accepted** (scoped) | attempt-4 PASS (read-only preflight); three earlier reports INCOMPLETE |
+| WP1 | **accepted** | APPROVE with two non-blocking documentary qualifications; no rerun |
+| WP2 | **accepted with qualifications** | six candidate pairs (D1–D6); D1/D2 axis→repo roles unresolved |
+| WP3/WP4 | **designs accepted as corrected** (design-only, not execution-validated) | §I–§K corrections applied |
+| WP5 | **accepted** (read-only executable checks) | this section; the checks are validated and can go red |
+
+### O.2 WP-G — entered for planning only, no execution authorization
+
+- WP-G is **entered** as a **planning/review** gate. Its deliverable is the decision/review packet
+  [`docs/plans/wp-g-mutation-gate-decision-packet.md`](../plans/wp-g-mutation-gate-decision-packet.md).
+- **No execution authorization exists.** WP-G holds **no** owner write authorization; the explicit
+  target and every parameter decision remain open, and any future write needs **explicit human
+  choices + explicit owner write authorization**.
+- No WP3 seed and no WP4 amendment is executed or authorized by this entry.
+
+### O.3 Measured results (this run, at 77c8f5b)
+
+| Command | Result |
+|---|---|
+| `bun run harness:wp5` (default) | **28 PASS · 0 FAIL · 5 BLOCKED**, aggregate **BLOCKED** (exit 2) — not green; the five approvals are missing |
+| `bun run harness:wp5 --test-only-decisions` | **33 PASS · 0 FAIL · 0 BLOCKED**, aggregate **PASS** (exit 0) — the fully-PASS path, test-only |
+| `bun run harness:wp5:test` | **38 pass / 0 fail** |
+| `bun run check` | **313 pass / 0 fail** (typecheck + build + unit suite) |
+| `bun run harness:records` | green — **267 text files scanned** (123 under `docs/`), 2 excluded by path |
+| `git diff --check` | clean |
+
+**Limitation (stated, not implied).** `bun run typecheck:host` is **not run**: no Nakama checkout is
+present (`NAKAMA_CHECKOUT` unset; `/mnt/otrais/repos/nakama` absent) and the host-type check needs one
+to resolve the real host types. It is a documented limitation, not a green claim.
+
+### O.4 Boundaries (unchanged)
+
+- **Five parameter gates stay unresolved** (G01 six axis→repo roles; G02 F08 wording/confidence; G03
+  optional blocker restoration; G04 evidence strategy; G05 proposed target) — no default is chosen.
+- **The authoring path is not execution-validated**; the read-only preflight only is validated.
+- No fixture/domain write, no inference, no service/deploy, no product/UI edit, no WP3 seed, no WP4
+  amendment, no merge. Every write still awaits **explicit owner authorization** and a **granted**
+  WP-G — which this entry does **not** grant.

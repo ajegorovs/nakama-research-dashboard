@@ -14,11 +14,15 @@ metadata:
 
 # Research-fixture authoring
 
-> **Status: read-only preflight validated, authoring not yet execution-validated (v0.1.0).** The
-> read-only WP0 preflight passed at commit `a2e4931` (see *Validation*); the **baseline seed/amendment
-> authoring path is not yet execution-validated** — no write has been exercised, so the procedure is
-> **not validated end-to-end**. Treat any authoring output as a proposal to be validated. The governing
-> plan is [`docs/plans/research-fixture-methodology.md`](../../../docs/plans/research-fixture-methodology.md).
+> **Status: read-only preflight validated; WP5 executable checks validated (isolated); authoring/mutation
+> not yet execution-validated.** The read-only WP0 preflight passed at commit `a2e4931`; the **WP5
+> executable checks** are **accepted** and validated against an **isolated throwaway store** at commit
+> `77c8f5b` (see *Executable checks (WP5)*). The **baseline seed/amendment authoring path is still not
+> execution-validated** — no write to any target has been exercised, so the procedure is **not validated
+> end-to-end**. Treat any authoring output as a proposal to be validated. The governing plan is
+> [`docs/plans/research-fixture-methodology.md`](../../../docs/plans/research-fixture-methodology.md);
+> the WP-G decision/review packet is
+> [`docs/plans/wp-g-mutation-gate-decision-packet.md`](../../../docs/plans/wp-g-mutation-gate-decision-packet.md).
 
 ## When to Use
 
@@ -221,11 +225,48 @@ finding is a **non-blocking rationale wording** correction (a direct GET does no
 session active org; the page fetches the active org's asset), fixed above with **no recipe change**.
 Only a gap on a **required** route blocks; an optional refinement does not.
 
-**This skill's status: the read-only preflight is validated at `a2e4931`; the baseline seed/amendment
-authoring path is not yet execution-validated** — no write has been exercised, so the procedure is not
-validated end-to-end. A passing WP0 report is **not** authorization for the authoritative WP1 run —
-the owner must authorize WP1 explicitly after WP0 passes. Neither WP0 nor WP1 is executed by this
-skill.
+**This skill's status: the read-only preflight is validated at `a2e4931`; the WP5 executable checks are
+validated (isolated) at `77c8f5b`; the baseline seed/amendment authoring path is still not
+execution-validated** — no write has been exercised, so the procedure is not validated end-to-end. A
+passing WP0 report is **not** authorization for the authoritative WP1 run — the owner must authorize WP1
+explicitly after WP0 passes. Neither WP0 nor WP1 is executed by this skill.
+
+## Executable checks (WP5) — validated (isolated), not an end-to-end validation
+
+The WP5 executable checks are the repo harness at `harness/wp5/`
+(`manifest.mjs`, `fixture.mjs`, `checks.mjs`, `run.mjs`, `wp5-checks.test.mjs`). They encode the
+**accepted WP3 baseline manifest** and the **accepted WP4 amendment invariants** as executable data and
+seed them through the product's own write path (`reconcileTopic`) into an **isolated throwaway temp store**
+(`mkdtemp` under `TMPDIR`, removed on dispose) — **never the retained fixture**, nothing inside the repo,
+and **no network client** (asserted by the C21 safety guard). Run them:
+
+| Command | What it does |
+|---|---|
+| `bun run harness:wp5` | the run — **default BLOCKED** (exit 2) while the parameter gates are unapproved; **not green** |
+| `bun run harness:wp5 --test-only-decisions` | the **test-only** fully-PASS path (exit 0) — proves a resolved contract can be verified; refused without the `testOnly` label |
+| `bun run harness:wp5:test` | the check suite — proves green is reachable and **can go red** |
+| `bun run check` | typecheck + build + unit suite |
+| `bun run harness:records` | the public-record redaction guard |
+
+**What "validated (isolated)" means — and what it does not.** Measured at `77c8f5b`:
+`bun run harness:wp5` → **28 PASS · 0 FAIL · 5 BLOCKED** (exit 2); `--test-only-decisions` → **33 PASS**
+(exit 0); `harness:wp5:test` → **38 pass / 0 fail**; `bun run check` → **313 pass / 0 fail**;
+`harness:records` green (**267** text files, 123 under `docs/`); `git diff --check` clean. The checks are
+**accepted** and validated: each can go **red** on an injected defect and the default run is honestly
+**not green**. This validates the **checker**, not a write. **The test store is not the live fixture** — a
+green (or BLOCKED) run is **not** evidence about any live service, and **the authoring/mutation path is
+still not execution-validated**. **Do not mark the procedure validated end-to-end.**
+
+**Known host-typecheck disclosure.** `bun run typecheck:host` is **not run** here: it needs a Nakama
+checkout to resolve the real host types (`bun harness/typecheck-host.mjs --checkout <path>` or
+`NAKAMA_CHECKOUT`), and none is present. It is a documented limitation, **not** a pass — do not report it
+as green.
+
+**Gate semantics.** The five parameter gates (G01 six axis→repository roles; G02 F08 wording/confidence;
+G03 optional blocker restoration; G04 evidence strategy; G05 proposed target) carry **no default**. An
+unresolved gate yields **BLOCKED**, never a silent value. The **WP-G** decision/review packet
+([`docs/plans/wp-g-mutation-gate-decision-packet.md`](../../../docs/plans/wp-g-mutation-gate-decision-packet.md))
+lays out the human choices; **WP-G grants no write authorization**, and no run writes the retained fixture.
 
 ## Pitfalls
 
