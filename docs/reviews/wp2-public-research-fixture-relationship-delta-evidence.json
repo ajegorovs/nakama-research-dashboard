@@ -1,0 +1,222 @@
+{
+  "artifact": "WP2 retained-fixture relationship-delta analysis — sanitized structured evidence",
+  "status": "wp2-executed-read-only-task-authorized",
+  "work_package": "WP2 (Reconcile retained-fixture links — F01, F02, F04)",
+  "scope": "read-only: three read actions over direct HTTP against the explicit target org; git reads at the frozen pin; local source-contract reads. No domain write, no inference, no reconcile_topic/record_activity, no service change, no deploy, no product/UI edit, no fixture repair, no merge. WP3/WP4/WP5/WP-G not started.",
+  "authorization": {
+    "source": "Task brief to this session explicitly authorized WP2 read-only (F01/F02/F04). The WP1 gate (public-research-fixture-findings.md §F) had stated WP2 was 'prepared but NOT authorized' by the owner; this session treats the dispatching brief as that authorization and records the boundary explicitly.",
+    "stop_condition": "Read-only analysis ends after the delta proposal; no write, no baseline-seed packet (WP3), no amendment packet (WP4), no checks (WP5), no mutation-gate review (WP-G)."
+  },
+  "sanitized": {
+    "loopback": "127.0.0.1 kept verbatim",
+    "withheld": ["target org id/name -> <targetOrg>", "recorder actor id -> <recorder actor>", "host-specific absolute paths"],
+    "labels": ["fixture-internal record ids (topic/axis/problem/repository/person/event) replaced with semantic labels; raw ids live only in local scratch"],
+    "kept": ["public GitHub owner/repo slugs", "public commit/PR refs", "frozen pins", "loopback endpoints"]
+  },
+  "target": {
+    "org": "<targetOrg> (explicit, by id; never orgs[0])",
+    "selection": "x-org-id per request; CSRF via x-csrf-token = nakama_csrf cookie. All three reads returned HTTP 200 and result.ok true."
+  },
+  "pins": {
+    "udv": {"repo": "ajegorovs/udv-echo-process", "sha": "841964d41f8dc73e55d78303e79ed4098c00d700", "date": "2026-09-28"},
+    "grablink": {"repo": "ajegorovs/Grablink-Full-sequence-acquisition", "sha": "e6f83b2f5a45a961044b107f2628b046d41c3ab2", "date": "2026-09-24"},
+    "dashboard": {"repo": "ajegorovs/nakama-research-dashboard", "sha": "95ec34e5d24240c7ac92c384cff5d5658ebb8761", "date": "2026-10-07"}
+  },
+  "product_contract": {
+    "pin_equals_head_for_source": true,
+    "source_digests_sha256": {
+      "src/actions.ts": "9964d4a52e4b00c0b836f5d8beebc22d3298e045163cfb1e5cc9e8494c32b25b",
+      "src/store.ts": "80015d89af5ed180b89dcbd1be84ca58672c5fb74d43fbef7146b40b8bb39b40",
+      "nakama.plugin.json": "e3f2fdb5af5a5743f93fe11c6cd1d97981c9f3fe230906c94ffcfb70ad0be3e2",
+      "migrations/004-ux-v2-model.sql": "46b830612d6b7f52cd661e30155779d6dd455dff2cbecb6386c4861cd301587e"
+    },
+    "note": "Local source digests equal the frozen dashboard pin; every line reference below is valid at the pin and at HEAD. The WP2 readback itself is the authoritative current-state measurement."
+  },
+  "reads_performed": {
+    "get_overview": {"http": 200, "ok": true, "envelope_digest_sha256": "8f7eee5163cd5739e94c1635677ba81f513e7c65b32cf473374dc5e614eef845"},
+    "get_topic_topicwide": {"infra": 200, "experimental": 200, "ok": true},
+    "get_topic_scoped": {"count": 6, "all": 200, "all_ok": true},
+    "search_dashboard": {"queries": 7, "all": 200, "all_ok": true},
+    "raw_batches_local": ".hermes/scratch/wp2-raw-*.json, .hermes/scratch/wp2-summary.json (git-ignored; raw record ids retained there only)"
+  },
+  "counts_measured": {"topics": 2, "axes": 6, "repositories": 3, "people": 1, "topicsByStatus": {"active": 2}},
+  "stored_relationships_vs_projections": {
+    "principle": "Absent infra-axis links are ABSENT STORED ROWS, not a display filter. The read follows projections over the link tables below; a link absent from the table is absent from every projection.",
+    "link_tables_and_writers": [
+      {"table": "axis_repositories", "migration": "002-coordination-model.sql:131", "stores": "axis<->repository link + relationship", "written_by": "reconcile_topic.axes[].repositories[] (store.ts:5778-5790, linkRepository upsert)", "read_by": "repositoriesByAxis() store.ts:2996; axis.repositories in get_topic/get_overview"},
+      {"table": "axis_people", "migration": "002-coordination-model.sql:142", "stores": "axis<->person link + role", "written_by": "reconcile_topic.axes[].people[] (store.ts:5791-5801)", "read_by": "axesByPerson -> person axes; store.ts:3290-3318"},
+      {"table": "topic_people", "migration": "002-coordination-model.sql:84", "stores": "topic<->person link", "written_by": "reconcile_topic.people[] (store.ts:5724-5735) / linkTopicPerson", "read_by": "PersonRollup topics; store.ts:3244-3318"},
+      {"table": "topic_repositories", "migration": "002-coordination-model.sql:56", "stores": "topic<->repository link", "written_by": "reconcile_topic.repositories[] (store.ts:5736-5748)", "read_by": "topic.repositories"},
+      {"table": "problem_repositories", "migration": "004-ux-v2-model.sql:185", "stores": "problem<->repository link", "written_by": "reconcile_topic.problems[].repositoryFullNames[] (createProblem/updateProblem store.ts:4845-4848)", "read_by": "problem.repositories"},
+      {"column": "activities.repository_id", "migration": "004-ux-v2-model.sql:352", "stores": "optional DIRECT event->repository link", "note": "NULL in this fixture"},
+      {"column": "activities.problem_id", "migration": "004-ux-v2-model.sql:351", "stores": "optional event->problem (evidence) link", "note": "resolves from an existing problem; F14a"}
+    ],
+    "indirect_event_to_repository_attribution": {
+      "rule": "An event recorded against an axis belongs to the repositories that axis names, even when the event's own repository_id is NULL.",
+      "evidence": "store.ts:3355-3394 (repositoryIdsByAxis; addRepositoryEvent for event.axisId), and the last-activity join store.ts:3411-3419 (activities x JOIN axis_repositories).",
+      "consequence": "Adding an axis_repositories row for an infra axis attributes that axis's existing commit events to the repository in the repository rollup WITHOUT editing any event row. Direct per-event repository_id links would be a needless duplicate of the same fact."
+    }
+  },
+  "before_state_link_inventory": {
+    "topics": [
+      {"label": "Research infrastructure / team management", "version": 1, "repositories": [{"repo": "ajegorovs/nakama-research-dashboard", "relationship": "primary"}], "people": ["Aleksandrs Jegorovs (githubLogin ajegorovs)"]},
+      {"label": "Experimental research", "version": 1, "repositories": [{"repo": "ajegorovs/udv-echo-process", "relationship": "primary"}, {"repo": "ajegorovs/Grablink-Full-sequence-acquisition", "relationship": "supporting"}], "people": ["Aleksandrs Jegorovs"]}
+    ],
+    "axes": [
+      {"label": "Research dashboard and focused retrieval", "topic": "Research infrastructure / team management", "version": 1, "state": "usable", "repositories": [], "people": [], "evidence_count": 3, "events": ["github_commit 95ec34e", "github_commit da7996b", "github_commit 5a62749"]},
+      {"label": "Agent consultation and automation evidence", "topic": "Research infrastructure / team management", "version": 1, "state": "usable", "repositories": [], "people": [], "evidence_count": 0, "problems": ["N-7 automation completes...", "Normal assigned research-coordinator skill loading..."]},
+      {"label": "High-rate optical acquisition", "topic": "Experimental research", "version": 1, "state": "usable", "repositories": [{"repo": "ajegorovs/Grablink-Full-sequence-acquisition", "relationship": "supporting"}], "people": ["Aleksandrs Jegorovs"], "events": ["repo_document docs/AGENDA.md", "github_pr PR #1"]},
+      {"label": "UDV sparse-analysis validation", "topic": "Experimental research", "version": 1, "state": "usable", "repositories": [{"repo": "ajegorovs/udv-echo-process", "relationship": "supporting"}], "people": ["Aleksandrs Jegorovs"], "events": ["github_pr PR #67"]},
+      {"label": "UDV acquisition automation", "topic": "Experimental research", "version": 1, "state": "usable", "repositories": [{"repo": "ajegorovs/udv-echo-process", "relationship": "supporting"}], "people": ["Aleksandrs Jegorovs"], "events": ["github_pr PR #69", "github_pr PR #44"]},
+      {"label": "Grablink diagnostics and sustained-rate validation", "topic": "Experimental research", "version": 1, "state": "active", "repositories": [{"repo": "ajegorovs/Grablink-Full-sequence-acquisition", "relationship": "supporting"}], "people": ["Aleksandrs Jegorovs"], "problems": [{"label": "Sustained 300-350 FPS operation has measured dropped frames...", "version": 1, "repositories": ["ajegorovs/Grablink-Full-sequence-acquisition"]}]}
+    ],
+    "repositories": [
+      {"fullName": "ajegorovs/Grablink-Full-sequence-acquisition", "url": "", "description": "", "defaultBranch": ""},
+      {"fullName": "ajegorovs/nakama-research-dashboard", "url": "", "description": "", "defaultBranch": ""},
+      {"fullName": "ajegorovs/udv-echo-process", "url": "", "description": "", "defaultBranch": ""}
+    ],
+    "person": {"label": "Aleksandrs Jegorovs", "githubLogin": "ajegorovs", "nakamaUserId": null, "attributable": false, "axes": ["Grablink diagnostics and sustained-rate validation", "High-rate optical acquisition", "UDV sparse-analysis validation", "UDV acquisition automation"], "topics": [{"topic": "Experimental research", "role": ""}, {"topic": "Research infrastructure / team management", "role": "", "axes": []}]},
+    "events": {"repository_id_all_null": true, "problem_id_all_null": true, "sourceUrl_all_empty": true, "actorType_all": "agent", "actorId": "<recorder actor> (single recorder, withheld)"}
+  },
+  "candidate_delta": [
+    {
+      "id": "D1", "finding": "F01",
+      "subject": "axis: Research dashboard and focused retrieval",
+      "predicate": "names repository (axis_repositories)",
+      "object": "ajegorovs/nakama-research-dashboard",
+      "candidate_relationship": null,
+      "candidate_relationship_status": "undecided",
+      "source": "The axis's three recorded events are commits of this repository: 95ec34e (= the frozen dashboard pin), da7996b, 5a62749 (git-verified in the dashboard repo). The parent topic's primary repository is the Dashboard (plan §5.2).",
+      "identity_proof": "git log -1 95ec34e da7996b 5a62749 -> all in ajegorovs/nakama-research-dashboard; messages are the dashboard product and the agent-consultation stage.",
+      "dedup": "Absent: axis.repositories == []; the repository is not referenced by any axis (only the topic link exists). No duplicate of this pair.",
+      "uncertainty": "The seed packet names axis 5's repository as 'product shared', not the repo slug; the axis-level attribution rests on the topic's primary repo + the commits' own provenance. Relationship value is null/undecided (NOT 'supporting', NOT 'primary') and needs WP4/human confirmation; see reviewer_qualification."
+    },
+    {
+      "id": "D2", "finding": "F01",
+      "subject": "axis: Agent consultation and automation evidence",
+      "predicate": "names repository (axis_repositories)",
+      "object": "ajegorovs/nakama-research-dashboard",
+      "candidate_relationship": null,
+      "candidate_relationship_status": "undecided",
+      "source": "The axis's two problems are documented in this repository (docs/reviews/2026-10-07-agent-consultation-and-focused-retrieval-stage-report.md and its acceptance record), and the repo's commit 5a62749 ('Record the agent-consultation and focused-retrieval stage and its acceptance') records that stage. Parent topic primary repo is the Dashboard.",
+      "identity_proof": "git log -1 5a62749 -> ajegorovs/nakama-research-dashboard, 2026-10-07.",
+      "dedup": "Absent: axis.repositories == []. No duplicate.",
+      "uncertainty": "The axis carries no events of its own (evidence_count 0), so the repo basis is the problems' documentation and the parent topic, not an axis-local event. Relationship value is null/undecided (NOT 'supporting', NOT 'primary'); WP4/human should confirm the attribution and the role. See reviewer_qualification."
+    },
+    {
+      "id": "D3", "finding": "F02",
+      "subject": "axis: Research dashboard and focused retrieval",
+      "predicate": "names person (axis_people)",
+      "object": "person: Aleksandrs Jegorovs (githubLogin ajegorovs)",
+      "candidate_role": "",
+      "source": "SOURCE-BACKED ENRICHMENT, not a restoration of the packet (the seed packet named the person only on axes 1-4). The three commits recorded on the axis are authored by GitHub author.login 'ajegorovs'; the person is already linked to the parent topic (topic_people).",
+      "identity_proof": "GitHub commit API repos/ajegorovs/nakama-research-dashboard/commits/{95ec34e5d24240c7ac92c384cff5d5658ebb8761,da7996b6143f918ca590a79649aba831151b4dca,5a6274918c92d8c6a539349d3549dde045c3985f} -> author.login 'ajegorovs' for all three. Basis: fixture githubLogin = GitHub author.login; no author-name equivalence. Exact identity/source only, no expanded research.",
+      "dedup": "Absent: axis.people == []. The person row already exists (0 new persons).",
+      "uncertainty": "resolvePersonForLink must reuse the existing row: supply githubLogin 'ajegorovs' so upsertPerson matches on github_login (store.ts:6399-6410); displayName alone also matches while a single person carries that name (store.ts:6372-6383). WP4 mechanic, not selected here."
+    },
+    {
+      "id": "D4", "finding": "F02",
+      "subject": "axis: Agent consultation and automation evidence",
+      "predicate": "names person (axis_people)",
+      "object": "person: Aleksandrs Jegorovs (githubLogin ajegorovs)",
+      "candidate_role": "",
+      "source": "SOURCE-BACKED ENRICHMENT, not a restoration of the packet (the seed packet named the person only on axes 1-4). The person is a topic member (topic_people); the consultation records and the recording commit (5a62749) are authored by GitHub author.login 'ajegorovs' in this repository.",
+      "identity_proof": "GitHub commit API repos/ajegorovs/nakama-research-dashboard/commits/5a6274918c92d8c6a539349d3549dde045c3985f -> author.login 'ajegorovs'; the commit tree contains docs/reviews/2026-10-07-agent-consultation-and-focused-retrieval-stage-report.md and docs/reviews/2026-10-07-agent-consultation-and-focused-retrieval-acceptance-record.md (the exact consultation stage/acceptance; N-7 automation and assigned research-coordinator skill material, both represented on axis 6). Topic membership is corroboration, not the primary basis. No author-name equivalence.",
+      "dedup": "Absent: axis.people == []. Person exists. No duplicate.",
+      "uncertainty": "No axis-local event; but the author-route chain to the exact stage/acceptance material is exact (see reviewer_qualification 9.3). Basis is fixture githubLogin = GitHub author.login, with topic membership as corroboration only. WP4/human should confirm."
+    },
+    {
+      "id": "D5", "finding": "F04",
+      "subject": "problem: N-7 automation completes, but its ephemeral session does not retain the tool trace...",
+      "predicate": "names repository (problem_repositories)",
+      "object": "ajegorovs/nakama-research-dashboard",
+      "source": "The problem describes the dashboard's agent-consultation stage, whose records live in this repository (docs/reviews/2026-10-07-agent-consultation-and-focused-retrieval-stage-report.md), recorded by commit 5a62749.",
+      "identity_proof": "git log -1 5a62749 -> this repository.",
+      "dedup": "Absent: problem.repositories == []; the sibling axis's commit event already exists but no problem-repo link does. No duplicate.",
+      "uncertainty": "Problem provenance is not a representable field (WP1 F10); a repository link attributes the problem's subject, not a source URL. WP4 wording/approval."
+    },
+    {
+      "id": "D6", "finding": "F04",
+      "subject": "problem: Normal assigned `research-coordinator` skill loading has not yet been demonstrated end-to-end...",
+      "predicate": "names repository (problem_repositories)",
+      "object": "ajegorovs/nakama-research-dashboard",
+      "source": "Same consultation-stage records in this repository; the problem concerns the product's skill-loading behaviour.",
+      "identity_proof": "git log -1 5a62749 -> this repository.",
+      "dedup": "Absent: problem.repositories == []. No duplicate.",
+      "uncertainty": "Same as D5."
+    }
+  ],
+  "f04_separate": {
+    "repository_omission": "Both consultation-axis problems have repositories == [] (no problem_repositories rows), so they are unattributable to a codebase.",
+    "sibling_evidence_location": "The source that would back them already exists as the github_commit event 5a62749 recorded on the SIBLING axis 'Research dashboard and focused retrieval' (and, for axis 5, as its other two commit events). The consultation axis itself has evidence_count 0.",
+    "candidate_needed_relationship": "problem (N-7) -> repository dashboard, and problem (skill-loading) -> repository dashboard, via reconcile_topic.problems[].repositoryFullNames.",
+    "not_decided": "Whether to MOVE the sibling evidence to the consultation axis, DUPLICATE it, or REASSOCIATE it, and whether to add event->problem evidence links, is deliberately NOT chosen here (left to WP4/WP-G). The delta only states the candidate link and the existing location."
+  },
+  "counts_actual_dedup": {
+    "candidate_adds": 6,
+    "axis_repository_adds": 2,
+    "axis_person_adds": 2,
+    "problem_repository_adds": 2,
+    "new_repositories_created": 0,
+    "new_people_created": 0,
+    "candidate_pairs_already_present": 0,
+    "pairs_accepted_by_reviewer": 6,
+    "role_decisions_resolved": 0,
+    "role_decisions_unresolved": 2,
+    "note": "All six candidate objects (1 repository, 1 person) already exist; only link rows are candidates."
+  },
+  "reviewer_qualification": {
+    "applied": "2026-10-08",
+    "head_tested": "fa2638ec69c2063a6a11d640ac11b7427eb72a35",
+    "docs_only": true,
+    "verdict": "ACCEPT all six candidate pairs D1-D6",
+    "pairs_accepted": 6,
+    "role_decisions": {"resolved": 0, "unresolved": 2, "roles": {"D1": null, "D2": null}},
+    "role_note": "D1/D2 axis<->repository role NOT established. NOT 'supporting' (a fixture default / other fixture links do not establish the semantics) and NOT 'primary' (a one-primary promotion would import a topic-level rule the source does not state for this axis). Left null/undecided for WP4/human approval.",
+    "d3d4_note": "Source-backed enrichments, not a restoration: the seed packet named the person only on axes 1-4.",
+    "d4_chain": "Strongest of D3/D4: fixture githubLogin 'ajegorovs' = GitHub author.login of commit 5a62749, whose tree contains the exact consultation stage/acceptance (stage-report + acceptance-record); the N-7 automation and assigned research-coordinator skill material is represented on axis 6. Topic membership is corroboration, not the primary basis.",
+    "identity_basis": "fixture githubLogin 'ajegorovs' = GitHub commit author.login 'ajegorovs' for the three exact commits in ajegorovs/nakama-research-dashboard (frozen repo); no author-name equivalence.",
+    "author_route_proof": {
+      "repo": "ajegorovs/nakama-research-dashboard",
+      "api": "GitHub commit API (GET /repos/{owner}/{repo}/commits/{ref})",
+      "commits": {
+        "95ec34e5d24240c7ac92c384cff5d5658ebb8761": {"author_login": "ajegorovs", "commit_author_name": "ajegorovs"},
+        "da7996b6143f918ca590a79649aba831151b4dca": {"author_login": "ajegorovs", "commit_author_name": "ajegorovs"},
+        "5a6274918c92d8c6a539349d3549dde045c3985f": {"author_login": "ajegorovs", "commit_author_name": "ajegorovs"}
+      },
+      "basis": "GitHub author.login (account identity), NOT git author name",
+      "scope": "exact identity/source of these three commits only; no expanded research"
+    },
+    "evidence_strategy": "move/duplicate/reassociate remains UNDECIDED (no strategy chosen)",
+    "authorization": "no WP3/WP4/WP5/WP-G authorized; no fixture/product/UI/service change, no inference, no merge"
+  },
+  "unchanged_objects": [
+    "topic->repository links: infra->dashboard (primary); experimental->udv (primary), ->grablink (supporting)",
+    "topic_people links: both topics -> Aleksandrs Jegorovs (role '')",
+    "axis_repositories on the 4 experimental axes (gradual: grablink/udv, relationship supporting)",
+    "axis_people on the 4 experimental axes (Aleksandrs Jegorovs)",
+    "problem 0d586e71 (Grablink diagnostics) -> repository grablink",
+    "the 5 non-infra events and the 3 infra commit events (their repository_id stays NULL; attribution is indirect via the new axis link)",
+    "all record versions (topics v1; axes v1; problems v1) before any write; no write performed"
+  ],
+  "limitations_for_wp4_mechanics": [
+    "Adding an axis link requires passing the EXISTING axis id (with expectedVersion = its current version, 1) inside reconcile_topic; a link-only patch is additive via ON CONFLICT upsert (linkRepository store.ts:5783, 5796-5800).",
+    "Person reuse: reconcile_topic.axes[].people[] goes through resolvePersonForLink; a person with nakamaUserId null is matched by github_login ('ajegorovs') or, when unique, by display_name (store.ts:6362-6410). Supplying neither would CREATE a second person with the same name only when no exact display_name match exists; with the existing row present the name-only path reuses it (unique). The account mapping (nakamaUserId) is still absent, so attributable stays false.",
+    "Problem repo links: reconcile_topic.problems[] with an existing problemId runs updateProblem and calls replaceProblemRepositories (store.ts:4845-4848) -> it REPLACES the problem's repository set, so the exact intended repositoryFullNames set must be sent; the manifest requires 'statement' on every problems[] item, so the verbatim statement must be echoed.",
+    "Problem state cannot be changed through problems[] on an update (store.ts:5931-5938); only via transitions[]. Not needed for these links.",
+    "reconcile_topic is per-topic atomic; adding infra axis links for topic 'Research infrastructure / team management' is one transaction in that topic.",
+    "Event->problem evidence (F14a) is a SEPARATE, supported but not-yet-used capability (reconcile_topic.activities[].problemId); the current fixture has zero event->problem links. Whether to add evidence links in addition to repository links is a WP4 decision, not part of this delta.",
+    "F09b: the repository model carries no pin field, so the dashboard pin cannot be stored as first-class repository state; it rides the evidence manifest only."
+  ],
+  "uncertainty": [
+    "Axis-level repository attribution for the two infra axes rests on topic primary repo + commit provenance, not an explicit axis line in the seed packet ('product shared').",
+    "The axis-6 person link (D4) has no axis-local event; basis is topic membership + the recording commit's authorship.",
+    "D1/D2 relationship value is null/undecided (NOT 'supporting', NOT 'primary'): a fixture default or another fixture link does not establish the semantics, and a one-primary promotion is not source-established. Left to WP4/human.",
+    "This is a delta PROPOSAL: move/duplicate/reassociate strategy and final wording are WP4/human decisions."
+  ],
+  "boundaries": [
+    "Read-only. No fixture/domain write, no reconcile_topic/record_activity, no inference, no service change, no deploy, no product/UI edit, no fixture repair, no merge.",
+    "This is WP2 analysis, not authorization for WP3/WP4/WP5/WP-G.",
+    "The findings ledger is preserved; the WP2 disposition is APPENDED (newlines exact), not rewritten."
+  ]
+}
