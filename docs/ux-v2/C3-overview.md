@@ -300,7 +300,7 @@ did not stop the write semantics from being verified. Tracked as its own item in
    still creates and operates on its own subject; the gate runs before it writes.
 2. **`wipe-plugin-rows.py` has no default target any more.** `--data-root` and `--org` are required, so the
    instance-targeting mistake cannot recur silently. It already had: with the *fixture* env sourced the script
-   emptied `/mnt/otrais/data/nakama-dev` anyway, and the fixture re-seed that followed restored only the
+   emptied `/mnt/<estate>/data/nakama-dev` anyway, and the fixture re-seed that followed restored only the
    fixture — the corpus stayed wiped until it was replayed through `harness/replay-corpus.mjs` (695 calls, then
    `1 topic / 3 axes / 1 person / 1 repository / 694 activities`).
 

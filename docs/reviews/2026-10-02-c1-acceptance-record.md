@@ -382,7 +382,7 @@ and fixture being equally reproducible, and the fixture was neither.
 
 - **The instance is a user unit.** `nakama-fixture-instance.service` (authoritative copy in the estate repo,
   `services/nakama/systemd/`) starts the same `run-dev-instance.sh` the corpus uses, with
-  `NAKAMA_DEV_DATA=/mnt/otrais/data/nakama-fixture`, `NAKAMA_DEV_PORT=4400` and
+  `NAKAMA_DEV_DATA=/mnt/<estate>/data/nakama-fixture`, `NAKAMA_DEV_PORT=4400` and
   `NAKAMA_ENV_FILE=compose/nakama/.env.fixture`; its review surface is `nakama-fixture-web.service` on
   `:3005`. Both are `Restart=always` and enabled on boot, logs through the user service manager. Before this
   the instance was launched by a session's scratch script from a data root inside the pruned Hermes scratch

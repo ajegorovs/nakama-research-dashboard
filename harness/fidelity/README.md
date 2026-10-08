@@ -23,13 +23,13 @@ user path is hardcoded.
 
 ```bash
 export PATH="$HOME/.bun/bin:$PATH"
-cd /mnt/otrais/repos/nakama-research-dashboard
+cd <repo root>
 
 # 1. capture the running UI (refuses rather than writing a capture it cannot prove), 2. render the
 #    prototypes at the same viewport, 3. build the montages. Credentials come from --env-file; the
-#    capture resolves harness/env-file.mjs itself.
+#    capture resolves harness/env-file.mjs itself. The env file lives in the estate, outside this repo.
 bun harness/fidelity/capture-current.mjs \
-  --env-file /mnt/otrais/services/compose/nakama/.env \
+  --env-file <estate>/services/compose/nakama/.env \
   --url http://<box>.<tailnet>.ts.net:3003 --viewport 1440x900 \
   --out docs/ux-v2/fidelity/current-1440x900
 bun harness/fidelity/render-prototypes.mjs --dir docs/ux-v2/contract/prototypes \
@@ -39,7 +39,7 @@ bun harness/fidelity/montage.mjs --fidelity docs/ux-v2/fidelity \
 
 # which build is that URL serving (markers, not assumptions)
 bun harness/fidelity/served-build.mjs \
-  --env-file /mnt/otrais/services/compose/nakama/.env \
+  --env-file <estate>/services/compose/nakama/.env \
   --url http://<box>.<tailnet>.ts.net:3003 --viewport 1440x900
 ```
 

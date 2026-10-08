@@ -38,11 +38,13 @@ They are a separate services estate, historically a mount outside every checkout
 | `nakama-fixture-instance.service` | fixture API | `4400` |
 | `nakama-fixture-web.service` | fixture review web (Vite) | `3005` |
 
-The estate's historical locations — **verify each against the current host before use**:
+The estate's historical locations — **verify each against the current host before use**. The estate is local to
+the machine that runs the instances, so these are shapes, not this repo's paths; `refresh.sh` reads the
+services tree as `ESTATE` and the checkout as `NAKAMA_CHECKOUT`:
 
-- services tree: `/mnt/otrais/services` (env files under `compose/nakama/`, corpus `.env`, fixture `.env.fixture`)
-- data roots: `/mnt/otrais/data/nakama-dev` (corpus) and `/mnt/otrais/data/nakama-fixture` (fixture)
-- vendor target: the Nakama checkout the estate's units run from (`NAKAMA_CHECKOUT`, historically `/mnt/otrais/repos/nakama`)
+- services tree (`ESTATE`): env files under `compose/nakama/` — the corpus `.env`, the fixture `.env.fixture`
+- data roots: `<estate>/data/nakama-dev` (corpus) and `<estate>/data/nakama-fixture` (fixture)
+- vendor target (`NAKAMA_CHECKOUT`): the Nakama checkout the estate's units run from
 
 Every path and unit name above is **historical**. The estate is local-only by design (it carries no remote), so it
 can live on a different machine than the one running this task — and the login name, mount path and even the units
@@ -79,8 +81,13 @@ anything; if the estate is genuinely absent here, reconstructing a fresh instanc
    in play.
 2. **Vendor.** `./vendor/vendor-into-nakama.sh <nakama checkout>`. Completion: the script reports the files it
    placed, and the built output in the checkout now contains your change (grep for a token you added).
-3. **Reinstall, with the instance's own parameter set.** Pass the URL explicitly; the corpus env file carries no
-   `NAKAMA_URL`, so a default inherits the caller's shell:
+3. **Reinstall, with the instance's own parameter set — and name the organization explicitly.** Pass the URL
+   explicitly; the corpus env file carries no `NAKAMA_URL`, so a default inherits the caller's shell. Name the
+   target org too: `install-plugin.mjs`, `reinstall-plugin.mjs` and `update-plugin.mjs` all resolve the org
+   through `harness/org-selection.mjs`, which honours `--org-id` / `--org-name` (or `NAKAMA_ORG_ID` /
+   `NAKAMA_ORG_NAME`), falls back to the only org on a single-org account, and **refuses a multi-org account
+   with no selector rather than rebinding `orgs[0]`** — the historical default that rebound the wrong
+   organization (see `harness/org-selection.test.mjs`):
 
    ```bash
    env NAKAMA_URL=http://127.0.0.1:4399 \

@@ -18,8 +18,10 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ESTATE="${ESTATE:-/mnt/otrais/services}"
-CHECKOUT="${NAKAMA_CHECKOUT:-/mnt/otrais/repos/nakama}"
+# The estate and the Nakama checkout are local to the machine that runs the instances, so neither is
+# defaulted here (a public repo must not carry a machine's own path). Name both explicitly.
+ESTATE="${ESTATE:?set ESTATE to the estate services tree (env files under compose/nakama/)}"
+CHECKOUT="${NAKAMA_CHECKOUT:?set NAKAMA_CHECKOUT to the Nakama checkout the estate's units run from}"
 ENV_FILE="${NAKAMA_ENV_FILE:-$ESTATE/compose/nakama/.env}"
 GUARD_TIMEOUT="${GUARD_TIMEOUT:-90}"
 # The guard measures the page the *acceptance pass* will measure, so it has to be pointed at the same

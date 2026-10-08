@@ -33,10 +33,14 @@ when the rule has already been broken.
 | loopback (`127.0.0.1:3005`) | **verbatim** — it identifies nobody, and it is a useful diagnostic |
 | an identity-shaped host | `http://<box>.<tailnet>.ts.net` — scheme, port and path kept |
 | a literal address, a private DNS suffix (`.ts.net`, `.local`, `.internal`, `.lan`), `os.hostname()` | redacted |
+| a machine path — a home root (`/home/<name>/`, `/Users/<name>/`) or a storage mount (`/mnt/<name>/`) | a path **inside** the repo becomes repo-relative; one **outside** becomes `<scratch>/<name>`; the mount's own name becomes the placeholder schema `/mnt/<machine-storage>/` |
 | a public host (the GitHub remote, upstream docs) | untouched |
 
 `.home` is deliberately **not** a private suffix — it collides with ordinary identifiers such as
-`process.env.HOME` and `landing.home`, and a rule that flags them is a rule that gets switched off.
+`process.env.HOME` and `landing.home`, and a rule that flags them is a rule that gets switched off. The path
+classes take the same narrowing: a **placeholder** segment (`<user>`, `<estate>`, `<machine-storage>`, `...`)
+identifies nobody and is kept, while a concrete name is identity. Concrete mount segments can be tolerated
+explicitly with `PUBLIC_RECORDS_MOUNT_ALLOW` (a comma-separated list) when a product legitimately ships one.
 
 **Credentials are referenced by key name only.** No secret, token or password in a file, a transcript or a commit
 message; the live values belong to the instance env files, which live outside this repo. An env file's *values*
@@ -49,9 +53,9 @@ are never printed to a transcript, not even to debug.
    committed files alone guarantees the next pass re-creates the leak.
 2. **Redact the committed records in place**, as a **presentation-only** change: no measured value is altered, so
    no acceptance re-run is required for it.
-3. **Run the guard**: `bun run harness:records`. It asserts the rule's unit cases *and* scans the public tree for
-   identity-shaped text; only the rule and its own suite are excluded. Completion: 0 offences, and the scan count
-   is reported.
+3. **Run the guard**: `bun run harness:records`. It asserts the rule's unit cases *and* scans the public tree —
+   for identity-shaped text, identity-bearing home paths **and machine storage mounts**; only the rule and its own
+   suite are excluded. Completion: 0 offences across all three classes, and the scan count is reported.
 4. **Prove it on a fresh clone** (the reviewer's path, not yours): clone the public remote, grep the header and
    the tree for the address, the suffix and the hostname. A shallow single-branch clone has no `origin/main`, so
    fetch it (`git fetch --depth 1 origin main:refs/remotes/origin/main`) before claiming the diff check ran.
@@ -68,7 +72,11 @@ are never printed to a transcript, not even to debug.
 2. **The guard's false positives are informative.** HTML-escaped placeholders (`&lt;box&gt;`), public URLs, and
    `.home` in `process.env.HOME` all appeared; narrowing the predicate while asserting the two narrowing decisions
    in the rule's own test suite is what stops them silently regressing back.
-3. **A guard that scans only `docs/` is half a guard.** Scan the whole public tree.
+3. **A guard that scans only `docs/` is half a guard.** Scan the whole public tree — and a machine's **storage
+   mount** leaks like its home path: a quoted `--data-root /mnt/<name>/…` or a screenshot under a mounted
+   checkout names where the work ran. Prefer a configurable variable (`ESTATE`, `NAKAMA_CHECKOUT`) or a
+   placeholder (`/mnt/<machine-storage>/`) over the machine's own mount name; never replace it with a
+   literal `<path>` placeholder a script cannot use — require the parameter instead.
 4. **A proof run can republish committed screenshots** as a side effect (the pass owns them). Revert them and
    amend so a redaction commit stays text-only — then say so in the record.
 5. **Doc hygiene covers prose, not just records.** No personal identifiers anywhere — accounts, local usernames,
