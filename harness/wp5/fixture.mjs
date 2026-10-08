@@ -199,6 +199,9 @@ export function readView(store) {
       version: t.topic.version,
       axes: detail.axes.map((axis) => ({
         id: axis.id,
+        // The persistent optimistic-version number, copied verbatim so a readback can measure it: it is
+        // a canonical, mutation-public value (a no-op axis reconcile bumps it) and must never be undefined.
+        version: axis.version,
         title: axis.title,
         state: axis.state,
         stateConfidence: axis.stateConfidence,

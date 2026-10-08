@@ -29,7 +29,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { STATUS_VALUES, canonicalReadback, evaluateStore, evaluateView, summarize } from "./checks.mjs";
+import { STATUS_VALUES, applyRetainedLikeDelta, canonicalReadback, evaluateStore, evaluateView, summarize } from "./checks.mjs";
 import {
   addAxis4Evidence,
   applyTestOnlyAmendment,
@@ -40,6 +40,7 @@ import {
   seedRetainedLike,
 } from "./fixture.mjs";
 import { AXES, TOPIC_NAMES, testOnlyDecisions, unresolvedGates } from "./manifest.mjs";
+import { ResearchStoreConflictError } from "../../src/store.ts";
 
 const repoRoot = join(import.meta.dir, "../..");
 
@@ -241,6 +242,18 @@ describe("WP5 C20 — targeted tamper controls (a mutation-public change in the 
     });
     expect(status).toBe(STATUS_VALUES.FAIL);
   });
+
+  test("a no-op axis dispatch that bumps only the persistent version (aside from the volatile updatedAt) is red (C20)", () => {
+    const status = runWithTamper((b) => {
+      const topic = b.getTopicByName("Experimental research");
+      const axis = b.listAxes(topic.id)[0];
+      // No-op dispatch: reconcile the axis carrying only its `expectedVersion` — the persistent version
+      // bumps (and `updatedAt`, which is volatile) and nothing else. If `readView`/`canonicalReadback`
+      // omitted the version, this would read back identically and C20 would falsely pass.
+      b.reconcileTopic({ topicName: topic.name, axes: [{ id: axis.id, expectedVersion: axis.version }] });
+    });
+    expect(status).toBe(STATUS_VALUES.FAIL);
+  });
 });
 
 // ---------------------------------------------------------------------------- 2c. C17 identity control
@@ -318,6 +331,66 @@ describe("WP5 C17 — source-event identity is axis-independent (cross-axis dupl
   });
 });
 
+// ---------------------------------------------------------------------------- 2d. C15 version freshness
+
+describe("WP5 C15 — fresh versions, a stale pass refuses, a fresh pass succeeds, link sets stable", () => {
+  const titleOf = (n) => AXES.find((x) => x.n === n).title;
+
+  test("pass 1 advances versions; a stale pass conflicts; a fresh pass succeeds; link sets stable", () => {
+    const iso = openIsolatedStore("wp5-c15");
+    try {
+      const b = iso.store;
+      seedRetainedLike(b);
+      const axisOf = (n) => {
+        for (const name of TOPIC_NAMES) {
+          const t = b.getTopicByName(name);
+          if (!t) continue;
+          const a = b.listAxes(t.id).find((x) => x.title === titleOf(n));
+          if (a) return a;
+        }
+        return null;
+      };
+      const snapshot = () => {
+        const ax5 = axisOf(5);
+        const ax6 = axisOf(6);
+        return JSON.stringify({
+          r5: b.listAxisRepositories(ax5.id).map((r) => `${r.fullName}:${r.relationship}`).sort(),
+          r6: b.listAxisRepositories(ax6.id).map((r) => `${r.fullName}:${r.relationship}`).sort(),
+          p6: b.listProblems(ax6.id).map((p) => b.listProblemRepositories(p.id).map((r) => r.fullName).sort()),
+        });
+      };
+
+      const v5start = axisOf(5).version;
+      const v6start = axisOf(6).version;
+
+      // Pass 1 — fresh reads; both reconciles return a result (success) and both versions advance.
+      const r1 = applyRetainedLikeDelta(b);
+      const v5once = axisOf(5).version;
+      const v6once = axisOf(6).version;
+      expect(r1.r5.axes[0].version).toBeGreaterThan(v5start);
+      expect(r1.r6.axes[0].version).toBeGreaterThan(v6start);
+      expect(v5once).toBeGreaterThan(v5start);
+      expect(v6once).toBeGreaterThan(v6start);
+      const s1 = snapshot();
+
+      // Pass 2 (stale) — the pass-1 versions are now stale → `conflict` is THROWN (never returned).
+      expect(() => applyRetainedLikeDelta(b, { v5: v5once - 1, v6: v6once - 1 })).toThrow(ResearchStoreConflictError);
+      // The refused attempt mutated nothing.
+      expect(axisOf(5).version).toBe(v5once);
+      expect(axisOf(6).version).toBe(v6once);
+      expect(snapshot()).toBe(s1);
+
+      // Pass 2 (fresh) — succeeds, advances again, and the link sets are unchanged.
+      const r2 = applyRetainedLikeDelta(b);
+      expect(r2.r5.axes[0].version).toBeGreaterThan(v5once);
+      expect(r2.r6.axes[0].version).toBeGreaterThan(v6once);
+      expect(snapshot()).toBe(s1);
+    } finally {
+      iso.dispose();
+    }
+  });
+});
+
 // ---------------------------------------------------------------------------- 3. missing approval = BLOCKED
 
 describe("WP5 parameter gates — no default, no fictitious green", () => {
@@ -390,11 +463,15 @@ describe("WP5 parameter gates — no default, no fictitious green", () => {
     expect(statusOf(named, "G04-evidence")).toBe(STATUS_VALUES.BLOCKED);
   });
 
-  test("G05 accepts a proposed-target decision only; an authorization claim is red", () => {
-    const proposed = evaluateView(seededView(), gatesWith("G05", { proposedTarget: "test-only", ownerAuthorization: false, liveBinding: false }));
+  test("G05 accepts a proposed-target decision only; an authorization claim or a live binding is red", () => {
+    const proposed = evaluateView(seededView(), gatesWith("G05", { proposedTarget: "test-only" }));
     expect(statusOf(proposed, "G05-target")).toBe(STATUS_VALUES.PASS);
-    const claimed = evaluateView(seededView(), gatesWith("G05", { proposedTarget: "test-only", ownerAuthorization: true }));
-    expect(statusOf(claimed, "G05-target")).toBe(STATUS_VALUES.FAIL);
+    const authorized = evaluateView(seededView(), gatesWith("G05", { proposedTarget: "test-only", ownerAuthorization: true }));
+    expect(statusOf(authorized, "G05-target")).toBe(STATUS_VALUES.FAIL);
+    const bound = evaluateView(seededView(), gatesWith("G05", { proposedTarget: "test-only", liveBinding: true }));
+    expect(statusOf(bound, "G05-target")).toBe(STATUS_VALUES.FAIL);
+    const nameless = evaluateView(seededView(), gatesWith("G05", {}));
+    expect(statusOf(nameless, "G05-target")).toBe(STATUS_VALUES.FAIL);
   });
 
   test("the fully-resolved test-only decisions with both views make the view family fully PASS", () => {

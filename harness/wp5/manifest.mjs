@@ -265,7 +265,7 @@ export function unresolvedGates() {
     pending("G02", "F08 axis-4 `currentState` wording + confidence", ["f08-currentstate"], "WP4 §8/§12 item 3: the source is sufficient but population and exact wording are a human editorial decision. Optional field; left absent rather than invented."),
     pending("G03", "Optional blocker restoration (axis-4 `inferred`→`confirmed`)", ["blocker-restore"], "WP4 §8/§12 item 3: the retained `inferred` is ratified; restoring `confirmed` is proposed, NOT approved, and would need axis-4 evidence by transaction end. No default upgrade/downgrade is applied."),
     pending("G04", "F03/F04/F14a evidence strategy (move / duplicate / reassociate)", ["evidence-strategy"], "WP4 §9.1/§12 item 2/4: in-place re-point is impossible, duplication is discouraged+non-idempotent, 'leave' is always available. No automatic choice is made."),
-    pending("G05", "Explicit target organization + owner write authorization", ["target"], "Methodology §6 gate 1 / WP3 §12: a fixture write needs an explicit target org and owner authorization. Until both exist no run writes anything; this harness never writes the retained fixture."),
+    pending("G05", "Proposed target decision only (owner write authorization is WP-G's, not this gate)", ["target"], "Methodology §6 gate 1: this gate records a **proposed target organization decision only**. It carries **no owner write authorization** and binds **no live target** — that authorization is WP-G's to grant, and **WP-G is not entered** by this harness. Until a proposal exists no run writes anything; this harness never writes the retained fixture."),
   ];
 }
 
@@ -309,7 +309,7 @@ export function testOnlyDecisions() {
     G02: TEST_ONLY_F08,
     G03: "skip", // keep the ratified retained `inferred`; restoring `confirmed` is the separate optional decision
     G04: "leave", // the only strategy exercisable without an authorized execution
-    G05: { proposedTarget: "test-only-synthetic-proposed-target", ownerAuthorization: false, liveBinding: false },
+    G05: { proposedTarget: "test-only-synthetic-proposed-target" },
   };
   return {
     testOnly: true,

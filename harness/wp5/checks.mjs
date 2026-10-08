@@ -436,7 +436,7 @@ function gateChecks(views, gates) {
   // G05 — a proposed-target DECISION only. It records no owner write authorization, binds no live target
   // and performs no network or write execution; WP-G stays closed. A resolution that claims authorization
   // or a live binding is rejected rather than allowed to cycle a write path into existence.
-  guard("G05", "G05-target", "explicit proposed target decision only (no owner write authorization, no live binding)", (value) => {
+  guard("G05", "G05-target", "explicit proposed target decision only (no owner write authorization, no live binding — WP-G's to grant)", (value) => {
     if (value?.ownerAuthorization === true || value?.liveBinding === true) {
       return fail(
         "G05-target",
@@ -482,6 +482,15 @@ export function evaluateView(view, gates, views) {
  */
 export function canonicalReadback(store) {
   const v = readView(store);
+  // The persistent state version is a canonical, mutation-public value — a no-op axis reconcile bumps it.
+  // It must be an actual number on every axis, never `undefined` (which JSON.stringify would silently
+  // drop, blinding this readback to a version-only change and letting C20 pass falsely).
+  const axisVersions = v.topics.flatMap((t) => t.axes.map((a) => a.version));
+  if (axisVersions.length === 0 || axisVersions.some((n) => typeof n !== "number" || !Number.isFinite(n))) {
+    throw new Error(
+      "canonicalReadback: every axis must carry a numeric `version` (stateVersion is required, never undefined)"
+    );
+  }
   return JSON.stringify({
     counts: v.counts,
     topics: v.topics.map((t) => ({
@@ -562,6 +571,61 @@ function storeAxisByTitle(store, title) {
   return null;
 }
 
+/** A reconcile response is a success when it returns the touched axis with a numeric new version. */
+function isReconcileSuccess(result) {
+  return !!result && Array.isArray(result.axes) && result.axes.length === 1 && typeof result.axes[0].version === "number";
+}
+
+/**
+ * Apply the retained-like amendment delta (D1–D6): D1/D2 axis→repo, D3/D4 axis→person, D5/D6 problem→repo
+ * (full-set replacement). **Each axis's version is read fresh, immediately before that axis's own
+ * reconcile**, so the `expectedVersion` it passes is current — never hoisted once and reused across calls
+ * (a stale `expectedVersion` makes `reconcileTopic` throw `ResearchStoreConflictError`). Returns the two
+ * `ReconcileResult`s so a caller asserts the response rather than discarding it.
+ *
+ * `versions` is a **TEST-ONLY override** for the freshness/conflict probe: when given, it supplies the
+ * `expectedVersion` for each axis instead of the freshly-read one, so a caller can drive a deliberately
+ * stale value and observe the refusal.
+ */
+export function applyRetainedLikeDelta(store, versions) {
+  const infra = "Research infrastructure / team management";
+  const dashboard = "ajegorovs/nakama-research-dashboard";
+  const person = { displayName: PERSON.displayName, githubLogin: PERSON.githubLogin };
+
+  // D1/D3 — axis 5: read its version immediately before reconciling it.
+  const ax5 = storeAxisByTitle(store, AXES.find((x) => x.n === 5).title);
+  const r5 = store.reconcileTopic({
+    topicName: infra,
+    axes: [
+      {
+        id: ax5.id,
+        expectedVersion: versions ? versions.v5 : ax5.version,
+        repositories: [{ fullName: dashboard, relationship: SYNTHETIC_ROLE }],
+        people: [person],
+      },
+    ],
+  });
+
+  // D2/D4/D5/D6 — axis 6: read its version immediately before reconciling it.
+  const ax6 = storeAxisByTitle(store, AXES.find((x) => x.n === 6).title);
+  const problems = store.listProblems(ax6.id);
+  const r6 = store.reconcileTopic({
+    topicName: infra,
+    axes: [
+      {
+        id: ax6.id,
+        expectedVersion: versions ? versions.v6 : ax6.version,
+        repositories: [{ fullName: dashboard, relationship: SYNTHETIC_ROLE }],
+        people: [person],
+      },
+    ],
+    // D5/D6 (problem→repo): `repositoryFullNames` REPLACES the whole set — carry the full intended set.
+    problems: problems.map((p) => ({ problemId: p.id, statement: p.statement, repositoryFullNames: [dashboard] })),
+  });
+
+  return { r5, r6 };
+}
+
 /** Spin to the next millisecond so a write lands on a settled, strictly-distinct clock tick. */
 function waitForNextMillis() {
   const start = Date.now();
@@ -622,42 +686,52 @@ export function evaluateStore({ store, makeStore, pluginActions, harnessSources,
     results.push(fail("C10", "problem policy distinct from guard", "baseline", `unexpected throw: ${err.message}`));
   }
 
-  // C15 — the real retained-fixture amendment delta (D1–D6), applied to a disposable RETAINED-LIKE store
-  // twice: axis→repo (D1/D2), axis→person (D3/D4), problem→repo (D5/D6). The store is explicitly labeled
-  // TEST-ONLY SYNTHETIC and its roles are synthetic (never a G01 decision). The delta must be idempotent
-  // (same link sets, no duplicates), preserve the other existing links, and carry the full problem set.
+  // C15 — the real retained-fixture amendment delta (D1–D6), applied to a disposable RETAINED-LIKE store.
+  // Each axis's version is read fresh, immediately before that axis's own reconcile (never hoisted), and
+  // the reconcile RESPONSE is asserted — a success returns the axis, a stale `expectedVersion` THROWS
+  // `ResearchStoreConflictError` (it is never a returned value that could be ignored). The sequence is
+  // explicit: pass 1 advances both axis versions; a pass-2 attempt carrying the pass-1 (now stale)
+  // versions must refuse with `conflict`; a pass-2 attempt with fresh versions succeeds; and the link
+  // sets stay stable and duplicate-free across all of it.
   try {
     const b = makeStore();
     seedRetainedLike(b); // TEST-ONLY SYNTHETIC: models the retained fixture's link shape
     const before = linkSets(b);
+    const t5 = AXES.find((x) => x.n === 5).title;
+    const t6 = AXES.find((x) => x.n === 6).title;
+    const versionOf = (title) => storeAxisByTitle(b, title).version;
 
-    const delta = () => {
-      const infra = "Research infrastructure / team management";
-      const ax5 = storeAxisByTitle(b, AXES.find((x) => x.n === 5).title);
-      const ax6 = storeAxisByTitle(b, AXES.find((x) => x.n === 6).title);
-      const dashboard = "ajegorovs/nakama-research-dashboard";
-      const person = { displayName: PERSON.displayName, githubLogin: PERSON.githubLogin };
-      const problems = b.listProblems(ax6.id);
-      b.reconcileTopic({
-        topicName: infra,
-        // D1/D2 (axis→repo, synthetic role) + D3/D4 (axis→person), re-read versions each run.
-        axes: [
-          { id: ax5.id, expectedVersion: ax5.version, repositories: [{ fullName: dashboard, relationship: SYNTHETIC_ROLE }], people: [person] },
-          { id: ax6.id, expectedVersion: ax6.version, repositories: [{ fullName: dashboard, relationship: SYNTHETIC_ROLE }], people: [person] },
-        ],
-        // D5/D6 (problem→repo): `repositoryFullNames` REPLACES the whole set — carry the full intended set.
-        problems: problems.map((p) => ({ problemId: p.id, statement: p.statement, repositoryFullNames: [dashboard] })),
-      });
-    };
+    const v5start = versionOf(t5);
+    const v6start = versionOf(t6);
 
-    delta();
+    // Pass 1 — fresh reads; both reconciles return a result (success), and both versions advance.
+    const r1 = applyRetainedLikeDelta(b);
     const once = linkSets(b);
-    delta();
-    const twice = linkSets(b);
+    const v5once = versionOf(t5);
+    const v6once = versionOf(t6);
+    const pass1Advanced = v5once > v5start && v6once > v6start;
+    const pass1Returned = isReconcileSuccess(r1.r5) && isReconcileSuccess(r1.r6);
 
-    const infra = "Research infrastructure / team management";
-    const ax5 = storeAxisByTitle(b, AXES.find((x) => x.n === 5).title);
-    const ax6 = storeAxisByTitle(b, AXES.find((x) => x.n === 6).title);
+    // Pass 2 (stale) — the pass-1 versions are now stale; the reconcile must refuse with `conflict`.
+    let staleError = null;
+    try {
+      applyRetainedLikeDelta(b, { v5: v5once - 1, v6: v6once - 1 });
+    } catch (err) {
+      staleError = err;
+    }
+    const staleConflicts = staleError instanceof ResearchStoreConflictError;
+    const afterStale = linkSets(b); // the refused attempt mutated nothing.
+
+    // Pass 2 (fresh) — succeeds; versions advance again; link sets unchanged.
+    const r2 = applyRetainedLikeDelta(b);
+    const twice = linkSets(b);
+    const v5after = versionOf(t5);
+    const v6after = versionOf(t6);
+    const pass2Advanced = v5after > v5once && v6after > v6once;
+    const pass2Returned = isReconcileSuccess(r2.r5) && isReconcileSuccess(r2.r6);
+
+    const ax5 = storeAxisByTitle(b, t5);
+    const ax6 = storeAxisByTitle(b, t6);
     const role5 = b.listAxisRepositories(ax5.id).map((r) => r.relationship);
     const role6 = b.listAxisRepositories(ax6.id).map((r) => r.relationship);
     const consult = b.listProblems(ax6.id).map((p) => b.listProblemRepositories(p.id).map((r) => r.fullName).sort());
@@ -667,6 +741,8 @@ export function evaluateStore({ store, makeStore, pluginActions, harnessSources,
     const preserved = before.all.every((row) => once.all.includes(row));
     // No duplicates: no link row appears twice.
     const noDup = once.all.length === new Set(once.all).size;
+    // The refused stale attempt left the store untouched.
+    const stableAcrossStale = JSON.stringify(afterStale.all) === JSON.stringify(once.all);
     // The role is the explicit SYNTHETIC value, and no G01 *decision* is made (a real, non-test-only
     // resolution would be a decision this check refuses to launder).
     const g01 = gateById(gates, "G01");
@@ -682,6 +758,12 @@ export function evaluateStore({ store, makeStore, pluginActions, harnessSources,
       .find((r) => r.fullName === "ajegorovs/nakama-research-dashboard")?.relationship;
 
     const ok =
+      pass1Advanced &&
+      pass1Returned &&
+      staleConflicts &&
+      stableAcrossStale &&
+      pass2Advanced &&
+      pass2Returned &&
       JSON.stringify(once.all) === JSON.stringify(twice.all) &&
       noDup &&
       preserved &&
@@ -694,11 +776,11 @@ export function evaluateStore({ store, makeStore, pluginActions, harnessSources,
     results.push(
       assertThat(
         "C15",
-        "retained-like amendment delta (D1–D6) idempotent — axis→repo, axis→person, problem→repo (TEST-ONLY SYNTHETIC)",
+        "retained-like amendment delta (D1–D6) idempotent — fresh versions, stale refused, stable link sets (TEST-ONLY SYNTHETIC)",
         "amendment",
         ok,
-        `TEST-ONLY SYNTHETIC delta applied twice to a disposable retained-like store (${RETAINED_LIKE_NOTE}): identical link sets, no duplicates, existing links preserved, the two consultation problems carry the full set [dashboard]; role '${SYNTHETIC_ROLE}' is synthetic (the store cannot store "undecided" and would default to 'supporting'), not a G01 decision${demoted === "supporting" ? "; a 'primary' would demote the existing primary (demonstrated), the hazard avoided" : ""}`,
-        `delta not stable: once==twice ${JSON.stringify(once.all) === JSON.stringify(twice.all)}, noDup ${noDup}, preserved ${preserved}, consultFull ${consultFull}, roles ${JSON.stringify([role5, role6])}, noRealG01 ${noRealG01}`
+        `TEST-ONLY SYNTHETIC delta (${RETAINED_LIKE_NOTE}): pass 1 read each axis's version fresh and advanced it (v5 ${v5start}->${v5once}, v6 ${v6start}->${v6once}); a pass-2 attempt with the stale pass-1 versions refused with conflict (nothing mutated); a pass-2 fresh attempt succeeded and advanced again (v5 ${v5once}->${v5after}, v6 ${v6once}->${v6after}); link sets identical and duplicate-free, existing links preserved, the two consultation problems carry the full set [dashboard]; role '${SYNTHETIC_ROLE}' is synthetic (the store cannot store "undecided" and would default to 'supporting'), not a G01 decision${demoted === "supporting" ? "; a 'primary' would demote the existing primary (demonstrated), the hazard avoided" : ""}`,
+        `delta not stable: pass1Advanced ${pass1Advanced}, pass1Returned ${pass1Returned}, staleConflicts ${staleConflicts}, stableAcrossStale ${stableAcrossStale}, pass2Advanced ${pass2Advanced}, pass2Returned ${pass2Returned}, once==twice ${JSON.stringify(once.all) === JSON.stringify(twice.all)}, noDup ${noDup}, preserved ${preserved}, consultFull ${consultFull}, roles ${JSON.stringify([role5, role6])}, noRealG01 ${noRealG01}`
       )
     );
   } catch (err) {
@@ -898,14 +980,18 @@ export function evaluateStore({ store, makeStore, pluginActions, harnessSources,
       store.linkTopicRepository(experimental, store.getRepositoryByFullName(link.fullName).id, link.relationship);
     }
     const bAfter = canonicalReadback(b);
+    const readbackAxes = JSON.parse(bAfter).topics.flatMap((t) => t.axes);
+    const versionsNumeric =
+      readbackAxes.length > 0 &&
+      readbackAxes.every((a) => typeof a.stateVersion === "number" && Number.isFinite(a.stateVersion));
     results.push(
       assertThat(
         "C20",
-        "untargeted store unchanged — by full mutation-public readback, not byte identity",
+        "untargeted store unchanged — by full mutation-public readback (incl. numeric axis stateVersions), not byte identity",
         "amendment",
-        bBefore === bAfter,
-        "a second isolated store read back identically after the target was written (metadata, links, claims, plans, activities, versions all measured; only volatile presentation excluded)",
-        "untargeted store readback changed — a mutation-public field differs"
+        bBefore === bAfter && versionsNumeric,
+        "a second isolated store read back identically after the target was written (metadata, links, claims, plans, activities, and numeric axis stateVersions all measured; only volatile presentation excluded)",
+        `untargeted store readback changed or a stateVersion is not a number: versionsNumeric ${versionsNumeric}`
       )
     );
   } catch (err) {

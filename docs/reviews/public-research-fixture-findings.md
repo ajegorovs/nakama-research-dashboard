@@ -514,3 +514,57 @@ fixture/domain write, no inference, no service/deploy, no product/UI edit, no WP
 **no WP-G entry** and no merge was performed; the six axis→repository roles, the F08 wording, the optional
 blocker restoration, the evidence strategy and the target **remain undecided**, and no role or default is
 chosen here.
+
+## N. WP5 corrections — C15 version freshness, C20 state-version readback, G05 proposed-target only (appended 2026-10-08)
+
+> **Appended, not an amendment.** §A–§M above are preserved unchanged. This section records the second
+> correction pass on the WP5 executable checks: **C15** (version freshness / response assertion), **C20**
+> (the readback did not measure the axis state version) and **G05** (proposed-target decision only), with
+> the measured root cause. **Harness only:** no fixture/domain write, no `reconcile_topic`/`record_activity`
+> against any target, no inference, no new research, no service/deploy/restart, no product/UI change, no
+> WP3 seed, no WP4 amendment, **no WP-G entry** and no merge. The retained fixture is never opened; every
+> store is a disposable `mkdtemp` throwaway.
+
+**Verdict: REQUEST CHANGES — corrections applied (harness-only).** Three scoped issues, all corrected in
+`harness/wp5/`.
+
+| # | Issue | Correction (all in `harness/wp5/`) |
+|---|---|---|
+| 1 | **C15 — version freshness and response.** The delta read each axis's version once at the top of its closure instead of immediately before that axis's reconcile, and discarded every `reconcileTopic` response (success or refusal) — so nothing asserted the version discipline. | `checks.applyRetainedLikeDelta` now reads each axis's version **fresh, immediately before that axis's own reconcile** (axis 5 = D1/D3, axis 6 = D2/D4 + D5/D6) and **returns both `ReconcileResult`s**. C15 asserts the sequence: pass 1 advances both versions; a pass-2 attempt carrying the pass-1 (now stale) versions **refuses with `conflict`** and mutates nothing; a pass-2 fresh attempt succeeds and advances again; the link sets are identical and duplicate-free throughout. A dedicated C15 suite test drives the same path (`applyRetainedLikeDelta` returns success; a stale call **throws** `ResearchStoreConflictError`). |
+| 2 | **C20 — the readback did not measure the state version.** `fixture.readView` never copied `axis.version`, so `canonicalReadback`'s `stateVersion` serialized as `undefined` and `JSON.stringify` **silently dropped it** — a no-op dispatch that bumps only the persistent version read back identically, so C20 **falsely passed**. | `readView` now copies `axis.version`; `canonicalReadback` **requires** every axis to carry a **numeric** `stateVersion` (throws otherwise — required, never undefined) and C20 asserts all readback `stateVersion`s are finite numbers. A **no-op-dispatch negative control** (reconcile the axis carrying only its `expectedVersion` → the version bumps and `updatedAt` moves, nothing else) is asserted to turn **C20 red**. |
+| 3 | **G05 — title/detail named owner write authorization.** The gate title and detail presented the target as authorized; the harness grants and holds no such authorization. | The G05 gate is now titled **"Proposed target decision only (owner write authorization is WP-G's, not this gate)"** with a detail stating it records a **proposed target decision only**, binds no live target, and that **WP-G (the mutation gate) is not entered**. The test-only decision carries `{ proposedTarget }` alone; a resolution claiming `ownerAuthorization` **or** `liveBinding` (or naming no proposal) is **red**. |
+
+**Measured root cause — C15 (why the earlier “36 pass” was not a stale false pass).** Measured, not
+inferred: the pre-correction C15 read `ax5`/`ax6` **inside** the delta closure, so each of the two calls
+re-read a fresh version — there was **no** stale value. And a deliberately stale `axes[].expectedVersion`
+does not return a conflict to ignore: `reconcileTopic` **throws `ResearchStoreConflictError`**
+(`conflict: axis "…" is at version N, not M — re-read it and retry.`), which the surrounding check would
+have surfaced as a **C15 FAIL**. Confirmed by probe: fresh read → versions advance `1→2→3→4` and the
+reconcile returns a result; stale read → **throws**. The “ignored returned conflict” hypothesis is
+therefore **refuted by measurement** — no returned conflict exists on that path, and the reads were
+per-invocation fresh. The real gap was the **absence of a positive assertion** (the response and the
+version advance were never checked); the rewrite closes it and makes the freshness/refusal explicit.
+
+**Measured root cause — C20 (a genuine stale false pass, now closed).** Measured by diffing the canonical
+readback before/after a no-op version-only dispatch on the isolated approved seed: the **only** differing
+mutation-public leaf is `$.topics[1].axes[0].stateVersion: 1 → 2`. Before the fix that leaf was
+`undefined` and absent from the JSON, so the two readbacks were byte-identical and C20 passed on a changed
+store. The readback now measures it, and the no-op control turns C20 red.
+
+**Actual results (measured this run, at the corrected harness).**
+
+| Command | Result |
+|---|---|
+| `bun run harness:wp5` (default) | **28 PASS · 0 FAIL · 5 BLOCKED**, aggregate **BLOCKED** (exit 2) — not green; the five approvals are missing |
+| `bun run harness:wp5 --test-only-decisions` | **33 PASS · 0 FAIL · 0 BLOCKED**, aggregate **PASS** (exit 0) — the fully-PASS path, test-only |
+| `bun run harness:wp5:test` | **38 pass / 0 fail** (was 36; +2: the C15 freshness test and the C20 no-op control) |
+| `bun run check` | **313 pass / 0 fail** (typecheck + build + unit suite) |
+| `bun run harness:records` | green — 266 text files scanned, no live endpoint / home path |
+| `git diff --check` | clean |
+
+**Coverage and boundaries.** As §M, and additionally: C15 now asserts version freshness and the conflict
+refusal, and C20 measures the axis state version with a no-op-dispatch negative control. No fixture/domain
+write, no inference, no service/deploy, no product/UI edit, no WP3 seed, no WP4 amendment, **no WP-G
+entry** and no merge was performed; the six axis→repository roles, the F08 wording, the optional blocker
+restoration, the evidence strategy and the proposed target **remain undecided**, and no role or default is
+chosen here.
