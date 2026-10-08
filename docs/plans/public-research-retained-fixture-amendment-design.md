@@ -537,8 +537,9 @@ implemented now.
 | 6 | Explicit **target organization** for the future write | all |
 
 **Design-accepted, not an approval item:** the F12 **positions base `1..4`** is a **reviewer-accepted
-design convention** (not a mutation permission, and there is **no base-selection gate**). **Approved
-items:** F02 (D3/D4), F04 links (D5/D6), F07/F09 metadata, F12 positions. **Blocked:** F05, F10
+design convention** (not a mutation permission, and there is **no base-selection gate**). **Design-accepted
+proposals (not mutation approval):** F02 (D3/D4), F04 links (D5/D6), F07/F09 metadata, F12 positions.
+**Blocked:** F05, F10
 (existing), F03/F04 move, F14a retro-link.
 
 ## 13. Boundaries

@@ -414,3 +414,54 @@ approved); **six** axis→repository roles unresolved; **F12 base 1..4** design-
 **Authorization boundaries (unchanged):** WP3 and WP4 remain **design-only and not authorized to
 execute**; WP5 and WP-G are **not authorized**. No fixture/domain write, no product/UI/service change,
 no inference, no new research, no merge.
+
+## L. WP5 executable-check stage disposition (appended 2026-10-08)
+
+> **Appended, not an amendment.** §A–§K above are preserved unchanged. This section records the **WP5**
+> executable-check stage — the checks themselves and their run — as a **read-only** artifact. WP5 authors
+> and runs verification checks; it performs **no** fixture write, no `reconcile_topic`/`record_activity`
+> against any target, no inference, no service/deploy change and no product/UI edit. **WP-G (the mutation
+> gate) is not entered, and no WP3 seed or WP4 amendment is executed or authorized by this record.**
+
+- **WP5 is implemented** as a repo harness at `harness/wp5/` (`manifest.mjs`, `fixture.mjs`, `checks.mjs`,
+  `run.mjs`, `wp5-checks.test.mjs`), wired as `bun run harness:wp5` (the run) and
+  `bun run harness:wp5:test` (the suite). The checks are **derived from the approved artifacts**: the WP3
+  §3.4/§8 baseline manifest and the WP4 §11 amendment invariants, transcribed as executable data —
+  **permitted testdata, transcribed from the accepted designs**, never the retained fixture.
+- **Isolation.** The run seeds the approved manifest through the product's own write path
+  (`reconcileTopic`) into a **fresh private throwaway temp store** (`mkdtemp` under `TMPDIR`, removed on
+  dispose); the retained fixture is never opened, nothing is written inside the repository, and **no
+  network client exists in the harness** (asserted by the C21 safety guard). `bun:sqlite` does not honour
+  an in-memory URI through the store's path seam, so a throwaway temp store — the shipped
+  `store.test.ts` pattern — is the honest isolation.
+- **What the checks assert (executable, not prose).** Counts **2 topics / 6 axes / 1 person / 3
+  repositories / 4 plan steps / 3 problems / 8 unique events**; the activity placement mapping
+  **2/1/1/1/3/0**; **explicit confidence with no store default relied on** (state `inferred` on all six;
+  `currentStateConfidence` `inferred` where present; axis-4 `blockerConfidence` per the manifest);
+  the **`confirmed`-⟹-evidence axis guard** (with a **negative control** and a **pre-existing-evidence**
+  case); the **problem-confidence-is-policy-not-guard** distinction; source **dates** (incl. the AGENDA
+  event present at `2026-09-24`, ingestion date not substituted) and public **URLs**; repository
+  metadata **byte-equal to the normalized pinned-README strings**; plan **positions `1..4`** (no nulls);
+  **link-set idempotency**; **version `conflict`** on a stale `expectedVersion`; **no activity
+  duplication**; **non-activity preservation** of event count / `occurredAt` / `lastActivityAt` while
+  recency may advance; **unsupported activity-update paths blocked**; **untargeted store unchanged by its
+  own readback measurement, not DB byte identity**; and the offline **safety guard**.
+- **BLOCKED is not green — no default is chosen.** Five parameter gates stay **unresolved** and each
+  dependent check reports **BLOCKED**, never a silent default: (G01) all **six** axis→repository roles
+  (not only D1/D2), (G02) the F08 axis-4 `currentState` wording/confidence, (G03) the optional axis-4
+  blocker restoration, (G04) the F03/F04/F14a evidence strategy, (G05) the explicit target org + owner
+  write authorization. A BLOCKED run exits non-zero and is not a verdict.
+- **Actual run.** `bun run harness:wp5` → **28 PASS · 0 FAIL · 5 BLOCKED**, aggregate **BLOCKED**
+  (exit 2) — the approved baseline is internally consistent, and the run stays **not green** because the
+  five approvals are missing. `bun run harness:wp5:test` → **16 pass / 0 fail**, proving green is
+  reachable and **can go red** on injected defects (null position, paraphrased description, defaulted
+  confidence, unbacked `confirmed`, ingestion-dated event, empty URL, wrong mapping, drifted count), that
+  an unresolved gate yields BLOCKED, and that a run over the **real retained-fixture readiness** (the
+  committed, sanitized WP1 `fixture_measured` evidence) is **red and blocked — never a fictitious
+  green**.
+- **Documentation correction.** WP4 §12 renamed **"Approved items"** to **"Design-accepted proposals
+  (not mutation approval)"** — those rows are proposals to be validated, not a mutation permission.
+- **Boundaries.** No fixture/domain write, no `reconcile_topic`/`record_activity` against a target, no
+  inference, no service/deploy/restart, no product/UI change, no WP3/WP4/WP-G execution and no merge. The
+  checks are read-only; the six axis→repository roles, the F08 wording, the optional blocker restoration,
+  the evidence strategy and the target **remain undecided**, and no role or default is chosen here.
