@@ -324,3 +324,33 @@ decisions** (D1, D2); **identity basis confirmed**; **author route proof recorde
 - **No WP3/WP4 design or execution, no domain/fixture/product/UI/service change, no inference, no
   merge** is performed or authorized.
 - The **move/duplicate/reassociate evidence strategy remains undecided** — not decided by this verdict.
+
+## I. WP3/WP4 design-stage disposition (appended 2026-10-08)
+
+> **Appended, not an amendment.** §A–§H above are preserved unchanged. This section records the **WP3
+> baseline-seed design** and the **WP4 retained-fixture amendment design** as **published, design-only**
+> artifacts, and the review fixes applied to them. **Neither design is executed or authorized to execute.**
+
+- **WP3 — baseline-seed design** (`docs/plans/public-research-baseline-seed-design.md`): a clean-slate
+  build that classifies every field `required`/`optional`/`unavailable`, sequences evidence atomically, and
+  carries a source/date/pin manifest. **Resolved:** the seed is a *fresh* build that **encodes the
+  WP2-accepted six-pair link set (D1–D6)**; reproducing the defective original packet verbatim is **not a
+  valid reading** (D-E is resolved, not open). **Open (human):** the D1/D2 axis→repository **role** stays
+  **undecided/blocked** — the schema has no "undecided" value, so those two links are **withheld**, never
+  defaulted to `supporting`.
+- **WP4 — retained-fixture amendment design**
+  (`docs/plans/public-research-retained-fixture-amendment-design.md`): a before/after, classified,
+  idempotent amendment plan covering **all 21 §A findings** (F01–F17, including the F07b / F09b /
+  F14a / F14b / F14c splits), stating the exposed write path per finding and recording the unsupported
+  paths as **BLOCKED** (F05, F10-existing, activity re-point, F14a retro-link — `activities` is
+  INSERT-only; **no direct-DB write and no workaround**). The amendment class distinguishes **factual
+  correction/enrichment** from **authored optional prose**; only F08's `currentState` wording is optional
+  editorial.
+- **Repo metadata descriptions are proposed concretely** from the **pinned READMEs** (WP4 §7.2), with the
+  as-of-pin vs as-of-read (`about`) variance stated, not silently resolved.
+- **Claims re-verified against the pinned source** (`src/store.ts`, `src/actions.ts`, `nakama.plugin.json`,
+  `migrations/002`/`004`): plan/steps unchanged-echo does **not** bump the version (`store.ts:5031`), the
+  topic/axis patches bump unconditionally (`store.ts:6144`, `:6268`), and the repo-metadata write is
+  coupled to a `primary`-demoting link write (`store.ts:6437-6445`, mitigated by carrying the stored role).
+- **No write, no WP5 checks, no WP-G, no merge.** Both designs are proposals awaiting explicit owner
+  authorization; **WP3/WP4 execution and WP5 are not authorized** by this record.
