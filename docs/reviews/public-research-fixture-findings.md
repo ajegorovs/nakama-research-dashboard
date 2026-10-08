@@ -43,7 +43,7 @@
 | F11 | optional | PR evidence is attributed to the agent, possibly conflating recorder with upstream author | reviewer hypothesis | Misattribution misrepresents authorship | Do not manufacture an account mapping; report the attribution boundary instead |
 | F12 | required | Ordered plan steps carry null positions | verified | An authored order that is not encoded cannot be relied on | Encode explicit `position` values on seed; the ordering is then a stored claim, not a projection side-effect |
 | F13 | unavailable | Plan provenance is not a first-class visible field | reviewer hypothesis | A plan with no visible source is hard to audit | Confirm the exposed contract; if the model truly lacks the field, record it as a stated model gap (unavailable), not a fabrication |
-| F14a | required | Problems have zero linked events though the source supports some (an existing problem) | verified | A problem's evidence cannot be attached through the event tool for an existing problem | **Supported capability.** `reconcile_topic.activities[].problemId` targets an **existing** problem; the field is **required** where the source backs such a link. Not a fourth disposition — the capability is *supported*, the field disposition is *required* |
+| F14a | required | Problems have zero linked events though the source supports some (an existing problem) | verified | A problem's evidence cannot be attached through the event tool for an existing problem **[WHY superseded 2026-10-08 — refuted by WP1: existing-problem linkage *is* supported via `reconcile_topic.activities[].problemId`; see §E]** | **Supported capability.** `reconcile_topic.activities[].problemId` targets an **existing** problem; the field is **required** where the source backs such a link. Not a fourth disposition — the capability is *supported*, the field disposition is *required* |
 | F14b | unavailable | A newly generated problem cannot be targeted by title in the same call | verified | An initial topic cannot attach evidence to a problem it creates in one transaction | **Unavailable.** No title-like reference targets a newly generated problem in the same `reconcile_topic` call; record the limitation, never a workaround |
 | F14c | unavailable | `record_activity` cannot target any problem | verified | A subsequent event cannot be attached to a problem at all | **Schema defect.** `record_activity` omits `problemId` entirely, so it targets no problem; record the schema defect, never a workaround |
 | F15 | optional | A person's activity is empty without a mapped account | accepted limitation | Empty activity can read as idleness when it is unattributability | The account mapping is **representable** in the model but **missing fixture context**; an absent mapping is honest, not a defect. Report `attributable=false`, **never** "idle" |
@@ -150,7 +150,8 @@ proof of the mechanism would be a category error, so each is marked *reviewer hy
 > evidence, source refs and measurement digests are in
 > [`wp1-public-research-fixture-verification.md`](wp1-public-research-fixture-verification.md) and
 > [`wp1-public-research-fixture-verification-evidence.json`](wp1-public-research-fixture-verification-evidence.json).
-> **All 21 rows verified; 0 refuted; 0 unresolved.** The *Status* column above was the reviewer's
+> **All 21 rows verified; 0 unresolved.** The *observations* are verified; **one row's causal *WHY* is refuted**
+> (F14a — see the note below) and one shorthand was overstated (F17). The *Status* column above was the reviewer's
 > pre-verification label; the *WP1* column below is the post-verification disposition. WP1 performs no
 > fixture correction and authorizes no WP2+. Fixture-internal record ids are referred to by
 > **semantic label**, not raw id prefix; public repo/pin/commit refs are kept. **"Verified" is a
@@ -175,14 +176,30 @@ proof of the mechanism would be a category error, so each is marked *reviewer hy
 | F11 | reviewer hypothesis | **verified** (boundary) | events `actorType:'agent'` (single recorder actor id withheld); `Activity` no upstream-author field `store.ts:152–170`; author slot only on collector path; upstream authors human (names/emails withheld) |
 | F12 | verified | **verified** | diagnostics axis plan 4 steps all `position:null`; model `migrations/004:142` |
 | F13 | reviewer hypothesis | **verified (unavailable); narrowed** | `Plan` `store.ts:351–358` has authorship, no content provenance; `plans` DDL `migrations/004:121–133` |
-| F14a | verified | **verified** (supported capability, required field) | manifest `activities[].problemId`; `store.ts:5837,6599–6609`; existing diagnostics-axis problem 0 events |
+| F14a | verified | **verified** (supported capability, required field) — **original causal WHY superseded/refuted 2026-10-08; see the note below** | manifest `activities[].problemId`; `store.ts:5837,6599–6609`; existing diagnostics-axis problem 0 events |
 | F14b | verified | **verified (unavailable)** | no title handle; write order `5806`→`5929`; FK `migrations/004:351`; `PRAGMA foreign_keys` `store.ts:2152` |
 | F14c | verified | **verified (schema defect)** | manifest description advertises `problemId`; schema omits it (`additionalProperties:false`); `actions.ts:361–387` drops it |
 | F15 | accepted limitation | **verified** (optional/accepted) | `attributable=Boolean(nakamaUserId)` `store.ts:3330`; `lastActivityAt` gated `:3333–3335` |
 | F16 | intentional | **verified** (absence; intentional) | both topics `summary:''` |
 | F17 | reviewer hypothesis | **verified** (shorthand overstated) | shorthand `five-tool-exercise.md:134`; source AGENDA reports partial 652/1028-frame saves + sustained as future work; blocker `:140` stands |
 
+> **F14a — the observation stands; its original causal WHY does not.** The §A row's *WHY* column reads
+> "A problem's evidence cannot be attached through the event tool for an existing problem". WP1 verifies the
+> **observation** (the diagnostics-axis problem carries zero linked events) and **refutes that reason**:
+> existing-problem linkage **is** supported, through `reconcile_topic.activities[].problemId`
+> (`store.ts:5837`, resolved from an existing problem row at `store.ts:6599–6609`) — **only the current fixture
+> failed to use it.** **No fixture change is implied or authorized** by this correction; it is a documentation
+> correction of a causal sentence, requested by the reviewer and made against the pinned source.
+> The plan's own line — "`record_activity` cannot link an event to a problem"
+> (`docs/plans/2026-10-07-public-research-fixture-five-tool-exercise.md:71`) — remains **correct as written and
+> as scoped**: it describes the `record_activity` action boundary (F14c), a *different tool* from
+> `reconcile_topic`, and is not the refuted claim.
+>
+> **Read the counts with that in mind:** "21 verified / 0 refuted" is a statement about the **observations**
+> and must not be read as endorsing every historical causal sentence in §A.
+
 An independent read-only **contract-only** cross-check (local, uncommitted) was also re-verified here;
 its boundaries are kept and its F14b "not even by id" claim is stated with its pre-existence/FK
-precondition rather than as an absolute. **No finding in §A was refuted.** No WP2+ work is performed
+precondition rather than as an absolute. **No finding's *observation* in §A was refuted; one row's causal
+*WHY* was** (F14a — see the note above). No WP2+ work is performed
 or authorized by this section.
