@@ -29,6 +29,21 @@
 > accepted and are not reopened**; no harness code is changed. The corrections are appended to the
 > ledger as **§Q**, preserving the earlier history.
 >
+> **Reviewer disposition 3 (docs-only D7 payload-parameter correction, 2026-10-08).** A third review flagged
+> that **two D7 payload templates** wrongly named the **infrastructure** topic for the **diagnostics axis-4**
+> write; the corrections are again **documentation only** — **no decision is settled**, no write
+> authorization is granted, and the two scopes stay **unapproved**. They (a) replace the `<infra>` topic
+> parameter in the **`new-problem-event`** and **`D3 restore-confirmed`** templates with a **clearly named
+> `Experimental research` topic parameter** (`<experimental-research-topic>`), (b) make the **F14a
+> `problemId`** explicitly an **existing diagnostics-axis (axis-4) problem id** (never generic), and (c) add
+> a **topic/axis preflight** requiring **exact, target-scoped private ids** — the problem's `axisId` equals
+> the **diagnostics axis-4** id and axis 4's `topicId` equals the **`Experimental research`** topic id — that
+> **STOPS on a mismatch before any write**. The plain **duplicate** evidence path is stated explicitly
+> (topic `Experimental research`, axis diagnostics, **no `problemId` unless an exact intentional
+> diagnostics-problem link**, ownership validated when present) and **all axis-4 templates were swept**.
+> **WP0–WP5 remain accepted and are not reopened**; no harness code is changed. The corrections are appended
+> to the ledger as **§R**, preserving the earlier history.
+>
 > **Governing artifacts (accepted):** WP0 validation (attempt-4, PASS); WP1 verification
 > ([`…-verification.md`](../reviews/wp1-public-research-fixture-verification.md)); WP2 relationship delta
 > ([`…-relationship-delta.md`](../reviews/wp2-public-research-fixture-relationship-delta.md)); the
@@ -395,34 +410,52 @@ when** the resolved decisions are **internally compatible**:
 **Exact payload templates (evidence path — retained D4 = C/D; gated, not executed).**
 
 ```
-// D4 = new-problem-event (supported) — the new event is axis-4-linked AND attached to an EXISTING problem.
+// D4 = new-problem-event (supported) — the new event is axis-4-linked AND attached to an EXISTING problem
+// on the diagnostics axis (axis 4), which lives under the "Experimental research" topic.
 reconcileTopic({
-  topicId: <infra>,
+  topicId: <experimental-research-topic>,   // the "Experimental research" topic's exact private id (scoped target)
   activities: [ {
-    axisId:   <axis4>,                 // REQUIRED: makes it qualifying axis-4 evidence
-    problemId:<existing problem id>,   // REQUIRED where the problem path is used; must PRE-EXIST
+    axisId:   <axis4>,                 // REQUIRED: the diagnostics axis-4 id — makes it qualifying axis-4 evidence
+    problemId:<existing diagnostics-axis (axis-4) problem id>,  // REQUIRED where the problem path is used; must PRE-EXIST on axis 4 — never a generic/any-topic problem id
     summary:  <verbatim source text>,
     sourceType: <enum>, sourceRef: <public ref>, sourceUrl: <public URL>, occurredAt: <own source date>
   } ]
 })
-// D4 = duplicate (distinct legitimate attachment) — same shape, axis-4-linked, readback-guarded against a
-// duplicate (activities is INSERT-only and NOT idempotent: a retry inserts a second row).
+// D4 = duplicate (distinct legitimate attachment) — PLAIN duplicate axis evidence: topic = "Experimental
+// research", axis = diagnostics (axis 4), and NO problemId unless an exact, intentional diagnostics-problem
+// link is provided; validate ownership when a problemId is present. Same shape, axis-4-linked, readback-guarded
+// against a duplicate (activities is INSERT-only and NOT idempotent: a retry inserts a second row).
 // No payload is asserted for an UNSUPPORTED path (move / retro-link / event edit).
+//
+// <experimental-research-topic> is a SCOPED PARAMETER (the exact private id of the "Experimental research"
+// topic), never a literal here; a diagnostics axis-4 write belongs to it, NOT to the infrastructure topic.
 ```
 
 ```
 // D2 = populate (retained) or D3 = restore-confirmed — after the evidence above is present by tx end.
-reconcileTopic({ topicId:<experimental>, axes:[ { id:<ax4>, expectedVersion:<fresh>,
+reconcileTopic({ topicId:<experimental-research-topic>, axes:[ { id:<ax4>, expectedVersion:<fresh>,
   currentState:<approved text>, currentStateConfidence:<c> } ] })   // F08; c = inferred unless classified
-reconcileTopic({ topicId:<infra>, axes:[ { id:<ax4>, expectedVersion:<fresh>,
+reconcileTopic({ topicId:<experimental-research-topic>, axes:[ { id:<ax4>, expectedVersion:<fresh>,
   blockerConfidence:"confirmed" } ] })                              // D3 restore only; evidence must exist
+// Both axis-4 writes name the "Experimental research" topic (<experimental-research-topic>), not the infra topic.
 ```
 
-**Stop / post-checks.** Before the call: assert the matrix row's condition (evidence present by tx end)
-and dedup-readback absence for any new event. On an incompatible/unproven `confirmed`: **STOP**, do not
-downgrade silently and do not write — report the BLOCKED combination. After the call: verify the axis
-carries qualifying evidence and that no **un**approved event/duplicate was inserted (event count,
-`lastActivityAt`, each `occurredAt` unchanged except the approved add).
+**Topic / axis preflight (exact private ids, scoped to the target — no heuristic).** Before any evidence
+or axis write, assert from a fresh scoped readback that the target problem's `axisId` equals the
+**diagnostics axis-4 id** (`<axis4>`), **and** that axis 4's `topicId` equals the **"Experimental
+research" topic's exact private id** (`<experimental-research-topic>`) — both for the chosen target only,
+each compared to its exact value **scoped to that target**, never a heuristic match, a display name,
+`orgs[0]`, or a positional default. A mismatch between the named topic/axis and the payload's
+`topicId`/`axisId` (the earlier `<infra>` templates were exactly this defect — the diagnostics axis-4
+lives under **"Experimental research"**, not the infrastructure topic) **STOPS before any write**; the
+two ids are resolved **only** in the local operational handoff and are never fixed in this public doc.
+
+**Stop / post-checks.** Before the call: assert the matrix row's condition (evidence present by tx end),
+the **topic/axis preflight above** (exact scoped ids), and dedup-readback absence for any new event. On an
+incompatible/unproven `confirmed` **or a topic/axis mismatch**: **STOP**, do not downgrade silently and do
+not write — report the BLOCKED combination. After the call: verify the axis carries qualifying evidence
+and that no **un**approved event/duplicate was inserted (event count, `lastActivityAt`, each `occurredAt`
+unchanged except the approved add).
 
 ---
 
@@ -557,8 +590,8 @@ there is no undo for a committed transaction (§6).
 | **F02 (D3/D4)** | `reconcileTopic({ topicId:<infra>, axes:[ { id:<ax5>, expectedVersion:<fresh>, people:[{ displayName:"Aleksandrs Jegorovs", githubLogin:"ajegorovs" }] }, { id:<ax6>, … } ] })` | enrichment | ok (proposal) |
 | **F04 (D5/D6)** | `reconcileTopic({ topicId:<infra>, problems:[ { problemId:<N-7…>, statement:<verbatim echo>, repositoryFullNames:["ajegorovs/nakama-research-dashboard"] }, { problemId:<skill-loading…>, … } ] })` | correction | ok (proposal) |
 | **F07/F09** | `reconcileTopic({ topicId:<t>, repositories:[{ fullName:…, url:…, description:<pinned README>, defaultBranch:<as-of-read>, relationship:<stored value verbatim> }] })` — **must carry the stored relationship** (metadata write is coupled to a link write; omitting demotes a primary) | correction | ok (proposal) |
-| **F12** | `reconcileTopic({ topicId:<exp>, plans:[ { planId:<diag>, axisId:<ax4>, summary:<verbatim echo>, steps:[ {stepId:<s1>,title:<verbatim>,position:1} … {position:4} ] } ] })` | correction | ok (proposal) |
-| **F08** | `reconcileTopic({ topicId:<exp>, axes:[ { id:<ax4>, expectedVersion:<fresh>, currentState:<D2 wording>, currentStateConfidence:<D2 confidence> } ] })` | optional editorial | **D2** |
+| **F12** | `reconcileTopic({ topicId:<experimental-research-topic>, plans:[ { planId:<diag>, axisId:<ax4>, summary:<verbatim echo>, steps:[ {stepId:<s1>,title:<verbatim>,position:1} … {position:4} ] } ] })` | correction | ok (proposal) |
+| **F08** | `reconcileTopic({ topicId:<experimental-research-topic>, axes:[ { id:<ax4>, expectedVersion:<fresh>, currentState:<D2 wording>, currentStateConfidence:<D2 confidence> } ] })` | optional editorial | **D2** |
 | **F03/F04 evidence** | **leave** (no payload) · **duplicate** (new `reconcileTopic.activities[]`, readback-guarded, non-idempotent) · **F14a new** `activities[].problemId` | required | **D4** |
 | **F05 / F10 (existing) / move / retro-link** | **no payload — BLOCKED** (INSERT-only `activities`) | — | — |
 

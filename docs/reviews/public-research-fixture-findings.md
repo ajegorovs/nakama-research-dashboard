@@ -750,3 +750,39 @@ every write still needs the explicit human choices **and** that scope's explicit
 **No** fixture/domain write, no `reconcile_topic`/`record_activity`, no inference, no service/deploy/restart,
 no product/UI change, no harness change, no WP3 seed, no WP4 amendment, and no merge is performed or
 authorized by this entry.
+
+## R. WP-G D7 payload-parameter correction — reviewer fix applied (appended 2026-10-08)
+
+> **Appended, not an amendment.** §A–§Q above are preserved unchanged. This section records a **docs-only**
+> reviewer correction of the **D7 payload templates' topic parameter names** in the WP-G decision/review
+> packet ([`wp-g-mutation-gate-decision-packet.md`](../plans/wp-g-mutation-gate-decision-packet.md)). **Not
+> a verbatim reviewer transcript**: the verdict line is exact; the corrections are summarized. **Docs only:**
+> no decision is settled, no write authorization is granted, both scopes stay **unapproved**, **WP0–WP5
+> remain accepted (§O) and are not reopened**, and **no operational id is resolved**. No fixture/domain
+> write, no `reconcile_topic`/`record_activity`, no inference, no new research, no service/deploy/restart, no
+> product/UI change, no harness change, no WP3 seed, no WP4 amendment, no merge.
+
+**Verdict: REQUEST CHANGES (WP-G packet, D7 template topic parameter; docs-only).** Two D7 payload
+templates named the **infrastructure** topic for a **diagnostics axis-4** write; the parameter names are
+corrected. The **current, corrected packet is the reviewed artifact**; **no decision category is settled**.
+
+| # | Correction | Applied in (packet) |
+|---|---|---|
+| 1 | **`new-problem-event` template topic parameter.** `topicId: <infra>` → `<experimental-research-topic>` — the diagnostics axis-4 lives under the **`Experimental research`** topic, not the infrastructure topic. | §3 D7 (evidence template) |
+| 2 | **`D3 restore-confirmed` template topic parameter.** `topicId:<infra>` → `<experimental-research-topic>` (and the sibling D2 `populate` line made the same clearly-named parameter). | §3 D7 (axis template) |
+| 3 | **F14a `problemId` is the existing diagnostics-axis (axis-4) problem id** — never a generic/any-topic problem id. | §3 D7 (evidence template) |
+| 4 | **Topic/axis preflight (exact, target-scoped ids, no heuristic).** Require the problem's `axisId` = the **diagnostics axis-4** id **and** axis 4's `topicId` = the **`Experimental research`** topic id, each scoped to the chosen target; a **mismatch STOPS before any write**. Ids are exact private values resolved in the local handoff, **never fixed in the public doc**. | §3 D7 (new preflight paragraph) |
+| 5 | **Plain duplicate evidence stated explicitly** — topic `Experimental research`, axis diagnostics; **no `problemId`** unless an **exact intentional diagnostics-problem link**, and **ownership validated when a `problemId` is present**. | §3 D7 (duplicate comment) |
+| 6 | **Topic/axis preflight wired into stop/post-checks** — a mismatch stops like an incompatible/unproven `confirmed`. | §3 D7 (stop/post-checks) |
+| 7 | **Sweep of all axis-4 templates.** The `F12` and `F08` §5.2 reference templates normalized from `<exp>` to the same clearly-named `<experimental-research-topic>`; the `<infra>` templates (axes 5/6, consultation problems) are **correct as-is** and left unchanged. | §5.2 |
+
+**Counts after the correction:** **two** D7 topic parameters corrected (`new-problem-event`,
+`D3 restore-confirmed`) plus the sibling D2 line and two §5.2 sweep rows; **both scopes remain
+unapproved**; **zero** decisions settled; **zero** harness changes; **zero** operational ids resolved.
+
+**Authorization boundaries (unchanged).** WP0–WP5 remain **accepted** and are **not reopened**. WP-G stays
+**entered for planning/review only, with no execution authorization**; both scopes are **unapproved**;
+every write still needs the explicit human choices **and** that scope's explicit owner write authorization.
+**No** fixture/domain write, no `reconcile_topic`/`record_activity`, no inference, no service/deploy/restart,
+no product/UI change, no harness change, no WP3 seed, no WP4 amendment, and no merge is performed or
+authorized by this entry.
