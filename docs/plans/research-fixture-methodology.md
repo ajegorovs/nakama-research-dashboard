@@ -205,11 +205,15 @@ served-asset identity established by byte-level digest at the exact target org, 
 required-route defect**. Its one residual finding is a **non-blocking rationale wording** correction —
 a direct GET does not enforce path-org == session active org; the **page** fetches the active org's
 asset — corrected in §11, the authoring skill and the local handoff, with **no functional change to
-the recipe**. **The authoring skill's read-only preflight is now validated at `a2e4931`; its baseline
-seed/amendment authoring is not yet execution-validated** — no write path has been exercised, so the
-procedure is not validated end-to-end. **A passing WP0 is not permission for WP1: the owner must
-explicitly authorize the authoritative WP1 research after WP0 passes.** Neither WP0 nor WP1 is
-executed by this plan.
+the recipe**. **The authoring skill's read-only preflight is now validated at `a2e4931`; the WP5
+executable checks are validated (isolated) at `77c8f5b`; and the narrow SCOPE-RETAINED amendment write
+path (two `reconcile_topic` calls, T1 + T2) is execution-validated (2026-10-08 — boundary 22/22 PASS,
+post-write 24/24 PASS, protected stores unchanged; see
+[`docs/reviews/2026-10-08-wp-g-retained-execution-report.md`](../reviews/2026-10-08-wp-g-retained-execution-report.md)).
+The full baseline seed authoring path is still not execution-validated** — no full seed has been
+exercised, so the procedure is not validated end-to-end. **A passing WP0 is not permission for WP1: the
+owner must explicitly authorize the authoritative WP1 research after WP0 passes.** Neither WP0 nor WP1
+is executed by this plan.
 
 Only a gap on a **required** route blocks the gate. A missing or wrong step that a zero-context
 session needs to complete a required transport — the action-response envelope, the explicit

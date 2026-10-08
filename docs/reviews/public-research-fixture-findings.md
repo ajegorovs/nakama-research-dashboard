@@ -913,8 +913,9 @@ sha256 `4606d290…`, T1 payload `647dd324…`, T2 payload `daee7b23…`, F08 **
   basis (ownership = the `Experimental research` topic; version 1; blank state; `inferred` blocker; zero
   evidence).
 
-**Post-write verification — PASS 24/24.** Counts `2/6/3/1` and **8 events unchanged**; axes 1–4
-(links/people/versions) unchanged; plans unchanged (F12 null positions preserved); repo metadata (F07/F09),
+**Post-write verification — PASS 24/24.** Counts `2/6/3/1` and **8 events unchanged**; axes **1–4**
+links/people unchanged (**axes 1–3** versions unchanged; **axis-4** version `1→2` from the approved T2
+write; **axes 5/6** advanced `1→2` for the T1 link write); plans unchanged (F12 null positions preserved); repo metadata (F07/F09),
 people (F02) and topic `primary` links unchanged; **axis-4 evidence `0`** (F03/F14a residual accepted);
 **no new events anywhere** (F05/F10-existing/move/retro-link untouched); **`lastActivityAt` unchanged**.
 The two **protected (un-targeted) stores** are **unchanged by their own fresh readback** (`Layout Demo`
@@ -934,3 +935,47 @@ any evidence add) is authorized. No merge is performed. WP0–WP5 remain accepte
 
 **PR links.** Branch `docs/research-fixture-methodology`; draft PR #4
 (`https://github.com/ajegorovs/nakama-research-dashboard/pull/4`); committed docs-only.
+
+## V. WP-G retained-scope execution — reviewer **EXECUTION ACCEPTED** + final operational disposition (appended 2026-10-08)
+
+> **Appended, not an amendment.** §A–§U above are preserved unchanged. This section records the external
+> reviewer's **acceptance of the executed SCOPE-RETAINED run** (T1 + T2) reported in
+> [`2026-10-08-wp-g-retained-execution-report.md`](2026-10-08-wp-g-retained-execution-report.md) and
+> [`2026-10-08-wp-g-retained-execution-evidence.json`](2026-10-08-wp-g-retained-execution-evidence.json),
+> and the **final operational disposition** of the retained scope. It is **not a verbatim reviewer
+> transcript**: the **verdict line is exact** and the dispositions are **summarized**, never quoted as the
+> reviewer's own words, and **no citation is invented**. **Docs-only closeout:** no rerun, no live fixture
+> read or write, no `reconcile_topic`/`record_activity`, no inference, no service/deploy/restart, no
+> product/UI/harness/source change, and no merge. **WP0–WP5 are not reopened**; the original retained
+> payload, its sources and the bundle bindings are **preserved as recorded in §T/§U**.
+
+**Verdict: EXECUTION ACCEPTED (WP-G retained scope — T1 + T2; docs closeout only; no rerun).** The
+reviewer accepted the executed retained-scope run as reported: both reviewed `reconcile_topic`
+transactions ran **once each** under the narrow, digest-bound owner authorization, boundary **22/22 PASS**
+(no material drift) and post-write **24/24 PASS**, with the protected (un-targeted) stores unchanged by
+their own fresh readback. **No rerun was requested or performed.** The executed bundle and payload digests
+remain the bound originals — bundle `4606d290…`, T1 `647dd324…`, T2 `daee7b23…`, F08 **411** chars — **no
+payload was re-derived or edited** for this closeout.
+
+### V.1 Final operational disposition (retained scope closed)
+
+| Item | Disposition |
+|---|---|
+| Owner grant | **CONSUMED** — authorized exactly one execution of each of T1/T2; **authorizes no further mutation** |
+| SCOPE-RETAINED | **Done** for the two authorized calls; **no further retained write** (F02/F07/F09/F12, any evidence add) is authorized |
+| SCOPE-BASELINE | **Unselected / unapproved / NOT authorized** — no target, no choices, no write |
+| Retained write path | **Execution-validated — narrowly** (T1/T2 only); **full baseline authoring is NOT execution-validated** |
+| F03 / F14a residual | **Accepted** (D4 = leave) — axis-4 evidence stays `0`; **no** event added, moved or duplicated |
+| F08 axis-4 `currentState` | **Persistence verified** by canonical readback (the exact 411-char §3.1 string at `inferred`); the UI render **was not conclusively reached** and stays **visually unverified** (not a product issue; no canonical screenshot overwritten) |
+| Deployment | **None** — no reinstall/deploy/restart; same served bytes before and after |
+| Merge | **Not performed and not requested** |
+| Repository state | **Documentary closeout only** — this section and the accompanying status corrections change **no** fixture, product, harness or service |
+
+**No earlier work package is reopened.** §S (decisions settled), §T (read-only preflight + prepared
+bundle) and §U (execution) stand as recorded; this section records only the reviewer's acceptance and the
+final disposition. The retained write authorization is **closed, not renewed** — any future mutation (more
+retained work beyond T1/T2, or SCOPE-BASELINE) requires its **own** fresh measurement, review and explicit
+owner authorization; a passing execution is **not** authorization for the next write.
+
+**PR links.** Branch `docs/research-fixture-methodology`; draft PR #4
+(`https://github.com/ajegorovs/nakama-research-dashboard/pull/4`); committed docs-only on top of `5c18db0…`.

@@ -262,8 +262,9 @@ and **no network client** (asserted by the C21 safety guard). Run them:
 `harness:records` green (**267** text files, 123 under `docs/`); `git diff --check` clean. The checks are
 **accepted** and validated: each can go **red** on an injected defect and the default run is honestly
 **not green**. This validates the **checker**, not a write. **The test store is not the live fixture** — a
-green (or BLOCKED) run is **not** evidence about any live service, and **the authoring/mutation path is
-still not execution-validated**. **Do not mark the procedure validated end-to-end.**
+green (or BLOCKED) run is **not** evidence about any live service, and the **full baseline authoring path
+is still not execution-validated** — only the **narrow retained T1/T2 path** is (see the status above).
+**Do not mark the procedure validated end-to-end.**
 
 **Known host-typecheck disclosure.** `bun run typecheck:host` is **not run** here: it needs a Nakama
 checkout to resolve the real host types (`bun harness/typecheck-host.mjs --checkout <path>` or

@@ -77,10 +77,15 @@ The re-derived bundle digest equals the digest recorded in the preflight report 
 | consultation problem 1 repo set | `[]` | `[ajegorovs/nakama-research-dashboard]` |
 | consultation problem 2 repo set | `[]` | `[ajegorovs/nakama-research-dashboard]` |
 
+- **Changed:** axes **5/6** version advanced **1 → 2** as their repository links were written (a
+  `reconcile_topic` axis patch bumps the axis version unconditionally); each consultation problem's
+  **repository set** was replaced with `[ajegorovs/nakama-research-dashboard]`. The problems' `statement`
+  text is **unchanged** (verbatim echo), and their row version stayed **1** with `updatedAt` **not
+  advanced** — measured in the T1 readback, and consistent with the source contract (`problems[]` carry no
+  `expectedVersion`, and replacing the problem set does not bump the row).
 - **Unchanged:** problem statements (verbatim echo); counts `2/6/3/1`; **8 events**; axes **1–4**
-  links/people/versions; topic-level `primary` links; plans; repository metadata; people; every
-  `occurredAt`; topic `lastActivityAt`. Only axes 5/6 and the two problems changed (versions/`updatedAt`
-  advance is expected).
+  links/people (and **axes 1–3** versions); the topic row; topic-level `primary` links; plans; repository
+  metadata; people; every `occurredAt`; topic `lastActivityAt`.
 
 ## 5. T2 — experimental topic, axis 4 (`currentState`)
 
