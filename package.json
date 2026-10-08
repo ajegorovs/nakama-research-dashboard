@@ -28,6 +28,7 @@
     "harness:boundary": "bun harness/test-people-boundary.mjs",
     "harness:wp5": "bun harness/wp5/run.mjs",
     "harness:wp5:test": "bun test harness/wp5/wp5-checks.test.mjs",
+    "harness:fulltext": "bun harness/full-text-clamp/check.mjs --serve",
     "harness:write": "bash harness/read-pass.sh --write",
     "preview": "bun harness/preview/run.mjs",
     "preview:fixture": "bun harness/preview/run.mjs --dataset fixture",

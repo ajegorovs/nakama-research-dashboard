@@ -594,3 +594,49 @@ the E2E `API-LIMITS.md`/`limits.mjs`, with action tests. `coverage.limit` is mad
 the topic-wide contract keeps `limit` unchanged. Served on the isolated fixture at
 `0.2.0+dev.64a201410338` (`actions/actions.js` sha256 `25900ac1…`, store generation unchanged); Layout Demo
 left on `0.2.0+dev.164ccaafbca4` (rev 20, untouched).
+
+## 17. The axis's own fold is the read affordance for its full `currentState` (2026-10-09)
+
+The finding (**U03**): the diagnostics axis-4 `currentState` is DOM-present and text-exact but stays
+**2-line clamped even with the axis fold open** — the only in-place route to the full string was the *edit*
+form. The bounded design (`.hermes/scratch/full-text-access-design.md`, Option A vs B) was previewed
+transiently (`.hermes/scratch/preview-clamp/`, DOM-only injected CSS) and the owner **visually accepted the
+preview**. The owner then authorized implementation and its regression test — **not** deploy/reinstall/restart
+or any fixture write.
+
+**Decision: Option A.** Opening the axis's **own native `<details class="rd-axis-more">`** fold releases the
+reading's clamp, **in place**. One CSS rule, keyed on the fold's own native `[open]` state and scoped to the
+row that owns the fold:
+
+```css
+[data-plugin-id="research-dashboard"] .rd-axis-detail:has(details.rd-axis-more[open]) .rd-axis-reading .rd-claim-value,
+[data-plugin-id="research-dashboard"] .rd-axis:has(details.rd-axis-more[open]) .rd-axis-reading .rd-claim-value {
+  -webkit-line-clamp: unset; display: block; overflow: visible;
+}
+```
+
+The base clamp (`src/ui.tsx`, `.rd-axis-reading .rd-claim-value`) is unchanged; the rule adds **no JSX, no
+React state, no `data-rd-*` hook, no new DOM node, no new control and no new fact** (`textContent` is
+identical before and after — the clamp is visual). A **collapsed** card is byte-identical because the rule
+cannot match while `[open]` is absent.
+
+- **Boundaries (stated):** only **fold-owning rows** unclamp — the Topics axis detail card (**where U03
+  lives**) and the People axis rows. Rows with **no fold** — the Repositories `AxisScanItem` scan rows and the
+  transient pre-detail `AxisItem` fallback — **stay clamped**. The fold's meaning widens from *provenance* to
+  *provenance + the full reading*; that widening is the decision. `:has()` requires a modern Chromium (≥105).
+- **Executable assertion (a rule needs one):** `harness/full-text-clamp/check.mjs`, run with
+  `bun run harness:fulltext`. It serves the **built** `ui/app.js` through the plugin's own host runtime on a
+  fresh loopback port (`harness/preview/run.mjs` — no instance, no credentials, no service restart) and
+  measures at **1440×900** and **1280×800**: collapsed clamped + text-exact (411), the new rule inert when
+  collapsed, the fold summary reachable by a **real Tab** press at ≥**3:1** settled focus, **Enter and Space**
+  toggling the native fold, expanded **fully readable with no ellipsis and no horizontal overflow**, a short
+  state a visual **no-op**, a **fold-less** row that does **not** match the rule, and a **negative control**
+  that re-clamps while open and **must go red**. It asserts the rule is present in the built bundle
+  byte-for-byte and **refuses** to measure a build without it.
+- **Where the work lands:** `src/ui.tsx` (the rule) and the rebuilt committed `ui/app.js`; the check under
+  `harness/full-text-clamp/`; the implementation-preview record in
+  [`U12-fulltext-clamp-release.md`](U12-fulltext-clamp-release.md).
+- **Not done, by instruction:** **no deploy, no vendor, no reinstall, no restart, no fixture write, no served
+  run.** This is an **implementation preview against the built bundle**, not served-build acceptance; the
+  served acceptance remains a separate decision (which names the org explicitly — `--org-id`/`--org-name`, a
+  backend that does not rebind `orgs[0]`).

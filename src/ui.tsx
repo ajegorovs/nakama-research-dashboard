@@ -980,6 +980,17 @@ const css = `
   display: -webkit-box;
   overflow: hidden;
 }
+/* The axis's own "More on this axis" fold already carries the detail the compact reading does not need;
+   opening it also releases the reading's clamp, so the reader can read the complete state in place. The
+   rule is keyed on the fold's own native [open] state and scoped to the row that owns the fold, so a
+   collapsed card is byte-identical to before and a row with no fold (the Repositories scan rows, the
+   pre-detail fallback) is untouched. No new control, state, hook or fact: textContent is unchanged. */
+[data-plugin-id="research-dashboard"] .rd-axis-detail:has(details.rd-axis-more[open]) .rd-axis-reading .rd-claim-value,
+[data-plugin-id="research-dashboard"] .rd-axis:has(details.rd-axis-more[open]) .rd-axis-reading .rd-claim-value {
+  -webkit-line-clamp: unset;
+  display: block;
+  overflow: visible;
+}
 [data-plugin-id="research-dashboard"] .rd-axis-refs {
   display: grid;
   gap: var(--rd-gap-tight);
