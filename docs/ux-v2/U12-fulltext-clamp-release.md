@@ -26,30 +26,45 @@ No JSX, no React state, no new `data-rd-*` hook, no new DOM node, no new control
 is identical collapsed and expanded — the clamp was always a visual clip.
 
 **Committed build output regenerated:** `ui/app.js` (sha256 `f6e6b8f3cec9476ad55be4f7067eb116690ae0b26c03cd98c58b654cb9024548`,
-155,239 B). `actions/actions.js` is **byte-unchanged** (`068315050565bce4b416211164e8a8e5e00c0692bc0912f7702f7c869f27a2e0`).
+**155,420 B** — the file's byte length, read from the raw Buffer, not the string's 155,239 UTF-16
+code-unit count). `actions/actions.js` is **byte-unchanged** (`068315050565bce4b416211164e8a8e5e00c0692bc0912f7702f7c869f27a2e0`).
 No migration, manifest or payload change.
 
 ## The executable assertion
 
 `harness/full-text-clamp/check.mjs` — `bun run harness:fulltext`.
 
-- It mounts the built `ui/app.js` through the plugin's own host runtime (`harness/preview/run.mjs`) on a fresh
-  loopback port — **no Nakama instance, no credentials, no service restart, nothing written to a served org.**
+- It mounts the built `ui/app.js` through the plugin's own host runtime (`harness/preview/run.mjs`) on a
+  **fresh ephemeral loopback port** (bind `127.0.0.1:0`, released, re-bound by the child) — **no Nakama
+  instance, no credentials, no service restart, nothing written to a served org.** Because that release is a
+  known bind→serve race, the check passes a per-run **run token** to the child, which serves its identity
+  (token + the built bundle's sha256 and byte length) at `/preview-identity.json`; readiness requires the
+  responder to echo **exactly this run's** token and sha, so a stale or foreign responder is **refused**
+  (exit 3), and a child that exits before readiness **aborts immediately** (exit 2) rather than polling.
 - **Refuses** (exit 3) unless the built bundle contains the approved rule **byte-for-byte**; **aborts** (exit 2)
   on an unreachable preview; exits 0/1 as a verdict. Same contract as the acceptance pass.
+- It **regenerates the generated fixture on every self-served run**, even when one already exists, and it
+  reports the build size as the file's **byte** length (`155420`), never the string's UTF-16 code-unit count
+  (`155239`) — the two differ and the check asserts they do.
 - It builds a preview payload from the **committed corpus transcript** (replayed through the real action
-  layer) with the **F08 subject** patched in verbatim — the axis title and the 411-char `currentState` from the
-  approved design (`.hermes/scratch/full-text-access-design.md` §1) — and its state promoted to `active` so the
-  fold is a live control (the corpus axis was `completed`, i.e. inside the closed "completed" fold). A public
-  blocker sentence is added to a repository axis so the fold-less scan row has a reading.
+  layer) with the **F08 subject** patched in verbatim — the axis title and the 411-char `currentState` from
+  the **shared constant** (`make-clamp-fixtures.mjs` exports `F08_TITLE`/`F08_STATE`; the check imports them
+  and cross-checks the title against the WP5 manifest's axis-4 title, so the builder, the checker and the
+  approved baseline cannot disagree). The subject row is addressed by its **exact title and the 411-char
+  constant, independently of geometry** — never by "the longest row". Its state is promoted to `active` so
+  the fold is a live control (the corpus axis was `completed`, i.e. inside the closed "completed" fold). A
+  public blocker sentence is added to a repository axis so the fold-less scan row has a reading.
 
-**Result: 31 checks · 31 PASS · 0 FAIL · 0 BLOCKED, at 1440×900 and 1280×800.**
+**Result: 46 checks · 46 PASS · 0 FAIL · 0 BLOCKED, at 1440×900 and 1280×800.**
 
 | Assertion | 1440×900 | 1280×800 |
 |---|---|---|
+| build size is the file's **byte** length (155420), not the UTF-16 code-unit count (155239) | PASS | PASS |
+| F08 row located by **exact title + the 411-char constant**, independent of geometry (not "the longest") | PASS | PASS |
+| mounted fixture **regenerated** this run; served identity echoes this run's **token + build sha/bytes** | PASS | PASS |
 | rule present in built bundle, byte-for-byte | PASS | PASS |
 | collapsed: clamp `2`, clipped, 411-char text-exact | client 39 < scroll 98, visible 201/411 | client 39 < scroll 98, visible 169/411 |
-| collapsed: the new rule is **inert** (`ruleMatches=false`) → card unchanged | PASS | PASS |
+| collapsed: the new rule is a **non-match** (`ruleMatches=false`) → computed collapsed behavior unchanged | PASS | PASS |
 | fold summary reached by a **real Tab** press, `:focus-visible` | PASS | PASS |
 | summarised focus indicator ≥ **3:1** (settled render) | **4.61:1** (`2px rgb(180,83,9)` on `oklch(0.97 0 0)`) | **4.61:1** |
 | **Enter** opens the fold | PASS | PASS |
@@ -60,12 +75,20 @@ No migration, manifest or payload change.
 | **Space** toggles the native fold closed then open | PASS | PASS |
 | **NEGATIVE CONTROL:** re-clamp while open → readability assertion **FAILS (red)** | PASS | PASS |
 | after removing the negative CSS: expanded fully readable again | PASS | PASS |
+| short no-op row carries the **explicit** fixture state (`no progress note`) | PASS | PASS |
 | short state (16 chars): opening the fold is a visual **no-op** | 20 → 20 px | 20 → 20 px |
 | fold-less row (Repositories `AxisScanItem`): does **not** match the rule, keeps clamp `2` | PASS (144-char blocker) | PASS |
 
 The negative control is the proof that a green run can go red: with the fold open, injecting
 `-webkit-line-clamp:2; display:-webkit-box; overflow:hidden !important` collapses the reading back to
 `client 39 < scroll 98` and the readability assertion fails.
+
+**The check's own guards can go red too** — `harness/full-text-clamp/integrity.test.mjs`
+(`bun run harness:fulltext:test`, **6 cases · 6 pass**): a default run reports the byte length (not the
+code-unit count); a stale pre-existing fixture is overwritten and measured; a fixture with a **wrong F08
+title** fails (exit 1); one with a **wrong F08 length/text** fails (exit 1); an **occupied fixed port**
+fails (the child exits before readiness, exit 2); and a **foreign responder** whose identity does not echo
+this run's token/sha is **refused** (exit 3).
 
 ### New implementation captures (for the owner's visual review, before final approval)
 
@@ -80,7 +103,16 @@ Written by the check to `.hermes/scratch/full-text-clamp/pack/` (generated, git-
 
 - **Not served-build acceptance.** The measurements are of the **built bundle** through the host runtime, not
   of a served release. Whatever an instance serves is unchanged until a deploy/reinstall, which this record
-  does **not** perform and does **not** authorize.
+  does **not** perform and does **not** authorize. **Deployment is pending**; no live/served run backs any
+  number here.
+- **The payload is a synthetic preview, not live data.** The check mounts a corpus-derived preview payload
+  with the **F08 candidate** subject patched in (the 411-char wording is the approved design's *candidate*,
+  carried as a shared constant — never an instance's live row). The viewer sees the rule's behavior on that
+  subject, not a claim about any org's stored state.
+- **Repeatable green, provably able to go red.** The check allocates a **fresh ephemeral port** per run,
+  proves the responder is its own child by echoing a per-run token and the build sha/bytes, **regenerates**
+  its generated fixture every run and reports the **byte** length (never UTF-16 units). Its own guards are
+  exercised by `harness/full-text-clamp/integrity.test.mjs` (6 cases).
 - **Coverage boundary, by design.** Only fold-owning rows unclamp: the Topics axis detail card and the People
   axis rows. Rows with no fold — the Repositories scan rows and the transient pre-detail `AxisItem` fallback —
   stay clamped. Extending the fold to those rows is out of this bounded scope.

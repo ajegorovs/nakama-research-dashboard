@@ -69,7 +69,9 @@ revision is present → a system chromium), so nothing downloads and no user pat
 ## Generated files in the checkout, and cleanup
 
 Running the preview writes **six** files into the checkout's `apps/web/` (`preview.html`, `preview-main.tsx`,
-`preview.css`, `preview-fixtures.json`, `preview-plugin.ts`, `preview.vite.config.ts`). `run.mjs` tracks what
+`preview.css`, `preview-fixtures.json`, `preview-plugin.ts`, `preview.vite.config.ts`) — plus a seventh,
+`preview-identity.json`, only when a caller passes `--run-token` (the full-text-clamp check does, so it can
+prove the responder on a reused port is its own child). `run.mjs` tracks what
 it writes in `.preview-generated.json` and, by default, removes exactly what it created when it exits (SIGINT
 and SIGTERM included). Two safety rules:
 

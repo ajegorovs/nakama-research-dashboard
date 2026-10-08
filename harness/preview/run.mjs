@@ -23,6 +23,7 @@
  * restores anything it overwrote); `--keep` leaves them. Either way a manifest (`.preview-generated.json`)
  * is the record, and a stale one from a crashed run is recovered on the next start.
  */
+import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import { copyFileSync, existsSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -52,6 +53,10 @@ const SKIP_FIXTURES = has("no-fixtures");
 // The preview copies real files into the host checkout to run. `--keep` leaves them (and the manifest) so
 // they can be inspected; the default removes what this run created when it exits.
 const KEEP = has("keep");
+// A caller that must prove the responder is *its own* child (the full-text-clamp check, guarding the
+// bind→serve race on a reused port) passes `--run-token`: this run then also writes `preview-identity.json`
+// into the webapp root, where the caller fetches and matches it. Absent a token nothing extra is written.
+const RUN_TOKEN = flag("run-token", "");
 
 const die = (message) => {
   console.error(`preview: ${message}`);
@@ -188,6 +193,25 @@ for (const name of ["preview.html", "preview-main.tsx", "preview.css"]) {
   place(path.join(HERE, name), path.join(WEBAPP, name));
 }
 place(fixturesFile, path.join(WEBAPP, "preview-fixtures.json"));
+
+// Only when a caller asked to identify this run: write its identity (the run token, plus the boot
+// bundle's sha256 and byte length, read from the raw bytes) into the webapp root. The caller fetches
+// `/preview-identity.json` and matches all three, so a responder that is not this child — a leftover
+// preview or a foreign server that won the bind race — is refused rather than measured.
+if (RUN_TOKEN) {
+  const bundleBuf = readFileSync(BUNDLE);
+  const identity = {
+    token: RUN_TOKEN,
+    pluginId: "research-dashboard",
+    buildSha256: createHash("sha256").update(bundleBuf).digest("hex"),
+    buildBytes: bundleBuf.length,
+    pid: process.pid,
+    startedAt: new Date().toISOString(),
+  };
+  const identityTarget = path.join(WEBAPP, "preview-identity.json");
+  claim(identityTarget, `${JSON.stringify(identity)}\n`);
+  writeFileSync(identityTarget, `${JSON.stringify(identity)}\n`);
+}
 
 // The plugin is imported by relative path (outside the checkout's root, which `server.fs.allow`
 // permits below) so Vite watches `ui/app.js` itself — a rebuild reloads the page, with no copy step.

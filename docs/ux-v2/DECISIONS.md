@@ -617,8 +617,9 @@ row that owns the fold:
 
 The base clamp (`src/ui.tsx`, `.rd-axis-reading .rd-claim-value`) is unchanged; the rule adds **no JSX, no
 React state, no `data-rd-*` hook, no new DOM node, no new control and no new fact** (`textContent` is
-identical before and after — the clamp is visual). A **collapsed** card is byte-identical because the rule
-cannot match while `[open]` is absent.
+identical before and after — the clamp is visual). A **collapsed** card is unchanged: the rule is a
+non-match while `[open]` is absent, so its *computed* collapsed behavior is identical (no screenshot
+byte-equality is claimed).
 
 - **Boundaries (stated):** only **fold-owning rows** unclamp — the Topics axis detail card (**where U03
   lives**) and the People axis rows. Rows with **no fold** — the Repositories `AxisScanItem` scan rows and the
@@ -632,7 +633,13 @@ cannot match while `[open]` is absent.
   toggling the native fold, expanded **fully readable with no ellipsis and no horizontal overflow**, a short
   state a visual **no-op**, a **fold-less** row that does **not** match the rule, and a **negative control**
   that re-clamps while open and **must go red**. It asserts the rule is present in the built bundle
-  byte-for-byte and **refuses** to measure a build without it.
+  byte-for-byte and **refuses** to measure a build without it. It allocates a **fresh ephemeral port**
+  each run and proves the responder is its own child (a per-run token plus the built bundle's sha256 and
+  **byte** length, cross-checked), so a stale or foreign responder is **refused** rather than measured and
+  a child that exits before readiness **aborts immediately**; the generated fixture is rebuilt on every
+  self-served run, and the reported build size is the file's byte length (`155420 B`), not its UTF-16
+  code-unit count (`155239`). The red/green guards are exercised by
+  `harness/full-text-clamp/integrity.test.mjs` (`bun run harness:fulltext:test`, 6 cases).
 - **Where the work lands:** `src/ui.tsx` (the rule) and the rebuilt committed `ui/app.js`; the check under
   `harness/full-text-clamp/`; the implementation-preview record in
   [`U12-fulltext-clamp-release.md`](U12-fulltext-clamp-release.md).

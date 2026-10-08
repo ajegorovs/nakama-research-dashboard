@@ -1,33 +1,55 @@
 /**
  * check.mjs — executable regression check for the full-text clamp release (`src/ui.tsx`).
  *
- *   bun harness/full-text-clamp/check.mjs --serve        # one command: build fixtures, serve, measure
+ *   bun harness/full-text-clamp/check.mjs --serve        # one command: regenerate fixtures, serve, measure
  *   bun harness/full-text-clamp/check.mjs --url http://127.0.0.1:3210/preview.html
+ *   bun harness/full-text-clamp/check.mjs --preflight    # the non-browser preconditions only (bytes,
+ *                                                         # fixture canon, fresh-port identity/liveness)
  *
  * What it establishes
  * -------------------
  * The approved bounded behavior: opening an axis's own **native** `More on this axis` fold releases the
  * 2-line clamp on that row's reading `[data-rd-claim="current_state"]`, in place, while a **collapsed**
- * card stays byte-identical, a row with **no fold** stays clamped, and a **short** state is a visual
- * no-op. It measures the real computed style, the real glyph visibility and the real keyboard walk.
+ * card's computed behavior is unchanged (the rule is a non-match while `[open]` is absent), a row with
+ * **no fold** stays clamped, and a **short** state is a visual no-op. It measures the real computed
+ * style, the real glyph visibility and the real keyboard walk.
  *
  * Where it runs
  * -------------
  * Against the **built** bundle (`ui/app.js`) mounted through the plugin's own host runtime by
- * `harness/preview/run.mjs` on a fresh loopback port — no Nakama instance, no credentials, no service
- * restart, nothing written to a served org. This is an **implementation preview**, not served-build
- * acceptance: it proves the rule in the bundle does what it says, not that an instance serves it.
- * `deployment is NOT performed` by this check.
+ * `harness/preview/run.mjs` on a **fresh ephemeral loopback port** — no Nakama instance, no credentials,
+ * no service restart, nothing written to a served org. This is an **implementation preview**, not
+ * served-build acceptance: it proves the rule in the bundle does what it says, not that an instance
+ * serves it. `deployment is NOT performed` by this check.
+ *
+ * Build size is the file's **byte** length
+ * ----------------------------------------
+ * `ui/app.js` is decoded to a string only to search it verbatim; the sha256 and the reported size are
+ * taken from the raw **Buffer**, so `buildBytes` is the file's byte length, never the string's UTF-16
+ * code-unit count (the two differ: 155420 bytes vs 155239 code units).
+ *
+ * Which server it measured
+ * ------------------------
+ * The run allocates an ephemeral port (`bind 127.0.0.1:0`, then release), so the child re-binds it. That
+ * release is a known race: another process can take the port in between. The check closes it by passing
+ * a random **run token** to the child, which serves its identity (token + the bundle sha256/bytes) at
+ * `/preview-identity.json`; readiness requires that a responder echo **exactly this run's** token and
+ * sha. A stale or foreign responder is **refused**, not measured; a child that exits before readiness
+ * (e.g. the port is occupied and Vite's `strictPort` fails) **aborts immediately**, it does not poll.
  *
  * Exit contract (matches the acceptance pass): 0 = verdict PASS, 1 = verdict FAIL, 2 = ABORTED,
  * 3 = REFUSED (a precondition failed, so nothing was established). The rule bytes it will inject as the
  * negative control are read from the bundle itself, so the check cannot pass against a get-around CSS.
  */
-import { chromium } from "playwright-core";
+import { createHash, randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createServer } from "node:net";
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { chromium } from "playwright-core";
 import { chromiumLaunchOptions, chromiumSource } from "../chromium.mjs";
+import { F08_STATE, F08_TITLE, SHORT_STATE } from "./make-clamp-fixtures.mjs";
+import { AXES } from "../wp5/manifest.mjs";
 
 const HERE = import.meta.dir;
 const REPO = path.resolve(HERE, "../..");
@@ -37,14 +59,22 @@ const flag = (name, fallback = null) => {
   return at === -1 ? fallback : args[at + 1];
 };
 const has = (name) => args.includes(`--${name}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const PORT = flag("port", "3210");
-const URL = flag("url", `http://127.0.0.1:${PORT}/preview.html`);
-const SERVE = has("serve") || flag("url") === null;
+const explicitUrl = flag("url");
+const explicitPort = flag("port");
+const SERVE = has("serve") || explicitUrl === null;
+const PREFLIGHT = has("preflight");
 const BUILD = flag("build", path.join(REPO, "ui", "app.js"));
+// A caller-owned payload (`--fixtures <path>`) is trusted and NOT regenerated; the harness's own generated
+// fixture is rebuilt on **every** self-served run, even when one already exists, so it can never measure a
+// stale payload. The generated file is git-ignored and rebuilt on demand (see the repo's `.gitignore`).
+const FIXTURES_EXPLICIT = flag("fixtures") !== null;
 const FIXTURES = flag("fixtures", path.join(HERE, "clamp-fixtures.json"));
 const OUT = flag("out", path.join(REPO, ".hermes", "scratch", "full-text-clamp", "pack"));
 const VIEWPORTS = [[1440, 900], [1280, 800]];
+// A per-run nonce, so the identity the child serves cannot be forged by a leftover responder.
+const RUN_TOKEN = randomBytes(16).toString("hex");
 
 // The rule the change adds, byte-for-byte as it appears in `src/ui.tsx` and in the built bundle.
 const RULE_SELECTOR =
@@ -69,65 +99,209 @@ const check = (id, desc, cond, detail = "") => {
   console.log(`${status.padEnd(7)} ${id}  ${desc}${detail ? ` — ${detail}` : ""}`);
   return status === "PASS";
 };
-const abort = (message) => {
-  console.error(`full-text-clamp: ${message}`);
-  console.error("full-text-clamp: ABORTED — nothing established.");
-  process.exit(2);
-};
 const refuse = (message) => {
   console.error(`full-text-clamp: ${message}`);
   console.error("full-text-clamp: REFUSED — a precondition failed.");
   process.exit(3);
 };
+const abort = (message) => {
+  console.error(`full-text-clamp: ${message}`);
+  console.error("full-text-clamp: ABORTED — nothing established.");
+  process.exit(2);
+};
 
-// ── precondition: the built bundle carries the rule, byte-for-byte ─────────────────────────────────
+/** Allocate an ephemeral loopback port: bind 127.0.0.1:0, read the port, release it. The gap between the
+ *  release and the child's re-bind is the race the run token closes. */
+const ephemeralPort = () =>
+  new Promise((resolve, reject) => {
+    const srv = createServer();
+    srv.once("error", reject);
+    srv.listen(0, "127.0.0.1", () => {
+      const { port } = srv.address();
+      srv.close(() => resolve(port));
+    });
+  });
+
+let PORT = explicitPort;
+if (SERVE && PORT == null) PORT = String(await ephemeralPort());
+const URL = explicitUrl ?? `http://127.0.0.1:${PORT}/preview.html`;
+// Identity is only meaningful against a server we start (or one whose identity URL the caller names).
+const IDENTITY_URL = flag("identity", SERVE ? `http://127.0.0.1:${PORT}/preview-identity.json` : null);
+
+// ── precondition: the built bundle carries the rule, byte-for-byte; size is bytes, not code units ──
 if (!existsSync(BUILD)) refuse(`no built bundle at ${BUILD} — run \`bun run build\` first.`);
-const bundle = readFileSync(BUILD, "utf8");
+const bundleBuf = readFileSync(BUILD);
+const bundle = bundleBuf.toString("utf8"); // decode for the verbatim search only
+const buildSha = createHash("sha256").update(bundleBuf).digest("hex");
+const buildBytes = bundleBuf.length; // the file's byte length (what the OS/disk reports)
+const buildFileBytes = statSync(BUILD).size;
+const buildCodeUnits = bundle.length; // the UTF-16 code-unit count — deliberately NOT what we report
 const rulePresent = bundle.includes(RULE_SELECTOR);
-const buildSha = (await import("node:crypto")).createHash("sha256").update(bundle).digest("hex");
 if (!rulePresent) {
   refuse(`the built bundle ${path.relative(REPO, BUILD)} does not contain the rule verbatim — refusing to measure a build without it.`);
 }
-check("build.ruleBytes", "the built bundle contains the approved rule byte-for-byte", rulePresent, `${path.relative(REPO, BUILD)} ${buildSha.slice(0, 12)}… ${bundle.length}B`);
+check("build.ruleBytes", "the built bundle contains the approved rule byte-for-byte", rulePresent, `${path.relative(REPO, BUILD)} ${buildSha.slice(0, 12)}… ${buildBytes}B`);
+check(
+  "build.bytesExact",
+  "buildBytes is the file's byte length (Buffer / on-disk size), not its UTF-16 code-unit count",
+  typeof buildBytes === "number" && buildBytes === buildFileBytes && buildBytes > 0,
+  `bytes=${buildBytes} onDisk=${buildFileBytes} utf16Units=${buildCodeUnits}${buildBytes !== buildCodeUnits ? " (the two differ — bytes, not code units, was reported)" : ""}`
+);
+
+// ── F08 subject: one shared constant, cross-checked against the WP5 manifest (no duplicate canon) ──
+const manifestF08Title = AXES.find((a) => a.n === 4)?.title;
+check(
+  "f08.canonTitle",
+  "the F08 title is the shared WP5 manifest's axis-4 title (single source, no duplicate)",
+  manifestF08Title === F08_TITLE,
+  `manifest='${manifestF08Title}' imported='${F08_TITLE}'`
+);
+check("f08.canonLength", "the shared F08 currentState constant is the approved 411-char subject", F08_STATE.length === 411, `len=${F08_STATE.length}`);
 
 mkdirSync(OUT, { recursive: true });
 const manifest = {
   kind: "implementation preview — isolated local preview server (host runtime, built ui/app.js). NOT served-build acceptance. Deployment NOT performed.",
   generatedAt: new Date().toISOString(),
-  url: URL, build: path.relative(REPO, BUILD), buildSha256: buildSha, buildBytes: bundle.length,
+  url: URL, build: path.relative(REPO, BUILD), buildSha256: buildSha, buildBytes,
+  runToken: RUN_TOKEN, port: PORT,
   rule: RULE_SELECTOR, negativeControl: NEGATIVE_CSS,
   viewports: VIEWPORTS.map((v) => v.join("x")), shots: [],
 };
 
-// ── optionally serve the preview ourselves (fresh port) ─────────────────────────────────────────────
-let server = null;
+// ── fixtures: regenerate the generated payload every self-served run; verify it carries the F08 canon ──
 if (SERVE) {
-  if (!existsSync(FIXTURES)) {
-    console.log("full-text-clamp: building clamp fixtures…");
+  if (FIXTURES_EXPLICIT) {
+    if (!existsSync(FIXTURES)) refuse(`caller-supplied fixtures do not exist at ${FIXTURES}.`);
+    console.log(`full-text-clamp: using caller-supplied fixtures ${FIXTURES} (not regenerated — the caller owns the payload).`);
+  } else {
+    const preexisting = existsSync(FIXTURES);
+    if (preexisting) rmSync(FIXTURES, { force: true });
+    console.log(`full-text-clamp: regenerating clamp fixtures (preexisting=${preexisting})…`);
     const made = spawn("bun", [path.join(HERE, "make-clamp-fixtures.mjs"), "--out", FIXTURES], { stdio: "inherit" });
     const code = await new Promise((resolve) => made.on("exit", resolve));
     if (code !== 0) abort("make-clamp-fixtures.mjs failed");
-  } else {
-    console.log(`full-text-clamp: using fixtures ${FIXTURES}`);
+    check(
+      "fixtures.regenerated",
+      "a self-served run regenerates the generated fixture even when a stale one already existed",
+      existsSync(FIXTURES),
+      `preexisting=${preexisting} → rebuilt ${path.relative(REPO, FIXTURES)}`
+    );
   }
+}
+
+// The mounted payload must carry the F08 subject row at its exact title and the exact 411-char constant.
+const fixtureCarriesF08 = (file) => {
+  if (!existsSync(file)) return { axisPresent: false, currentState: null };
+  let payload;
+  try {
+    payload = JSON.parse(readFileSync(file, "utf8"));
+  } catch {
+    return { axisPresent: false, currentState: null };
+  }
+  const topicKey = Object.keys(payload.responses ?? {}).find((k) => k.startsWith("get_topic:"));
+  const topic = topicKey ? payload.responses[topicKey] : null;
+  const axis = (topic?.axes ?? []).find((a) => a.title === F08_TITLE);
+  return { axisPresent: !!axis, currentState: axis?.currentState ?? null, axisCount: topic?.axes?.length ?? 0 };
+};
+if (existsSync(FIXTURES)) {
+  const fx = fixtureCarriesF08(FIXTURES);
+  check("fixtures.f08TitleExact", "the mounted fixture carries the F08 subject row at its exact title", fx.axisPresent, `expected='${F08_TITLE}'`);
+  check(
+    "fixtures.f08StateExact",
+    `the F08 row's currentState is the shared constant, text-exact (${F08_STATE.length} chars)`,
+    fx.currentState === F08_STATE,
+    `len=${fx.currentState === null ? "(absent)" : fx.currentState.length} expected=${F08_STATE.length}`
+  );
+}
+
+// ── serve the preview ourselves (fresh ephemeral port) and prove the responder is THIS child ─────────
+let server = null;
+let childExit = null;
+let stopping = false;
+const stopServer = () => {
+  stopping = true;
+  try {
+    server?.kill("SIGTERM");
+  } catch {
+    /* already gone */
+  }
+};
+
+if (SERVE) {
   server = spawn(
     "bun",
-    [path.join(HERE, "..", "preview", "run.mjs"), "--dataset", "corpus", "--no-fixtures", "--fixtures", FIXTURES, "--port", PORT],
+    [path.join(HERE, "..", "preview", "run.mjs"), "--dataset", "corpus", "--no-fixtures", "--fixtures", FIXTURES, "--port", PORT, "--run-token", RUN_TOKEN],
     { cwd: REPO, stdio: ["ignore", "inherit", "inherit"] }
   );
-  const deadline = Date.now() + 30_000;
-  let up = false;
-  while (Date.now() < deadline) {
-    try {
-      const res = await fetch(URL, { method: "GET" });
-      if (res.ok) { up = true; break; }
-    } catch { /* not yet */ }
-    await new Promise((r) => setTimeout(r, 400));
-  }
-  if (!up) { try { server.kill(); } catch {} abort(`preview did not become ready at ${URL}`); }
+  server.on("exit", (code, signal) => {
+    // 143 / SIGTERM after we asked it to stop is our own intentional shutdown; anything else, and
+    // anything before readiness, is an unexpected exit and is reported as such (never hidden).
+    if (childExit === null) childExit = { code, signal, intentional: stopping };
+  });
+  process.on("exit", stopServer);
 }
-const stopServer = () => { try { server?.kill("SIGTERM"); } catch {} };
-process.on("exit", stopServer);
+
+let identity = null;
+if (IDENTITY_URL) {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    // Liveness first: a child that exited (bad port, missing checkout, Vite strictPort collision) can
+    // never become ready — fail immediately instead of polling out the whole deadline.
+    if (SERVE && childExit) {
+      stopServer();
+      const how = childExit.signal ? `signal ${childExit.signal}` : `exit code ${childExit.code}`;
+      abort(`the preview child exited before readiness (${how}) — nothing is served at ${URL}.`);
+    }
+    try {
+      const res = await fetch(IDENTITY_URL, { cache: "no-store", signal: AbortSignal.timeout(3000) });
+      if (res.ok) {
+        const body = await res.json();
+        if (body.token === RUN_TOKEN && body.buildSha256 === buildSha && body.buildBytes === buildBytes) {
+          identity = body;
+          break;
+        }
+        stopServer();
+        refuse(
+          `a responder at ${IDENTITY_URL} is not this run's preview child — its identity does not match ` +
+            `(token '${String(body.token).slice(0, 8)}…' vs '${RUN_TOKEN.slice(0, 8)}…', ` +
+            `sha '${String(body.buildSha256).slice(0, 12)}…' vs '${buildSha.slice(0, 12)}…'). ` +
+            `Refusing to measure an unknown responder.`
+        );
+      }
+    } catch {
+      /* not up yet, or not ours yet */
+    }
+    await sleep(400);
+  }
+  if (!identity) {
+    stopServer();
+    abort(`the preview did not establish its identity at ${IDENTITY_URL} within 30s.`);
+  }
+  check(
+    "serve.identity",
+    "readiness is this run's own preview child: the served identity echoes the run token and the built bundle sha/bytes",
+    identity.token === RUN_TOKEN && identity.buildSha256 === buildSha && identity.buildBytes === buildBytes,
+    `token=${RUN_TOKEN.slice(0, 8)}… sha=${buildSha.slice(0, 12)}… bytes=${identity.buildBytes}`
+  );
+} else {
+  check("serve.identity", "a served identity was established for the measured build", "blocked", `no identity endpoint (measured an existing --url: ${URL})`);
+}
+
+if (PREFLIGHT) {
+  // The non-browser preconditions only (bytes, fixture canon, fresh-port identity/liveness). Used by the
+  // integrity suite to exercise the guards cheaply; it does not measure geometry.
+  stopServer();
+  await sleep(200);
+  manifest.childExit = childExit ?? null;
+  const p = checks.filter((c) => c.status === "PASS").length;
+  const f = checks.filter((c) => c.status === "FAIL").length;
+  const b = checks.filter((c) => c.status === "BLOCKED").length;
+  manifest.checks = checks;
+  manifest.counts = { total: checks.length, passed: p, failed: f, blocked: b };
+  writeFileSync(path.join(OUT, "preflight-manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+  console.log(`\n${p} passed · ${f} failed · ${b} blocked · full-text-clamp (preflight)`);
+  process.exit(f > 0 ? 1 : 0);
+}
 
 console.log(`full-text-clamp: chromium — ${chromiumSource()}`);
 const browser = await chromium.launch({ ...chromiumLaunchOptions(), headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
@@ -272,33 +446,45 @@ try {
     catch (e) { check(`preview.${vp}.reachable`, "the preview renders", false, String(e).slice(0, 120)); continue; }
     await openIntoTopic(page);
 
-    // discover the sample rows by their measured state, then address them by a stable attribute
+    // The F08 subject is addressed by its exact title and constant — NOT by "the longest row". A row is
+    // discovered only to prove the subject is present and text-exact, independently of any geometry.
     const rows = await page.evaluate(() => [...document.querySelectorAll("li.rd-axis-detail[data-rd-axis-title]")].map((li) => ({
       title: li.getAttribute("data-rd-axis-title"),
       len: li.querySelector('.rd-claim-value[data-rd-claim="current_state"]')?.textContent.length ?? 0,
       hasFold: !!li.querySelector("details.rd-axis-more"),
     })));
-    const longRow = rows.filter((r) => r.hasFold).sort((a, b) => b.len - a.len)[0];
-    const shortRow = rows.filter((r) => r.hasFold && r.len > 0).sort((a, b) => a.len - b.len)[0];
     v[vp].discovered = rows;
-    check(`coverage.${vp}.samples`, "found a long (clamped) and a short (no-op) axis row, each owning a fold",
-      !!(longRow && longRow.len > 200 && shortRow && shortRow.len > 0 && shortRow.len < 40),
-      `rows=${rows.length} long=${longRow?.title} (${longRow?.len}) short=${shortRow?.title} (${shortRow?.len})`);
-    if (!longRow) { await page.close(); continue; }
+    const f08Row = rows.find((r) => r.title === F08_TITLE);
+    const longest = [...rows].sort((a, b) => b.len - a.len)[0];
+    check(`f08.${vp}.rowTitleExact`, "the F08 subject row is present by its exact title", !!f08Row, `expected '${F08_TITLE}' among ${rows.length} rows`);
+    check(
+      `f08.${vp}.locatedByTitle`,
+      "the F08 subject is located by its exact title/constant, not by being the longest row",
+      !!f08Row,
+      `f08=${f08Row?.len} longest='${longest?.title}' (${longest?.len})${longest && longest.title !== F08_TITLE ? " — a longer row exists and is not the subject" : ""}`
+    );
+    check(`coverage.${vp}.samples`, "the F08 (fold-owning) subject and the short no-op state are both present", !!(f08Row && f08Row.hasFold && rows.some((r) => r.hasFold && r.len === SHORT_STATE.length)), `rows=${rows.length}`);
+    if (!f08Row) { await page.close(); continue; }
 
-    const LONG = `li.rd-axis-detail[data-rd-axis-title="${longRow.title}"]`;
+    const LONG = `li.rd-axis-detail[data-rd-axis-title="${f08Row.title}"]`;
+    // Independent of geometry: the F08 row's DOM text must BE the shared 411-char constant.
+    const f08StateText = await page.evaluate((s) => document.querySelector(s + ' .rd-claim-value[data-rd-claim="current_state"]')?.textContent ?? null, LONG);
+    check(`f08.${vp}.stateExact`, `the F08 row's currentState text is the shared 411-char constant, character-exact`, typeof f08StateText === "string" && f08StateText === F08_STATE, `len=${f08StateText?.length ?? "(absent)"} expected=${F08_STATE.length}`);
+
+    // The short no-op row is addressed by its explicit fixture state, not "the shortest".
+    const shortRow = rows.filter((r) => r.hasFold).find((r) => r.len === SHORT_STATE.length);
     const SHORT = shortRow ? `li.rd-axis-detail[data-rd-axis-title="${shortRow.title}"]` : null;
     const CLAIM = '.rd-claim-value[data-rd-claim="current_state"]';
 
     // ---- (1) COLLAPSED baseline ----
     v[vp].collapsed = await page.evaluate(MEASURE, [LONG, CLAIM]);
-    v[vp].collapsed.claim.textExact = v[vp].collapsed.claim.rawText.length === longRow.len;
+    v[vp].collapsed.claim.textExact = v[vp].collapsed.claim.rawText.length === f08Row.len;
     await shot(page, `f08-${vp}-collapsed.png`, LONG);
     check(`collapsed.${vp}.clamped`, "collapsed: the reading is clamped to 2 lines with hidden text",
       v[vp].collapsed.claim.lineClamp === "2" && v[vp].collapsed.claim.clipped,
       `clamp=${v[vp].collapsed.claim.lineClamp} client=${v[vp].collapsed.claim.clientHeight} scroll=${v[vp].collapsed.claim.scrollHeight} visible=${v[vp].collapsed.claim.visibleLen}/${v[vp].collapsed.claim.textLen}`);
-    check(`collapsed.${vp}.textExact`, `collapsed: DOM text is text-exact (${longRow.len} chars)`, v[vp].collapsed.claim.textExact, `len=${v[vp].collapsed.claim.textLen}`);
-    check(`collapsed.${vp}.ruleInert`, "collapsed: the new rule does not apply at all (the fold is closed), so the card is unchanged by construction",
+    check(`collapsed.${vp}.textExact`, `collapsed: DOM text is text-exact (${f08Row.len} chars)`, v[vp].collapsed.claim.textExact, `len=${v[vp].collapsed.claim.textLen}`);
+    check(`collapsed.${vp}.ruleInert`, "collapsed: the new rule is a non-match (the fold is closed), so the computed collapsed behavior is unchanged",
       v[vp].collapsed.claim.ruleMatches === false, `ruleMatches=${v[vp].collapsed.claim.ruleMatches} clamp=${v[vp].collapsed.claim.lineClamp} display=${v[vp].collapsed.claim.display}`);
     check(`collapsed.${vp}.blocks`, "collapsed: the axis keeps its protected block count (<=6 with a blocker)", v[vp].collapsed.blocks <= 6, `blocks=${v[vp].collapsed.blocks}`);
 
@@ -323,13 +509,13 @@ try {
     await page.waitForFunction((s) => document.querySelector(s)?.hasAttribute("open"), `${LONG} details.rd-axis-more`, { timeout: 5000 });
     await settle(page, LONG);
     v[vp].expanded = await page.evaluate(MEASURE, [LONG, CLAIM]);
-    v[vp].expanded.claim.textExact = v[vp].expanded.claim.rawText.length === longRow.len;
+    v[vp].expanded.claim.textExact = v[vp].expanded.claim.rawText.length === f08Row.len;
     await shot(page, `f08-${vp}-expanded.png`, LONG);
     await shot(page, `f08-${vp}-expanded-viewport.png`);
     const exp = readabilityAssert(v[vp].expanded);
     v[vp].expanded.assert = exp;
     check(`expanded.${vp}.fullReadable`, "expanded: the clamp is released, the whole state is readable, no ellipsis, no horizontal overflow", exp.ok, exp.why);
-    check(`expanded.${vp}.textExact`, `expanded: DOM text unchanged (text-exact ${longRow.len})`, v[vp].expanded.claim.textExact, `len=${v[vp].expanded.claim.textLen}`);
+    check(`expanded.${vp}.textExact`, `expanded: DOM text unchanged (text-exact ${f08Row.len})`, v[vp].expanded.claim.textExact, `len=${v[vp].expanded.claim.textLen}`);
     check(`expanded.${vp}.blocks`, "expanded: the axis keeps its protected block count", v[vp].expanded.blocks <= 6, `blocks=${v[vp].expanded.blocks}`);
 
     // ---- (4) Space toggles the native fold ----
@@ -355,6 +541,8 @@ try {
 
     // ---- (6) SHORT state: opening the fold is a visual no-op ----
     if (SHORT) {
+      const shortText = await page.evaluate((s) => document.querySelector(s + ' .rd-claim-value[data-rd-claim="current_state"]')?.textContent ?? null, SHORT);
+      check(`short.${vp}.exact`, `the short no-op row carries the explicit fixture state (${JSON.stringify(SHORT_STATE)})`, shortText === SHORT_STATE, `len=${shortText?.length ?? "(absent)"} expected=${SHORT_STATE.length}`);
       const before = await page.evaluate(MEASURE, [SHORT, CLAIM]);
       await page.evaluate((s) => { const f = document.querySelector(s + " details.rd-axis-more"); if (f && !f.hasAttribute("open")) f.setAttribute("open", ""); }, SHORT);
       await settle(page, SHORT);
@@ -414,7 +602,14 @@ await browser.close();
 stopServer();
 // Let the preview server unwind before the verdict is printed, so its shutdown chatter cannot be misread
 // as part of the result.
-await new Promise((resolve) => setTimeout(resolve, 400));
+await sleep(400);
+manifest.childExit = childExit ?? null;
+if (childExit) {
+  const how = childExit.signal ? `signal ${childExit.signal}` : `code ${childExit.code}`;
+  console.log(`full-text-clamp: preview child exited (${how}) — ${childExit.intentional ? "intentional shutdown (we stopped it)" : "UNEXPECTED"}${childExit.code === 143 || childExit.signal === "SIGTERM" ? " [143/SIGTERM = teardown, not a failure]" : ""}.`);
+} else if (SERVE) {
+  console.log("full-text-clamp: preview child had not reported its exit at teardown (stopped with the check).");
+}
 
 const passed = checks.filter((c) => c.status === "PASS").length;
 const failed = checks.filter((c) => c.status === "FAIL").length;
