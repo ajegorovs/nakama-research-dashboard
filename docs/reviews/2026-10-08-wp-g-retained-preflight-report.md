@@ -147,7 +147,10 @@ T2  reconcile_topic({ topicId: <T-exp>,
   metadata is written**. The problem write **replaces** the `problem_repositories` set; the statements
   are **verbatim echoes** (no text rewrite). Topic-level `primary` links are preserved.
 - **No executor.** No auto-write script is produced. The exact ids, the executable payload and the
-  bundle digest are held **local** (`.hermes/scratch/wpg-retained-bundle.json`).
+  bundle digest are held **local** (`.hermes/scratch/wpg-retained-bundle.json`), bound to this
+  preflight: **bundle digest** `4606d290c89572f88ef0386551883d193a92a85ffae1235d079513137fece154`;
+  **payload digests** T1 `647dd32465e2421bc3e1705b3f9704db323e4c835187fe4560d7516a98610b08`,
+  T2 `daee7b23f80ec9fb109e1303aea3ae14f00d88bc7bba4fb937239ce96969d655`; §3.1 string **411 chars**.
 - **Temporary validity.** The bundle is bound to this preflight (served sha256, release, head, object
   versions). At the write boundary it must be **re-measured**; **any served-sha or `expectedVersion`
   drift STOPS the write** and requires a fresh preflight.

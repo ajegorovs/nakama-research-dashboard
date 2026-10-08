@@ -875,7 +875,7 @@ local handoff; **fresh-verified and explicitly selected**, never `orgs[0]`), hea
 
 **Prepared, not executed.** The exact write bundle (two `reconcile_topic` transactions, operational
 ids, `expectedVersion`, the §3.1 411-char string) is held **local** (git-ignored) bound to this
-preflight by digest; **no executor and no auto-write script** exist, and the bundle is a
+preflight by digest (`4606d290…`); **no executor and no auto-write script** exist, and the bundle is a
 **temporary-validity** artifact to be **re-measured at the write boundary**, where **any
 version/served-sha drift STOPS**.
 
