@@ -14,12 +14,17 @@ metadata:
 
 # Research-fixture authoring
 
-> **Status: read-only preflight validated; WP5 executable checks validated (isolated); authoring/mutation
-> not yet execution-validated.** The read-only WP0 preflight passed at commit `a2e4931`; the **WP5
+> **Status: read-only preflight validated; WP5 executable checks validated (isolated); the narrow
+> retained write path (two `reconcile_topic` calls) is now execution-validated; full baseline authoring is
+> still not execution-validated.** The read-only WP0 preflight passed at commit `a2e4931`; the **WP5
 > executable checks** are **accepted** and validated against an **isolated throwaway store** at commit
-> `77c8f5b` (see *Executable checks (WP5)*). The **baseline seed/amendment authoring path is still not
-> execution-validated** — no write to any target has been exercised, so the procedure is **not validated
-> end-to-end**. Treat any authoring output as a proposal to be validated. The governing plan is
+> `77c8f5b` (see *Executable checks (WP5)*). The **SCOPE-RETAINED amendment** was executed live on
+> 2026-10-08 (two `reconcile_topic` calls — axis 5/6 `primary` links + both consultation problem→repo sets,
+> and the axis-4 `currentState`) and **post-write verification passed** (counts/events unchanged, protected
+> stores unchanged); that validates **only this narrow path**, not the wider design. The **baseline seed
+> authoring path is still not execution-validated** — no full seed has run, so the procedure is **not
+> validated end-to-end**. Treat any authoring output beyond the executed retained calls as a proposal to be
+> validated. The governing plan is
 > [`docs/plans/research-fixture-methodology.md`](../../../docs/plans/research-fixture-methodology.md);
 > the WP-G decision/review packet is
 > [`docs/plans/wp-g-mutation-gate-decision-packet.md`](../../../docs/plans/wp-g-mutation-gate-decision-packet.md).
@@ -226,8 +231,11 @@ session active org; the page fetches the active org's asset), fixed above with *
 Only a gap on a **required** route blocks; an optional refinement does not.
 
 **This skill's status: the read-only preflight is validated at `a2e4931`; the WP5 executable checks are
-validated (isolated) at `77c8f5b`; the baseline seed/amendment authoring path is still not
-execution-validated** — no write has been exercised, so the procedure is not validated end-to-end. A
+validated (isolated) at `77c8f5b`; the **narrow SCOPE-RETAINED amendment write path (two
+`reconcile_topic` calls) is execution-validated** (2026-10-08; boundary 22/22 PASS, both transactions
+`ok`, post-write 24/24 PASS, protected stores unchanged — see
+`docs/reviews/2026-10-08-wp-g-retained-execution-report.md`); the **full baseline seed authoring path is
+still not execution-validated** — no full seed has run, so the procedure is not validated end-to-end. A
 passing WP0 report is **not** authorization for the authoritative WP1 run — the owner must authorize WP1
 explicitly after WP0 passes. Neither WP0 nor WP1 is executed by this skill.
 

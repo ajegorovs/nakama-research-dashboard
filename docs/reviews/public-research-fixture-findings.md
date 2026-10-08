@@ -882,3 +882,55 @@ version/served-sha drift STOPS**.
 **PR links.** Branch `docs/research-fixture-methodology`; draft PR #4
 (`https://github.com/ajegorovs/nakama-research-dashboard/pull/4`); committed docs-only on top of
 `9f07552…`.
+
+## U. WP-G retained-scope **execution** — T1 + T2 committed, postflight PASS, protected stores unchanged (appended 2026-10-08)
+
+> **Appended, not an amendment.** §A–§T above are preserved unchanged. This section records the **live
+> execution** of the **two reviewed retained `reconcile_topic` transactions** (T1 + T2) under the owner's
+> **explicit, narrow, digest-bound write authorization**, and the post-write verification. Published in
+> [`2026-10-08-wp-g-retained-execution-report.md`](2026-10-08-wp-g-retained-execution-report.md), with
+> machine evidence in
+> [`2026-10-08-wp-g-retained-execution-evidence.json`](2026-10-08-wp-g-retained-execution-evidence.json).
+> **SCOPE-BASELINE remains unselected/unapproved.** Public labels and sanitized id references only; exact
+> operational identity and the raw envelopes are held **local** (git-ignored).
+
+**Owner grant (scope) and status.** The owner granted an **explicit write authorization** for
+**SCOPE-RETAINED only** — the two reviewed calls (T1 + T2) — bound to the bundle digest `4606d290…`. The
+grant is **CONSUMED**: it authorized exactly one execution of each of the two payloads and no further
+mutation. No deployment/reinstall/restart and no product/UI/harness/source change accompanied it.
+
+**Bundle verification.** Re-hashed with the **canonical algorithm** (no edit, no auto-rederive): bundle
+sha256 `4606d290…`, T1 payload `647dd324…`, T2 payload `daee7b23…`, F08 **411** chars — all match.
+
+**Executed (live, at the exact `Public Research Exercise` target org; served sha256 `41e61ef5…`, release
+`0.2.0+dev.78af5cbb87b4` rev `9`, byte-equal; boundary 22/22 PASS, no drift):**
+
+- **T1** — infrastructure topic: axes **5/6** repository links added as `primary` →
+  `ajegorovs/nakama-research-dashboard`; both **consultation problem→repo** sets set to that repository
+  (D1/F01 + D6/F04). HTTP 200, `ok` true.
+- **T2** — experimental topic, axis 4: `currentState` populated with the **exact 411-char §3.1 string** at
+  `currentStateConfidence: inferred` (D2/F08). HTTP 200, `ok` true. Fresh pre-write diagnostics matched the
+  basis (ownership = the `Experimental research` topic; version 1; blank state; `inferred` blocker; zero
+  evidence).
+
+**Post-write verification — PASS 24/24.** Counts `2/6/3/1` and **8 events unchanged**; axes 1–4
+(links/people/versions) unchanged; plans unchanged (F12 null positions preserved); repo metadata (F07/F09),
+people (F02) and topic `primary` links unchanged; **axis-4 evidence `0`** (F03/F14a residual accepted);
+**no new events anywhere** (F05/F10-existing/move/retro-link untouched); **`lastActivityAt` unchanged**.
+The two **protected (un-targeted) stores** are **unchanged by their own fresh readback** (`Layout Demo`
+`edfdf7dc…`, `Nakama E2E Fixture` `7d84edbd…`, identical pre vs post — stable projection, **not** DB byte
+identity). Mutation-public digest `d8d62f53…` → `9789f151…`.
+
+**Optional UI render check.** Read-only attempt only; the Overview tab renders correctly; the axis-4 **F08**
+detail text was not conclusively reached by automated navigation (not a product issue — the value is
+confirmed by canonical readback). Screenshot retained in `.hermes/scratch/`; **no canonical screenshot
+overwritten**.
+
+**Boundaries (changed: retained path now execution-validated narrowly; grant closed).** This run is the
+**first live write** and validates **only this narrow retained path (T1/T2)** — **not** a full baseline
+authoring and not the wider WP3/WP4 design. **SCOPE-BASELINE:** unselected, **NOT authorized**.
+**SCOPE-RETAINED:** the two authorized calls are **done**; **no further retained write** (F02/F07/F09/F12,
+any evidence add) is authorized. No merge is performed. WP0–WP5 remain accepted and are not reopened.
+
+**PR links.** Branch `docs/research-fixture-methodology`; draft PR #4
+(`https://github.com/ajegorovs/nakama-research-dashboard/pull/4`); committed docs-only.

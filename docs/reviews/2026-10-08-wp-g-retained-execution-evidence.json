@@ -1,0 +1,108 @@
+{
+  "artifact": "wp-g-retained-execution-evidence/1",
+  "scope": "SCOPE-RETAINED",
+  "executedAtUtc": "2026-10-08T19:05:48Z",
+  "gitHeadAtExecution": "2005b56019e68a138af7adfb2dc250be73bd5ecf",
+  "grant": {
+    "state": "CONSUMED",
+    "scope": "SCOPE-RETAINED only (T1 + T2); SCOPE-BASELINE not authorized",
+    "boundBundleSha256": "4606d290c89572f88ef0386551883d193a92a85ffae1235d079513137fece154"
+  },
+  "bundleVerification": {
+    "canonicalAlgorithm": "sha256(JSON.stringify(bundle minus {bundleDigest,payloadDigests,f08Chars}))",
+    "reDerivedBundleDigest": "4606d290c89572f88ef0386551883d193a92a85ffae1235d079513137fece154",
+    "bundleMatch": true,
+    "T1PayloadSha256": "647dd32465e2421bc3e1705b3f9704db323e4c835187fe4560d7516a98610b08",
+    "T2PayloadSha256": "daee7b23f80ec9fb109e1303aea3ae14f00d88bc7bba4fb937239ce96969d655",
+    "payloadsMatch": true,
+    "f08Chars": 411,
+    "transactions": 2
+  },
+  "boundary": {
+    "targetOrgLabel": "Public Research Exercise",
+    "targetResolvedBy": "id AND name, explicitly selected (never orgs[0])",
+    "activeOrgEchoEqualsTarget": true,
+    "servedAssetSha256": "41e61ef5891bfd630a1704d26f144880730f3d842f7d81b79426dd48709787fc",
+    "servedAssetBytes": 154417,
+    "servedRelease": "0.2.0+dev.78af5cbb87b4",
+    "servedRevision": 9,
+    "servedMatchesRepo": true,
+    "deploymentChanged": false,
+    "versionsAllOne": true,
+    "axes56LinkAbsent": true,
+    "consultationProblemSetsEmpty": true,
+    "problemStatementsByteEcho": true,
+    "ax4CurrentStateBlank": true,
+    "ax4EvidenceZero": true,
+    "countsBefore": { "topics": 2, "axes": 6, "repositories": 3, "people": 1 },
+    "eventsBefore": 8,
+    "boundaryPass": true
+  },
+  "transactions": [
+    {
+      "id": "T1",
+      "action": "reconcile_topic",
+      "topicLabel": "Research infrastructure / team management",
+      "httpStatus": 200,
+      "resultOk": true,
+      "verifiedDelta": {
+        "ax5.Repositories": { "before": [], "after": [{ "fullName": "ajegorovs/nakama-research-dashboard", "relationship": "primary" }] },
+        "ax6.Repositories": { "before": [], "after": [{ "fullName": "ajegorovs/nakama-research-dashboard", "relationship": "primary" }] },
+        "consultProblem1.Repositories": { "before": [], "after": ["ajegorovs/nakama-research-dashboard"] },
+        "consultProblem2.Repositories": { "before": [], "after": ["ajegorovs/nakama-research-dashboard"] },
+        "problemStatements": "unchanged (verbatim echo)",
+        "counts": "unchanged",
+        "events": "unchanged (8)",
+        "axes1to4": "unchanged (links/people/versions)"
+      }
+    },
+    {
+      "id": "T2",
+      "action": "reconcile_topic",
+      "topicLabel": "Experimental research",
+      "axisLabel": "Grablink diagnostics and sustained-rate validation",
+      "httpStatus": 200,
+      "resultOk": true,
+      "verifiedDelta": {
+        "ax4.currentState": { "before": "", "afterChars": 411 },
+        "ax4.currentStateConfidence": { "before": null, "after": "inferred" },
+        "ax4.blockerConfidence": { "before": "inferred", "after": "inferred (ratified, unchanged)" },
+        "ax4.version": { "before": 1, "after": 2 },
+        "ax4.evidence": { "before": 0, "after": 0 },
+        "counts": "unchanged",
+        "events": "unchanged (8)",
+        "lastActivityAt": "unchanged"
+      }
+    }
+  ],
+  "postflight": {
+    "verdict": "PASS",
+    "checksPassed": 24,
+    "checksTotal": 24,
+    "countsAfter": { "topics": 2, "axes": 6, "repositories": 3, "people": 1 },
+    "eventsAfter": 8,
+    "mutationPublicDigestBefore": "d8d62f53319f36e9511c63c5cb9674cb24cf9013c97c496b9f0973e60d0a4013",
+    "mutationPublicDigestAfter": "9789f1516e72bc267a09ac9fa2985c88038fa5bb720178c9313ecf3e9a14337f",
+    "preservedExcludedRows": {
+      "F03_F14a_evidenceAx4": 0,
+      "F05_F10_existing_move_retroLink": "no new events anywhere",
+      "F02_personLinks": "unchanged",
+      "F07_F09_repoMetadata": "unchanged",
+      "F12_planStepPositions": "unchanged (null positions preserved)",
+      "topicPrimaryLinks": "preserved"
+    },
+    "lastActivityAtUnchanged": true
+  },
+  "protectedStores": {
+    "compareMethod": "own full canonical readback projection, fresh immediate-pre-T1 vs post",
+    "Layout Demo": { "counts": { "topics": 2, "axes": 7, "repositories": 3, "people": 2 }, "digestBefore": "edfdf7dcd725edee329293de2f137a5a04c15de08d820de138772966d0547489", "digestAfter": "edfdf7dcd725edee329293de2f137a5a04c15de08d820de138772966d0547489", "unchanged": true },
+    "Nakama E2E Fixture": { "counts": { "topics": 2, "axes": 8, "repositories": 1, "people": 0 }, "digestBefore": "7d84edbdd6f75535811574a5bc0c87058420e62c9da614add3bc4af61cfbb9f2", "digestAfter": "7d84edbdd6f75535811574a5bc0c87058420e62c9da614add3bc4af61cfbb9f2", "unchanged": true }
+  },
+  "deployment": { "reinstall": false, "deploy": false, "restart": false, "note": "API :4399 and web :3003 were already serving; same served bytes before and after" },
+  "uiRenderCheck": { "performed": "optional, attempted", "verdict": "inconclusive via automated navigation", "canonicalOverwritten": false, "note": "Overview tab renders 2 topics/6 axes/1 person/3 repositories; F08 axis-4 detail not conclusively reached; not a product issue" },
+  "limitations": [
+    "The authoring/mutation path had never been execution-validated; this run is the first live write and validates only this narrow retained path (T1/T2), not a full baseline authoring.",
+    "The preflight report's protected-store envelope digests were volatile (per-read timestamps); this run used a stable projection compared fresh pre vs post.",
+    "UI render check of the F08 detail was not conclusive; the F08 value is confirmed by canonical readback."
+  ]
+}
