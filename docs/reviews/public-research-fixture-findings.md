@@ -465,3 +465,52 @@ no inference, no new research, no merge.
   inference, no service/deploy/restart, no product/UI change, no WP3/WP4/WP-G execution and no merge. The
   checks are read-only; the six axis→repository roles, the F08 wording, the optional blocker restoration,
   the evidence strategy and the target **remain undecided**, and no role or default is chosen here.
+
+## M. WP5 reviewer REQUEST CHANGES — corrections applied (appended 2026-10-08)
+
+> **Appended, not an amendment.** §A–§L above are preserved unchanged. This section records the
+> external reviewer's **REQUEST CHANGES** on the WP5 executable checks and the corrections applied to the
+> harness. **Harness only:** no fixture/domain write, no `reconcile_topic`/`record_activity` against any
+> target, no inference, no new research, no service/deploy/restart, no product/UI change, no WP3 seed, no
+> WP4 amendment, no **WP-G** entry and no merge. The retained fixture is never opened. The verdict line is
+> exact; the seven issues are **summarized** (no verbatim reviewer message is available to commit).
+
+**Verdict: REQUEST CHANGES — corrections applied (harness-only).** Seven scoped issues, all corrected in
+`harness/wp5/`. Where §L recorded “16 pass” and a single BLOCKED run, this section **supersedes those
+counts** with the actual, re-measured results below.
+
+| # | Issue | Correction (all in `harness/wp5/`) |
+|---|---|---|
+| 1 | **C20 readback too narrow + no tamper controls.** | `checks.canonicalReadback` now serializes the **full mutation-public state** — repository metadata (`url`/`description`/`defaultBranch`); topic and axis repository links **and** people; `currentState`/blocker **confidences**; problem repository sets; plan step **ids, titles, positions**; source activities (type/ref/url/occurredAt/axis); and topic/axis **versions** — excluding **only** volatile presentation (generated/recorded/updated timestamps and random row ids). Added **targeted tamper negative controls** (metadata, link, claim, plan-step, activity), each asserted to turn **C20 red** via a test-only `untargetedTamper` hook. |
+| 2 | **C15 did not exercise the real D1–D6 delta.** | C15 now builds a **disposable TEST-ONLY SYNTHETIC retained-like** store (missing D1–D6: axes 5/6 unlinked; the two consultation problems repository-less) and applies the real delta — D1/D2 axis→repo, D3/D4 axis→person, D5/D6 problem→repo (full-set replacement) — **twice**, asserting **identical link sets, no duplicates**, existing links preserved, the consultation problems carrying exactly `[dashboard]`. The role is the explicit synthetic `supporting` (the store cannot store “undecided”; omitting it stores this value — **not a G01 decision**), and a `primary` link **demotion hazard** is demonstrated. |
+| 3 | **C18 did not touch a real axis mutation.** | C18 now performs an **actual axis reconcile** and a **problem→repository replacement** touching the same axis, then asserts the axis **`updatedAt`/recency strictly advanced** while the **event count, each `occurredAt` and `lastActivityAt` are unchanged**. No clock seam is exposed (`nowIso` reads the real clock), so a bounded spin to the next millisecond gives a settled, strictly-distinct tick — failures are never hidden. |
+| 4 | **Gate semantics conflated decision and state.** | Gate checks now **separate decision resolution from state verification** and name the view each verifies against: **baseline** (seed) for the count/metadata checks, the **amendment view** for G01/G02, and the **retained view** for G03. **G03** distinguishes the ratified retained `inferred` (requires no evidence) from the **optional** `confirmed` restoration, which is graded on the **actual evidence interaction** (a `confirmed` claim with 0 evidence is **red**) — never a “baseline == approved value” false pass. |
+| 5 | **G05 presented a target as authorization.** | G05 now accepts only an **explicit proposed-target decision**; it records **no owner write authorization** and binds **no live target**, and a resolution claiming `ownerAuthorization`/`liveBinding` is **red** rather than allowed to cycle a write path. No network or write execution exists (C21). |
+| 6 | **Fully-PASS path not reachable.** | `run.mjs` gains a **test-only** `--test-only-decisions` option / `--decisions <file>` data gate (payload **must** carry `"testOnly": true`; an unlabelled payload is **refused**, exit 3). With it the runner reaches aggregate **PASS (exit 0)**; **by default it stays BLOCKED**. Tests cover **skip-restoration** and **confirmed** (with evidence → PASS; without evidence → **red**), and distinguish a test-only parameter from an approved real target. |
+| 7 | **C17 identity was weak.** | C17 now checks **source-event identity independent of the axis** (`sourceType|sourceRef`, with url as context): a **cross-axis duplicate — e.g. an AGENDA event on two axes — is RED** unless an explicit G04 strategy **names that exact ref**; a **blanket allow is rejected as a loophole**. Added the duplicate **negative control** (red), the blanket-allow control (red) and the named-ref control (PASS). |
+| + | **C16 version guards.** | C16 now asserts a stale top-level **and** a stale `axes[].expectedVersion` both refuse with `conflict`, that the store’s **problem/plan** writers also conflict, and that the **reconcile tool input exposes no `expectedVersion` for `problems[]`/`plans[]`** (an asymmetry recorded, not hidden). |
+| + | **Temp cleanup.** | A cleanup safety test tracks **every** isolated handle (including each `makeStore()` handle), disposes them in `finally`, and asserts **no `wp5-` temp directory remains**. |
+
+**Actual results (measured this run, at the corrected harness).**
+
+| Command | Result |
+|---|---|
+| `bun run harness:wp5` (default) | **28 PASS · 0 FAIL · 5 BLOCKED**, aggregate **BLOCKED** (exit 2) — not green; the five approvals are missing |
+| `bun run harness:wp5 --test-only-decisions` | **33 PASS · 0 FAIL · 0 BLOCKED**, aggregate **PASS** (exit 0) — the fully-PASS path, test-only |
+| restore decisions + `--restore-with-evidence` | **PASS** (exit 0) — G03 `confirmed` restoration backed by axis-4 evidence |
+| `bun run harness:wp5:test` | **36 pass / 0 fail** |
+| `bun run check` | **313 pass / 0 fail** (typecheck + build + unit suite) |
+| `bun run harness:records` | green — 266 text files scanned, no live endpoint / home path |
+| `git diff --check` | clean |
+
+**Limitation (stated, not implied).** `bun run typecheck:host` was **not run**: no Nakama checkout is
+present at `/mnt/otrais/repos/nakama` (`NAKAMA_CHECKOUT` unset), and the host-type check needs one to
+resolve the real host types. It is a documented limitation, not a green claim.
+
+**Coverage and boundaries.** The check suite proves green is reachable, that every check **can go red** on
+an injected defect (including the C20 tamper controls and the C17 identity control), that an unresolved
+gate is **BLOCKED** and that the fully-PASS path is reachable **only** through **test-only** decisions. No
+fixture/domain write, no inference, no service/deploy, no product/UI edit, no WP3 seed, no WP4 amendment,
+**no WP-G entry** and no merge was performed; the six axis→repository roles, the F08 wording, the optional
+blocker restoration, the evidence strategy and the target **remain undecided**, and no role or default is
+chosen here.

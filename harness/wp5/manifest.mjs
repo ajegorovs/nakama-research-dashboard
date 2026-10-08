@@ -273,3 +273,53 @@ export function unresolvedGates() {
 export function gateById(gates, id) {
   return (gates ?? []).find((g) => g.id === id);
 }
+
+/**
+ * The label every synthetic gate resolution must carry. A resolved gate supplied for this harness is a
+ * **test-only synthetic** value: it exists so the fully-PASS path is reachable and so the checks can be
+ * shown to be able to go red. It is **not** an owner decision, **not** an approval, and **not** a target
+ * binding. The runner treats a decisions payload without this label as a refusal, so a "test-only
+ * parameter" can never be mistaken for a real, approved target.
+ */
+export const TEST_ONLY_LABEL = "TEST-ONLY SYNTHETIC — not an owner decision, not an approval, no target";
+
+/**
+ * Synthetic axis→repository roles for the test-only fully-PASS path. Every value is a **test-only
+ * synthetic** placeholder, never an approved role: the product cannot store "undecided", so a synthetic
+ * decision must name *some* enum value to make the amendment view verifiable at all. It must never be
+ * read as a G01 decision (G01 stays an approval item; see the ledger).
+ */
+export const TEST_ONLY_ROLES = Object.fromEntries(AXES.map((a) => [a.title, "supporting"]));
+
+/** Synthetic F08 wording + confidence for the test-only fully-PASS path (never an approved wording). */
+export const TEST_ONLY_F08 = {
+  currentState:
+    "Test-only synthetic diagnostics state — not an approved wording; the field stays optional and unapproved.",
+  confidence: "inferred",
+};
+
+/**
+ * The test-only decisions payload. `testOnly: true` is mandatory and enforced by the runner: supplying it
+ * resolves every gate with a **synthetic** value so the full contract runs, but it records no approval,
+ * binds no target and authorizes no write.
+ */
+export function testOnlyDecisions() {
+  const valueById = {
+    G01: TEST_ONLY_ROLES,
+    G02: TEST_ONLY_F08,
+    G03: "skip", // keep the ratified retained `inferred`; restoring `confirmed` is the separate optional decision
+    G04: "leave", // the only strategy exercisable without an authorized execution
+    G05: { proposedTarget: "test-only-synthetic-proposed-target", ownerAuthorization: false, liveBinding: false },
+  };
+  return {
+    testOnly: true,
+    label: TEST_ONLY_LABEL,
+    gates: unresolvedGates().map((g) => ({
+      ...g,
+      resolved: true,
+      approvedBy: null,
+      testOnly: true,
+      value: valueById[g.id],
+    })),
+  };
+}

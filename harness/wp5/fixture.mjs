@@ -16,7 +16,7 @@
  * execution: the store it writes to is discarded when the run ends.
  */
 import { Database } from "bun:sqlite";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -30,6 +30,7 @@ import {
   REPOSITORIES,
   TOPIC_NAMES,
   TOPIC_REPO_LINKS,
+  gateById,
 } from "./manifest.mjs";
 
 const migrationsDir = join(import.meta.dir, "../../migrations");
@@ -60,6 +61,7 @@ export function openIsolatedStore(label = "wp5") {
   return {
     store,
     path,
+    dir,
     dispose() {
       try {
         store.close();
@@ -69,6 +71,16 @@ export function openIsolatedStore(label = "wp5") {
       }
     },
   };
+}
+
+/**
+ * The temp directories this harness's isolated stores live in (for the cleanup safety test). Every one is
+ * created under `TMPDIR` with the `wp5-` prefix and is removed on `dispose()`; a leftover after a run is a
+ * leak the cleanup assertion catches.
+ */
+export function listTempStoreDirs() {
+  const root = process.env.TMPDIR || tmpdir();
+  return readdirSync(root).filter((name) => name.startsWith("wp5-"));
 }
 
 function repoInput(fullName, relationship) {
@@ -242,4 +254,188 @@ export function readView(store) {
       defaultBranch: r.defaultBranch,
     })),
   };
+}
+
+/**
+ * Labels and synthetic constants for the **test-only synthetic retained-like** fixture. This store is built
+ * to model the *retained fixture's measured relationship shape* — its missing D1–D6 links — as a disposable
+ * throwaway, never the retained fixture itself. Everything it applies is labeled synthetic.
+ */
+export const RETAINED_LIKE_LABEL =
+  "TEST-ONLY SYNTHETIC retained-like fixture — models the retained fixture's link shape, is not it";
+
+/**
+ * The axis→repository role the retained fixture happens to store on axes 1–4: `supporting`. It is **not an
+ * approved role** (WP2 §H.1). The product enum is `{primary, supporting}` with no "undecided", so omitting
+ * the field stores exactly this value — the hazard the C15 check records. Choosing `primary` is the other
+ * hazard: it demotes any current axis-level primary (`linkRepository`).
+ */
+export const SYNTHETIC_ROLE = "supporting";
+
+function findAxis(store, title) {
+  for (const name of TOPIC_NAMES) {
+    const topic = store.getTopicByName(name);
+    if (!topic) continue;
+    const axis = store.listAxes(topic.id).find((a) => a.title === title);
+    if (axis) return axis;
+  }
+  return null;
+}
+
+/**
+ * Seed a **disposable retained-like** store: the approved content, but with the retained fixture's measured
+ * link shape — axes 5/6 carry **no** axis→repo or axis→person link (D1–D4 absent), the two consultation
+ * problems carry **no** repository (D5/D6 absent), axes 1–4 carry the retained `supporting` axis→repo links,
+ * axis-4 carries the ratified `inferred` blockerConfidence, and the AGENDA event sits on axis 3 (F03).
+ * Test-only synthetic: this is permitted testdata in a throwaway temp store, never the retained fixture.
+ */
+export function seedRetainedLike(store) {
+  const axisInput = (axis) => ({
+    title: axis.title,
+    kind: axis.kind,
+    state: axis.state,
+    stateConfidence: axis.stateConfidence,
+    ...(axis.currentState !== null
+      ? { currentState: axis.currentState, currentStateConfidence: axis.currentStateConfidence }
+      : {}),
+    ...(axis.blocker !== null
+      ? {
+          blocker: axis.blocker,
+          // The retained fixture's ratified value on axis 4 is `inferred`, not the packet's `confirmed`.
+          blockerConfidence: axis.n === 4 ? "inferred" : axis.blockerConfidence,
+        }
+      : {}),
+    // Retained person shape: only axes 1–4 (D3/D4 absent on axes 5/6).
+    ...(axis.n <= 4 ? { people: [personInput()] } : {}),
+  });
+
+  // Retained placement: the AGENDA event sits on the sibling high-rate axis (3), not axis 4 (F03).
+  const retainedActivities = ACTIVITIES.map((a) => (a.sourceRef === "docs/AGENDA.md" ? { ...a, axis: 3 } : a));
+
+  const results = {};
+  for (const topicName of TOPIC_NAMES) {
+    const axes = AXES.filter((a) => a.topic === topicName);
+    const axisNumbers = new Set(axes.map((a) => a.n));
+    const activities = retainedActivities
+      .filter((a) => axisNumbers.has(a.axis))
+      .map((a) => ({
+        summary: a.summary,
+        sourceType: a.sourceType,
+        sourceRef: a.sourceRef,
+        sourceUrl: a.sourceUrl,
+        occurredAt: a.occurredAt,
+        axisTitle: AXES.find((x) => x.n === a.axis).title,
+      }));
+    const problems = PROBLEMS.filter((p) => axisNumbers.has(p.axis)).map((p) => ({
+      statement: p.statement,
+      state: p.state,
+      stateConfidence: p.stateConfidence,
+      axisTitle: AXES.find((x) => x.n === p.axis).title,
+      // The two consultation problems (axis 6) have no repository in the retained fixture (D5/D6 absent);
+      // the diagnostics problem keeps its Grablink link.
+      repositoryFullNames: p.axis === 6 ? [] : p.repositoryFullNames,
+    }));
+    const plans =
+      PLAN.axis !== undefined && axisNumbers.has(PLAN.axis)
+        ? [
+            {
+              axisTitle: AXES.find((x) => x.n === PLAN.axis).title,
+              summary: PLAN.summary,
+              steps: PLAN.steps.map((s) => ({ title: s.title, position: s.position })),
+            },
+          ]
+        : [];
+
+    results[topicName] = store.reconcileTopic({
+      topicName,
+      people: [personInput()],
+      repositories: TOPIC_REPO_LINKS.filter((l) => l.topic === topicName).map((l) =>
+        repoInput(l.fullName, l.relationship)
+      ),
+      axes: axes.map(axisInput),
+      activities,
+      problems,
+      plans,
+    });
+  }
+
+  // The retained fixture's axes 1–4 carry `supporting` axis→repo links; apply them directly (synthetic,
+  // test-only). Axes 5/6 stay missing so the real D1/D2 delta has somewhere to land.
+  for (const def of AXES.filter((a) => a.n <= 4)) {
+    const axis = findAxis(store, def.title);
+    const repo = store.getRepositoryByFullName(def.repo);
+    if (axis && repo) store.linkAxisRepository(axis.id, repo.id, SYNTHETIC_ROLE);
+  }
+  return results;
+}
+
+/** Add one test-only synthetic activity on axis 4 so an optional `confirmed` restoration can be backed. */
+export function addAxis4Evidence(store) {
+  const def = AXES.find((x) => x.n === 4);
+  return store.reconcileTopic({
+    topicName: def.topic,
+    activities: [
+      {
+        summary: "test-only synthetic axis-4 evidence (for the optional blocker restoration case).",
+        sourceType: "repo_document",
+        sourceRef: "test-only://axis-4-evidence",
+        axisTitle: def.title,
+      },
+    ],
+  });
+}
+
+/**
+ * Apply the **test-only synthetic** gate decisions to a freshly seeded baseline store, producing the
+ * *amendment view* the gate checks verify against. Only G01/G02/G03 change stored state; G04 ("leave") and
+ * G05 (proposed target, no authorization) write nothing. Never call this to represent an approved
+ * amendment — it is test-only.
+ */
+export function applyTestOnlyAmendment(store, gates) {
+  const value = (id) => {
+    const gate = gateById(gates, id);
+    return gate && gate.resolved ? gate.value : null;
+  };
+
+  // G01 — synthetic axis→repository roles.
+  const roles = value("G01");
+  if (roles) {
+    for (const def of AXES) {
+      const axis = findAxis(store, def.title);
+      const role = roles[def.title];
+      const repo = store.getRepositoryByFullName(def.repo);
+      if (axis && repo && role) store.linkAxisRepository(axis.id, repo.id, role);
+    }
+  }
+
+  // G02 — synthetic F08 wording + confidence.
+  const f08 = value("G02");
+  if (f08) {
+    const def = AXES.find((x) => x.n === 4);
+    const axis = findAxis(store, def.title);
+    store.reconcileTopic({
+      topicName: def.topic,
+      axes: [
+        {
+          id: axis.id,
+          expectedVersion: axis.version,
+          currentState: f08.currentState,
+          currentStateConfidence: f08.confidence,
+        },
+      ],
+    });
+  }
+
+  // G03 — optional blocker restoration. "skip"/"inferred" writes nothing; "restore"/"confirmed" sets the
+  // value, which the store grades against the axis's evidence by transaction end (it throws if unbacked).
+  const g03 = value("G03");
+  const decision = typeof g03 === "string" ? g03 : g03?.decision;
+  if (decision === "restore" || decision === "confirmed") {
+    const def = AXES.find((x) => x.n === 4);
+    const axis = findAxis(store, def.title);
+    store.reconcileTopic({
+      topicName: def.topic,
+      axes: [{ id: axis.id, expectedVersion: axis.version, blockerConfidence: "confirmed" }],
+    });
+  }
 }

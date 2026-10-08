@@ -3,18 +3,25 @@
  *
  * Two families, both **read-only against anything that matters**:
  *
- *   - `evaluateView(view, gates)` — pure checks over a readback view of an isolated store, plus the
+ *   - `evaluateView(view, gates, views)` — pure checks over a readback view of an isolated store, plus the
  *     parameter-gate checks. Baseline counts/mapping/confidence/guard/dates/urls/metadata/positions are
  *     asserted here; a gate with no explicit approval yields **BLOCKED**, never a silent default.
  *   - `evaluateStore({ store, makeStore, ... })` — behavioural checks that need to *exercise* the
- *     isolated store: link idempotency, version conflict, duplicate detection, non-activity preservation,
- *     the unsupported activity-update boundary, untargeted-store preservation and the no-network guard.
- *     Every store it touches is an isolated temp throwaway (`fixture.openIsolatedStore`); the retained
- *     fixture is never opened, and nothing is ever written to a target.
+ *     isolated store: link idempotency, the real retained-like amendment delta, version discipline,
+ *     source-event identity, non-activity preservation, the unsupported activity-update boundary,
+ *     untargeted-store preservation (full mutation-public readback), and the no-network guard. Every store
+ *     it touches is an isolated temp throwaway (`fixture.openIsolatedStore`); the retained fixture is never
+ *     opened, and nothing is ever written to a target.
  *
  * Outcome model: `PASS` / `FAIL` / `BLOCKED`. A run with any FAIL is red; a run with any BLOCKED (and no
  * FAIL) is **not green** — it means an approval is missing, so the run did not establish the full
  * contract. `summarize` encodes that precedence.
+ *
+ * **Gate semantics — decision resolution vs state verification.** A gate is a *decision* (what a human
+ * approved). A gate check *verifies* the decision's effect on the view it belongs to: baseline-seed gates
+ * verify the seed; amendment gates verify the amendment view; the F08/blocker gates verify the retained
+ * view (the retained fixture's measured state). A gate never passes merely because the baseline happens to
+ * equal an approved value.
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -25,6 +32,7 @@ import {
   ACTIVITY_MAPPING,
   AXES,
   BASELINE_COUNTS,
+  PERSON,
   PLAN,
   PROBLEMS,
   REPOSITORIES,
@@ -32,7 +40,13 @@ import {
   TOPIC_REPO_LINKS,
   gateById,
 } from "./manifest.mjs";
-import { readView, seedApprovedBaseline, topicRepoLinkInputs } from "./fixture.mjs";
+import {
+  SYNTHETIC_ROLE,
+  readView,
+  seedApprovedBaseline,
+  seedRetainedLike,
+  topicRepoLinkInputs,
+} from "./fixture.mjs";
 
 const STATUS = { PASS: "PASS", FAIL: "FAIL", BLOCKED: "BLOCKED" };
 
@@ -66,6 +80,23 @@ function axisIn(view, axisDef) {
 
 function allAxes(view) {
   return view.topics.flatMap((t) => t.axes.map((a) => ({ ...a, topicName: t.name })));
+}
+
+/** The canonical source-event list of a view: identity + occurrence, none of the volatile presentation. */
+function canonicalEvents(v) {
+  return v.topics
+    .flatMap((t) =>
+      t.axes.flatMap((a) =>
+        a.history.map(
+          (h) => `${t.name}|${a.title}|${h.sourceType}|${h.sourceRef}|${h.sourceUrl}|${h.occurredAt}`
+        )
+      )
+    )
+    .sort();
+}
+
+function lastActivityMap(v) {
+  return v.topics.map((t) => `${t.name}:${t.lastActivityAt}`).sort();
 }
 
 // ---------------------------------------------------------------------------- baseline count/mapping
@@ -288,8 +319,19 @@ function sourceChecks(view) {
 
 // ---------------------------------------------------------------------------- parameter gates
 
-function gateChecks(view, gates) {
+/**
+ * Gate checks. `views` names which view a gate's decision is verified against:
+ *
+ *   - `views.amendment` — the amendment view (seed + approved delta): verification gates G01/G02;
+ *   - `views.retained`  — the retained-fixture view (the measured retained state): G03;
+ *   - G04/G05 are decision-only and verify no view.
+ *
+ * A gate that cannot be verified against its view is BLOCKED (the decision is not established), never a
+ * silent PASS on the baseline.
+ */
+function gateChecks(views, gates) {
   const results = [];
+  const v = views ?? {};
 
   const guard = (gateId, checkId, title, evaluate) => {
     const gate = gateById(gates, gateId);
@@ -299,14 +341,18 @@ function gateChecks(view, gates) {
       );
       return;
     }
-    results.push(evaluate(gate.value));
+    results.push(evaluate(gate.value, gate));
   };
 
-  // G01 — axis→repository roles. Resolved only with an explicit per-axis role map.
-  guard("G01", "G01-roles", "explicit axis→repository roles (never a defaulted `supporting`)", (value) => {
+  // G01 — axis→repository roles. The decision is verified against the AMENDMENT view (the seed withholds
+  // all six links, so a realized role can only be read from the amended state).
+  guard("G01", "G01-roles", "explicit axis→repository roles (never a defaulted `supporting`; amendment view)", (value) => {
+    if (!v.amendment) {
+      return blocked("G01-roles", "explicit axis→repository roles", "gate", "the role decision is approved for execution, but no amendment view is available to verify the realized roles against — not established here");
+    }
     const bad = [];
     for (const def of AXES) {
-      const a = axisIn(view, def);
+      const a = axisIn(v.amendment, def);
       const wanted = value?.[def.title];
       if (!wanted) {
         bad.push(`${def.title}: no approved role`);
@@ -317,33 +363,97 @@ function gateChecks(view, gates) {
         bad.push(`${def.title}: read ${JSON.stringify(got)} != [${wanted}]`);
       }
     }
-    return assertThat("G01-roles", "explicit axis→repository roles", "gate", bad.length === 0, "all six roles match the approved values", bad.join("; "));
+    return assertThat("G01-roles", "explicit axis→repository roles", "gate", bad.length === 0, "all six roles match the approved values on the amendment view", bad.join("; "));
   });
 
-  // G02 — F08 axis-4 currentState wording + confidence.
-  guard("G02", "G02-currentstate", "F08 axis-4 `currentState` wording + confidence approved", (value) => {
-    const a = axisIn(view, AXES.find((x) => x.n === 4));
+  // G02 — F08 axis-4 currentState wording + confidence, verified against the AMENDMENT view.
+  guard("G02", "G02-currentstate", "F08 axis-4 `currentState` wording + confidence (amendment view)", (value) => {
+    if (!v.amendment) {
+      return blocked("G02-currentstate", "F08 axis-4 currentState", "gate", "the wording is approved for execution, but no amendment view is available to verify it against — not established here");
+    }
+    const a = axisIn(v.amendment, AXES.find((x) => x.n === 4));
     const ok = a?.currentState === value?.currentState && a?.currentStateConfidence === value?.confidence;
-    return assertThat("G02-currentstate", "F08 axis-4 currentState", "gate", ok, "axis-4 currentState matches the approved wording+confidence", `axis-4 currentState ${JSON.stringify(a?.currentState)} / ${num(a?.currentStateConfidence)} != approved`);
+    return assertThat("G02-currentstate", "F08 axis-4 currentState", "gate", ok, "axis-4 currentState matches the approved wording+confidence on the amendment view", `axis-4 currentState ${JSON.stringify(a?.currentState)} / ${num(a?.currentStateConfidence)} != approved`);
   });
 
-  // G03 — optional blocker restoration.
-  guard("G03", "G03-blocker", "optional axis-4 blocker restoration approved", (value) => {
+  // G03 — the retained axis-4 blocker. Verified against the RETAINED view, with the ACTUAL evidence
+  // interaction: the ratified `inferred` requires none; an OPTIONAL `confirmed` restoration must be backed
+  // by axis-4 evidence present by the transaction's end. Never a "baseline == approved value" false pass.
+  guard("G03", "G03-blocker", "axis-4 blocker — retained `inferred` ratified; optional `confirmed` restoration (retained view, evidence-graded)", (value) => {
+    const decision = typeof value === "string" ? value : value?.decision;
+    // The decision selects WHICH view establishes it: "skip" is established by the untouched retained
+    // fixture; "restore" is established by the amendment view. Never a "baseline == approved" false pass.
+    const view = decision === "skip" || decision === "inferred" ? (v.retained ?? v.amendment) : (v.amendment ?? v.retained);
+    if (!view) {
+      return blocked("G03-blocker", "axis-4 blockerConfidence", "gate", "the decision is approved, but no view is available to verify the retained/restored confidence and its evidence against — not established here");
+    }
     const a = axisIn(view, AXES.find((x) => x.n === 4));
-    return assertThat("G03-blocker", "axis-4 blockerConfidence", "gate", a?.blockerConfidence === value, `blockerConfidence == ${value}`, `blockerConfidence ${num(a?.blockerConfidence)} != ${value}`);
+    if (decision === "skip" || decision === "inferred") {
+      return assertThat(
+        "G03-blocker",
+        "axis-4 blockerConfidence (retained `inferred` ratified)",
+        "gate",
+        a?.blockerConfidence === "inferred",
+        "the retained `inferred` stands unchanged — an inferred claim requires no evidence",
+        `blockerConfidence ${num(a?.blockerConfidence)} != inferred`
+      );
+    }
+    if (decision === "restore" || decision === "confirmed") {
+      const conf = a?.blockerConfidence;
+      const evidence = a?.evidenceCount ?? 0;
+      const ok = conf === "confirmed" && evidence > 0;
+      return assertThat(
+        "G03-blocker",
+        "axis-4 blockerConfidence (optional `confirmed` restoration)",
+        "gate",
+        ok,
+        "the `confirmed` restoration is backed by axis-4 evidence present by the transaction end",
+        conf !== "confirmed"
+          ? `blockerConfidence ${num(conf)} != confirmed`
+          : `confirmed with ${evidence} evidence — a confirmed claim requires evidence by the transaction's end`
+      );
+    }
+    return fail("G03-blocker", "axis-4 blockerConfidence", "gate", `unrecognized G03 decision ${JSON.stringify(value)}`);
   });
 
-  // G04 — evidence strategy (move/duplicate/reassociate/leave).
+  // G04 — evidence strategy. Only "leave" is exercisable without an authorized execution; a duplication
+  // strategy must name the specific refs (a blanket allow is a loophole and is red).
   guard("G04", "G04-evidence", "F03/F04/F14a evidence strategy approved", (value) => {
-    if (value === "leave") {
+    const strategy = typeof value === "string" ? value : value?.strategy;
+    if (strategy === "leave") {
       return pass("G04-evidence", "evidence strategy", "gate", "approved strategy is 'leave as-is' — no event is moved or duplicated");
     }
-    return blocked("G04-evidence", "evidence strategy", "gate", `strategy '${value}' requires an authorized execution not exercised by WP5`);
+    if (strategy === "duplicate") {
+      const allow = Array.isArray(value?.allow) ? value.allow : null;
+      if (!allow || allow.length === 0) {
+        return fail("G04-evidence", "evidence strategy", "gate", "a blanket duplication strategy is rejected: it must name the specific source refs (a blanket allow proves nothing)");
+      }
+      return blocked("G04-evidence", "evidence strategy", "gate", `a duplication strategy naming ${JSON.stringify(allow)} requires an authorized execution not exercised by WP5`);
+    }
+    return blocked("G04-evidence", "evidence strategy", "gate", `strategy '${strategy}' requires an authorized execution not exercised by WP5`);
   });
 
-  // G05 — explicit target org + owner authorization.
-  guard("G05", "G05-target", "explicit target organization + owner write authorization", (value) => {
-    return blocked("G05-target", "target write authorization", "gate", `approval recorded (${JSON.stringify(value)}) but this harness never writes a target; execution stays a WP-G decision`);
+  // G05 — a proposed-target DECISION only. It records no owner write authorization, binds no live target
+  // and performs no network or write execution; WP-G stays closed. A resolution that claims authorization
+  // or a live binding is rejected rather than allowed to cycle a write path into existence.
+  guard("G05", "G05-target", "explicit proposed target decision only (no owner write authorization, no live binding)", (value) => {
+    if (value?.ownerAuthorization === true || value?.liveBinding === true) {
+      return fail(
+        "G05-target",
+        "target write authorization",
+        "gate",
+        `the resolution claims ${value?.ownerAuthorization === true ? "owner write authorization" : "a live target binding"} — WP5 records only a proposed-target DECISION; no owner authorization and no live binding exist, and neither is accepted here`
+      );
+    }
+    if (!value || typeof value.proposedTarget !== "string" || value.proposedTarget.trim().length === 0) {
+      return fail("G05-target", "target write authorization", "gate", "no explicit proposed target was named");
+    }
+    return pass(
+      "G05-target",
+      "target write authorization",
+      "gate",
+      `proposed target decision recorded (TEST-ONLY SYNTHETIC where labelled); this is NOT owner write authorization, no target is bound and this harness performs no network or write execution — WP-G remains closed`
+    );
   });
 
   return results;
@@ -351,43 +461,123 @@ function gateChecks(view, gates) {
 
 // ---------------------------------------------------------------------------- view family
 
-export function evaluateView(view, gates) {
+export function evaluateView(view, gates, views) {
   return [
     ...countChecks(view),
     ...confidenceChecks(view),
     ...sourceChecks(view),
-    ...gateChecks(view, gates),
+    ...gateChecks(views ?? {}, gates),
   ];
 }
 
 // ---------------------------------------------------------------------------- store family
 
-/** Canonical, order-stable readback of a store — a measurement, never a byte comparison. */
+/**
+ * Canonical, order-stable readback of a store's **full mutation-public state** — a measurement, never a
+ * byte comparison. It covers everything an approved mutation may change (repository metadata; topic/axis
+ * repository links and people; currentState/blocker confidences; problem repository sets; plan step ids,
+ * titles and positions; source events with their ref/url/time/axis; and versions) and **excludes only the
+ * volatile presentation** (generated/recorded/updated timestamps and random row ids). Because C20 compares
+ * two readbacks, a change to *any* of those fields is detected.
+ */
 export function canonicalReadback(store) {
-  const view = readView(store);
+  const v = readView(store);
   return JSON.stringify({
-    counts: view.counts,
-    topics: view.topics.map((t) => ({
+    counts: v.counts,
+    topics: v.topics.map((t) => ({
       name: t.name,
+      version: t.version,
+      repositories: t.repositories.map((r) => `${r.fullName}:${r.relationship}`).sort(),
+      people: [...t.people].sort(),
+      lastActivityAt: t.lastActivityAt,
       axes: t.axes.map((a) => ({
         title: a.title,
         state: a.state,
         stateConfidence: a.stateConfidence,
+        currentState: a.currentState,
+        currentStateConfidence: a.currentStateConfidence,
+        blocker: a.blocker,
+        blockerConfidence: a.blockerConfidence,
+        stateVersion: a.version,
         evidenceCount: a.evidenceCount,
         historyCount: a.historyCount,
+        repositories: a.repositories.map((r) => `${r.fullName}:${r.relationship}`).sort(),
+        people: [...a.people].sort(),
+        plan: a.plan
+          ? {
+              id: a.plan.id,
+              summary: a.plan.summary,
+              steps: a.plan.steps.map((s) => ({ id: s.id, title: s.title, position: s.position })),
+            }
+          : null,
+        problems: a.problems.map((p) => ({
+          statement: p.statement,
+          state: p.state,
+          stateConfidence: p.stateConfidence,
+          repositories: [...p.repositoryFullNames].sort(),
+        })),
       })),
-      lastActivityAt: t.lastActivityAt,
     })),
-    repositories: view.repositories.map((r) => r.fullName).sort(),
+    repositories: v.repositories
+      .map((r) => ({ fullName: r.fullName, url: r.url, description: r.description, defaultBranch: r.defaultBranch }))
+      .sort((x, y) => x.fullName.localeCompare(y.fullName)),
+    activities: canonicalEvents(v),
   });
+}
+
+/** The raw link rows of a store, as order-stable label sets (for the C15 idempotency comparison). */
+function linkSets(store) {
+  const v = readView(store);
+  const topicRepo = [];
+  const topicPeople = [];
+  const axisRepo = [];
+  const axisPeople = [];
+  const problemRepo = [];
+  for (const t of v.topics) {
+    for (const r of t.repositories) topicRepo.push(`topic:${t.name}|${r.fullName}:${r.relationship}`);
+    for (const p of t.people) topicPeople.push(`topic:${t.name}|${p}`);
+    for (const a of t.axes) {
+      for (const r of a.repositories) axisRepo.push(`axis:${t.name}/${a.title}|${r.fullName}:${r.relationship}`);
+      for (const p of a.people) axisPeople.push(`axis:${t.name}/${a.title}|${p}`);
+      for (const p of a.problems) for (const rn of p.repositoryFullNames) problemRepo.push(`problem:${t.name}/${a.title}|${p.statement.slice(0, 12)}|${rn}`);
+    }
+  }
+  return {
+    topicRepo: topicRepo.sort(),
+    topicPeople: topicPeople.sort(),
+    axisRepo: axisRepo.sort(),
+    axisPeople: axisPeople.sort(),
+    problemRepo: problemRepo.sort(),
+    all: [...topicRepo, ...topicPeople, ...axisRepo, ...axisPeople, ...problemRepo].sort(),
+  };
+}
+
+function storeAxisByTitle(store, title) {
+  for (const name of TOPIC_NAMES) {
+    const topic = store.getTopicByName(name);
+    if (!topic) continue;
+    const axis = store.listAxes(topic.id).find((a) => a.title === title);
+    if (axis) return axis;
+  }
+  return null;
+}
+
+/** Spin to the next millisecond so a write lands on a settled, strictly-distinct clock tick. */
+function waitForNextMillis() {
+  const start = Date.now();
+  while (Date.now() === start) {
+    /* the store exposes no clock seam (`nowIso` reads the real clock); a bounded spin is the honest seam */
+  }
 }
 
 /**
  * Behavioural checks against isolated, throwaway stores. `makeStore()` must return a fresh store (the
  * harness supplies `fixture.openIsolatedStore`). `harnessSources` is the text of the harness's own
- * modules, used only for the static no-network guard.
+ * modules, used only for the static no-network guard. `gates` carries any resolved decisions (for C15/C17).
+ * `untargetedTamper` is a **negative-control hook** (tests only): it mutates the untargeted store so C20
+ * must fail, proving the full readback sees the change.
  */
-export function evaluateStore({ store, makeStore, pluginActions, harnessSources }) {
+export function evaluateStore({ store, makeStore, pluginActions, harnessSources, gates, untargetedTamper }) {
   const results = [];
 
   // C09b — pre-existing evidence satisfies the guard (evidence need not be same-transaction).
@@ -432,105 +622,246 @@ export function evaluateStore({ store, makeStore, pluginActions, harnessSources 
     results.push(fail("C10", "problem policy distinct from guard", "baseline", `unexpected throw: ${err.message}`));
   }
 
-  // C15 — link-set idempotency (re-running link writes yields the same set, no duplicates).
+  // C15 — the real retained-fixture amendment delta (D1–D6), applied to a disposable RETAINED-LIKE store
+  // twice: axis→repo (D1/D2), axis→person (D3/D4), problem→repo (D5/D6). The store is explicitly labeled
+  // TEST-ONLY SYNTHETIC and its roles are synthetic (never a G01 decision). The delta must be idempotent
+  // (same link sets, no duplicates), preserve the other existing links, and carry the full problem set.
   try {
-    const experimental = view(store, TOPIC_NAMES[0]);
-    const before = store.listTopicRepositories(experimental.id).map((r) => `${r.fullName}:${r.relationship}`).sort();
-    for (const link of topicRepoLinkInputs(TOPIC_NAMES[0])) {
-      store.linkTopicRepository(experimental.id, store.getRepositoryByFullName(link.fullName).id, link.relationship);
-    }
-    const after = store.listTopicRepositories(experimental.id).map((r) => `${r.fullName}:${r.relationship}`).sort();
+    const b = makeStore();
+    seedRetainedLike(b); // TEST-ONLY SYNTHETIC: models the retained fixture's link shape
+    const before = linkSets(b);
+
+    const delta = () => {
+      const infra = "Research infrastructure / team management";
+      const ax5 = storeAxisByTitle(b, AXES.find((x) => x.n === 5).title);
+      const ax6 = storeAxisByTitle(b, AXES.find((x) => x.n === 6).title);
+      const dashboard = "ajegorovs/nakama-research-dashboard";
+      const person = { displayName: PERSON.displayName, githubLogin: PERSON.githubLogin };
+      const problems = b.listProblems(ax6.id);
+      b.reconcileTopic({
+        topicName: infra,
+        // D1/D2 (axis→repo, synthetic role) + D3/D4 (axis→person), re-read versions each run.
+        axes: [
+          { id: ax5.id, expectedVersion: ax5.version, repositories: [{ fullName: dashboard, relationship: SYNTHETIC_ROLE }], people: [person] },
+          { id: ax6.id, expectedVersion: ax6.version, repositories: [{ fullName: dashboard, relationship: SYNTHETIC_ROLE }], people: [person] },
+        ],
+        // D5/D6 (problem→repo): `repositoryFullNames` REPLACES the whole set — carry the full intended set.
+        problems: problems.map((p) => ({ problemId: p.id, statement: p.statement, repositoryFullNames: [dashboard] })),
+      });
+    };
+
+    delta();
+    const once = linkSets(b);
+    delta();
+    const twice = linkSets(b);
+
+    const infra = "Research infrastructure / team management";
+    const ax5 = storeAxisByTitle(b, AXES.find((x) => x.n === 5).title);
+    const ax6 = storeAxisByTitle(b, AXES.find((x) => x.n === 6).title);
+    const role5 = b.listAxisRepositories(ax5.id).map((r) => r.relationship);
+    const role6 = b.listAxisRepositories(ax6.id).map((r) => r.relationship);
+    const consult = b.listProblems(ax6.id).map((p) => b.listProblemRepositories(p.id).map((r) => r.fullName).sort());
+    const consultFull = consult.every((set) => set.length === 1 && set[0] === "ajegorovs/nakama-research-dashboard");
+
+    // Preserve the other existing links: every pre-delta link is still present afterwards.
+    const preserved = before.all.every((row) => once.all.includes(row));
+    // No duplicates: no link row appears twice.
+    const noDup = once.all.length === new Set(once.all).size;
+    // The role is the explicit SYNTHETIC value, and no G01 *decision* is made (a real, non-test-only
+    // resolution would be a decision this check refuses to launder).
+    const g01 = gateById(gates, "G01");
+    const noRealG01 = !g01 || !g01.resolved || g01.testOnly === true;
+
+    // Primary hazard, demonstrated: a `primary` link demotes the existing axis-level primary.
+    const scratch = makeStore();
+    scratch.reconcileTopic({ topicName: "Synthetic hazard", repositories: [{ fullName: "ajegorovs/nakama-research-dashboard", relationship: "primary" }] });
+    scratch.reconcileTopic({ topicName: "Synthetic hazard", repositories: [{ fullName: "ajegorovs/udv-echo-process", relationship: "primary" }] });
+    const hazardTopic = scratch.getTopicByName("Synthetic hazard");
+    const demoted = scratch
+      .listTopicRepositories(hazardTopic.id)
+      .find((r) => r.fullName === "ajegorovs/nakama-research-dashboard")?.relationship;
+
+    const ok =
+      JSON.stringify(once.all) === JSON.stringify(twice.all) &&
+      noDup &&
+      preserved &&
+      consultFull &&
+      role5.length === 1 &&
+      role5[0] === SYNTHETIC_ROLE &&
+      role6.length === 1 &&
+      role6[0] === SYNTHETIC_ROLE &&
+      noRealG01;
     results.push(
       assertThat(
         "C15",
-        "link-set idempotency — re-running a link write adds no duplicate",
+        "retained-like amendment delta (D1–D6) idempotent — axis→repo, axis→person, problem→repo (TEST-ONLY SYNTHETIC)",
         "amendment",
-        JSON.stringify(before) === JSON.stringify(after),
-        "topic→repository link set is stable across a re-run",
-        `link set changed: ${JSON.stringify(before)} -> ${JSON.stringify(after)}`
+        ok,
+        `TEST-ONLY SYNTHETIC delta applied twice to a disposable retained-like store (${RETAINED_LIKE_NOTE}): identical link sets, no duplicates, existing links preserved, the two consultation problems carry the full set [dashboard]; role '${SYNTHETIC_ROLE}' is synthetic (the store cannot store "undecided" and would default to 'supporting'), not a G01 decision${demoted === "supporting" ? "; a 'primary' would demote the existing primary (demonstrated), the hazard avoided" : ""}`,
+        `delta not stable: once==twice ${JSON.stringify(once.all) === JSON.stringify(twice.all)}, noDup ${noDup}, preserved ${preserved}, consultFull ${consultFull}, roles ${JSON.stringify([role5, role6])}, noRealG01 ${noRealG01}`
       )
     );
   } catch (err) {
-    results.push(fail("C15", "link-set idempotency", "amendment", err.message));
+    results.push(fail("C15", "retained-like amendment delta idempotency", "amendment", err.message));
   }
 
-  // C16 — version conflict: a stale expectedVersion refuses with `conflict`.
+  // C16 — version discipline. Both a stale `axes[].expectedVersion` and a stale top-level topic
+  // `expectedVersion` refuse with `conflict`; the store's problem/plan writers support a version guard,
+  // but the reconcile tool input exposes NO `expectedVersion` for `problems[]`/`plans[]` — an asymmetry,
+  // recorded not hidden.
   try {
-    const topic = store.getTopicByName(TOPIC_NAMES[1]);
-    let conflict = null;
+    const topic0 = store.getTopicByName(TOPIC_NAMES[0]);
+    const axis0 = store.listAxes(topic0.id)[0];
+    const planAxis = storeAxisByTitle(store, AXES.find((x) => x.n === 4).title);
+
+    let axisConflict = null;
     try {
-      store.reconcileTopic({ topicName: topic.name, expectedVersion: topic.version + 50, topic: { summary: "stale probe" } });
+      store.reconcileTopic({ topicName: topic0.name, axes: [{ id: axis0.id, expectedVersion: axis0.version + 50, description: "stale probe" }] });
     } catch (err) {
-      conflict = err;
+      axisConflict = err;
     }
+
+    let topicConflict = null;
+    try {
+      store.reconcileTopic({ topicName: topic0.name, expectedVersion: topic0.version + 50, topic: { summary: "stale probe" } });
+    } catch (err) {
+      topicConflict = err;
+    }
+
+    // The store CAN guard a problem/plan; the tool path does not expose it.
+    const problem = store.listProblems(planAxis.id)[0];
+    let problemConflict = null;
+    try {
+      store.updateProblem({ id: problem.id, statement: problem.statement, authorType: "agent", expectedVersion: problem.version + 50 });
+    } catch (err) {
+      problemConflict = err;
+    }
+    const plan = store.planForAxis(planAxis.id);
+    let planConflict = null;
+    try {
+      store.updatePlan({ id: plan.plan.id, authorType: "agent", expectedVersion: plan.plan.version + 50 });
+    } catch (err) {
+      planConflict = err;
+    }
+
+    // The tool path drops an `expectedVersion` supplied on a problems[] item: no conflict is raised.
+    let toolPathRaised = false;
+    try {
+      store.reconcileTopic({
+        topicName: topic0.name,
+        problems: [{ problemId: problem.id, statement: problem.statement, expectedVersion: problem.version + 50 }],
+      });
+    } catch {
+      toolPathRaised = true;
+    }
+
+    const ok =
+      axisConflict instanceof ResearchStoreConflictError &&
+      topicConflict instanceof ResearchStoreConflictError &&
+      problemConflict instanceof ResearchStoreConflictError &&
+      planConflict instanceof ResearchStoreConflictError &&
+      !toolPathRaised;
     results.push(
       assertThat(
         "C16",
-        "version discipline — a stale expectedVersion refuses with `conflict`",
+        "version discipline — stale topic AND axes[].expectedVersion conflict; problem/plan lack a tool-level guard",
         "amendment",
-        conflict instanceof ResearchStoreConflictError,
-        "stale version refused as a conflict",
-        conflict ? `refused with ${conflict.constructor.name}: ${conflict.message}` : "stale version was accepted"
+        ok,
+        "a stale topic and a stale `axes[].expectedVersion` both refuse with `conflict`; the store's problem/plan writers also conflict, but the reconcile tool input exposes no `expectedVersion` for `problems[]`/`plans[]`, so the tool path cannot be version-guarded (an asymmetry, stated not hidden)",
+        `axisConflict ${axisConflict?.constructor?.name ?? "none"}, topicConflict ${topicConflict?.constructor?.name ?? "none"}, problemConflict ${problemConflict?.constructor?.name ?? "none"}, planConflict ${planConflict?.constructor?.name ?? "none"}, toolPathRaised ${toolPathRaised}`
       )
     );
   } catch (err) {
     results.push(fail("C16", "version conflict", "amendment", err.message));
   }
 
-  // C17 — no activity duplication: events are unique by (topic, axis, sourceRef).
+  // C17 — source-event identity is the EVENT (sourceType+sourceRef), independent of the axis. The same
+  // source event appearing more than once — e.g. an AGENDA event duplicated across two axes — is RED
+  // unless an explicit G04 strategy names those refs (a blanket allow is a loophole and is rejected).
   {
-    const events = view(store, null).topics.flatMap((t) =>
-      t.axes.flatMap((a) => a.history.map((h) => `${t.name}|${a.title}|${h.sourceRef}`))
+    const v = readView(store);
+    const events = v.topics.flatMap((t) =>
+      t.axes.flatMap((a) => a.history.map((h) => ({ topic: t.name, axis: a.title, key: `${h.sourceType}|${h.sourceRef}` })))
     );
-    const unique = new Set(events);
+    const byKey = new Map();
+    for (const e of events) {
+      if (!byKey.has(e.key)) byKey.set(e.key, []);
+      byKey.get(e.key).push(e);
+    }
+    const dupKeys = [...byKey.entries()].filter(([, list]) => list.length > 1);
+
+    const g04 = gateById(gates, "G04");
+    const raw = g04 && g04.resolved ? g04.value : null;
+    const strategy = typeof raw === "string" ? raw : raw?.strategy;
+    const allow = raw && typeof raw === "object" && Array.isArray(raw.allow) ? raw.allow : null;
+    const blanket = strategy === "duplicate" && (!allow || allow.length === 0);
+
+    let ok;
+    let detail;
+    if (dupKeys.length === 0) {
+      ok = true;
+      detail = `${events.length} source events; every identity (sourceType|sourceRef) is unique across axes`;
+    } else if (strategy === "duplicate" && allow && allow.length > 0) {
+      ok = dupKeys.every(([key]) => allow.includes(key));
+      detail = ok
+        ? `duplication limited to the explicitly-named refs ${JSON.stringify(allow)}`
+        : `duplication of refs not named in the approved strategy: ${dupKeys.map(([k]) => k).join(", ")}`;
+    } else {
+      ok = false;
+      detail = `duplicate source identities across axes without an explicit approved strategy: ${dupKeys
+        .map(([k, list]) => `${k} on ${list.map((e) => e.axis).join(" + ")}`)
+        .join("; ")}${blanket ? " (a blanket duplication allow is rejected as a loophole)" : ""}`;
+    }
     results.push(
       assertThat(
         "C17",
-        "no activity duplication — 8 unique events, no repeated sourceRef on an axis",
+        "source-event identity is axis-independent — no cross-axis duplicate (unless an explicit G04 strategy names it)",
         "amendment",
-        events.length === unique.size && events.length === BASELINE_COUNTS.activities,
-        `${events.length} events, all unique`,
-        `${events.length} events, ${unique.size} unique`
+        ok,
+        detail,
+        detail
       )
     );
   }
 
-  // C18 — a non-activity change preserves counts / occurredAt / lastActivityAt (recency may advance).
+  // C18 — an ACTUAL axis reconcile and a problem→repository replacement touching the same axis advance
+  // updatedAt/recency but add no activity: the event count, each event's occurredAt and lastActivityAt are
+  // unchanged. No clock seam exists, so the check spins to the next millisecond to get a settled, distinct
+  // tick, then asserts the advance strictly (failures are never hidden).
   try {
     const beforeView = readView(store);
     const beforeEvents = canonicalEvents(beforeView);
-    const beforeLast = beforeView.topics.map((t) => `${t.name}:${t.lastActivityAt}`);
+    const beforeLast = lastActivityMap(beforeView);
+    const infra = "Research infrastructure / team management";
+    const ax6 = storeAxisByTitle(store, AXES.find((x) => x.n === 6).title);
+    const beforeUpdated = store.getAxis(ax6.id).updatedAt;
+    const problem = store.listProblems(ax6.id)[0];
 
-    // A link-only reconcile and an unchanged plan-step write: no new activity.
-    const experimental = view(store, TOPIC_NAMES[0]).id;
-    for (const link of topicRepoLinkInputs(TOPIC_NAMES[0])) {
-      store.linkTopicRepository(experimental, store.getRepositoryByFullName(link.fullName).id, link.relationship);
-    }
-    const planAxis = axisIn(beforeView, AXES.find((x) => x.n === PLAN.axis));
-    if (planAxis?.plan) {
-      store.reconcileTopic({
-        topicName: AXES.find((x) => x.n === PLAN.axis).topic,
-        plans: [
-          {
-            axisTitle: planAxis.title,
-            summary: planAxis.plan.summary,
-            steps: planAxis.plan.steps.map((s) => ({ stepId: s.id, title: s.title, position: s.position })),
-          },
-        ],
-      });
-    }
+    waitForNextMillis();
+    // (1) an actual axis reconcile (bumps the axis `updated_at` and version);
+    store.reconcileTopic({ topicName: infra, axes: [{ id: ax6.id, expectedVersion: ax6.version, description: ax6.description }] });
+    // (2) a problem→repository replacement touching the same axis (`updateProblem` touches the axis).
+    store.reconcileTopic({
+      topicName: infra,
+      problems: [{ problemId: problem.id, statement: problem.statement, repositoryFullNames: ["ajegorovs/nakama-research-dashboard"] }],
+    });
 
     const afterView = readView(store);
     const afterEvents = canonicalEvents(afterView);
-    const afterLast = afterView.topics.map((t) => `${t.name}:${t.lastActivityAt}`);
+    const afterLast = lastActivityMap(afterView);
+    const afterUpdated = store.getAxis(ax6.id).updatedAt;
+
+    const eventsUnchanged = JSON.stringify(beforeEvents) === JSON.stringify(afterEvents);
+    const lastUnchanged = JSON.stringify(beforeLast) === JSON.stringify(afterLast);
+    const recencyAdvanced = afterUpdated > beforeUpdated;
     results.push(
       assertThat(
         "C18",
-        "non-activity change preserves event count / occurredAt / lastActivityAt (recency may advance)",
+        "an actual axis reconcile + problem→repo replacement advance updatedAt/recency but add no activity",
         "amendment",
-        JSON.stringify(beforeEvents) === JSON.stringify(afterEvents) && JSON.stringify(beforeLast) === JSON.stringify(afterLast),
-        "event set and lastActivityAt unchanged; updated_at/recency is allowed to advance",
-        "event set or lastActivityAt changed under a non-activity write"
+        eventsUnchanged && lastUnchanged && recencyAdvanced,
+        `axis updatedAt advanced ${beforeUpdated} -> ${afterUpdated} (a settled, strictly-distinct tick — no clock seam is exposed, so a bounded spin to the next millisecond is used); event count/occurredAt and lastActivityAt are unchanged`,
+        `eventsUnchanged ${eventsUnchanged}, lastUnchanged ${lastUnchanged}, recencyAdvanced ${recencyAdvanced} (${beforeUpdated} -> ${afterUpdated})`
       )
     );
   } catch (err) {
@@ -554,11 +885,13 @@ export function evaluateStore({ store, makeStore, pluginActions, harnessSources 
     );
   }
 
-  // C20 — untargeted store unchanged by its OWN readback measurement (never DB byte identity).
+  // C20 — untargeted store unchanged by its OWN full mutation-public readback (never DB byte identity).
+  // `untargetedTamper` (tests only) mutates the untargeted store so this check must go red.
   try {
     const b = makeStore();
     seedApprovedBaseline(b);
     const bBefore = canonicalReadback(b);
+    if (typeof untargetedTamper === "function") untargetedTamper(b);
     // Write to the target store (this one) only.
     const experimental = view(store, TOPIC_NAMES[0]).id;
     for (const link of topicRepoLinkInputs(TOPIC_NAMES[0])) {
@@ -568,11 +901,11 @@ export function evaluateStore({ store, makeStore, pluginActions, harnessSources 
     results.push(
       assertThat(
         "C20",
-        "untargeted store unchanged — by readback measurement, not byte identity",
+        "untargeted store unchanged — by full mutation-public readback, not byte identity",
         "amendment",
         bBefore === bAfter,
-        "a second isolated store read back identically after the target was written (measurement, not byte proof)",
-        "untargeted store readback changed"
+        "a second isolated store read back identically after the target was written (metadata, links, claims, plans, activities, versions all measured; only volatile presentation excluded)",
+        "untargeted store readback changed — a mutation-public field differs"
       )
     );
   } catch (err) {
@@ -587,7 +920,7 @@ export function evaluateStore({ store, makeStore, pluginActions, harnessSources 
       for (const token of forbidden) {
         if (src.includes(token)) offenders.push(`${name}: imports ${token}`);
       }
-      if (/\bfetch\s*\(/.test(src)) offenders.push(`${name}: calls fetch(`);
+      if (/\bfetch\s*\(/.test(src)) offenders.push(`${name}: calls the network client`);
       if (/NAKAMA_URL|NAKAMA_EMAIL|x-org-id|active-org/.test(src)) offenders.push(`${name}: references a live endpoint/target`);
     }
     results.push(
@@ -605,16 +938,12 @@ export function evaluateStore({ store, makeStore, pluginActions, harnessSources 
   return results;
 }
 
+const RETAINED_LIKE_NOTE = "see fixture.RETAINED_LIKE_LABEL";
+
 function view(store, topicName) {
   const v = readView(store);
   if (topicName === null) return v;
   return v.topics.find((t) => t.name === topicName) ?? { id: null, axes: [] };
-}
-
-function canonicalEvents(v) {
-  return v.topics.flatMap((t) =>
-    t.axes.flatMap((a) => a.history.map((h) => `${t.name}|${a.title}|${h.sourceRef}|${h.occurredAt}`))
-  );
 }
 
 /**
