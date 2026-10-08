@@ -312,7 +312,7 @@ memory):
 | initial activities | 8 | packet §5.4 (PRs #44/#69/#67/#1, AGENDA doc, commits `5a62749`/`da7996b`/`95ec34e`) |
 | topic→repo links | 3 | infra→Dashboard `primary`; experimental→UDV `primary`, →Grablink `supporting` |
 | topic→person links | 2 | both topics → the person |
-| axis→repo links | 6 | 4 experimental (`supporting`) + 2 infra (role = §9 D-A) |
+| axis→repo links | 6 | 4 experimental (`supporting`) written directly + 2 infra (D1/D2, **withheld pending §9 D-A role**) |
 | axis→person links | 6 | axes 1–4 (packet) + axes 5–6 (WP2 D3/D4 accepted) |
 | problem→repo links | 3 | diagnostics→Grablink; 2 consultation→Dashboard (WP2 D5/D6) |
 
@@ -347,11 +347,11 @@ silently.
   intent), so it carries the **current accepted intent**, not a reproduction of the original packet. The
   original packet named the person only on axes 1–4 and never named a repository on the two infra axes;
   the accepted relationship set ([`…-findings.md`](../reviews/public-research-fixture-findings.md) §G/§H)
-  adds D1–D6 as **source-backed** links (D1/D2 axis→repo, D3/D4 axis→person, D5/D6 problem→repo), so the
-  seed encodes all six from the first write. **Reproducing the defective original packet verbatim —
+  adds D1–D6 as **source-backed** links (D1/D2 axis→repo, D3/D4 axis→person, D5/D6 problem→repo). The seed
+  **includes all six in its intended link set**: D3/D4 and D5/D6 are written directly, while D1/D2 are
+  **withheld until the D-A role is chosen** (a link whose role is undecided cannot be written without
+  asserting the very default the reviewer refused). **Reproducing the defective original packet verbatim —
   knowingly writing the F01/F02 link gaps into a *fresh* fixture — is rejected as not a valid reading.**
-  D1/D2 stay **gated on the D-A role decision** (a link whose role is undecided cannot be written without
-  asserting the very default the reviewer refused); the other four are encoded directly.
 - **D-F — problem/plan wording and any `confirmed` vs `inferred` call** where the packet is silent.
 
 ---
