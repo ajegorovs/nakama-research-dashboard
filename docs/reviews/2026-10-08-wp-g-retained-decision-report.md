@@ -130,22 +130,31 @@ proposal, and no row runs without the explicit gate + authorization in §7.
 
 ## 7. Remaining for a future authorized session (before any retained write)
 
-Even with the retained decisions settled, **the retained write is NOT authorized.** A future session
-must obtain, in order:
+Even with the retained decisions settled, **the retained write is NOT authorized.** The sequence is
+**measure-then-review-then-grant** — the write authorization is the **last** step, **never the first**:
 
-1. **Explicit owner write authorization for SCOPE-RETAINED**, bound to the resolved decisions, the exact
-   payloads and the target version — **not a blanket field** (the packet's §10).
-2. **Fresh private target identity.** The exact org id/name is a **historical bound**, **not
-   fresh-verified**; a future session must **re-establish** it by an explicitly authorized read stage
-   before binding.
-3. **Versioned served-store preservation preflight.** Establish the served build **by measurement** at
-   the **exact target org**, capture each axis's fresh `expectedVersion`, run the dedup pass, and confirm
-   the **un-targeted stores are unchanged by their own readback** (WP4 §10; packet §6/§7).
-4. **An explicit read stage** — only if the owner grants read permission. **No live fixture read is
-   authorized by this record.**
+1. **Read-only preflight (measurement first).** Establish **fresh private target identity** and the
+   **served build by measurement** at the **exact target org**, capture each axis's fresh
+   `expectedVersion`, run the dedup pass, take the served-asset sha256, and confirm the **un-targeted
+   stores by their own readback** (WP4 §10; packet §6/§7). *(Done — see the appended retained-scope
+   preflight report; **PASS**, no material drift.)*
+2. **Exact write-bundle preparation.** Bind the prepared payloads to that preflight (served sha256,
+   head, object versions); **no executor and no auto-write script** — a temporary-validity artifact
+   that must be **re-measured at the write boundary**, where **any version/served-sha drift STOPS**.
+3. **Concrete bundle review.** The reviewer inspects the prepared payload against §6 of this record
+   (selected vs not-selected rows, no implicit metadata, verbatim echo, gate compatibility).
+4. **Explicit owner write authorization for SCOPE-RETAINED**, bound to the **reviewed** bundle's
+   resolved decisions, exact payloads and target version — **not a blanket field** (packet §10).
 5. **Post-write verification** (packet §8) as one separately authorized pass.
 
-Until (1)–(4) are granted, **no call is made**.
+**No call is made** until steps 1–4 have produced a **measured, reviewed and explicitly granted**
+bundle. Step 3 (review) and step 4 (grant) are **separate** and both required; neither the preflight
+(step 1) nor the prepared bundle (step 2) is itself authorization.
+
+*Formatting note (presentational, optional).* The payload templates elsewhere in this record use code
+blocks/backticks for readability only; the values are the **plain text** they contain (e.g. the §3.1
+sentence is the plain 411-character string, not its fenced rendering). Code formatting carries **no
+semantic weight**.
 
 ## 8. Private target binding (label only here; exact id in the local handoff)
 

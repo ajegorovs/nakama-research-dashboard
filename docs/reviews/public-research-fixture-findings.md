@@ -841,3 +841,44 @@ fresh-verified**; and **no live fixture read or write** is performed or authoriz
 fixture/domain write, no `reconcile_topic`/`record_activity`, no inference, no service/deploy/restart, no
 product/UI change, no harness change, no WP3 seed, no WP4 amendment, and no merge is performed or
 authorized by this entry.
+
+## T. WP-G retained-scope **read-only preflight** + write-bundle preparation (appended 2026-10-08)
+
+> **Appended, not an amendment.** §A–§S above are preserved unchanged. This section records a **fresh,
+> live, read-only** preflight of the retained fixture, taken under the user's **explicit read-only
+> authorization**, and the **preparation** (not execution) of the retained write bundle. Published in
+> [`2026-10-08-wp-g-retained-preflight-report.md`](2026-10-08-wp-g-retained-preflight-report.md).
+> **Docs only / read-only:** no fixture/domain write, no `reconcile_topic`/`record_activity`, no
+> inference, no new research, no service/deploy/restart, no product/UI/harness change, no WP3 seed, no
+> WP4 amendment, no merge. Public labels and sanitized ids only.
+
+**Authorization measured (scope).** The user authorized a **read-only** preflight + bundle preparation.
+The record's **write scope stays NOT authorized**: the two intended `reconcile_topic` transactions are
+**NOT executed**, and the **concrete bundle review** plus a **separate explicit owner write
+authorization** remain the gate.
+
+**Measured (read-only) at the exact target org** (label `Public Research Exercise`; exact id in the
+local handoff; **fresh-verified and explicitly selected**, never `orgs[0]`), head `9f07552…`:
+
+- **Served identity (org-aware, browser-actually-served):** `ui/app.js` sha256
+  `41e61ef5891bfd630a1704d26f144880730f3d842f7d81b79426dd48709787fc`, **byte-equal** to the repo; the
+  target org serves release `0.2.0+dev.78af5cbb87b4` revision `9`. The **served-build guard is not
+  org-aware** and reported a different store's `…164ccaafbca4` rev `20` — recorded as the trap, **not**
+  the build of record.
+- **Counts:** `2 topics / 6 axes / 3 repositories / 1 person`. **Axes 5/6** have **no** repository link
+  yet (F01 gap); the two **consultation problems** have **empty** repository sets (F04 gap); **ax4**
+  `currentState` is **blank** with `blockerConfidence: inferred` (ratified) and **zero** axis-4
+  evidence; the diagnostics plan-steps carry **null** positions (F12); all topic/axis **versions = 1**.
+- **Drift verdict: NO material drift** — no legitimate-extra link set beyond the expected four axes-1–4
+  links; nothing absorbed; the preflight does not stop. **22/22 checks PASS**. The two un-targeted
+  stores were baselined by their **own readback** (`Layout Demo`, `Nakama E2E Fixture`).
+
+**Prepared, not executed.** The exact write bundle (two `reconcile_topic` transactions, operational
+ids, `expectedVersion`, the §3.1 411-char string) is held **local** (git-ignored) bound to this
+preflight by digest; **no executor and no auto-write script** exist, and the bundle is a
+**temporary-validity** artifact to be **re-measured at the write boundary**, where **any
+version/served-sha drift STOPS**.
+
+**PR links.** Branch `docs/research-fixture-methodology`; draft PR #4
+(`https://github.com/ajegorovs/nakama-research-dashboard/pull/4`); committed docs-only on top of
+`9f07552…`.
