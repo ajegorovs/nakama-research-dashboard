@@ -84,22 +84,24 @@
       "subject": "axis: Research dashboard and focused retrieval",
       "predicate": "names repository (axis_repositories)",
       "object": "ajegorovs/nakama-research-dashboard",
-      "candidate_relationship": "supporting",
+      "candidate_relationship": null,
+      "candidate_relationship_status": "undecided",
       "source": "The axis's three recorded events are commits of this repository: 95ec34e (= the frozen dashboard pin), da7996b, 5a62749 (git-verified in the dashboard repo). The parent topic's primary repository is the Dashboard (plan §5.2).",
       "identity_proof": "git log -1 95ec34e da7996b 5a62749 -> all in ajegorovs/nakama-research-dashboard; messages are the dashboard product and the agent-consultation stage.",
       "dedup": "Absent: axis.repositories == []; the repository is not referenced by any axis (only the topic link exists). No duplicate of this pair.",
-      "uncertainty": "The seed packet names axis 5's repository as 'product shared', not the repo slug; the axis-level attribution rests on the topic's primary repo + the commits' own provenance. Relationship value ('supporting', matching the other axis links) needs WP4/human confirmation."
+      "uncertainty": "The seed packet names axis 5's repository as 'product shared', not the repo slug; the axis-level attribution rests on the topic's primary repo + the commits' own provenance. Relationship value is null/undecided (NOT 'supporting', NOT 'primary') and needs WP4/human confirmation; see reviewer_qualification."
     },
     {
       "id": "D2", "finding": "F01",
       "subject": "axis: Agent consultation and automation evidence",
       "predicate": "names repository (axis_repositories)",
       "object": "ajegorovs/nakama-research-dashboard",
-      "candidate_relationship": "supporting",
+      "candidate_relationship": null,
+      "candidate_relationship_status": "undecided",
       "source": "The axis's two problems are documented in this repository (docs/reviews/2026-10-07-agent-consultation-and-focused-retrieval-stage-report.md and its acceptance record), and the repo's commit 5a62749 ('Record the agent-consultation and focused-retrieval stage and its acceptance') records that stage. Parent topic primary repo is the Dashboard.",
       "identity_proof": "git log -1 5a62749 -> ajegorovs/nakama-research-dashboard, 2026-10-07.",
       "dedup": "Absent: axis.repositories == []. No duplicate.",
-      "uncertainty": "The axis carries no events of its own (evidence_count 0), so the repo basis is the problems' documentation and the parent topic, not an axis-local event. WP4/human should confirm the attribution."
+      "uncertainty": "The axis carries no events of its own (evidence_count 0), so the repo basis is the problems' documentation and the parent topic, not an axis-local event. Relationship value is null/undecided (NOT 'supporting', NOT 'primary'); WP4/human should confirm the attribution and the role. See reviewer_qualification."
     },
     {
       "id": "D3", "finding": "F02",
@@ -107,8 +109,8 @@
       "predicate": "names person (axis_people)",
       "object": "person: Aleksandrs Jegorovs (githubLogin ajegorovs)",
       "candidate_role": "",
-      "source": "The three commits recorded on the axis are authored by public author login 'ajegorovs'; the person is already linked to the parent topic (topic_people).",
-      "identity_proof": "git log -1 --format=%an 95ec34e/da7996b/5a62749 -> ajegorovs (email withheld).",
+      "source": "SOURCE-BACKED ENRICHMENT, not a restoration of the packet (the seed packet named the person only on axes 1-4). The three commits recorded on the axis are authored by GitHub author.login 'ajegorovs'; the person is already linked to the parent topic (topic_people).",
+      "identity_proof": "GitHub commit API repos/ajegorovs/nakama-research-dashboard/commits/{95ec34e5d24240c7ac92c384cff5d5658ebb8761,da7996b6143f918ca590a79649aba831151b4dca,5a6274918c92d8c6a539349d3549dde045c3985f} -> author.login 'ajegorovs' for all three. Basis: fixture githubLogin = GitHub author.login; no author-name equivalence. Exact identity/source only, no expanded research.",
       "dedup": "Absent: axis.people == []. The person row already exists (0 new persons).",
       "uncertainty": "resolvePersonForLink must reuse the existing row: supply githubLogin 'ajegorovs' so upsertPerson matches on github_login (store.ts:6399-6410); displayName alone also matches while a single person carries that name (store.ts:6372-6383). WP4 mechanic, not selected here."
     },
@@ -118,10 +120,10 @@
       "predicate": "names person (axis_people)",
       "object": "person: Aleksandrs Jegorovs (githubLogin ajegorovs)",
       "candidate_role": "",
-      "source": "The person is a member of the parent topic (topic_people); the consultation records and the recording commit (5a62749) are authored by the same public login in this repository.",
-      "identity_proof": "git log -1 5a62749 -> author login ajegorovs.",
+      "source": "SOURCE-BACKED ENRICHMENT, not a restoration of the packet (the seed packet named the person only on axes 1-4). The person is a topic member (topic_people); the consultation records and the recording commit (5a62749) are authored by GitHub author.login 'ajegorovs' in this repository.",
+      "identity_proof": "GitHub commit API repos/ajegorovs/nakama-research-dashboard/commits/5a6274918c92d8c6a539349d3549dde045c3985f -> author.login 'ajegorovs'; the commit tree contains docs/reviews/2026-10-07-agent-consultation-and-focused-retrieval-stage-report.md and docs/reviews/2026-10-07-agent-consultation-and-focused-retrieval-acceptance-record.md (the exact consultation stage/acceptance; N-7 automation and assigned research-coordinator skill material, both represented on axis 6). Topic membership is corroboration, not the primary basis. No author-name equivalence.",
       "dedup": "Absent: axis.people == []. Person exists. No duplicate.",
-      "uncertainty": "Weakest of the six: the seed packet does not name a person on axis 6, and the axis has no events. Basis is topic membership + the recording commit's authorship. WP4/human should confirm."
+      "uncertainty": "No axis-local event; but the author-route chain to the exact stage/acceptance material is exact (see reviewer_qualification 9.3). Basis is fixture githubLogin = GitHub author.login, with topic membership as corroboration only. WP4/human should confirm."
     },
     {
       "id": "D5", "finding": "F04",
@@ -158,7 +160,35 @@
     "new_repositories_created": 0,
     "new_people_created": 0,
     "candidate_pairs_already_present": 0,
+    "pairs_accepted_by_reviewer": 6,
+    "role_decisions_resolved": 0,
+    "role_decisions_unresolved": 2,
     "note": "All six candidate objects (1 repository, 1 person) already exist; only link rows are candidates."
+  },
+  "reviewer_qualification": {
+    "applied": "2026-10-08",
+    "head_tested": "fa2638ec69c2063a6a11d640ac11b7427eb72a35",
+    "docs_only": true,
+    "verdict": "ACCEPT all six candidate pairs D1-D6",
+    "pairs_accepted": 6,
+    "role_decisions": {"resolved": 0, "unresolved": 2, "roles": {"D1": null, "D2": null}},
+    "role_note": "D1/D2 axis<->repository role NOT established. NOT 'supporting' (a fixture default / other fixture links do not establish the semantics) and NOT 'primary' (a one-primary promotion would import a topic-level rule the source does not state for this axis). Left null/undecided for WP4/human approval.",
+    "d3d4_note": "Source-backed enrichments, not a restoration: the seed packet named the person only on axes 1-4.",
+    "d4_chain": "Strongest of D3/D4: fixture githubLogin 'ajegorovs' = GitHub author.login of commit 5a62749, whose tree contains the exact consultation stage/acceptance (stage-report + acceptance-record); the N-7 automation and assigned research-coordinator skill material is represented on axis 6. Topic membership is corroboration, not the primary basis.",
+    "identity_basis": "fixture githubLogin 'ajegorovs' = GitHub commit author.login 'ajegorovs' for the three exact commits in ajegorovs/nakama-research-dashboard (frozen repo); no author-name equivalence.",
+    "author_route_proof": {
+      "repo": "ajegorovs/nakama-research-dashboard",
+      "api": "GitHub commit API (GET /repos/{owner}/{repo}/commits/{ref})",
+      "commits": {
+        "95ec34e5d24240c7ac92c384cff5d5658ebb8761": {"author_login": "ajegorovs", "commit_author_name": "ajegorovs"},
+        "da7996b6143f918ca590a79649aba831151b4dca": {"author_login": "ajegorovs", "commit_author_name": "ajegorovs"},
+        "5a6274918c92d8c6a539349d3549dde045c3985f": {"author_login": "ajegorovs", "commit_author_name": "ajegorovs"}
+      },
+      "basis": "GitHub author.login (account identity), NOT git author name",
+      "scope": "exact identity/source of these three commits only; no expanded research"
+    },
+    "evidence_strategy": "move/duplicate/reassociate remains UNDECIDED (no strategy chosen)",
+    "authorization": "no WP3/WP4/WP5/WP-G authorized; no fixture/product/UI/service change, no inference, no merge"
   },
   "unchanged_objects": [
     "topic->repository links: infra->dashboard (primary); experimental->udv (primary), ->grablink (supporting)",
@@ -181,7 +211,7 @@
   "uncertainty": [
     "Axis-level repository attribution for the two infra axes rests on topic primary repo + commit provenance, not an explicit axis line in the seed packet ('product shared').",
     "The axis-6 person link (D4) has no axis-local event; basis is topic membership + the recording commit's authorship.",
-    "Candidate relationship value 'supporting' is chosen to match the other axis links; not source-mandated.",
+    "D1/D2 relationship value is null/undecided (NOT 'supporting', NOT 'primary'): a fixture default or another fixture link does not establish the semantics, and a one-primary promotion is not source-established. Left to WP4/human.",
     "This is a delta PROPOSAL: move/duplicate/reassociate strategy and final wording are WP4/human decisions."
   ],
   "boundaries": [

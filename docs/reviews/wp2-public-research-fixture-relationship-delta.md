@@ -13,6 +13,14 @@
 > "prepared but NOT authorized"; this session treats the brief as that authorization and states the
 > boundary rather than re-litigating it.
 >
+> **Reviewer qualification (appended 2026-10-08).** The analysis below stands **tested at the original
+> WP2 head `fa2638ec69c2063a6a11d640ac11b7427eb72a35`** and is **preserved as written**; the external
+> reviewer's verdict is applied in **§9** and in the structured evidence. **All six candidate pairs
+> (D1–D6) are accepted**; the **D1/D2 axis→repository role is left `null`/undecided** (not
+> `supporting`, not `primary`); D3/D4 are **source-backed enrichments**, not a restoration of the
+> original packet (which named the person on axes 1–4 only); the evidence
+> **move/duplicate/reassociate strategy remains undecided**; and **no WP3/WP4 is authorized**.
+>
 > **Scope: read-only.** The only non-`GET` calls are the login and the session-selection
 > `POST /v1/auth/active-org` (session-selection state only, no domain mutation). Verification used the
 > three read actions (`get_overview`, `get_topic` topic-wide and scoped, `search_dashboard`) over
@@ -97,8 +105,13 @@ is a proposal for WP4/WP-G.
 | D5 | F04 | problem *N-7 automation completes…* | names repository | `ajegorovs/nakama-research-dashboard` | problem describes the dashboard consultation stage, recorded in that repo |
 | D6 | F04 | problem *Normal assigned `research-coordinator` skill loading…* | names repository | `ajegorovs/nakama-research-dashboard` | same stage records / product-skill-loading subject |
 
-**Candidate relationship value** for D1/D2 is `supporting` (matching the existing
-`axis_repositories` links on the experimental axes); it is a proposal, not source-mandated.
+**Candidate relationship value** for D1/D2 is **`null` / undecided** (reviewer qualification
+2026-10-08 — §9). It is **not** `supporting` and **not** `primary`: the experimental axes'
+`axis_repositories` rows happen to use `supporting` and the topic→repository rows use `primary`, but a
+fixture default, or another fixture link, **does not establish the semantics** of this axis's link.
+Promoting it to `primary` would read a **one-primary** implication out of a topic-level fact (the infra
+topic already names Dashboard `primary`) and is likewise **not** source-established. The role is left
+to **WP4 / human approval**.
 
 ### 4.1 F04 separately — repository omission, sibling evidence location, candidate relationship
 
@@ -152,7 +165,10 @@ the diagnostics problem→Grablink link; the three infra commit events (their `r
   axis 5 ("product shared").
 - D4 (axis-6 person) is the weakest candidate: no axis-local event; basis is topic membership plus
   the recording commit's authorship.
-- The `supporting` relationship value is a proposal matching existing axis links.
+- The D1/D2 relationship value is **`null`/undecided** — **not** `supporting`, **not** `primary`; the
+  role is a **WP4 / human** decision (§9). A fixture default or another fixture link does not establish
+  the semantics, and a `primary` promotion would import a one-primary implication the source does not
+  state for these axes.
 - **This is a delta proposal only.** Move/duplicate/reassociate strategy, wording and approval are
   WP4/human decisions.
 
@@ -162,3 +178,80 @@ the diagnostics problem→Grablink link; the three infra commit events (their `r
   service change, no deploy, no product/UI edit, no fixture repair, no merge.
 - **This is WP2 analysis, not authorization for WP3/WP4/WP5/WP-G.**
 - The findings ledger is **preserved**; the WP2 disposition is **appended** (§G), not rewritten.
+
+## 9. Reviewer qualification of the accepted delta (appended 2026-10-08)
+
+> **Appended, not an amendment — and not a verbatim transcript.** §1–§8 above are preserved as the
+> analysis **tested at the original WP2 head `fa2638ec69c2063a6a11d640ac11b7427eb72a35`**. This section
+> records the external reviewer's **qualification of the accepted delta**; the verdict line is exact and
+> the qualifications are **summarized**, and must not be quoted as the reviewer's own words.
+> **Docs-only.** No fixture write, no product/UI/service change, no inference, no WP3/WP4 design, no
+> merge; the only verification was the GitHub commit API for **exact identity/source** of three named
+> commits (no expanded research).
+
+**Verdict: ACCEPT all six candidate link-adds (D1–D6), with the qualifications below.** The six pairs
+are accepted; two decision items remain **unresolved** for **WP4 / human approval** and are **not**
+silently resolved.
+
+### 9.1 D1/D2 — the axis→repository role is NOT established
+
+The axis→repository **relationship value is `null` / undecided**. It is **not** `supporting` and
+**not** `primary`.
+
+- **A default, or another fixture link, does not establish the semantics.** The experimental axes'
+  `axis_repositories` rows happen to use `supporting`, and the topic→repository rows use `primary`, but
+  copying either value would assert a semantic the source does not state for these two infra axes.
+- **A `primary` promotion is not source-established either.** The source carries a **one-primary**
+  implication — a topic names one primary repository, and the infra topic already names Dashboard
+  `primary` — so promoting an axis link to `primary` would read a rule out of a topic-level fact. It is
+  refused as a substitute.
+- **Resolution:** the role is left for **WP4 / human approval**; the delta records the pair with the
+  role field **unset**.
+
+### 9.2 D3/D4 — source-backed enrichments, not a restoration
+
+D3/D4 are **source-backed enrichments** of the retained fixture, **not** a restoration of an original
+packet value: the **seed packet named the person only on axes 1–4** and stated no axis-level person for
+the infra axes. The add is justified by **source**, not by the packet.
+
+**Identity basis — exact, public, API-verified; no author-name equivalence.** The fixture person's
+`githubLogin` is `ajegorovs`. Each of the three infra commit events was **independently resolved
+through the GitHub commit API** at the frozen repository `ajegorovs/nakama-research-dashboard`, and its
+**`author.login`** is `ajegorovs` for every commit:
+
+| Commit (short → full) | GitHub `author.login` | `commit.author.name` | date |
+|---|---|---|---|
+| `95ec34e` → `95ec34e5d24240c7ac92c384cff5d5658ebb8761` | `ajegorovs` | `ajegorovs` | 2026-10-07 |
+| `da7996b` → `da7996b6143f918ca590a79649aba831151b4dca` | `ajegorovs` | `ajegorovs` | 2026-10-07 |
+| `5a62749` → `5a6274918c92d8c6a539349d3549dde045c3985f` | `ajegorovs` | `ajegorovs` | 2026-10-07 |
+
+The established basis is **fixture `githubLogin` = GitHub `author.login`**, scoped to these three exact
+commits in this exact frozen repository. The git **author *name*** also reads `ajegorovs`, but a name is
+freely settable and is **not equivalent** to the account login — **no author-name equivalence** is
+claimed. **No expanded research:** only these commits' identity/source were queried.
+
+### 9.3 D4 — the strongest chain, stated precisely
+
+D4 is the **stronger** of the D3/D4 pair, on an exact chain rather than a generic one. This
+**supersedes §7's "D4 … weakest candidate" label**, which rested only on the absence of an axis-local
+event — the author-route chain below is exact:
+
+- **fixture `githubLogin` (`ajegorovs`) = GitHub `author.login`** of commit
+  `5a6274918c92d8c6a539349d3549dde045c3985f` in `ajegorovs/nakama-research-dashboard` (API-verified);
+- that commit **contains the exact consultation stage/acceptance**: its tree carries
+  `docs/reviews/2026-10-07-agent-consultation-and-focused-retrieval-stage-report.md` and
+  `docs/reviews/2026-10-07-agent-consultation-and-focused-retrieval-acceptance-record.md` — the material
+  the consultation-axis problems are about (N-7 automation-completes; normal assigned
+  `research-coordinator` skill loading), both **represented on axis 6**;
+- **topic membership is corroboration, not the primary basis**: the person is linked to the parent
+  topic, which supports the link but does not by itself establish it; the **author-route chain above is
+  the primary basis**.
+
+### 9.4 Unchanged — and the accepted disposition
+
+The **move / duplicate / reassociate strategy remains undecided** (as in §4.1 and §6); the six
+`candidate_adds`, the dedup counts (0 new repositories, 0 new people, 0 already-present pairs) and the
+unchanged-object list are unchanged. **Accepted-disposition summary:** six pairs accepted; **two
+unresolved role decisions** (D1, D2); **identity basis confirmed** (`githubLogin` = `author.login`);
+**author route proof** recorded; evidence strategy undecided. **This qualification authors no write and
+authorizes no WP3/WP4/WP5/WP-G.**

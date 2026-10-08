@@ -291,3 +291,36 @@ separate, unused capability. F09b: no first-class repository pin.
 
 **Counts.** `candidate_adds = 6` (2 axis-repo + 2 axis-person + 2 problem-repo); new objects `0`;
 duplicates `0`. **This section performs no write and authorizes no WP3/WP4/WP5/WP-G.**
+
+## H. External reviewer gate disposition — WP2 (appended 2026-10-08)
+
+> **Appended, not an amendment — and not a verbatim transcript.** §A–§G above are preserved unchanged.
+> This section records the **gate disposition** of the external reviewer's WP2 verdict and the
+> authorization boundary it leaves in force. The **verdict line is exact**; the qualifications are
+> **summarized** below (no verbatim reviewer message is available to commit) and must not be quoted as
+> the reviewer's own words. Full detail is in
+> [`wp2-public-research-fixture-relationship-delta.md`](wp2-public-research-fixture-relationship-delta.md) §9
+> and [`wp2-public-research-fixture-relationship-delta-evidence.json`](wp2-public-research-fixture-relationship-delta-evidence.json).
+
+**Verdict: ACCEPT the six candidate link-adds (D1–D6), with the qualifications below.**
+
+| # | Qualification | How it is applied |
+|---|---|---|
+| 1 | **D1/D2 — the axis→repository role is not established.** The chosen value `supporting` is removed; the role is **`null`/undecided**. A fixture default or another fixture link does not establish the semantics, and a `primary` promotion (a one-primary implication read out of the topic link) is likewise not source-established. | Delta `candidate_relationship` is now `null` with status `undecided`; §9.1 states the reasoning; the role is left to **WP4 / human approval**. |
+| 2 | **D3/D4 — source-backed enrichments, not a restoration.** The seed packet named the person only on axes 1–4. | §9.2 restates the basis as **source** (not packet); the report is preserved as tested at the original WP2 head. |
+| 3 | **Identity basis — exact, API-verified; no author-name equivalence.** The person's `githubLogin` (`ajegorovs`) equals the GitHub `author.login` of each of the three named commits at the frozen dashboard repo. | §9.2 records the three-commit API table and states the git author *name* is **not** the identity. |
+| 4 | **D4 — strong chain.** `githubLogin` → `author.login` of `5a62749`, whose tree carries the exact consultation stage/acceptance; the N-7 / assigned-skill material is represented on axis 6. Topic membership is **corroboration, not the primary basis**. | §9.3 states the chain and supersedes the earlier "weakest candidate" label. |
+| 5 | **Scope — exact identity/source only.** | The only verification is the GitHub commit API for the three named commits; **no expanded research**, **no inference**. |
+
+**Counts after the qualification:** **six candidate pairs accepted**; **two unresolved role
+decisions** (D1, D2); **identity basis confirmed**; **author route proof recorded**; the evidence
+(move/duplicate/reassociate) **strategy remains undecided**. No fixture mutation.
+
+**Authorization boundaries (unchanged by this verdict):**
+
+- **WP2 is accepted with the qualifications above** and remains **read-only**; it authors no fixture write.
+- **WP3 and WP4 are technically ready but NOT authorized.** They await **explicit owner authorization**;
+  no packet design is performed.
+- **No WP3/WP4 design or execution, no domain/fixture/product/UI/service change, no inference, no
+  merge** is performed or authorized.
+- The **move/duplicate/reassociate evidence strategy remains undecided** — not decided by this verdict.
