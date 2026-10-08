@@ -77,7 +77,7 @@ model is named where it differs. "Source" is the input the baseline seed would d
 | `fullName` | **required** | the public `owner/repo` slug; a repository is auto-registered when named |
 | `url` | **required** (when the public source is available) | the public repo URL, grounded at the **frozen pin** (`https://github.com/<fullName>`); F07/F09 |
 | `description` | **required** (when the public source is available) | the repo's **own pinned-README opening paragraph, normalized** — soft-wraps collapsed to single spaces and **presentation emphasis markers stripped**, words preserved; never a paraphrase. The **pinned README is authoritative** and GitHub's mutable `about` is **as-of-read** (§3 item 3); F07 |
-| `defaultBranch` | **required** (when the public source is available) | the **source branch the pin is on** (as-of-pin) — **not** GitHub's current `default_branch`, which is stated beside it (§3 item 3); F07/F09 |
+| `defaultBranch` | **required** (when the public source is available) | the repository's **actual GitHub `default_branch` as-of-read** — the current observed value (`master`/`master`/`main`), **not** a historical value *inferred from* which branch the pin is reachable from (§3 item 3). The **source branch the pin is on** and the **pinned revision** are distinct §3 manifest entries, never `Repository` fields; F07/F09 |
 | `relationship` (topic/axis link) | **required** where a link row is written | enum `primary \| supporting` only; **no "undecided" value exists** (see §9 D-A) |
 | repo **source pin** | **unavailable** | no `pin` field on `Repository` type, DDL, manifest or `types/`; F09b — carried in the §3 manifest, never a repo field |
 | repo "source docs" | **unavailable** | "source docs" is not a `Repository` field at all (an activity `sourceUrl` lives on the *activity*); F09 |
@@ -104,7 +104,7 @@ model is named where it differs. "Source" is the input the baseline seed would d
 | `currentState` | **required for axes 1,2,3,5,6 / optional for axis 4** | packet supplies verbatim text for axes 1,2,3,5,6; **axis 4 has none — leave absent (optional, honest), do not invent**. The field is representable and the source supports a conservative state, so axis 4's absence is **optional** (F08), not `unavailable` |
 | `currentStateConfidence` | **required where `currentState` is present, explicit** | **`inferred`** on axes 1,2,3,5,6; null where `currentState` is absent (axis 4). Never left to the `confirmed` default (§5.3); F08 |
 | `blocker` | **required for axis 4** | verbatim, `blockerConfidence: confirmed` (packet §5.3) |
-| `blockerConfidence` | **required with `blocker`, explicit** | **`confirmed`** for axis 4 — the one store-enforced claim in the seed, **bound to same-call evidence** (§5.1/§5.4) |
+| `blockerConfidence` | **required with `blocker`, explicit** | the packet proposes **`confirmed`** for axis 4; this baseline seed sets it explicitly (never a default) and backs it **same-transaction** (§5.1/§5.4). **Distinct from the retained fixture**, whose measured `blockerConfidence` is **`inferred` (ratified; not a defect)** — see WP4 §8 and the ledger §K |
 | `branch`, `prNumber`, `prUrl` | **optional** | representable axis evidence; packet records PRs as activities rather than axis fields — see §5 |
 | `expectedVersion` | **required on an update, absent on a create** | a fresh axis has no version to check (methodology §4.4) |
 | axis `repositories[]` | **required where source-backed; axis-level `relationship` UNRESOLVED for all six axes** | all six axes have a source repo (axes 1–4 per packet §5.3; axes 5–6 per WP2 D1/D2), but **no role is established for any of them** — the retained fixture's `supporting` on axes 1–4 is a fixture link, not an approved semantic ("a fixture default or another fixture link does not establish the semantics"). **Withhold all six links** until a human selects the role (§9 D-A); omitting the field would silently store `supporting` |
@@ -161,7 +161,7 @@ model is named where it differs. "Source" is the input the baseline seed would d
 |---|---|---|
 | topic ↔ repository | `reconcile_topic.repositories[]` | required where the packet names them; role `primary`/`supporting` |
 | topic ↔ person | `reconcile_topic.people[]` | optional; role `""` |
-| axis ↔ repository | `reconcile_topic.axes[].repositories[]` | required where source-backed; **role = human decision** for the 2 infra axes (§9 D-A) |
+| axis ↔ repository | `reconcile_topic.axes[].repositories[]` | required where source-backed; **role unresolved for all six axes** (§9 D-A). The two **WP2 candidate pairs** (D1/D2, the infra axes) are a *subset* of that unresolved set — not a separate, smaller rule; all six links are withheld until a human selects `primary`/`supporting` |
 | axis ↔ person | `reconcile_topic.axes[].people[]` | required for axes 1–4 (packet); axes 5–6 are the **WP2-accepted source-backed enrichment** (D3/D4); role `""`; person reused by `githubLogin` |
 | problem ↔ repository | `reconcile_topic.problems[].repositoryFullNames[]` | required where source-backed; **replaces** the set |
 | event → repository | activity `repositoryFullName` | optional (prefer the axis link) |
@@ -192,23 +192,28 @@ It states, per source:
    **2026-09-24** is an **explicitly chosen precision**, not an inherent limit (F05). PR/commit events
    carry their **own** event date at the source's precision (concrete values in §3.4).
 
-3. **Repository public metadata — as-of-pin vs current, enumerated.** `url`/`defaultBranch`/`description`
-   are grounded at the **frozen pin** and are reproducible from it. **Normalization:** the description is
-   the repo's own **pinned-README opening paragraph** with **soft line-wraps collapsed to single spaces and
-   presentation emphasis markers stripped** — words preserved, nothing added, removed or reordered. The
-   field is plain text; the **exact pinned excerpt** is retained in this manifest.
+3. **Repository public metadata — per field, as-of-pin vs as-of-read.** `url` is the public repo URL
+   (F07/F09); `description` is the repo's own **pinned-README opening paragraph**, grounded at the
+   **frozen pin** and reproducible from it; `defaultBranch` is the repository's **actual GitHub
+   `default_branch` as-of-read** — the current observed value (`master`/`master`/`main`), **not** a
+   historical value inferred from which branch the pin is reachable from. **Normalization:** the
+   description is the repo's own pinned-README opening paragraph with **soft line-wraps collapsed to
+   single spaces and presentation emphasis markers stripped** — words preserved, nothing added, removed
+   or reordered. The field is plain text; the **exact pinned excerpt** is retained in this manifest,
+   alongside the **source branch the pin is on** and the **pinned revision** (F09b).
 
-   | Repository | `url` | `defaultBranch` (source branch @ pin) | current GitHub `default_branch` (as-of-read) | `description` (pinned README, normalized) |
+   | Repository | `url` | `defaultBranch` (GitHub `default_branch`, as-of-read) | source branch @ pin + pinned revision (manifest; distinct) | `description` (pinned README, normalized) |
    |---|---|---|---|---|
-   | `ajegorovs/udv-echo-process` | `https://github.com/ajegorovs/udv-echo-process` | `master` | `master` | Multi-sensor Ultrasonic Doppler Velocimetry (UDV) processing for rotating machinery analysis. Supports echo (amplitude) and velocity measurements from single-sensor continuous recordings and multi-sensor rolling (round-robin) arrays, in both raw time-series and statistical-summary formats. |
-   | `ajegorovs/Grablink-Full-sequence-acquisition` | `https://github.com/ajegorovs/Grablink-Full-sequence-acquisition` | `master` | `master` | Windows MFC application for capturing high-frame-rate 8-bit monochrome image sequences from an Euresys Grablink/MultiCam capture card. |
-   | `ajegorovs/nakama-research-dashboard` | `https://github.com/ajegorovs/nakama-research-dashboard` | `main` | `main` | A dashboard page plus agent tools over shared coordination state — topics, development axes and the evidence attached to them — for a self-hosted Nakama instance. One page (the overview, with the editing surface underneath it), eight actions of which five are agent tools, one skill, org-scoped SQLite storage. |
+   | `ajegorovs/udv-echo-process` | `https://github.com/ajegorovs/udv-echo-process` | `master` | `master` @ `841964d41f8dc73e55d78303e79ed4098c00d700` (2026-09-28) | Multi-sensor Ultrasonic Doppler Velocimetry (UDV) processing for rotating machinery analysis. Supports echo (amplitude) and velocity measurements from single-sensor continuous recordings and multi-sensor rolling (round-robin) arrays, in both raw time-series and statistical-summary formats. |
+   | `ajegorovs/Grablink-Full-sequence-acquisition` | `https://github.com/ajegorovs/Grablink-Full-sequence-acquisition` | `master` | `master` @ `e6f83b2f5a45a961044b107f2628b046d41c3ab2` (2026-09-24) | Windows MFC application for capturing high-frame-rate 8-bit monochrome image sequences from an Euresys Grablink/MultiCam capture card. |
+   | `ajegorovs/nakama-research-dashboard` | `https://github.com/ajegorovs/nakama-research-dashboard` | `main` | `main` @ `95ec34e5d24240c7ac92c384cff5d5658ebb8761` (2026-10-07) | A dashboard page plus agent tools over shared coordination state — topics, development axes and the evidence attached to them — for a self-hosted Nakama instance. One page (the overview, with the editing surface underneath it), eight actions of which five are agent tools, one skill, org-scoped SQLite storage. |
 
-   - **Branch provenance.** The stored `defaultBranch` is the **source branch the pin is on** (as-of-pin),
-     **never** a value copied from GitHub's mutable current metadata. At the pins the two agree
-     (`master`/`master`/`main`) and the **current** GitHub `default_branch` read today is stated beside it
-     so the historical value is never *inferred from* the current one. If they diverge, the as-of-pin value
-     wins and the divergence is stated, not silently resolved.
+   - **Branch provenance.** The stored `defaultBranch` is the repository's **actual GitHub
+     `default_branch` as-of-read** (`master`/`master`/`main`) — the current observed value, **never** a
+     value derived by checking which branch the pin is reachable from, and never a synthesized historical
+     value. The **source branch the pin is on** and the **pinned revision** are carried as the distinct
+     §3.1 manifest entries above (F09b); they are not the `defaultBranch` field. If a repository's
+     `default_branch` changes between reads, the value is re-observed, never back-inferred.
    - **`about` is not versioned** and **current GitHub metadata is variable**: the Dashboard `pushed_at`
      now postdates the pin, and `about`/`homepage` change between reads. A value read from the live GitHub
      API is **`as-of-read`, not `as-of-pin`**, and is labelled as such — at read time UDV has no `about`;
@@ -276,7 +281,9 @@ grades are exactly three per axis (`store.ts:6790–6798`):
 - `current_state` — only when the patched/stored text is non-empty;
 - `blocker` — only when the patched/stored text is non-empty.
 
-It requires same-call evidence when such a claim is `confirmed`; the evidence definition is `axisEvidence`
+It requires evidence **present when the check runs inside the transaction** — **pre-existing axis evidence
+counts**, so it need not be added in the same call — when such a claim is `confirmed`; the evidence
+definition is `axisEvidence`
 (`store.ts:2506`): the axis's **branch**, its **PR** (`prNumber`/`prUrl`), its **recorded activities**
 (`axis_id`) and its **annotations** (`axis_id`). A `confirmed` claim with an empty evidence list throws and
 **rolls the whole update back**. **Problem claims are not covered by this guard.**
@@ -297,7 +304,10 @@ The read model reports a text-carrying claim's confidence as `confirmed` when th
 A seed that leans on that default silently asserts `confirmed` and trips the guard. The seed therefore sets
 **every** axis claim's confidence explicitly (§2.3): `stateConfidence` **inferred** on all six axes;
 `currentStateConfidence` **inferred** on axes 1,2,3,5,6; axis 4's `blockerConfidence` **confirmed** — backed
-by the same-transaction AGENDA activity (§3.4 row 5). **No claim relies on a default.**
+by the same-transaction AGENDA activity (§3.4 row 5). **No claim relies on a default.** (The packet's
+`confirmed` is the **packet's proposal**, backed here by same-transaction evidence; it is **not** a claim
+about the retained fixture, whose measured `blockerConfidence` is `inferred` and **ratified** — see WP4 §8
+and the ledger §K.)
 
 ### 5.4 Consequences for the baseline-seed packet
 
@@ -438,8 +448,9 @@ These are the properties a future WP5 check would assert. They are stated so the
 
 1. **Count identity** — read-back counts equal §8 (topics/axes/people/repos/plan steps/problems/links).
 2. **No null positions** — every seeded plan step has an explicit integer position 1..n.
-3. **Confirmed ⟹ same-call evidence** — every `confirmed` **axis** claim (`state`/`current_state`/`blocker`)
-   has an activity/annotation/branch/PR on that axis in the same call; the suite can go red on a negative
+3. **Confirmed ⟹ evidence by transaction end** — every `confirmed` **axis** claim (`state`/`current_state`/`blocker`)
+   has an activity/annotation/branch/PR on that axis **present when the check runs** (a baseline seed supplies
+   it in the same transaction; pre-existing axis evidence would also count); the suite can go red on a negative
    control (a `confirmed` axis claim with no evidence must fail). Problem claims are **not** covered by this
    guard (a fixture policy, not store-enforced, §5.2).
 4. **No silent role default** — no `axis_repositories` row exists whose role was omitted (would default to
@@ -505,7 +516,8 @@ These are the properties a future WP5 check would assert. They are stated so the
   - `migrations/002` (`relationship NOT NULL DEFAULT 'supporting'`; one-primary per topic/axis),
     `migrations/004` (`plan_steps.position INTEGER` + "no ordering synthesized"; `problems`; `plans`).
 - **Bounded source harvest (public, read-only):** the three repos' **current** GitHub `about` /
-  `default_branch` read (used only to distinguish as-of-read from as-of-pin); the **pinned** `README.md` at
+  `default_branch` read — the observed `default_branch` is the value stored as `defaultBranch` (the
+  as-of-read field), while the pin's own source branch/revision ride the §3 manifest; the **pinned** `README.md` at
   each frozen pin (UDV `841964d4…`, Grablink `e6f83b2f…`, Dashboard `95ec34e5…`) fetched to confirm the
   verbatim description source text (§3.3); and the **8 initial events' own public URLs and event dates**
   read from the GitHub API (§3.4 — PR merge timestamps for `#44/#69/#67/#1`, commit committer dates for

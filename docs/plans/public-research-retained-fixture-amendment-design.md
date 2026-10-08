@@ -96,7 +96,7 @@ level. **Decision** = what must be approved before executing.
 | **F04** evidence part | enrichment (evidence placement; **required** finding) | consultation-axis evidence | insert-only, or none; **move UNSUPPORTED** | see §9.1 | **choice unresolved → human** |
 | **F05** | correction *(would-be)* | AGENDA event `occurredAt` → source date | **BLOCKED** — no activity-update path | — | blocked capability (§6) |
 | **F07** | correction | repo `url`/`description`/`defaultBranch` | `reconcile_topic.repositories[]` — **supported** (coupled to a link write) | upsert | approved; **exact pinned-README description text fixed in §7.2** |
-| **F08** | optional editorial addition | diagnostics-axis `currentState` | `reconcile_topic.axes[].currentState` — **supported** | version-bump | **exact wording + confidence → human**; evidence coupling (§8) |
+| **F08** | optional editorial addition | diagnostics-axis `currentState` | `reconcile_topic.axes[].currentState` — **supported** | version-bump | **exact wording + confidence → human** (§8). The retained `blockerConfidence` is **`inferred` (ratified — not a defect)**; a `confirmed` `currentState` **or** an explicitly-separately-approved blocker **restoration** to `confirmed` needs evidence by the transaction's end (§8) |
 | **F09** (url/branch/desc) | correction | same fields as F07 | same as F07 | same | same |
 | **F09** ("source docs") | — | none | **unavailable** (no Repository field) | — | boundary, no mutation |
 | **F10** (existing events) | correction *(would-be)* | event `sourceUrl` | **BLOCKED** — no activity-update path | — | blocked capability (§6) |
@@ -168,9 +168,11 @@ payload.
   row. A retried activity add produces a **second event**. Every activity-adding proposal (§9.1) is
   therefore marked **non-idempotent at the store** and must be front-guarded by a readback
   (`search_dashboard`/`get_topic`) that asserts the event is absent; it is never auto-retried.
-- **`assertClaimsAreBacked`** (`store.ts:6786-6816`): a `current_state` claim marked **`confirmed`**
-  is refused unless the axis carries **evidence** (`axisEvidence(axis).length > 0`) — a branch, a PR or
-  an activity — in the **same call**. This governs F08 (§8).
+- **`assertClaimsAreBacked`** (`store.ts:6786-6816`): a `state`/`current_state`/`blocker` claim marked
+  **`confirmed`** is refused unless the axis carries **evidence** (`axisEvidence(axis).length > 0`) — a
+  branch, a PR, an activity or an annotation. The check runs at the axis write **inside the transaction**,
+  so evidence must be present **by the transaction's end**; **pre-existing axis evidence counts** (it need
+  not be added in the same call). An `inferred`/`uncertain` claim requires none. This governs F08 (§8).
 - **The default `relationship` is `supporting`.** A repository item with no `relationship` links as
   `supporting`; a `primary` link **demotes** any current primary first (`store.ts:6437-6445`). So a
   repository **metadata** write (which must go through `repositories[]`) is **coupled** to a link write
@@ -295,13 +297,13 @@ that half of F10 is a **model boundary**, not a blank field.
 ### 7.2 D — F07 / F09 repository metadata (correction)
 
 - **BEFORE (measured):** all three repositories return `url:''`, `description:''`, `defaultBranch:''`.
-- **AFTER (proposed — explicit values, fixed by the pin):**
+- **AFTER (proposed — explicit values; description fixed by the pin, branch as-of-read):**
 
-  | Repository | `url` | `defaultBranch` (source branch @ pin) | current GitHub `default_branch` (as-of-read) | `description` (pinned README, normalized) |
+  | Repository | `url` | `defaultBranch` (GitHub `default_branch`, as-of-read) | source branch @ pin + pinned revision (manifest; distinct) | `description` (pinned README, normalized) |
   |---|---|---|---|---|
-  | `ajegorovs/nakama-research-dashboard` | `https://github.com/ajegorovs/nakama-research-dashboard` | `main` | `main` | `A dashboard page plus agent tools over shared coordination state — topics, development axes and the evidence attached to them — for a self-hosted Nakama instance. One page (the overview, with the editing surface underneath it), eight actions of which five are agent tools, one skill, org-scoped SQLite storage.` |
-  | `ajegorovs/udv-echo-process` | `https://github.com/ajegorovs/udv-echo-process` | `master` | `master` | `Multi-sensor Ultrasonic Doppler Velocimetry (UDV) processing for rotating machinery analysis. Supports echo (amplitude) and velocity measurements from single-sensor continuous recordings and multi-sensor rolling (round-robin) arrays, in both raw time-series and statistical-summary formats.` |
-  | `ajegorovs/Grablink-Full-sequence-acquisition` | `https://github.com/ajegorovs/Grablink-Full-sequence-acquisition` | `master` | `master` | `Windows MFC application for capturing high-frame-rate 8-bit monochrome image sequences from an Euresys Grablink/MultiCam capture card.` |
+  | `ajegorovs/nakama-research-dashboard` | `https://github.com/ajegorovs/nakama-research-dashboard` | `main` | `main` @ `95ec34e5d24240c7ac92c384cff5d5658ebb8761` (2026-10-07) | `A dashboard page plus agent tools over shared coordination state — topics, development axes and the evidence attached to them — for a self-hosted Nakama instance. One page (the overview, with the editing surface underneath it), eight actions of which five are agent tools, one skill, org-scoped SQLite storage.` |
+  | `ajegorovs/udv-echo-process` | `https://github.com/ajegorovs/udv-echo-process` | `master` | `master` @ `841964d41f8dc73e55d78303e79ed4098c00d700` (2026-09-28) | `Multi-sensor Ultrasonic Doppler Velocimetry (UDV) processing for rotating machinery analysis. Supports echo (amplitude) and velocity measurements from single-sensor continuous recordings and multi-sensor rolling (round-robin) arrays, in both raw time-series and statistical-summary formats.` |
+  | `ajegorovs/Grablink-Full-sequence-acquisition` | `https://github.com/ajegorovs/Grablink-Full-sequence-acquisition` | `master` | `master` @ `e6f83b2f5a45a961044b107f2628b046d41c3ab2` (2026-09-24) | `Windows MFC application for capturing high-frame-rate 8-bit monochrome image sequences from an Euresys Grablink/MultiCam capture card.` |
 
 - **The description value is concrete and normalized, not a "harvest at execution" placeholder.** Each
   string above is the repository's **own README opening paragraph from the frozen pin** (§1 header pins;
@@ -310,10 +312,12 @@ that half of F10 is a **model boundary**, not a blank field.
   the field is plain text. **Words are preserved exactly**: nothing added, removed or reordered. The exact
   pinned excerpt is retained in the WP3 design's §3.3 manifest. F07 requires **source text, not
   paraphrase**, and the pin fixes the string, so it is specified here rather than deferred.
-- **Branch provenance — as-of-pin vs current, stated not assumed.** The `defaultBranch` written is the
-  **source branch the frozen pin is on** (as-of-pin), **not** GitHub's mutable current `default_branch`; the
-  **current** value read today is stated beside it. At the pins the two agree (`main`/`master`/`master`); if
-  they ever diverge, the as-of-pin value wins and the divergence is recorded, never silently resolved.
+- **Branch provenance — as-of-read, stated not assumed.** The `defaultBranch` written is the repository's
+  **actual GitHub `default_branch` as-of-read** (`main`/`master`/`master`) — the current observed value,
+  **never** a value derived by checking which branch the pin is reachable from, and never a synthesized
+  historical value. The **source branch the pin is on** and the **pinned revision** ride this design's
+  manifest as distinct entries (F09b), never the `defaultBranch` field. If the `default_branch` changes
+  between reads, the value is re-observed, never back-inferred.
 - **As-of-pin vs as-of-read (stated, not silently resolved).** The `description` above is the **pinned
   README**, which is **versioned and authoritative** for the fixture. GitHub's mutable **`about`** field is
   **as-of-read** and **differs**: at read time UDV has no `about`; Grablink's `about` reads *"modified
@@ -357,8 +361,10 @@ that half of F10 is a **model boundary**, not a blank field.
   version to preserve. The **plan's** version is **not bumped**, because the required `summary` is sent as
   an **unchanged echo** (`updatePlan` bumps only when the summary text changes; `store.ts:5031`).
 - **Idempotency:** re-running with the same positions updates the same steps — content-stable.
-- **Decision:** **proposed, pending acceptance** — the authored order is in the packet §5.3, but the
-  position base (1..4) is this design's proposal, not an approved mutation.
+- **Decision:** the **1..4 base is a reviewer-accepted design convention** — a design fact, **not** a
+  mutation permission and **not** a base-selection gate. The authored order is the packet's (§5.3); the
+  design fixes the base at **1** (first authored step = position 1). The earlier **0..3 alternative is
+  withdrawn** (a design-convention choice, not an approval item).
 
 ## 8. F08 — diagnostics-axis `currentState` (optional editorial addition)
 
@@ -376,20 +382,30 @@ that half of F10 is a **model boundary**, not a blank field.
   the final sentence — that is the human's editorial call.
 - **Path:** `reconcile_topic { topicId:<experimental>, axes:[ { id:<axis4>, expectedVersion:<v>,
   currentState:<approved text>, currentStateConfidence:<c> } ] }`
-- **Evidence coupling — driven by the axis's `confirmed` blocker, NOT by the `currentState` confidence.**
-  `assertClaimsAreBacked` runs on **any** axis write (`updateAxis` calls it "unconditionally … including
-  ones this patch did not touch", `store.ts:3698–3700`; `reconcile_topic` calls it for every touched axis,
-  `store.ts:6027–6037`) and grades the axis's `state`/`current_state`/`blocker` claims from the
-  **patched/stored** values (`store.ts:6790–6798`). Axis 4 carries a **`confirmed` blocker** (the approved
-  value, packet §5.3). So **every** axis-4 patch re-evaluates that blocker and needs the axis to carry
-  **evidence in the same reconciliation** — a branch, a PR, an activity or an annotation — **regardless of
-  the `currentState` confidence**. Writing `currentStateConfidence: inferred` does **not** exempt the call,
-  because the blocker is a separate claim. **No confidence downgrade is proposed** to sidestep the guard:
-  the honest values are kept and the required same-call axis evidence is carried (the natural route is a
-  same-call axis activity, e.g. the AGENDA-source event — which is also what F03 asks for).
-  *(The retained store currently carries axis 4's `blockerConfidence` as `inferred`, a measured deviation
-  from the approved `confirmed`; that is a separate correction on the blocker's own row, not this
-  `currentState` row.)*
+- **Two separate claims on axis 4 — keep them apart.** `assertClaimsAreBacked` runs on **any** axis write
+  (`updateAxis` calls it "unconditionally … including ones this patch did not touch", `store.ts:3698–3700`;
+  `reconcile_topic` calls it for every touched axis, `store.ts:6027–6037`) and grades the axis's
+  `state`/`current_state`/`blocker` claims **independently**, each from its own **patched/stored** value
+  (`store.ts:6790–6798`). The `currentState` confidence and the `blocker` confidence are therefore
+  **separate claims**: neither determines the other.
+  - **The actual retained state — `blockerConfidence: inferred` — is RATIFIED.** The retained fixture
+    carries axis 4's `blockerConfidence` as **`inferred`** (the measured live value; the reviewer
+    **ratified** it). The packet's `confirmed` (§5.3 of the exercise packet) is the **historical packet
+    value**, never measured as confirmed in the fixture, so the live `inferred` is the honest, accepted
+    value. **An `inferred` `blocker` (and an `inferred` `currentState`) requires no evidence and trips no
+    guard.** **No correction of the retained `inferred` to `confirmed` is designed here** — the earlier
+    framing that read it as "a measured deviation from the approved `confirmed`" is **withdrawn** (a
+    classification correction of *packet value vs accepted confidence*, recorded in §12 and ledger §K).
+  - **Restoring `blockerConfidence` to `confirmed` is a separate OPTIONAL amendment — proposed, NOT
+    approved.** If a human chooses it, `assertClaimsAreBacked` requires axis 4 to carry **evidence by the
+    transaction's end**; **pre-existing axis evidence counts**, so it need not be added in the same call.
+    Axis 4 currently carries **zero** evidence (no branch, PR, activity or annotation) — so a **first**
+    `confirmed` needs an **evidence add** (e.g. a same-transaction activity, such as the AGENDA-source
+    event, or an earlier explicitly-authorized pass that already added one). **No default downgrade or
+    upgrade is introduced:** with this restoration **not** chosen, the retained `inferred` values stand
+    **unchanged**.
+  - **A `confirmed` `currentState` (if any) needs the same evidence-by-transaction-end**, independent of
+    the blocker; where evidence is absent the honest value is `currentStateConfidence: inferred`.
 - **Idempotency:** `applyAxisPatch` bumps the axis version on every call — content-stable, version-
   monotonic (re-read before retry). Not idempotent if the confidence/evidence pairing differs run to run.
 
@@ -493,9 +509,12 @@ implemented now.
    equals the **pinned README string** (byte-equal), not a paraphrase.
 7. **Position monotonicity.** The four diagnostics steps carry **distinct ascending** positions in the
    authored order; step **ids and titles** are unchanged.
-8. **Optional stays optional.** `topic.summary`/`description` remain empty; the `currentState` is written
-   only if approved, and if its confidence is `confirmed`, the same transaction carries evidence (or the
-   check demands `inferred`).
+8. **Optional stays optional — the ratified `inferred` is not silently changed.** `topic.summary`/
+   `description` remain empty; the `currentState` is written only if approved. The retained axis-4
+   `blockerConfidence = inferred` is **ratified** and must **not** be silently promoted; only if a
+   `confirmed` `currentState` **or** an explicitly-approved blocker **restoration** is chosen does the
+   check require the axis to carry evidence **by the transaction's end** (pre-existing evidence counts) —
+   an `inferred` claim requires none.
 9. **Untargeted store unchanged** by its own readback.
 10. **Blocked findings stay unapplied**: no attempt to write an activity `occurredAt`/`sourceUrl` on an
     existing row (there is no path; a check asserts none was attempted).
@@ -512,13 +531,14 @@ implemented now.
 |---|---|---|
 | 1 | axis→repository **role** for **all six** axes (`primary` \| `supporting`) — or explicitly withhold | Group A |
 | 2 | F03 / F04 evidence-location choice (A leave / C duplicative add / D new problem-evidenced event) | §9.1 |
-| 3 | F08 `currentState` **exact wording** and **confidence** (and the evidence pairing it implies) | §8 |
+| 3 | F08 `currentState` **exact wording** and **confidence** — and, **separately optional**, whether to **restore `blockerConfidence` from the ratified `inferred` to `confirmed`** (needs axis-4 evidence by the transaction's end; axis 4 currently carries none) | §8 |
 | 4 | Whether any **new** evidence events are authorized at all (F03/F04/F14a) | §9.1 |
 | 5 | Confirm F04 problem↔repo links (D5/D6) independently of #2 | §7.1 |
-| 6 | Confirm F12 positions base (1..4 vs 0..3) | §7.3 |
-| 7 | Explicit **target organization** for the future write | all |
+| 6 | Explicit **target organization** for the future write | all |
 
-Approved items: F02 (D3/D4), F04 links (D5/D6), F07/F09 metadata, F12 positions. Blocked: F05, F10
+**Design-accepted, not an approval item:** the F12 **positions base `1..4`** is a **reviewer-accepted
+design convention** (not a mutation permission, and there is **no base-selection gate**). **Approved
+items:** F02 (D3/D4), F04 links (D5/D6), F07/F09 metadata, F12 positions. **Blocked:** F05, F10
 (existing), F03/F04 move, F14a retro-link.
 
 ## 13. Boundaries

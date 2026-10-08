@@ -371,12 +371,12 @@ service or deploy change, no inference, no merge.
 |---|---|---|
 | 1 | **Guard scope separated.** The `confirmed` guard (`assertClaimsAreBacked`) is **axis-scoped** — `state`/`current_state`/`blocker` only (`store.ts:6790–6798`). Problem `stateConfidence` is a **fixture policy**, **not** store-enforced; the design no longer presents problem claims as guard-backed. | WP3 §5.1–§5.2 |
 | 2 | **Concrete 8-event activity manifest.** Exact public `sourceUrl`, `occurredAt`, basis and precision, and axis placement per event: axis 1 = PR #44 + #69, axis 2 = PR #67, axis 3 = PR #1, axis 4 = `docs/AGENDA.md`, axis 5 = commits `95ec34e`/`da7996b`/`5a62749`, axis 6 = none — **8 unique events**. The AGENDA event is **included** (dated `2026-09-24` by file-touch basis), not omitted. | WP3 §3.4, §2.7 |
-| 3 | **Explicit confidence, no defaults.** Every non-empty axis claim sets its confidence explicitly; `currentStateConfidence` **inferred** on axes 1–3/5–6, axis 4 `blocker` **confirmed**, backed same-transaction. | WP3 §2.3, §5.3 |
+| 3 | **Explicit confidence, no defaults.** Every non-empty axis claim sets its confidence explicitly; `currentStateConfidence` **inferred** on axes 1–3/5–6, axis 4 `blocker` **confirmed** (the *packet's proposal*, backed same-transaction). The **retained fixture's** measured `blockerConfidence` is `inferred` — **ratified** (see §K); the two are distinct. | WP3 §2.3, §5.3 |
 | 4 | **Creation transactions.** Two **creation** transactions plus any explicitly-approved problem-evidence later passes — **not** a guaranteed total of two, and **no** duplicated event to satisfy a policy. | WP3 §5.5 |
 | 5 | **All six axis→repository roles unresolved.** The retained `supporting` on axes 1–4 is not an approved role; all six links are withheld pending explicit human approval. | WP3 §9 D-A, §2.3, §8 |
-| 6 | **Repository metadata normalized.** Descriptions are the pinned-README opening paragraph with soft-wraps collapsed and **emphasis markers stripped** (words preserved); branch provenance distinguishes the as-of-pin source branch from the current GitHub `default_branch`. | WP3 §3.3; WP4 §7.2 |
-| 7 | **WP4 axis-4 patch re-evaluates the `confirmed` blocker.** Any axis-4 patch needs same-call axis evidence regardless of the `currentState` confidence; **no** confidence downgrade is proposed. | WP4 §8 |
-| 8 | **WP4 F12 fixed at positions 1..4.** The 0-based alternative and the "approved" claim are removed; the design proposes 1..4, pending acceptance. | WP4 §7.3 |
+| 6 | **Repository metadata normalized.** Descriptions are the pinned-README opening paragraph with soft-wraps collapsed and **emphasis markers stripped** (words preserved); `defaultBranch` is the **actual GitHub `default_branch` as-of-read**, with the **source branch + pinned revision** carried as **distinct** manifest entries — never inferred from reachability, never conflated with the field. | WP3 §3.3; WP4 §7.2 |
+| 7 | **WP4 axis-4 patch re-evaluates the retained `blocker` claim.** Any axis-4 patch is graded by `assertClaimsAreBacked` against the axis's evidence; the *actual retained* `blockerConfidence` is **`inferred`** — **ratified, not a defect** — so an `inferred` blocker needs no evidence. Only a `confirmed` `currentState` **or** an **explicitly separately approved** blocker **restoration** to `confirmed` needs evidence by the transaction's **end** (pre-existing evidence counts). **[superseded 2026-10-08 — the "`confirmed` blocker / no downgrade" framing was wrong; see §K]** | WP4 §8 |
+| 8 | **WP4 F12 fixed at positions 1..4.** The 0-based alternative is withdrawn; `1..4` is a **reviewer-accepted design convention** — not a mutation permission and no base-selection gate. | WP4 §7.3, §12 |
 | 9 | **Recency vs research (F06 side-effect).** A link/axis touch advances recency but adds no activity; the WP5-to-be invariants assert event counts / event times / `lastActivityAt` unchanged for non-activity changes. | WP4 §11; WP3 §10 |
 
 **Counts after the correction:** the concrete manifest is **8 unique events** across **six axes**
@@ -386,3 +386,31 @@ introduced.
 
 **Authorization boundaries (unchanged):** WP3 and WP4 are **design-only and not authorized to execute**;
 WP5 and WP-G are **not authorized**. Each awaits its own explicit owner authorization.
+
+## K. Reviewer narrowing on the WP3/WP4 design — axis-4 confidence, `defaultBranch`, role scope (appended 2026-10-08)
+
+> **Appended, not an amendment — and not a verbatim transcript.** §A–§J above are preserved unchanged
+> (the four narrowed rows in §J rows 3/6/7/8 carry dated notes/tags). This section records the
+> external reviewer's **narrowing corrections** to the two design documents and the documentation
+> corrections applied. **Documentation only:** no fixture write, no product/UI/service change, no deploy,
+> no inference, no new research, no merge, no WP5/WP-G. **The WP1 and WP2 records are untouched.**
+
+**Verdict: the WP3/WP4 design corrections are applied (design-only).** Five narrowings:
+
+| # | Reviewer narrowing | Applied in |
+|---|---|---|
+| 1 | **The retained axis-4 `blockerConfidence = inferred` is RATIFIED — not a defect.** The packet's `confirmed` is the **historical packet value**, never measured as confirmed in the retained fixture. The design must **separate** (a) the actual retained `inferred` (no evidence required, no product guard) from (b) an **optional, proposed-not-approved** *restoration* to `confirmed`. | WP4 §8, §3 (F08 row), §11 inv. 8, §12 item 3; WP3 §2.3, §5.3 |
+| 2 | **Evidence-by-transaction-END.** A `confirmed` `currentState` **or** an explicitly-separately-approved blocker **restoration** needs evidence present by the check's transaction end (`assertClaimsAreBacked`); **pre-existing axis evidence counts** (not necessarily same call). Axis 4 carries **zero** evidence, so a **first** `confirmed` needs an **evidence add** unless an earlier explicitly-authorized pass added one. | WP4 §4.3, §8; WP3 §5.1 |
+| 3 | **No default downgrade/upgrade.** With the restoration **not** chosen, the retained `inferred` stands unchanged — no default change is introduced. | WP4 §8, §11 |
+| 4 | **`defaultBranch` = the actual GitHub `default_branch` as-of-read** (`master`/`master`/`main`). The **source branch the pin is on** and the **pinned revision** are **distinct manifest entries**, never conflated with `defaultBranch`; the historical branch is **not** inferred from reachability. | WP3 §2.1, §3 item 3; WP4 §7.2 |
+| 5 | **Roles scope.** WP3 §2.8: **all six** axis→repository roles are unresolved, and the **2 WP2 candidate pairs (D1/D2)** are distinguished as a *subset*, not a smaller rule. WP4 §12/§7.3: the **F12 `0..3` choice is removed**; **`1..4` is a reviewer-accepted design convention** (not a mutation permission; **no** base-selection gate). | WP3 §2.8; WP4 §7.3, §12 |
+
+**Counts after the narrowing:** the retained axis-4 `blockerConfidence` is **`inferred` (ratified)**;
+**zero** corrections to the retained confidence; **one optional** restoration item (proposed, not
+approved); **six** axis→repository roles unresolved; **F12 base 1..4** design-accepted. The
+`move`/`duplicate`/`reassociate` evidence strategy remains **undecided**, and **no** confidence default
+(downgrade or upgrade) is introduced.
+
+**Authorization boundaries (unchanged):** WP3 and WP4 remain **design-only and not authorized to
+execute**; WP5 and WP-G are **not authorized**. No fixture/domain write, no product/UI/service change,
+no inference, no new research, no merge.
