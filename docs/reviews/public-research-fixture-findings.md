@@ -231,3 +231,63 @@ and **no WP1 rerun** is required.
 - **No WP2 research, and no WP3/WP4, fixtures, product or UI change**, is performed or authorized.
 - Only the two documentary corrections above are in scope for this verdict; every other work package
   awaits its own explicit owner authorization.
+
+## G. WP2 relationship-delta disposition (appended 2026-10-08)
+
+> **Appended, not an amendment.** §A–§F above are preserved unchanged. This section records the
+> **WP2** read-only relationship-delta analysis of the three link findings (**F01, F02, F04**) against
+> the current explicitly-targeted fixture readback and the frozen pins. Full evidence is in
+> [`wp2-public-research-fixture-relationship-delta.md`](wp2-public-research-fixture-relationship-delta.md)
+> and [`wp2-public-research-fixture-relationship-delta-evidence.json`](wp2-public-research-fixture-relationship-delta-evidence.json).
+> **WP2 performs no fixture correction and authorizes no WP3+.** Record ids are referred to by
+> **semantic label**; public repo/pin/commit refs are kept. **Authorization:** the dispatching brief
+> authorized WP2 read-only; §F had recorded WP2 as not yet owner-authorized, and this session treats
+> the brief as that authorization.
+
+**Measurement.** Three read actions over direct HTTP at the explicit target org (`x-org-id`, CSRF
+`x-csrf-token`), all HTTP 200 / `result.ok: true`; local source digests equal the frozen pin.
+Fixture counts: `{topics: 2, axes: 6, repositories: 3, people: 1}`.
+
+**Stored relationships, not projections.** The infra gaps are **absent link rows**, not display
+filters. Link tables: `axis_repositories`, `axis_people`, `topic_people`, `topic_repositories`,
+`problem_repositories`, `activities.repository_id`, `activities.problem_id`. Event→repository
+attribution is **indirect through the axis** (`store.ts:3355-3394`, `:3411-3419`): naming the
+repository on the infra axis attributes that axis's existing commit events **without editing any
+event row**.
+
+**Before-state (measured).** The infra **topic** already links the Dashboard repository (*primary*),
+but both infra axes have `repositories: []` and `people: []`; the consultation axis has **0 events**
+and its two problems have `repositories: []`. The person carries the 4 experimental axes only (infra
+**topic** membership present with `axes: []`). All three infra commit events (`95ec34e`, `da7996b`,
+`5a62749`) are commits of `ajegorovs/nakama-research-dashboard` (git-verified).
+
+**Candidate delta (deduplicated).** Six candidate link-adds, all objects pre-existing — 0 new
+repositories, 0 new people, 0 already-present pairs:
+
+| # | Finding | Link | Source |
+|---|---|---|---|
+| D1 | F01 | axis *Research dashboard and focused retrieval* → repo Dashboard | its 3 commit events are Dashboard commits; topic primary repo |
+| D2 | F01 | axis *Agent consultation and automation evidence* → repo Dashboard | its problems' records live in that repo; commit `5a62749`; topic primary repo |
+| D3 | F02 | axis *Research dashboard and focused retrieval* → person *Aleksandrs Jegorovs* | the axis's commits are authored by `ajegorovs`; person is a topic member |
+| D4 | F02 | axis *Agent consultation and automation evidence* → person *Aleksandrs Jegorovs* | topic membership + recording-commit authorship (weakest candidate) |
+| D5 | F04 | problem *N-7 automation completes…* → repo Dashboard | problem describes the dashboard consultation stage, recorded in that repo |
+| D6 | F04 | problem *Normal assigned `research-coordinator` skill loading…* → repo Dashboard | same stage records / product-skill-loading subject |
+
+**F04 separately.** Repository omission: both consultation problems have `repositories: []`. Sibling
+evidence location: the backing `github_commit 5a62749` is recorded on the **sibling** axis *Research
+dashboard and focused retrieval*, not on the consultation axis. Candidate needed relationship:
+problem → repository Dashboard (via `problems[].repositoryFullNames`). The **move/duplicate/reassociate
+strategy is deliberately not chosen** here.
+
+**Unchanged objects.** Topic→repository links; both topics' person links; the four experimental axes'
+repository/people links; the diagnostics problem→Grablink link; the infra commit events
+(`repository_id` stays `NULL`); all record versions (v1).
+
+**Limitations carried for WP4 mechanics.** Axis links are additive (`expectedVersion` on the existing
+axis); a `nakamaUserId: null` person is reused by `github_login`/`display_name`
+(`store.ts:6362-6386`); problem repo links **replace** the set and require the verbatim `statement`
+(`store.ts:4845-4848`); problem state changes only via `transitions[]`. F14a evidence links remain a
+separate, unused capability. F09b: no first-class repository pin.
+
+**Counts.** `candidate_adds = 6` (2 axis-repo + 2 axis-person + 2 problem-repo); new objects `0`;
+duplicates `0`. **This section performs no write and authorizes no WP3/WP4/WP5/WP-G.**
