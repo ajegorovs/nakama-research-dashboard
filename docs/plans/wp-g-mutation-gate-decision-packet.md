@@ -18,6 +18,17 @@
 > only this planning packet and its appended ledger record were revised. The reviewer's corrections are
 > appended to the ledger as **§P** (request + correction), preserving the earlier history.
 >
+> **Reviewer disposition 2 (docs-only decision-consistency correction, 2026-10-08).** A second review
+> returned **two issues plus format tightening** on the packet's **internal decision consistency**; the
+> corrections are again **documentation only** — **no decision is settled**, no write authorization is
+> granted, and the two scopes stay **unapproved**. They (a) make every **`confirmed` retained choice
+> compatible with the axis-4 evidence rule** (D2 `populate`+`confirmed`, D3 `restore-confirmed`, and D4
+> `leave`), (b) make **SCOPE-BASELINE D1 fixed/fully-required and D2 fixed** rather than open choices,
+> and (c) add a **decision compatibility matrix** with a preflight validation, an authorization block,
+> exact payload templates, stop/post-checks and a **decision-form cross-validation**. **WP0–WP5 remain
+> accepted and are not reopened**; no harness code is changed. The corrections are appended to the
+> ledger as **§Q**, preserving the earlier history.
+>
 > **Governing artifacts (accepted):** WP0 validation (attempt-4, PASS); WP1 verification
 > ([`…-verification.md`](../reviews/wp1-public-research-fixture-verification.md)); WP2 relationship delta
 > ([`…-relationship-delta.md`](../reviews/wp2-public-research-fixture-relationship-delta.md)); the
@@ -41,9 +52,11 @@
   authorization. A filled-in decision form here is a *proposed decision set*, not authorization.
 - **Every write still needs BOTH** (a) the explicit human choices below, **and** (b) explicit owner
   write authorization. Neither is given by this packet.
-- **No decision settlement in this revision.** The reviewer's scope corrections answer **none** of the
-  decision categories D1–D6; SCOPE-BASELINE and SCOPE-RETAINED remain **unapproved**, and the **current
-  packet is the reviewed artifact**.
+- **No decision settlement in this revision.** Neither the reviewer's scope corrections (§P) nor the
+  **decision-consistency corrections (§Q)** answer any of the decision categories D1–D6; SCOPE-BASELINE
+  and SCOPE-RETAINED remain **unapproved**, and the **current packet is the reviewed artifact**. The
+  baseline halves of D1 (all six required) and D2 (**fixed leave-absent**) are **design facts carried
+  from WP3**, not WP-G choices; the retained compatibility matrix (D7) is a **preflight**, not a decision.
 - **No WP3 seed and no WP4 amendment is executed by this packet.** The WP5 manifest is the WP5
   checker's *approved input contract* — permitted testdata, not an executed fixture.
 - **Authorization is per scope, never blanket.** There is **no** single global "owner write
@@ -95,7 +108,11 @@ The packet carries **six decision categories (D1–D6)**, each **scoped** to a p
 apply to **SCOPE-BASELINE**, to **SCOPE-RETAINED**, or to **both with different content per scope**. They
 are **not** one global independent set: a resolved decision answers **only its own scope**. **None is
 approved here**, and the reviewer's corrections settle **none** of them. The recommendation in each is a
-*default the packet proposes*, **not a chosen value**.
+*default the packet proposes*, **not a chosen value**. A seventh element, **D7** (end of this section), is
+**not a decision** but a **compatibility preflight** over D2/D3/D4 — the check that refuses an
+incompatible/unbacked `confirmed`. Two baseline halves are **not choices at all** and are **fixed by the
+accepted WP3 design**: **D1 baseline resolves all six roles** (no withhold, no partial seed) and **D2
+baseline is leave-absent**.
 
 ### D1 (G01) — axis→repository **role**, scoped
 
@@ -121,16 +138,29 @@ field silently stores `supporting` — the very value the reviewer refused. **Th
 | 6 Agent consultation and automation evidence | **absent** | **baseline + retained** (WP2 D2) | **no** |
 
 **Options (per scope).**
-- **SCOPE-BASELINE:** a per-axis explicit `primary`/`supporting` for **each of the six** (Option A); a
-  uniform value (Option B — **not recommended**: uniform `supporting` launders the undecided semantic
-  into the refused default; uniform `primary` demotes an existing primary); or **withhold a link**
-  (Option C, only where the axis genuinely has no source-backed repository). The **six roles are
-  answered**, never defaulted.
-- **SCOPE-RETAINED:** `primary`/`supporting` for **axes 5 and 6 only** — axes 1–4 are **not re-decided**
-  and **not rewritten** (no new role changes on the existing four links).
+- **SCOPE-BASELINE:** a per-axis explicit `primary`/`supporting` for **each of the six** (Option A —
+  the **only** supported option); a uniform value (Option B — **not recommended**: uniform `supporting`
+  launders the undecided semantic into the refused default; uniform `primary` demotes an existing
+  primary). **`primary | supporting` ONLY.** The **six roles are all required**, never defaulted, and
+  **never withheld** in the baseline: the seed writes **all six** links with a decided role. There is
+  **no `withhold` option and no partial seed** — a **blank/unresolved** role for any axis **blocks this
+  scope's authorization** (the form cannot be authorized while any of the six is blank), and writing
+  **five of six** links is **not permitted** (the baseline is all-six or nothing). (A design that would
+  withhold a baseline link is a **WP3/WP5 design change**, not a WP-G choice — see the note below.)
+- **SCOPE-RETAINED:** `primary`/`supporting` for **the missing axes 5 and 6** — axes 1–4 are **not
+  re-decided** and **not rewritten** (no new role changes on the existing four links). Within the
+  retained scope a role **may be withheld** (leaving the axes 5/6 link a **known residual**, recorded,
+  not silently dropped) — this is the **existing accepted retained scope preserved**, and the packet
+  makes **no unrequested decision** beyond it.
 
-**Recommendation (not chosen):** per-axis explicit values; for an axis with no source repo, **withhold
-that axis** rather than default it. **Never** default any role to `supporting`.
+**Recommendation (not chosen):** per-axis explicit values; baseline **all six** `primary`/`supporting`
+(**no withhold, no default**); retained axes 5/6 by explicit value or an **explicit withhold** stated as
+a residual. **Never** default any role to `supporting`.
+
+**Not a WP-G choice (format).** The baseline's all-six requirement is **the accepted WP3 design**
+(WP3 §2.3/§8/§9 D-A: `axis_repositories` has no "undecided" value and omitting it silently stores
+`supporting`). **WP-G does not reopen WP3**: any change to *whether* a baseline link is written is a
+**small WP3/WP5 design/check delta → reviewer → re-enter WP-G**, never a new baseline option here.
 
 **Blocked until:** D1 answered. WP5 gate **G01** stays BLOCKED.
 
@@ -140,20 +170,24 @@ that axis** rather than default it. **Never** default any role to `supporting`.
 support a conservative factual state, so **evidence sufficiency** and **editorial choice** are separate.
 **The decision is scoped, and the two scopes must not silently share an answer:**
 
-- **SCOPE-BASELINE — default blank (an accepted WP3 deviation).** The baseline seed's accepted design
-  (WP3) **leaves axis-4 `currentState` absent**; this is an **accepted deviation** from the original
-  exercise packet. **Populating it in the baseline is a separate, explicitly-approved design choice** —
-  it is not implied by the retained scope's answer, and if it is populated the baseline's **counts and
-  claims expectations must be updated accordingly**. **Do not silently reuse the retained choice** in the
-  seed.
+- **SCOPE-BASELINE — FIXED leave-absent (not a WP-G choice).** The baseline seed's accepted design
+  (WP3 §2.3/§9 D-B) **leaves axis-4 `currentState` absent**; this is an **accepted WP3 deviation** from
+  the original exercise packet. **WP-G does not offer a baseline `populate` option**, and **no new
+  baseline decision is made here.** Making the baseline populate `currentState` — or populating it with
+  any wording/confidence — requires a **small WP3/WP5 design/check delta (counts and claims expectations
+  updated) → reviewer → re-enter WP-G**, and **then** it is a separate, explicitly-approved choice. It is
+  **not** implied by the retained scope's answer and the retained choice **must not be silently reused**
+  in the seed. (Baseline `currentStateConfidence` is therefore **inferred where a state is present**
+  (axes 1,2,3,5,6) and **null on axis 4** — §4.4.)
 - **SCOPE-RETAINED — its own wording + confidence.** The retained amendment carries **its own** approved
-  sentence and an explicit `currentStateConfidence`, independent of the baseline's default-blank.
+  sentence and an explicit `currentStateConfidence`, independent of the baseline's fixed blank.
 
 **Options (per scope).**
-- **A — leave absent** (baseline default; the retained default is also to leave as-is). No wording risk;
-  axis 4 keeps only its blocker/problem/plan.
-- **B — populate** with an approved sentence and an explicit confidence. The **accepted-design
-  candidate** (derived strictly from the pinned AGENDA facts; **not approved**) is:
+- **SCOPE-BASELINE:** **none** — the field is **fixed leave-absent**. (`populate` is **withdrawn** as a
+  WP-G option; it is a WP3/WP5 design change as above.)
+- **SCOPE-RETAINED:** **A — leave as-is** (axis 4 keeps only its blocker/problem/plan) or **B — populate**
+  with an approved sentence and an explicit confidence. The **accepted-design candidate** (derived
+  strictly from the pinned AGENDA facts; **not approved**) is:
 
   > *Candidate wording (NOT approved):* "High-rate optical acquisition has a hardware-validated baseline
   > (≈351 FPS preview; a 200-frame capture wrote `Image_00000.bmp`–`Image_00199.bmp`; a 2000-frame
@@ -161,16 +195,18 @@ support a conservative factual state, so **evidence sufficiency** and **editoria
   > 300–350 FPS operation with dropped-frame measurement remains outstanding; `core/CaptureStats` is
   > implemented and covered by 13 tests but no production code calls it."
 
-  **Confidence condition:** an `inferred` `currentState` needs **no** evidence; **`confirmed` needs the
-  axis to carry evidence by the transaction's end** (`assertClaimsAreBacked`), and axis 4 currently
-  carries **zero** evidence. So the safe confidence is **`inferred`** unless an evidence add is separately
-  approved. (In SCOPE-BASELINE a `confirmed` `currentState` would need the same-transaction activity
-  #5; in SCOPE-RETAINED it needs pre-existing axis evidence.)
+  **Confidence condition (retained):** an `inferred` `currentState` needs **no** evidence; **`confirmed`
+  needs the axis to carry evidence by the transaction's end** (`assertClaimsAreBacked`), and the live
+  historical retained fixture's axis 4 currently carries **zero** evidence. So the safe confidence is
+  **`inferred`** unless an evidence add is separately authorized. (In SCOPE-RETAINED a `confirmed`
+  `currentState` needs pre-existing axis evidence — see the compatibility matrix below; in SCOPE-BASELINE
+  the field is fixed absent, and a `confirmed` value would require the same-transaction activity #5.)
 
-**Recommendation (not chosen):** baseline **A — leave absent (the accepted deviation)**; retained
-**A** unless a human approves exact wording. **Never reuse one scope's answer for the other.**
+**Recommendation (not chosen):** baseline **fixed leave-absent** (no option); retained **A — leave
+as-is** unless a human approves exact wording. **Never reuse one scope's answer for the other.**
 
-**Blocked until:** D2 answered **per scope**. WP5 gate **G02** stays BLOCKED.
+**Blocked until:** D2 answered **in the retained scope** (the baseline half is **fixed**, not open).
+WP5 gate **G02** stays BLOCKED.
 
 ### D3 (G03) — axis-4 `blocker` confidence — **SCOPE-RETAINED only**
 
@@ -191,11 +227,15 @@ placed on axis 4). It is **not** an open choice and must **not** be re-derived f
   **first** `confirmed` needs an **evidence add** (e.g. the AGENDA-source event in the same transaction,
   or an earlier explicitly-authorized pass).
 
-**Evidence condition (exact):** `confirmed` ⟹ axis-4 evidence(`branch`|`PR`|`activity`|`annotation`)
-`> 0` at the check. `inferred` ⟹ no condition.
+**Evidence condition (exact):** `confirmed` ⟹ **qualifying axis-4 evidence**
+(`branch` | `PR` | `activity` | `annotation`, `axisEvidence(axis).length > 0`) at the check — i.e.
+**present by the transaction's end**; **pre-existing axis evidence counts**. `inferred` ⟹ no condition.
+**The live historical retained fixture's axis 4 carries zero such evidence**, so **B** needs a
+**separately authorized evidence add** and is otherwise **blocked**. This is one row of the compatibility
+matrix below; it must hold together with **D4** (which supplies or withholds axis-4 evidence).
 
 **Recommendation (not chosen):** retained **A — keep `inferred`.** Restoring `confirmed` is only
-meaningful if an authorized evidence add is also chosen.
+meaningful if an authorized evidence add (amenable to the D4 choice) is also chosen.
 
 **Blocked until:** D3 answered. WP5 gate **G03** stays BLOCKED.
 
@@ -226,7 +266,7 @@ never optional is the **presence of the mandatory relationship rows** (D1/D6) �
 | **Edit an existing event** (`occurredAt` / `sourceUrl`) | **UNSUPPORTED** | same INSERT-only boundary |
 | **Duplicate / re-record** a distinct event | store-supported (INSERT) but **discouraged + non-idempotent** | no uniqueness constraint; a retry inserts again; only as a *distinct legitimate attachment*, readback-guarded |
 | **F14a retro-link** an **existing** event to a problem | **UNSUPPORTED** | `activities[].problemId` applies only to a **new** insert |
-| **F14a new** event → existing problem | **supported** | `reconcile_topic.activities[].problemId` (existing problem only) |
+| **F14a new** event → existing problem | **supported** | `reconcile_topic.activities[].problemId` (existing problem only). To count as **axis-4 evidence** the new event must **also** carry axis 4 (`axisId`/`axisTitle`); a problem attachment **alone** is not axis evidence |
 
 **No direct-DB workaround, and no duplicate fix via the database.** The product's own write path is the
 only surface; the packet asserts **no** payload for an unsupported path.
@@ -240,7 +280,29 @@ problem-evidence pass (F14a) is a **separate operation under a new design** — 
 (blocked) · **C — duplicate** (only if a human judges it a distinct legitimate attachment; readback-guarded) ·
 **D — add new problem-evidenced events** (supported, via `activities[].problemId`).
 
-**Recommendation (not chosen):** retained **A — leave as-is**. **Not approved.**
+**Compatibility of D4 with a `confirmed` axis-4 claim (D2/D3).** If **D2 = populate + `confirmed`** or
+**D3 = restore-confirmed**, the axis must carry **qualifying axis-4 evidence by the transaction's end**.
+D4 then decides whether that evidence is supplied:
+
+- **D4 = leave (A)** adds **no** evidence. It is therefore **incompatible** with a `confirmed` D2/D3
+  **unless** a **separately authorized pre-existing-evidence operation has already completed AND a fresh
+  readback proves qualifying axis-4 evidence** (`branch`|`PR`|`activity`|`annotation`) **already exists**
+  at the check. Absent that proof — and the live historical retained fixture today carries **zero**
+  axis-4 evidence — **D4 = leave forces `inferred`**: D2 `populate` is allowed only at
+  `currentStateConfidence: inferred` and D3 is **keep-`inferred`**. (No fresh read is performed now; the
+  current zero-evidence state is the **historical measured** value, §D3.)
+- **D4 = duplicate (C) or new-problem-event (D)** **may** supply evidence — but only if the new event is
+  **axis-4-linked** (`axisId`/`axisTitle` = axis 4), **not** merely attached to a problem
+  (`activities[].problemId`). A problem attachment alone is **not** axis-4 evidence and does **not**
+  satisfy the `confirmed` condition. The event's approved payload **must name an explicit axis** and an
+  **existing problem id** (when the problem path is used); no path is invented.
+
+**No invented paths.** Only the supported paths above exist (INSERT-only `activities`; no move/re-point/
+retro-link). The packet asserts **no** payload for an unsupported path.
+
+**Recommendation (not chosen):** retained **A — leave as-is**. **Not approved.** If a `confirmed` claim
+is desired, D4 must be **C/D** (or a separately authorized pre-existing-evidence operation must be
+proved by fresh readback) — the decision form cross-validation below enforces this.
 
 **Blocked until:** D4 answered. WP5 gate **G04** stays BLOCKED; C15/C17 only exercise the synthetic
 `leave` / named-ref strategies.
@@ -287,6 +349,81 @@ set**). **Source-backed, non-duplicating, and separable** from the evidence-loca
 proposal, not a mutation approval.** In the baseline it is a required metric; in the retained scope it
 rides the chosen target.
 
+### D7 — decision **compatibility matrix** (added 2026-10-08; validation preflight, authorization block)
+
+**Purpose.** The six decisions are **not independent**: a `confirmed` axis-4 claim requires qualifying
+axis-4 evidence, and only the **D4** choice can supply it. This matrix is the **preflight a scope's
+authorization must pass**; it **forces no upgrade, downgrade or default mutation** — an incompatible
+combination is **BLOCKED**, never silently repaired. **No fresh read is performed now** (the packet is
+planning-only); the current `zero axis-4 evidence` is the **historical measured** value (§3 D3), not a
+live measurement.
+
+**Compatibility matrix (SCOPE-RETAINED; the baseline halves of D2/D3 are fixed, not choices).**
+
+| D2 `currentState` | D3 `blocker` | D4 evidence strategy | Compatible? | Required condition |
+|---|---|---|---|---|
+| leave-as-is | keep-`inferred` | leave | **yes** | none — all `inferred`, no evidence needed |
+| populate + `inferred` | keep-`inferred` | leave | **yes** | none |
+| populate + `inferred` | keep-`inferred` | duplicate / new-problem-event | **yes** | evidence add readback-guarded; axis-4-linked |
+| populate + `confirmed` | keep-`inferred` | leave | **NO** | needs qualifying axis-4 evidence by tx end — see exception |
+| leave-as-is | restore-`confirmed` | leave | **NO** | needs qualifying axis-4 evidence by tx end — see exception |
+| populate + `confirmed` | restore-`confirmed` | leave | **NO** | needs qualifying axis-4 evidence by tx end — see exception |
+| any (`confirmed`) | any (`confirmed`) | duplicate / new-problem-event | **yes** | new event **must** be axis-4-linked (`axisId`=axis 4); problem-only attachment does **not** qualify |
+
+**Prior-verified-evidence exception (the only way `confirmed` + leave is allowed).** A `confirmed` claim
+with **D4 = leave** is permitted **only if** a **separately authorized pre-existing-evidence operation
+has already completed** AND a **fresh readback proves qualifying axis-4 evidence exists**
+(`branch`|`PR`|`activity`|`annotation`). **A future measurement is never asserted as current**: the
+packet records the **historical** zero-evidence state, and only the later authorized fresh readback may
+establish the exception. Absent that, `confirmed` with `leave` is **BLOCKED**.
+
+**Authorization block (exact conditions).** A scope's write authorization (§10) may be **granted only
+when** the resolved decisions are **internally compatible**:
+
+1. **SCOPE-BASELINE:** **all six** axis→repo roles resolved `primary|supporting` (**no blank, no
+   withhold, no partial seed**); D2 **fixed leave-absent**; D3 **fixed `confirmed`, evidence-backed
+   same-transaction** (activity #5); D6 **three required links confirmed** (no withhold). Any blank →
+   authorization **BLOCKED**.
+2. **SCOPE-RETAINED:** the matrix row above is **`yes`**, **or** the prior-verified-evidence exception is
+   **evidenced by a fresh readback**; a `confirmed` claim whose matrix row is `NO` and whose exception is
+   unproven → authorization **BLOCKED**. D1 axes 5/6 must each be an explicit value **or** an **explicit
+   withhold** stated as a residual; an **ambiguous blank** → **BLOCKED** (no default).
+3. **Both scopes:** D5 target resolved (fresh-verified-empty for baseline; the retained org for retained);
+   the scope's **own** owner write authorization bound to the resolved payload/version — **no blanket
+   field**.
+
+**Exact payload templates (evidence path — retained D4 = C/D; gated, not executed).**
+
+```
+// D4 = new-problem-event (supported) — the new event is axis-4-linked AND attached to an EXISTING problem.
+reconcileTopic({
+  topicId: <infra>,
+  activities: [ {
+    axisId:   <axis4>,                 // REQUIRED: makes it qualifying axis-4 evidence
+    problemId:<existing problem id>,   // REQUIRED where the problem path is used; must PRE-EXIST
+    summary:  <verbatim source text>,
+    sourceType: <enum>, sourceRef: <public ref>, sourceUrl: <public URL>, occurredAt: <own source date>
+  } ]
+})
+// D4 = duplicate (distinct legitimate attachment) — same shape, axis-4-linked, readback-guarded against a
+// duplicate (activities is INSERT-only and NOT idempotent: a retry inserts a second row).
+// No payload is asserted for an UNSUPPORTED path (move / retro-link / event edit).
+```
+
+```
+// D2 = populate (retained) or D3 = restore-confirmed — after the evidence above is present by tx end.
+reconcileTopic({ topicId:<experimental>, axes:[ { id:<ax4>, expectedVersion:<fresh>,
+  currentState:<approved text>, currentStateConfidence:<c> } ] })   // F08; c = inferred unless classified
+reconcileTopic({ topicId:<infra>, axes:[ { id:<ax4>, expectedVersion:<fresh>,
+  blockerConfidence:"confirmed" } ] })                              // D3 restore only; evidence must exist
+```
+
+**Stop / post-checks.** Before the call: assert the matrix row's condition (evidence present by tx end)
+and dedup-readback absence for any new event. On an incompatible/unproven `confirmed`: **STOP**, do not
+downgrade silently and do not write — report the BLOCKED combination. After the call: verify the axis
+carries qualifying evidence and that no **un**approved event/duplicate was inserted (event count,
+`lastActivityAt`, each `occurredAt` unchanged except the approved add).
+
 ---
 
 ## 4. SCOPE-BASELINE — the accepted manifest, discussed
@@ -309,7 +446,7 @@ transcription). **Every value is a *proposal being exercised*, not an executed f
 | topic→person links | 2 | both topics → the person |
 | axis→person links | 6 | axes 1–4 (packet) + axes 5–6 (WP2 D3/D4) |
 | problem→repo links | 3 | diagnostics→Grablink; 2 consultation→Dashboard — **required in the baseline (D6); cannot be withheld** |
-| **axis→repo links written** | **6** | gated on **D1**: the baseline resolves **all six roles** explicitly (never defaulted to `supporting`) |
+| **axis→repo links written** | **6** | gated on **D1**: the baseline resolves **all six roles** explicitly (`primary`/`supporting` only — **never defaulted to `supporting`, never withheld, no partial 5-link seed**; a blank role blocks authorization) |
 
 ### 4.2 The 8 initial events — placement **2/1/1/1/3/0** and their own source dates
 
@@ -381,7 +518,7 @@ reconcileTopic({
     { fullName: "ajegorovs/udv-echo-process", url: …, description: …, defaultBranch: "master", relationship: "primary" },
     { fullName: "ajegorovs/Grablink-Full-sequence-acquisition", url: …, description: …, defaultBranch: "master", relationship: "supporting" },
   ],
-  axes: [ /* axes 1–4: title, kind, state, stateConfidence:"inferred", currentState*, currentStateConfidence:"inferred", people:[…], repositories:[ { fullName, relationship:<D1> } ] */ ],
+  axes: [ /* axes 1–4: title, kind, state, stateConfidence:"inferred", currentState (present, inferred, on axes 1–3; ABSENT on axis 4 — baseline D2 FIXED leave-absent), currentStateConfidence:"inferred", people:[…], repositories:[ { fullName, relationship:<D1, all six required> } ] */ ],
   activities: [ /* #1 #2 #3 #4 #5 per §4.2; axisTitle handles */ ],
   problems: [ { statement: …, axisTitle: "Grablink diagnostics…", state: "open", stateConfidence: "confirmed",
                repositoryFullNames: ["ajegorovs/Grablink-Full-sequence-acquisition"] } ],
@@ -517,12 +654,13 @@ packet's committed evidence is a **proposal's** projection, not a live measureme
 
 | Decision | Scope | Packet's recommendation | Status |
 |---|---|---|---|
-| D1 axis→repo roles | **BASELINE: all six** · **RETAINED: axes 5/6 only (1–4 untouched)** | per-axis explicit value; never default | **not approved** |
-| D2 F08 `currentState` | **BASELINE: default blank (accepted WP3 deviation)** · **RETAINED: own wording/confidence** | leave absent unless exact wording approved; if populated, `inferred` | **not approved** |
-| D3 axis-4 blocker | **RETAINED only** (baseline `confirmed` is evidence-backed, fixed) | keep the ratified `inferred` | **not approved** |
-| D4 evidence strategy | **RETAINED only** (baseline 8 events fixed) | leave as-is (accept the F03/F14a residual) | **not approved** |
+| D1 axis→repo roles | **BASELINE: all six required (`primary`\|`supporting` only; no withhold/partial)** · **RETAINED: axes 5/6 only (1–4 untouched; explicit value or explicit withhold-residual)** | per-axis explicit value; never default; a blank blocks authorization | **not approved** |
+| D2 F08 `currentState` | **BASELINE: FIXED leave-absent (not a choice)** · **RETAINED: own wording/confidence** | baseline: none (change → WP3/WP5 delta); retained: leave absent unless exact wording approved; if populated, `inferred` unless evidence exists | **not approved** |
+| D3 axis-4 blocker | **RETAINED only** (baseline `confirmed` is evidence-backed, fixed) | keep the ratified `inferred`; a `confirmed` restore needs axis-4 evidence by tx end (matrix) | **not approved** |
+| D4 evidence strategy | **RETAINED only** (baseline 8 events fixed) | leave as-is (accept the F03/F14a residual) — but `leave` cannot back a `confirmed` D2/D3 unless pre-existing evidence is proved; else C/D (axis-4-linked) | **not approved** |
 | D5 target | one **explicit** target per scope (baseline: fresh, verified-empty; never the retained org) | new org for SCOPE-BASELINE; retained org for SCOPE-RETAINED | **not approved** |
 | D6 problem→repo links | **BASELINE: required (cannot withhold)** · **RETAINED: confirm/withhold** | confirm in both (baseline required; retained else F04 residual) | **not approved** |
+| **D7** (compatibility matrix) | **not a choice — a preflight** over D2/D3/D4 | an incompatible `confirmed` combination is **BLOCKED** (no forced upgrade/downgrade/default) | **enforced, not decided** |
 
 **All six decision categories are recommendations only.** The packet chooses none; the owner decides,
 **per scope**. Authorization is **never blanket** — each scope carries its own (§10).
@@ -534,7 +672,11 @@ packet's committed evidence is a **proposal's** projection, not a live measureme
 Two forms, one per program. Each is **independent**: answering one scope does **not** answer the other.
 **Each carries its own exact target and its own write authorization, bound to that scope's resolved
 decisions, payload and version** — there is **no blanket authorization field**. Answer any subset; a blank
-line **withholds** (no default is applied). The **exact org id/name** for each chosen target is recorded
+line **withholds** (no default is applied) — **except** where a blank is **not permitted** and instead
+**blocks** authorization: the baseline D1 roles are **all required** (a blank there blocks the scope), and
+the retained D1 axes 5/6 must be an explicit value **or** an explicit withhold (an ambiguous blank blocks).
+The **D7 compatibility matrix cross-validation** (below the forms) is applied before any authorization is
+granted. The **exact org id/name** for each chosen target is recorded
 only in the local (git-ignored) **operational handoff**; the public packet keeps **sanitized labels**
 (no heuristic labels, no actual secret ids).
 
@@ -543,38 +685,51 @@ WP-G decision form — SCOPE-BASELINE (fresh seed)
 Target (D5a; exact id/name in the private handoff):  [ new-org (verified-empty) ]    ______
   (a nonempty target STOPS; the retained org is NOT permitted here)
 
-D1 axis→repo role — ALL SIX axes (primary|supporting|withhold only if source-less):
+D1 axis→repo role — ALL SIX axes, REQUIRED (primary|supporting ONLY — never withhold, no partial seed;
+   a blank on any axis BLOCKS this scope's authorization):
   ax1 UDV acquisition automation ....... ______   ax2 UDV sparse-analysis validation .. ______
   ax3 High-rate optical acquisition .... ______   ax4 Grablink diagnostics ........... ______
   ax5 Research dashboard (D1) .......... ______   ax6 Agent consultation (D2) ......... ______
 
-D2 F08 axis-4 currentState:  [ leave-absent (default) | populate ]                   ______
-   if populate (a separate approved design choice): confidence [inferred|confirmed]; wording: ______
+D2 F08 axis-4 currentState:  [ FIXED leave-absent — not a choice ]                   ______
+   (a baseline populate is a WP3/WP5 design/check delta → reviewer → re-enter WP-G, NOT a form option)
 
 D6 F04 problem→repo links (3, required — cannot withhold):  [ confirm ]              ______
 
-SCOPE-BASELINE write authorization (bound to the resolved D1/D2/D6 above):           ______
+SCOPE-BASELINE write authorization (bound to the resolved D1/D6 above; D2 fixed):    ______
    *** not granted | granted *** — grants BASELINE only; WP-G grants nothing by itself.
+   (cannot be granted while any of the six D1 roles is blank)
 
 WP-G decision form — SCOPE-RETAINED (amendment)
 Target (D5b; exact id/name in the private handoff):  [ retained-org ]                ______
 
 D1 axis→repo role — ONLY the missing axes 5/6 (axes 1–4 untouched):
   ax5 Research dashboard (D1) .......... ______   ax6 Agent consultation (D2) ......... ______
+   (each: primary | supporting | withhold [leaves the axes 5/6 link a stated residual]; a blank is ambiguous)
 
 D2 F08 axis-4 currentState:  [ leave-as-is | populate ]                              ______
    if populate: confidence [inferred|confirmed]; wording: ______________________________
+   (a `confirmed` here requires qualifying axis-4 evidence by tx end — see D4/matrix)
 
 D3 axis-4 blocker confidence: [ keep-inferred (ratified) | restore-confirmed ]       ______
-   (restore-confirmed requires an approved axis-4 evidence add: yes/no)             ______
+   (restore-confirmed requires qualifying axis-4 evidence by tx end — see D4/matrix) ______
 
 D4 evidence strategy:  [ leave (accept F03/F14a residual) | duplicate | new-problem-event ]  ______
-   if duplicate/new: name the exact source refs allowed: ______________________________
+   if duplicate/new: name the exact source refs allowed (the new event MUST be axis-4-linked): ______
+   (leave is incompatible with a `confirmed` D2/D3 unless pre-existing axis-4 evidence is proved)
 
 D6 F04 problem→repo links (D5/D6):  [ confirm | withhold (leaves F04 a known residual) ]  ______
 
 SCOPE-RETAINED write authorization (bound to the resolved D1–D4/D6 above):           ______
    *** not granted | granted *** — grants RETAINED only; WP-G grants nothing by itself.
+   (cannot be granted while a `confirmed` D2/D3 is unbacked by axis-4 evidence, or D1 is an ambiguous blank)
+
+Cross-validation (D7 matrix — applied before either authorization is granted):
+  - D2/D3 `confirmed` is allowed ONLY with D4 = duplicate/new-problem-event that is axis-4-linked,
+    OR a separately authorized pre-existing-evidence operation already proved by fresh readback.
+  - a `confirmed` row whose matrix verdict is NO and whose exception is unproven → authorization BLOCKED.
+  - baseline: any blank D1 role, or a withhold, or a partial (5-of-6) seed → authorization BLOCKED.
+  - no choice silently forces an upgrade/downgrade or applies a `supporting`/`confirmed` default.
 ```
 
 ---
@@ -584,14 +739,21 @@ SCOPE-RETAINED write authorization (bound to the resolved D1–D4/D6 above):    
 - **Planning/review only.** No fixture/domain write, no `reconcile_topic`/`record_activity`, no
   inference, no service/deploy/restart, no product/UI edit, no direct-DB write, no merge, no network
   call.
-- **No decision settlement; scopes unapproved.** The reviewer's corrections settle **none** of D1–D6;
-  SCOPE-BASELINE and SCOPE-RETAINED remain **unapproved**, and **WP0–WP5 remain accepted** (ledger §O).
+- **No decision settlement; scopes unapproved.** The reviewer's corrections (§P scope, §Q
+  decision-consistency) settle **none** of D1–D6; SCOPE-BASELINE and SCOPE-RETAINED remain **unapproved**,
+  and **WP0–WP5 remain accepted** (ledger §O), **not reopened**.
 - **No blanket authorization.** Every write needs the explicit human choices **and** that **scope's**
   explicit owner write authorization; the decision categories (D1–D6) stay BLOCKED until answered. There
   is **no** single global authorization field.
+- **No choice forces a default mutation.** A blank, an unresolved combination or an unbacked `confirmed`
+  is **BLOCKED** — it never silently applies the `supporting` link default, the `confirmed` confidence
+  default, an upgrade/downgrade, or a partial seed. The **D7 compatibility matrix** (validation preflight
+  + authorization block + decision-form cross-validation) is the check that enforces this.
 - **Scope integrity.** SCOPE-BASELINE targets a **fresh, verified-empty** org and **never** the retained
-  org; **no reset/clear** is permitted, and a **nonempty** target **STOPS**. SCOPE-RETAINED touches
-  **only** the missing axes 5/6 role links and leaves axes 1–4 **untouched**.
+  org; **no reset/clear** is permitted, and a **nonempty** target **STOPS**. Its **D1 resolves all six**
+  roles (`primary`/`supporting`) — **never withheld, never a partial 5-of-6 seed** — and its **D2 is
+  fixed leave-absent**. SCOPE-RETAINED touches **only** the missing axes 5/6 role links (each an explicit
+  value **or** an explicit withhold-residual) and leaves axes 1–4 **untouched**.
 - **Partial commits stop the session.** A partial commit (baseline T1-committed/T2-failed, or a retained
   multi-call partial) **STOPS** the session, is **logged exactly** and **verified by fresh readback** —
   never blind-re-run, and there is **no implicit rollback**.

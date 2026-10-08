@@ -487,7 +487,7 @@ counts** with the actual, re-measured results below.
 | 4 | **Gate semantics conflated decision and state.** | Gate checks now **separate decision resolution from state verification** and name the view each verifies against: **baseline** (seed) for the count/metadata checks, the **amendment view** for G01/G02, and the **retained view** for G03. **G03** distinguishes the ratified retained `inferred` (requires no evidence) from the **optional** `confirmed` restoration, which is graded on the **actual evidence interaction** (a `confirmed` claim with 0 evidence is **red**) — never a “baseline == approved value” false pass. |
 | 5 | **G05 presented a target as authorization.** | G05 now accepts only an **explicit proposed-target decision**; it records **no owner write authorization** and binds **no live target**, and a resolution claiming `ownerAuthorization`/`liveBinding` is **red** rather than allowed to cycle a write path. No network or write execution exists (C21). |
 | 6 | **Fully-PASS path not reachable.** | `run.mjs` gains a **test-only** `--test-only-decisions` option / `--decisions <file>` data gate (payload **must** carry `"testOnly": true`; an unlabelled payload is **refused**, exit 3). With it the runner reaches aggregate **PASS (exit 0)**; **by default it stays BLOCKED**. Tests cover **skip-restoration** and **confirmed** (with evidence → PASS; without evidence → **red**), and distinguish a test-only parameter from an approved real target. |
-| 7 | **C17 identity was weak.** | C17 now checks **source-event identity independent of the axis** (`sourceType|sourceRef`, with url as context): a **cross-axis duplicate — e.g. an AGENDA event on two axes — is RED** unless an explicit G04 strategy **names that exact ref**; a **blanket allow is rejected as a loophole**. Added the duplicate **negative control** (red), the blanket-allow control (red) and the named-ref control (PASS). |
+| 7 | **C17 identity was weak.** | C17 now checks **source-event identity independent of the axis** (`sourceType\|sourceRef`, with url as context): a **cross-axis duplicate — e.g. an AGENDA event on two axes — is RED** unless an explicit G04 strategy **names that exact ref**; a **blanket allow is rejected as a loophole**. Added the duplicate **negative control** (red), the blanket-allow control (red) and the named-ref control (PASS). |
 | + | **C16 version guards.** | C16 now asserts a stale top-level **and** a stale `axes[].expectedVersion` both refuse with `conflict`, that the store’s **problem/plan** writers also conflict, and that the **reconcile tool input exposes no `expectedVersion` for `problems[]`/`plans[]`** (an asymmetry recorded, not hidden). |
 | + | **Temp cleanup.** | A cleanup safety test tracks **every** isolated handle (including each `makeStore()` handle), disposes them in `finally`, and asserts **no `wp5-` temp directory remains**. |
 
@@ -676,3 +676,77 @@ planning/review only, with no execution authorization**; both scopes are **unapp
 needs the explicit human choices **and** that scope's explicit owner write authorization. **No** fixture/
 domain write, no `reconcile_topic`/`record_activity`, no inference, no service/deploy/restart, no
 product/UI change, no WP3 seed, no WP4 amendment, and no merge is performed or authorized by this entry.
+
+## Q. WP-G packet decision-consistency — reviewer two issues + format tightening, corrections applied (appended 2026-10-08)
+
+> **Appended, not an amendment.** §A–§P above are preserved unchanged. This section records a second
+> external reviewer round — **two issues plus format tightening** on the **internal decision consistency**
+> of the WP-G decision/review packet
+> ([`wp-g-mutation-gate-decision-packet.md`](../plans/wp-g-mutation-gate-decision-packet.md)) — and the
+> documentation corrections applied. It is **not a verbatim reviewer transcript**: the **verdict line is
+> exact** and the corrections are **summarized**, never quoted as the reviewer's own words. **Docs only:**
+> no decision is settled, no write authorization is granted, the two scopes stay **unapproved**, and
+> **WP0–WP5 remain accepted** (§O) and are **not reopened**. No fixture/domain write, no
+> `reconcile_topic`/`record_activity`, no inference, no new research, no service/deploy/restart, no
+> product/UI change, **no harness change**, **no WP3 seed, no WP4 amendment, no merge**.
+
+**Verdict: REQUEST CHANGES (WP-G packet, decision consistency; docs-only).** The retained-scope
+confidence choices were **not compatible** with the axis-4 evidence rule, and two SCOPE-BASELINE items
+were presented as open choices though the accepted WP3 design **fixes** them. Corrections applied to the
+packet and cross-referenced here; **no decision category is settled** and the **current, corrected packet
+is the reviewed artifact**.
+
+**Issue 1 — retained compatibility (D2/D3 vs D4) with axis-4 evidence.**
+A **`confirmed`** axis-4 claim — whether **D2 `populate` + `confirmed`** or **D3 `restore-confirmed`** —
+requires **qualifying axis-4 evidence** (`branch`|`PR`|`activity`|`annotation`, `axisEvidence>0`) present
+**by the transaction's end**; **pre-existing axis evidence counts**, but the **live historical retained
+fixture's axis 4 carries zero**. So: **D4 = leave** adds no evidence and is **incompatible** with a
+`confirmed` D2/D3 **unless** a **separately authorized pre-existing-evidence operation has already
+completed AND a fresh readback proves qualifying axis-4 evidence** (the **prior-verified-evidence
+exception**); **a future measurement is never asserted as current**. A **D4 = duplicate / new-problem-event**
+supplies evidence **only** if the new event is **axis-4-linked** (`axisId`=axis 4), **not** merely attached
+to a problem (`problemId`); the approved payload must name an **explicit axis** and an **existing problem
+id**, and **no unsupported path is invented**.
+
+**Issue 2 — SCOPE-BASELINE D1 and D2 are fixed, not open choices.**
+The baseline **D1** is **`primary | supporting` ONLY, all six required** — **never withheld, never a
+partial 5-of-6 seed**; a **blank/unresolved** role **blocks** the scope's authorization. The baseline
+**D2** (F08 axis-4 `currentState`) is **FIXED leave-absent** (the accepted WP3 deviation); the packet's
+baseline **`populate` option is withdrawn** and **no new baseline decision is made in WP-G**. A future
+change to either is a **small WP3/WP5 design/check delta → reviewer → re-enter WP-G**, **not** a new
+option here (WP3 is **not reopened** in WP-G).
+
+**Format tightening — compatibility matrix, preflight, authorization block, cross-validation.**
+The packet adds **D7 — a decision compatibility matrix** (a *preflight*, **not** a decision) with:
+a **validation preflight**; an **authorization block** with **exact conditions** per scope; **exact
+payload templates** for the evidence path and the `currentState`/`blocker` writes; **stop / post-checks**;
+and a **decision-form cross-validation**. It **forces no upgrade, downgrade or default mutation** — an
+incompatible combination is **BLOCKED**, never silently repaired. The retained **D1 withhold** is
+preserved explicitly (axes 5/6 may be withheld as a **stated residual**), with **no unrequested decision
+beyond the existing accepted retained scope**.
+
+| # | Correction | Applied in (packet) |
+|---|---|---|
+| 1 | **Retained `confirmed` needs axis-4 evidence.** D2 `populate`+`confirmed` / D3 `restore-confirmed` require qualifying axis-4 evidence **by tx end**; the live historical retained axis 4 carries **zero**. | §3 D2, §3 D3 |
+| 2 | **D4 = leave is incompatible with a `confirmed` D2/D3** unless a separately authorized pre-existing-evidence op is **completed** and a **fresh readback proves** the evidence; a **future measurement is never current**. | §3 D4, §3 D7 |
+| 3 | **D4 = new/duplicate event qualifies only if axis-4-linked** — a problem-only attachment is not axis evidence; payloads require an **explicit axis** + **existing problem id**; no invented paths. | §3 D4, §3 D7 |
+| 4 | **Baseline D2 FIXED leave-absent** (not a choice); `populate` withdrawn; a change is a **WP3/WP5 delta**. | §0, §3 D2, §4, §5.1, §9, §10, §11 |
+| 5 | **Baseline D1 `primary\|supporting` ONLY, all six required**; no withhold, no partial seed; a blank **blocks** authorization. | §3 D1, §4.1, §9, §10, §11 |
+| 6 | **Retained D1 withhold preserved** as a stated residual; no unrequested decision beyond the accepted retained scope. | §3 D1, §9, §10, §11 |
+| 7 | **D7 compatibility matrix + validation preflight + authorization block + payload templates + stop/post-checks + decision-form cross-validation** added; **no forced default**; blanks that are not permitted **block** (not withhold). | §3 D7, §9, §10, §11 |
+| 8 | **Decision forms updated** — baseline D1 required all six / D2 fixed; retained D1 withhold-residual; D2/D3/D4 carry the evidence condition; **cross-validation** block added. | §10 |
+| 9 | **Stale-baseline sweep** — every remaining `populate`/`withhold` mention is scoped (baseline required / retained confirm-withhold) and consistent with #4–#6. | whole packet |
+| 10 | **Crossrefs / tables / links re-checked**; `git diff --check` and the public-record guard green. | whole packet + ledger |
+
+**Counts after the correction:** the packet carries **six decision categories (D1–D6)** plus the **D7
+compatibility preflight** (not a decision); the **baseline D1 is six required roles** and the **baseline
+D2 is fixed leave-absent**; the retained matrix has **4 `yes` rows** and **3 `NO` rows** (the latter
+allowed only via the prior-verified-evidence exception); **both scopes remain unapproved**; **zero**
+decisions settled; **zero** harness changes.
+
+**Authorization boundaries (unchanged).** WP0–WP5 remain **accepted** and are **not reopened**. WP-G stays
+**entered for planning/review only, with no execution authorization**; both scopes are **unapproved**;
+every write still needs the explicit human choices **and** that scope's explicit owner write authorization.
+**No** fixture/domain write, no `reconcile_topic`/`record_activity`, no inference, no service/deploy/restart,
+no product/UI change, no harness change, no WP3 seed, no WP4 amendment, and no merge is performed or
+authorized by this entry.
