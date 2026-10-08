@@ -25,7 +25,7 @@
  */
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -565,14 +565,26 @@ describe("WP5 store-family checks", () => {
   test("the safety guard is red when a module could reach a network or name a target", () => {
     // Built by concatenation so this test's own source does not contain the tokens the guard hunts for.
     const netImport = ["node", "net"].join(":");
-    const net = evaluateStore({
-      store: openIsolatedStore("wp5-guard").store,
-      makeStore: () => openIsolatedStore("wp5-guard-aux").store,
-      pluginActions: [],
-      harnessSources: { "some-module.mjs": `import * as net from "${netImport}";` },
-      gates: unresolvedGates(),
-    });
-    expect(statusOf(net, "C21")).toBe(STATUS_VALUES.FAIL);
+    const guardStore = openIsolatedStore("wp5-guard");
+    const auxStores = [];
+    const makeStore = () => {
+      const s = openIsolatedStore("wp5-guard-aux");
+      auxStores.push(s);
+      return s.store;
+    };
+    try {
+      const net = evaluateStore({
+        store: guardStore.store,
+        makeStore,
+        pluginActions: [],
+        harnessSources: { "some-module.mjs": `import * as net from "${netImport}";` },
+        gates: unresolvedGates(),
+      });
+      expect(statusOf(net, "C21")).toBe(STATUS_VALUES.FAIL);
+    } finally {
+      guardStore.dispose();
+      for (const s of auxStores) s.dispose();
+    }
   });
 });
 
@@ -635,6 +647,7 @@ describe("WP5 runner — default BLOCKED, test-only decisions reachable, no-labe
       cwd: repoRoot,
       encoding: "utf8",
     });
+    rmSync(dir, { recursive: true, force: true });
     expect(result.status).toBe(3);
     expect(result.stdout).toContain("REFUSED");
   });
