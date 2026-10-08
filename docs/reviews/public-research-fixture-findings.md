@@ -786,3 +786,58 @@ every write still needs the explicit human choices **and** that scope's explicit
 **No** fixture/domain write, no `reconcile_topic`/`record_activity`, no inference, no service/deploy/restart,
 no product/UI change, no harness change, no WP3 seed, no WP4 amendment, and no merge is performed or
 authorized by this entry.
+
+## S. WP-G retained-scope decision settlement — reviewer acceptance + owner choices (appended 2026-10-08)
+
+> **Appended, not an amendment.** §A–§R above are preserved unchanged. This section records the external
+> reviewer's **acceptance of the WP-G decision/review packet** at `c3566a5…` and the **owner's explicit
+> SCOPE-RETAINED choices** against it, published in
+> [`2026-10-08-wp-g-retained-decision-report.md`](2026-10-08-wp-g-retained-decision-report.md). It is **not
+> a verbatim reviewer transcript**: the **verdict line is exact** and the dispositions are **summarized**,
+> never quoted as the reviewer's own words, and **no citation is invented**. **Docs only:** only the
+> **SCOPE-RETAINED** parameter decisions are settled; **SCOPE-BASELINE stays unselected/unapproved**; and
+> **no write is authorized — neither retained nor baseline**. The packet's proposal history, the appended
+> design constants and the WP0–WP5 acceptance (§O) are **preserved unchanged** (this section appends; it
+> rewrites no design constant). No fixture/domain write, no `reconcile_topic`/`record_activity`, no
+> inference, no new research, no service/deploy/restart, no product/UI change, no harness change, no WP3
+> seed, no WP4 amendment, no merge.
+
+**Verdict: DECISION PACKET ACCEPTED (WP-G decision/review packet, `c3566a5…`; docs-only).** The packet,
+after the §P scope corrections, the §Q decision-consistency corrections and the §R D7 payload-parameter
+correction, is the **reviewed artifact** and is **accepted**; it is **ready to settle** — the owner may
+answer the scoped decision categories against it. **Packet acceptance settles no decision and grants no
+write authorization.**
+
+### S.1 Settled SCOPE-RETAINED decisions (owner choices)
+
+| # | Category | Settled value (retained only) |
+|---|---|---|
+| **D1** | axis→repository role (axes 5/6 only) | **ax5 `primary`, ax6 `primary`**; axes **1–4 untouched** |
+| **D2** | F08 axis-4 `currentState` | **populate** with the report's §3.1 **exact plain string**, `currentStateConfidence: inferred` |
+| **D3** | axis-4 `blockerConfidence` | **keep ratified `inferred` — no change** |
+| **D4** | F03 / F14a evidence strategy | **leave as-is** — no insert/duplicate/move/edit; F03/F14a remain **known residuals** |
+| **D5** | target | existing **`Public Research Exercise`** org — **public label only**; exact private id in the local (git-ignored) handoff; **proposed, not fresh-verified** (WP5 G05) |
+| **D6** | F04 problem→repository links | **confirm both** consultation problems → `ajegorovs/nakama-research-dashboard`, **full intended set** |
+
+The settled combination is **D7-compatible** (populate + `inferred` / keep-`inferred` / leave = **yes,
+none required**): no `confirmed` claim is made, so **no axis-4 evidence and no prior-verified-evidence
+exception is engaged**.
+
+### S.2 Not settled — still requires authorization
+
+**SCOPE-BASELINE is unselected/unapproved** (its D1/D2 are WP3-fixed, not chosen here; its D5 target and
+write authorization are **not granted**). Within the retained bundle, the WP4 **design-accepted
+proposals** — **F07/F09** repository metadata, **F12** plan-step positions `1..4`, the **F02 (WP2 D3/D4)
+axis→person enrichments** — and any **evidence add (F03/F14a)** are **NOT selected** and each **REQUIRES
+authorization**; **F05 / F10 (existing) / move / retro-link** stay **BLOCKED** (no supported path). The
+retained bundle is enumerated with its gate status in the report §6 (SELECTED vs NOT SELECTED).
+
+### S.3 Authorization boundaries (changed: retained decisions settled; no write granted)
+
+**WP0–WP5 remain accepted** (§O) and are **not reopened**. **SCOPE-BASELINE write: NOT authorized.**
+**SCOPE-RETAINED write: NOT authorized.** Every write still needs the explicit human choices **and** that
+scope's explicit owner write authorization; the retained target id is a **historical bound, not
+fresh-verified**; and **no live fixture read or write** is performed or authorized by this section. **No**
+fixture/domain write, no `reconcile_topic`/`record_activity`, no inference, no service/deploy/restart, no
+product/UI change, no harness change, no WP3 seed, no WP4 amendment, and no merge is performed or
+authorized by this entry.
