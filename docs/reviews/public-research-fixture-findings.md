@@ -203,3 +203,31 @@ its boundaries are kept and its F14b "not even by id" claim is stated with its p
 precondition rather than as an absolute. **No finding's *observation* in §A was refuted; one row's causal
 *WHY* was** (F14a — see the note above). No WP2+ work is performed
 or authorized by this section.
+
+## F. External reviewer gate disposition — WP1 (appended 2026-10-08)
+
+> **Appended, not an amendment — and not a verbatim transcript.** §A–§E above are preserved unchanged.
+> This section records the **gate disposition** of the external reviewer's WP1 verdict and the
+> authorization boundary it leaves in force. The **verdict line is exact**; the two qualifications are
+> **summarized** below (no verbatim reviewer message is available to commit) and must not be quoted as
+> the reviewer's own words.
+
+**Verdict: APPROVE WP1 WITH TWO NON-BLOCKING DOCUMENTARY QUALIFICATIONS.** Neither qualification
+warrants rerunning WP1; both are documentary only — no fixture, product, UI or WP2+ work is implied.
+
+| # | Qualification (source precision · cause vs observation) | How it is applied |
+|---|---|---|
+| 1 | **F08 — source precision.** The pinned source *does* support a conservative factual `currentState`; whether to **populate** the optional field and the exact **wording** remain an editorial choice for **WP4 / human approval**. | The F08 conclusion now separates **evidence sufficiency** from **editorial choice** (`wp1-public-research-fixture-verification.md` §3; `…-evidence.json` `F08`). The class stays **optional**; not a defect, and not a verified "should be populated". |
+| 2 | **F14a — cause vs observation.** The **observation is true**; the original historical ***WHY* is false** (superseded/refuted). Existing-problem linkage **is** supported through `reconcile_topic.activities[].problemId`, and **only the fixture omitted the links**. | The §A row is preserved as history with a **dated supersede tag**; the explicit statement lives in §E above; the `0 refuted` absolutes were corrected to separate refuted **observations** (0) from the refuted **causal *WHY*** (1). |
+
+**Counts after the qualifications:** **21 rows verified as observations**; **0 observations
+refuted**; **1 causal *WHY* refuted** (F14a); **0 unresolved** — no material finding is unresolved,
+and **no WP1 rerun** is required.
+
+**Authorization boundaries (unchanged by this verdict):**
+
+- **WP2 is prepared but NOT authorized.** The read-only WP2 scope (**F01/F02/F04**) is ready; the
+  **owner has not authorized it**, and it has **not been started**.
+- **No WP2 research, and no WP3/WP4, fixtures, product or UI change**, is performed or authorized.
+- Only the two documentary corrections above are in scope for this verdict; every other work package
+  awaits its own explicit owner authorization.
