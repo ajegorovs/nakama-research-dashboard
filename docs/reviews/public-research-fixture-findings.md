@@ -354,3 +354,35 @@ decisions** (D1, D2); **identity basis confirmed**; **author route proof recorde
   coupled to a `primary`-demoting link write (`store.ts:6437-6445`, mitigated by carrying the stored role).
 - **No write, no WP5 checks, no WP-G, no merge.** Both designs are proposals awaiting explicit owner
   authorization; **WP3/WP4 execution and WP5 are not authorized** by this record.
+
+## J. External reviewer correction on the WP3/WP4 design (appended 2026-10-08)
+
+> **Appended, not an amendment — and not a verbatim transcript.** §A–§I above are preserved unchanged.
+> This section records the **gate disposition** of the external reviewer's review of the two design
+> documents and the documentation corrections applied in response. The **verdict line is exact**; the
+> corrections are **summarized** (no verbatim reviewer message is available to commit) and must not be
+> quoted as the reviewer's own words.
+
+**Verdict: REQUEST CHANGES (design-only).** No WP5 is performed or authorized; both designs stay
+design-only, and neither is executed. The corrections are documentation only — no fixture, product, UI,
+service or deploy change, no inference, no merge.
+
+| # | Correction | Applied in |
+|---|---|---|
+| 1 | **Guard scope separated.** The `confirmed` guard (`assertClaimsAreBacked`) is **axis-scoped** — `state`/`current_state`/`blocker` only (`store.ts:6790–6798`). Problem `stateConfidence` is a **fixture policy**, **not** store-enforced; the design no longer presents problem claims as guard-backed. | WP3 §5.1–§5.2 |
+| 2 | **Concrete 8-event activity manifest.** Exact public `sourceUrl`, `occurredAt`, basis and precision, and axis placement per event: axis 1 = PR #44 + #69, axis 2 = PR #67, axis 3 = PR #1, axis 4 = `docs/AGENDA.md`, axis 5 = commits `95ec34e`/`da7996b`/`5a62749`, axis 6 = none — **8 unique events**. The AGENDA event is **included** (dated `2026-09-24` by file-touch basis), not omitted. | WP3 §3.4, §2.7 |
+| 3 | **Explicit confidence, no defaults.** Every non-empty axis claim sets its confidence explicitly; `currentStateConfidence` **inferred** on axes 1–3/5–6, axis 4 `blocker` **confirmed**, backed same-transaction. | WP3 §2.3, §5.3 |
+| 4 | **Creation transactions.** Two **creation** transactions plus any explicitly-approved problem-evidence later passes — **not** a guaranteed total of two, and **no** duplicated event to satisfy a policy. | WP3 §5.5 |
+| 5 | **All six axis→repository roles unresolved.** The retained `supporting` on axes 1–4 is not an approved role; all six links are withheld pending explicit human approval. | WP3 §9 D-A, §2.3, §8 |
+| 6 | **Repository metadata normalized.** Descriptions are the pinned-README opening paragraph with soft-wraps collapsed and **emphasis markers stripped** (words preserved); branch provenance distinguishes the as-of-pin source branch from the current GitHub `default_branch`. | WP3 §3.3; WP4 §7.2 |
+| 7 | **WP4 axis-4 patch re-evaluates the `confirmed` blocker.** Any axis-4 patch needs same-call axis evidence regardless of the `currentState` confidence; **no** confidence downgrade is proposed. | WP4 §8 |
+| 8 | **WP4 F12 fixed at positions 1..4.** The 0-based alternative and the "approved" claim are removed; the design proposes 1..4, pending acceptance. | WP4 §7.3 |
+| 9 | **Recency vs research (F06 side-effect).** A link/axis touch advances recency but adds no activity; the WP5-to-be invariants assert event counts / event times / `lastActivityAt` unchanged for non-activity changes. | WP4 §11; WP3 §10 |
+
+**Counts after the correction:** the concrete manifest is **8 unique events** across **six axes**
+(2/1/1/1/3/0); **six** axis→repository roles unresolved; **no** WP5 check implemented. The
+`move`/`duplicate`/`reassociate` evidence strategy remains **undecided**, and no direct-DB workaround is
+introduced.
+
+**Authorization boundaries (unchanged):** WP3 and WP4 are **design-only and not authorized to execute**;
+WP5 and WP-G are **not authorized**. Each awaits its own explicit owner authorization.

@@ -206,6 +206,9 @@ links-only reconcile (`resolveTopicForReconcile` ignores it; `applyTopicPatch` i
   Therefore executing D1/D2 without a human role decision would **silently assert `supporting`** — the
   exact value the reviewer refused. **Decision: withhold D1/D2 until a human sets the role.** (This is a
   design decision, not an oversight: the amendment must not launder an undecided semantic into a default.)
+  **The same reasoning applies to axes 1–4's retained `supporting`** — its being a fixture link does not
+  establish the semantics, so the axis→repository role is unresolved for **all six** axes (see the WP3
+  design §9 D-A).
 - **Idempotency:** `linkRepository` upserts on `(axis_id, repository_id)` — re-running is content-stable.
   Each run bumps both axis versions, so retries re-read versions.
 - **Source:** the three commits are git-verified commits of the dashboard repo; parent-topic primary repo
@@ -294,18 +297,23 @@ that half of F10 is a **model boundary**, not a blank field.
 - **BEFORE (measured):** all three repositories return `url:''`, `description:''`, `defaultBranch:''`.
 - **AFTER (proposed — explicit values, fixed by the pin):**
 
-  | Repository | `url` | `defaultBranch` (as of pin) | `description` (pinned-README text, **proposed now**) |
-  |---|---|---|---|
-  | `ajegorovs/nakama-research-dashboard` | `https://github.com/ajegorovs/nakama-research-dashboard` | `main` | `A dashboard page plus agent tools over **shared coordination state** — topics, development axes and the evidence attached to them — for a self-hosted Nakama instance. One page (the overview, with the editing surface underneath it), eight actions of which **five are agent tools**, one skill, org-scoped SQLite storage.` |
-  | `ajegorovs/udv-echo-process` | `https://github.com/ajegorovs/udv-echo-process` | `master` | `Multi-sensor Ultrasonic Doppler Velocimetry (UDV) processing for rotating machinery analysis. Supports **echo** (amplitude) and **velocity** measurements from single-sensor continuous recordings and multi-sensor rolling (round-robin) arrays, in both raw time-series and statistical-summary formats.` |
-  | `ajegorovs/Grablink-Full-sequence-acquisition` | `https://github.com/ajegorovs/Grablink-Full-sequence-acquisition` | `master` | `Windows MFC application for capturing high-frame-rate 8-bit monochrome image sequences from an Euresys Grablink/MultiCam capture card.` |
+  | Repository | `url` | `defaultBranch` (source branch @ pin) | current GitHub `default_branch` (as-of-read) | `description` (pinned README, normalized) |
+  |---|---|---|---|---|
+  | `ajegorovs/nakama-research-dashboard` | `https://github.com/ajegorovs/nakama-research-dashboard` | `main` | `main` | `A dashboard page plus agent tools over shared coordination state — topics, development axes and the evidence attached to them — for a self-hosted Nakama instance. One page (the overview, with the editing surface underneath it), eight actions of which five are agent tools, one skill, org-scoped SQLite storage.` |
+  | `ajegorovs/udv-echo-process` | `https://github.com/ajegorovs/udv-echo-process` | `master` | `master` | `Multi-sensor Ultrasonic Doppler Velocimetry (UDV) processing for rotating machinery analysis. Supports echo (amplitude) and velocity measurements from single-sensor continuous recordings and multi-sensor rolling (round-robin) arrays, in both raw time-series and statistical-summary formats.` |
+  | `ajegorovs/Grablink-Full-sequence-acquisition` | `https://github.com/ajegorovs/Grablink-Full-sequence-acquisition` | `master` | `master` | `Windows MFC application for capturing high-frame-rate 8-bit monochrome image sequences from an Euresys Grablink/MultiCam capture card.` |
 
-- **The description value is concrete, not a "harvest at execution" placeholder.** Each string above is
-  the repository's **own README opening paragraph, quoted verbatim from the frozen pin** (§1 header pins;
-  `README.md`, the paragraph immediately under the H1). Only the markdown **soft line-wraps are collapsed
-  to single spaces** — no word added, removed or reordered; the README's own `**…**` emphasis markers are
-  carried as literal characters (the field is plain text). F07 requires **source text, not paraphrase**,
-  and the pin fixes the string, so it is specified here rather than deferred.
+- **The description value is concrete and normalized, not a "harvest at execution" placeholder.** Each
+  string above is the repository's **own README opening paragraph from the frozen pin** (§1 header pins;
+  `README.md`, the paragraph immediately under the H1), with the **soft line-wraps collapsed to single
+  spaces** and the markdown **`**…**` emphasis markers stripped** — the emphasis is **presentation**, and
+  the field is plain text. **Words are preserved exactly**: nothing added, removed or reordered. The exact
+  pinned excerpt is retained in the WP3 design's §3.3 manifest. F07 requires **source text, not
+  paraphrase**, and the pin fixes the string, so it is specified here rather than deferred.
+- **Branch provenance — as-of-pin vs current, stated not assumed.** The `defaultBranch` written is the
+  **source branch the frozen pin is on** (as-of-pin), **not** GitHub's mutable current `default_branch`; the
+  **current** value read today is stated beside it. At the pins the two agree (`main`/`master`/`master`); if
+  they ever diverge, the as-of-pin value wins and the divergence is recorded, never silently resolved.
 - **As-of-pin vs as-of-read (stated, not silently resolved).** The `description` above is the **pinned
   README**, which is **versioned and authoritative** for the fixture. GitHub's mutable **`about`** field is
   **as-of-read** and **differs**: at read time UDV has no `about`; Grablink's `about` reads *"modified
@@ -337,9 +345,10 @@ that half of F10 is a **model boundary**, not a blank field.
   synthesizes no order — `migrations/004:118-119`).
 - **AFTER (proposed):** the same 4 steps, **same `stepId`s and same verbatim titles**, carrying explicit
   positions **1, 2, 3, 4** in the authored order (step 1 → `Wire CaptureStats…` … step 4 → `Run sustained
-  300–350 FPS…`). *(Alternative: `0,1,2,3`; the schema allows any non-negative integer, `optionalPosition`
-  `store.ts:654`, index `plan_steps_by_plan (plan_id, position)` `migrations/004:151`. The invariant is
-  distinct, ascending, non-negative integers that encode the authored order; pick one and state it.)*
+  300–350 FPS…`). The design proposes **1..4 consistently** (the first authored step is position 1). The
+  schema accepts any non-negative integer (`optionalPosition` `store.ts:654`; index
+  `plan_steps_by_plan (plan_id, position)` `migrations/004:151`); the design fixes the base at **1** rather
+  than leaving it open.
 - **Path:** `reconcile_topic { topicId:<experimental>, plans:[ { planId:<diag plan>, axisId:<axis4>,
   summary:<verbatim plan summary>, steps:[ { stepId:<s1>, title:<verbatim>, position:1 }, … ] } ] }`
 - **Semantics preserved:** a `stepId` present → `updatePlanStep` (update in place, **same step id**);
@@ -348,7 +357,8 @@ that half of F10 is a **model boundary**, not a blank field.
   version to preserve. The **plan's** version is **not bumped**, because the required `summary` is sent as
   an **unchanged echo** (`updatePlan` bumps only when the summary text changes; `store.ts:5031`).
 - **Idempotency:** re-running with the same positions updates the same steps — content-stable.
-- **Decision:** approved (the authored order is in the approved packet §5.3).
+- **Decision:** **proposed, pending acceptance** — the authored order is in the packet §5.3, but the
+  position base (1..4) is this design's proposal, not an approved mutation.
 
 ## 8. F08 — diagnostics-axis `currentState` (optional editorial addition)
 
@@ -366,13 +376,20 @@ that half of F10 is a **model boundary**, not a blank field.
   the final sentence — that is the human's editorial call.
 - **Path:** `reconcile_topic { topicId:<experimental>, axes:[ { id:<axis4>, expectedVersion:<v>,
   currentState:<approved text>, currentStateConfidence:<c> } ] }`
-- **Evidence coupling (must be decided together with §9.1 / Group G):** if the confidence is
-  **`confirmed`**, `assertClaimsAreBacked` requires the axis to carry **evidence in the same call**
-  (`store.ts:6809`). The diagnostics axis has **0 events** and no branch/PR, so a `confirmed`
-  `currentState` **cannot** be written on its own — it must be paired with a same-call activity (§9.1/§9),
-  or the confidence must be **`inferred`** (which understates a source-backed fact). **This is a real
-  interaction, not a free choice**, and it is one more reason the F08 wording/confidence decision is a
-  human one.
+- **Evidence coupling — driven by the axis's `confirmed` blocker, NOT by the `currentState` confidence.**
+  `assertClaimsAreBacked` runs on **any** axis write (`updateAxis` calls it "unconditionally … including
+  ones this patch did not touch", `store.ts:3698–3700`; `reconcile_topic` calls it for every touched axis,
+  `store.ts:6027–6037`) and grades the axis's `state`/`current_state`/`blocker` claims from the
+  **patched/stored** values (`store.ts:6790–6798`). Axis 4 carries a **`confirmed` blocker** (the approved
+  value, packet §5.3). So **every** axis-4 patch re-evaluates that blocker and needs the axis to carry
+  **evidence in the same reconciliation** — a branch, a PR, an activity or an annotation — **regardless of
+  the `currentState` confidence**. Writing `currentStateConfidence: inferred` does **not** exempt the call,
+  because the blocker is a separate claim. **No confidence downgrade is proposed** to sidestep the guard:
+  the honest values are kept and the required same-call axis evidence is carried (the natural route is a
+  same-call axis activity, e.g. the AGENDA-source event — which is also what F03 asks for).
+  *(The retained store currently carries axis 4's `blockerConfidence` as `inferred`, a measured deviation
+  from the approved `confirmed`; that is a separate correction on the blocker's own row, not this
+  `currentState` row.)*
 - **Idempotency:** `applyAxisPatch` bumps the axis version on every call — content-stable, version-
   monotonic (re-read before retry). Not idempotent if the confidence/evidence pairing differs run to run.
 
@@ -482,12 +499,18 @@ implemented now.
 9. **Untargeted store unchanged** by its own readback.
 10. **Blocked findings stay unapplied**: no attempt to write an activity `occurredAt`/`sourceUrl` on an
     existing row (there is no path; a check asserts none was attempted).
+11. **Recency is not research (F06 side-effect).** A link write (axis↔repo, axis↔person, problem↔repo) and
+    any axis patch **advance the axis's `updated_at`/recency** but add **no** activity; for every
+    non-activity change the check asserts the **event count, each event's `occurredAt`, and `lastActivityAt`
+    are unchanged**, while a recency/`updatedAt` field **may** advance — so a bumped recency is not mistaken
+    for a new research event. (The product's `recencyAt` fallback and the "last activity" label are the F06
+    *product* finding; this check is scoped to the fixture's own fields.)
 
 ## 12. Approval checklist (what a human must decide before WP-G)
 
 | # | Decision | Blocks |
 |---|---|---|
-| 1 | D1/D2 axis→repository **role** (`primary` \| `supporting`) — or explicitly withhold | Group A |
+| 1 | axis→repository **role** for **all six** axes (`primary` \| `supporting`) — or explicitly withhold | Group A |
 | 2 | F03 / F04 evidence-location choice (A leave / C duplicative add / D new problem-evidenced event) | §9.1 |
 | 3 | F08 `currentState` **exact wording** and **confidence** (and the evidence pairing it implies) | §8 |
 | 4 | Whether any **new** evidence events are authorized at all (F03/F04/F14a) | §9.1 |

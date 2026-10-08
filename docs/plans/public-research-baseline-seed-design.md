@@ -38,6 +38,10 @@
   mutation gate, any fixture/domain write, any inference, any service/deploy/UI/product change, any merge.
 - **Owner authorization** (and an explicit target org) is a precondition of any future execution — a green
   design is not authorization.
+- **Revision status (reviewer correction).** The concrete activity manifest (§3.4), the explicit-confidence
+  values (§2.3, §5.3) and the all-six unresolved axis→repository roles (§9 D-A) are the **proposed baseline
+  design — pending acceptance**, **not** mutation approval. Incorporating this layout is not an
+  authorization to write; every write still needs explicit owner authorization and the WP-G gate.
 
 ---
 
@@ -72,8 +76,8 @@ model is named where it differs. "Source" is the input the baseline seed would d
 |---|---|---|
 | `fullName` | **required** | the public `owner/repo` slug; a repository is auto-registered when named |
 | `url` | **required** (when the public source is available) | the public repo URL, grounded at the **frozen pin** (`https://github.com/<fullName>`); F07/F09 |
-| `description` | **required** (when the public source is available) | the repo's **own pinned-README opening text, verbatim** — never a paraphrase; the **pinned README is authoritative** and GitHub's mutable `about` is **as-of-read** (§3 item 3); F07 |
-| `defaultBranch` | **required** (when the public source is available) | the branch as of the **frozen pin** (see §3 — current GitHub metadata may differ); F07/F09 |
+| `description` | **required** (when the public source is available) | the repo's **own pinned-README opening paragraph, normalized** — soft-wraps collapsed to single spaces and **presentation emphasis markers stripped**, words preserved; never a paraphrase. The **pinned README is authoritative** and GitHub's mutable `about` is **as-of-read** (§3 item 3); F07 |
+| `defaultBranch` | **required** (when the public source is available) | the **source branch the pin is on** (as-of-pin) — **not** GitHub's current `default_branch`, which is stated beside it (§3 item 3); F07/F09 |
 | `relationship` (topic/axis link) | **required** where a link row is written | enum `primary \| supporting` only; **no "undecided" value exists** (see §9 D-A) |
 | repo **source pin** | **unavailable** | no `pin` field on `Repository` type, DDL, manifest or `types/`; F09b — carried in the §3 manifest, never a repo field |
 | repo "source docs" | **unavailable** | "source docs" is not a `Repository` field at all (an activity `sourceUrl` lives on the *activity*); F09 |
@@ -96,14 +100,14 @@ model is named where it differs. "Source" is the input the baseline seed would d
 | `title` | **required** | exact packet title (verbatim) |
 | `kind` | **required** | enum `feature\|experiment\|test\|investigation\|maintenance`; packet supplies each |
 | `state` | **required** (packet supplies) | enum `active\|usable\|draft\|blocked\|parked\|completed\|abandoned` |
-| `stateConfidence` | **required** | enum `confirmed\|inferred\|uncertain`; packet says **inferred** for all six (see §5 for the `confirmed` guard) |
+| `stateConfidence` | **required, explicit** | enum `confirmed\|inferred\|uncertain`; **`inferred` for all six** (packet). Set it explicitly: the read model and `insertAxis` both **default an unset confidence to `confirmed`** (`store.ts:800–808`, `:6187–6198`), so omitting it silently asserts `confirmed` and trips the guard (§5.1/§5.3) |
 | `currentState` | **required for axes 1,2,3,5,6 / optional for axis 4** | packet supplies verbatim text for axes 1,2,3,5,6; **axis 4 has none — leave absent (optional, honest), do not invent**. The field is representable and the source supports a conservative state, so axis 4's absence is **optional** (F08), not `unavailable` |
-| `currentStateConfidence` | **optional** | null where `currentState` is absent (axis 4); F08 |
+| `currentStateConfidence` | **required where `currentState` is present, explicit** | **`inferred`** on axes 1,2,3,5,6; null where `currentState` is absent (axis 4). Never left to the `confirmed` default (§5.3); F08 |
 | `blocker` | **required for axis 4** | verbatim, `blockerConfidence: confirmed` (packet §5.3) |
-| `blockerConfidence` | **required with `blocker`** | `confirmed` — bound to same-call evidence (§5) |
+| `blockerConfidence` | **required with `blocker`, explicit** | **`confirmed`** for axis 4 — the one store-enforced claim in the seed, **bound to same-call evidence** (§5.1/§5.4) |
 | `branch`, `prNumber`, `prUrl` | **optional** | representable axis evidence; packet records PRs as activities rather than axis fields — see §5 |
 | `expectedVersion` | **required on an update, absent on a create** | a fresh axis has no version to check (methodology §4.4) |
-| axis `repositories[]` | **required where source-backed; role = human decision** | 4 experimental axes name their repo (`supporting`); the 2 infra axes are WP2-accepted (D1/D2) but the role is undecided (§9 D-A) |
+| axis `repositories[]` | **required where source-backed; axis-level `relationship` UNRESOLVED for all six axes** | all six axes have a source repo (axes 1–4 per packet §5.3; axes 5–6 per WP2 D1/D2), but **no role is established for any of them** — the retained fixture's `supporting` on axes 1–4 is a fixture link, not an approved semantic ("a fixture default or another fixture link does not establish the semantics"). **Withhold all six links** until a human selects the role (§9 D-A); omitting the field would silently store `supporting` |
 | axis `people[]` | **required for the 6 axes** | the person, role `""`; axes 1–4 per packet, axes 5–6 WP2-accepted (D3/D4) |
 
 ### 2.4 Person (block: `people[]` / axis `people[]`)
@@ -122,7 +126,7 @@ model is named where it differs. "Source" is the input the baseline seed would d
 | `statement` | **required** | verbatim packet text; required by the manifest on every `problems[]` item |
 | `axisId`/`axisTitle` | **required** | the parent axis (by title in the creating transaction) |
 | `state` | **required** | enum `open\|resolved`; packet: three open problems |
-| `stateConfidence` | **required** | `confirmed` for the packet's acknowledged gaps (bound to evidence, §5) |
+| `stateConfidence` | **required, explicit** | the packet's acknowledged gaps are declared `confirmed`. This is a **fixture policy, not store enforcement** — the `confirmed` guard covers only axis `state`/`current_state`/`blocker` (§5.1/§5.2), so a problem's confidence is stored as sent. The seed still follows the policy by hand; it does **not** duplicate an event to "back" a problem (§5.2) |
 | `planStepId` | **optional** | link a problem to a plan step; not supplied by the packet |
 | `repositoryFullNames[]` | **required where source-backed** | diagnostics problem→Grablink (existing); consultation problems→Dashboard (WP2 D5/D6); **replaces the set** on update |
 | `personIds[]` | **optional** | not supplied by the packet |
@@ -145,8 +149,8 @@ model is named where it differs. "Source" is the input the baseline seed would d
 | `summary` | **required** | objective event text; the only `record_activity`-required field |
 | `sourceType` | **required** | enum `manual\|github_pr\|github_commit\|github_issue\|repo_document\|group_chat\|experiment\|agent_review` |
 | `sourceRef` | **required** | e.g. `PR #44`, a short commit hash, `docs/AGENDA.md` |
-| `sourceUrl` | **required where a public URL exists** | public only; all event records are public, so the retained fixture's empty `sourceUrl` is the F10 supported-but-empty gap |
-| `occurredAt` | **required where the source carries a date** | the event's **own** date (§3); day-only stays day-only; omitted for a document with no explicit date |
+| `sourceUrl` | **required where a public URL exists** | public only; all event records are public, so the retained fixture's empty `sourceUrl` is the F10 supported-but-empty gap. Concrete per-event URLs: §3.4 |
+| `occurredAt` | **required for every event** | the event's **own** date at the source's precision (§3). PR/commit events use their **own** event timestamp; a document with no explicit date is dated by its **last file-touch commit at or before the pin** (day-only chosen precision) — **never omitted**, never the ingestion date. Concrete values: §3.4 |
 | `axisId`/`axisTitle` | **required** | the axis the event belongs to — **`axisTitle` is the same-transaction handle** (§5) |
 | `repositoryFullName` | **optional** | a *direct* event→repo link; **prefer the axis→repo link** (§7) — a direct link duplicates the indirect attribution WP2 established |
 | `problemId` | **required where the source backs an existing-problem evidence link** | **supported** (F14a) via `reconcile_topic.activities[].problemId`; resolves only an **existing** problem (§5) |
@@ -182,24 +186,62 @@ It states, per source:
 2. **Source dates, with the exact basis and precision.** A document's **own** date is used, never the
    ingestion/recording date. Day-only stays day-only; **no time-of-day is invented**. When a document
    carries **no explicit date**, it is dated by the **last file-touch commit at or before the pin**,
-   recording that basis. The worked case: `docs/AGENDA.md` has no explicit date; its last file-touch commit
-   at/before the pin `e6f83b2` is `44ba1a43da78c8f572f042f1af4850f3b64790cb` @
-   `2026-09-24T11:33:25+03:00`; the day-only value **2026-09-24** is an **explicitly chosen precision**, not
-   an inherent limit (F05). PR/commit events carry their **own event date** (packet §5.4).
+   recording that basis. The worked case — **included in the seed, not omitted**: `docs/AGENDA.md` has no
+   explicit date; its last file-touch commit at/before the pin `e6f83b2` is
+   `44ba1a43da78c8f572f042f1af4850f3b64790cb` @ `2026-09-24T11:33:25+03:00`; the day-only value
+   **2026-09-24** is an **explicitly chosen precision**, not an inherent limit (F05). PR/commit events
+   carry their **own** event date at the source's precision (concrete values in §3.4).
 
-3. **Repository public metadata — as-of-pin vs current.** `url`/`defaultBranch`/`description` are grounded
-   at the **frozen pin** and are reproducible from it:
-   - `defaultBranch`: `master` (UDV), `master` (Grablink), `main` (Dashboard) at the pins;
-   - `description`: **verbatim source text** from the repo's own README at the pin (e.g. Grablink's README
-     title/`about` line, UDV's README summary, the Dashboard README) — never a paraphrase;
-   - **`about` is not versioned** and **current GitHub metadata is variable** (e.g. the Dashboard
-     `pushed_at` now postdates the pin; `about`/`homepage` can change between reads). A value read from the
-     live GitHub API is **`as-of-read`, not `as-of-pin`**, and must be labelled as such. Where the as-of-pin
-     source (README) and the mutable current metadata disagree, the **as-of-pin README is authoritative**
-     for the fixture, and the variance is stated, not silently resolved.
+3. **Repository public metadata — as-of-pin vs current, enumerated.** `url`/`defaultBranch`/`description`
+   are grounded at the **frozen pin** and are reproducible from it. **Normalization:** the description is
+   the repo's own **pinned-README opening paragraph** with **soft line-wraps collapsed to single spaces and
+   presentation emphasis markers stripped** — words preserved, nothing added, removed or reordered. The
+   field is plain text; the **exact pinned excerpt** is retained in this manifest.
 
-`sourceUrl` is a **field of the activity**, not of the Repository or Problem; the pins/dates/metadata above
-are **manifest entries**, not Repository fields.
+   | Repository | `url` | `defaultBranch` (source branch @ pin) | current GitHub `default_branch` (as-of-read) | `description` (pinned README, normalized) |
+   |---|---|---|---|---|
+   | `ajegorovs/udv-echo-process` | `https://github.com/ajegorovs/udv-echo-process` | `master` | `master` | Multi-sensor Ultrasonic Doppler Velocimetry (UDV) processing for rotating machinery analysis. Supports echo (amplitude) and velocity measurements from single-sensor continuous recordings and multi-sensor rolling (round-robin) arrays, in both raw time-series and statistical-summary formats. |
+   | `ajegorovs/Grablink-Full-sequence-acquisition` | `https://github.com/ajegorovs/Grablink-Full-sequence-acquisition` | `master` | `master` | Windows MFC application for capturing high-frame-rate 8-bit monochrome image sequences from an Euresys Grablink/MultiCam capture card. |
+   | `ajegorovs/nakama-research-dashboard` | `https://github.com/ajegorovs/nakama-research-dashboard` | `main` | `main` | A dashboard page plus agent tools over shared coordination state — topics, development axes and the evidence attached to them — for a self-hosted Nakama instance. One page (the overview, with the editing surface underneath it), eight actions of which five are agent tools, one skill, org-scoped SQLite storage. |
+
+   - **Branch provenance.** The stored `defaultBranch` is the **source branch the pin is on** (as-of-pin),
+     **never** a value copied from GitHub's mutable current metadata. At the pins the two agree
+     (`master`/`master`/`main`) and the **current** GitHub `default_branch` read today is stated beside it
+     so the historical value is never *inferred from* the current one. If they diverge, the as-of-pin value
+     wins and the divergence is stated, not silently resolved.
+   - **`about` is not versioned** and **current GitHub metadata is variable**: the Dashboard `pushed_at`
+     now postdates the pin, and `about`/`homepage` change between reads. A value read from the live GitHub
+     API is **`as-of-read`, not `as-of-pin`**, and is labelled as such — at read time UDV has no `about`;
+     Grablink's `about` reads *"modified Euresys Grablink program to continuously save images"*; Dashboard's
+     reads *"Research dashboard plugin for a self-hosted Nakama deployment: …"*. Where the as-of-pin source
+     (README) and the mutable current metadata disagree, the **as-of-pin README is authoritative** for the
+     fixture, and the variance is stated, not silently resolved.
+
+   `sourceUrl` is a **field of the activity**, not of the Repository or Problem; the pins/dates/metadata
+   above are **manifest entries**, not Repository fields.
+
+### 3.4 Concrete activity source manifest (the 8 initial events)
+
+Every initial event is public and carries its **own** source date at the source's precision — no ingestion
+date, no invented time-of-day. One event per activity row; the placements are the design's (see §9 D-E).
+
+| # | Axis | `sourceType` | `sourceRef` | `sourceUrl` (public) | `occurredAt` | Date basis / precision |
+|---|---|---|---|---|---|---|
+| 1 | axis 1 — UDV acquisition automation | `github_pr` | `PR #44` | `https://github.com/ajegorovs/udv-echo-process/pull/44` | `2026-09-28T15:15:05Z` | PR #44 **merge** timestamp (its own event date; the source is known to the second) |
+| 2 | axis 1 — UDV acquisition automation | `github_pr` | `PR #69` | `https://github.com/ajegorovs/udv-echo-process/pull/69` | `2026-09-28T15:22:46Z` | PR #69 merge timestamp |
+| 3 | axis 2 — UDV sparse-analysis validation | `github_pr` | `PR #67` | `https://github.com/ajegorovs/udv-echo-process/pull/67` | `2026-09-28T13:44:37Z` | PR #67 merge timestamp |
+| 4 | axis 3 — High-rate optical acquisition | `github_pr` | `PR #1` | `https://github.com/ajegorovs/Grablink-Full-sequence-acquisition/pull/1` | `2026-09-24T09:16:43Z` | PR #1 merge timestamp |
+| 5 | **axis 4** — Grablink diagnostics and sustained-rate validation | `repo_document` | `docs/AGENDA.md` | `https://github.com/ajegorovs/Grablink-Full-sequence-acquisition/blob/e6f83b2f5a45a961044b107f2628b046d41c3ab2/docs/AGENDA.md` | `2026-09-24` | file-touch basis: last file-touch commit ≤ pin `e6f83b2` is `44ba1a43da78c8f572f042f1af4850f3b64790cb` @ `2026-09-24T11:33:25+03:00`; **day-only is a chosen precision** (no time-of-day invented) |
+| 6 | axis 5 — Research dashboard and focused retrieval | `github_commit` | `95ec34e` | `https://github.com/ajegorovs/nakama-research-dashboard/commit/95ec34e5d24240c7ac92c384cff5d5658ebb8761` | `2026-10-07T11:32:37Z` | commit committer date |
+| 7 | axis 5 — Research dashboard and focused retrieval | `github_commit` | `da7996b` | `https://github.com/ajegorovs/nakama-research-dashboard/commit/da7996b6143f918ca590a79649aba831151b4dca` | `2026-10-07T11:32:37Z` | commit committer date |
+| 8 | axis 5 — Research dashboard and focused retrieval | `github_commit` | `5a62749` | `https://github.com/ajegorovs/nakama-research-dashboard/commit/5a6274918c92d8c6a539349d3549dde045c3985f` | `2026-10-07T11:09:37Z` | commit committer date |
+
+**Placement counts: axis 1 = 2, axis 2 = 1, axis 3 = 1, axis 4 = 1, axis 5 = 3, axis 6 = 0 — eight unique
+events.** Axis 6 has **no initial activity** (its two problems are raised from acceptance records, and the
+`problemId` evidence link is a separate, unresolved strategy — §9 D-D). The AGENDA event is placed on
+**axis 4**, the axis whose blocker/problem/plan it backs, so axis 4's `confirmed` blocker is backed by
+**same-transaction evidence**; a fresh seed places the event where its claims are made rather than on a
+sibling axis.
 
 ---
 
@@ -222,22 +264,47 @@ that creates the claims they back. `record_activity` is for events that *arrive 
 manufacturing an initial claim's evidence. This is the sequencing defect the first packet violated
 (WP0/methodology §9).
 
-**Why it binds here: the `confirmed` guard, as actually implemented.** After the write loops,
-`reconcile_topic` calls `assertClaimsAreBacked` for every touched axis **inside the transaction**
-(`store.ts:6027–6037`; rule at `store.ts:6786–6816`). It requires same-call evidence when a claim is
-`confirmed`; the evidence definition is `axisEvidence` (`store.ts:2506`): the axis's **branch**, its
-**PR** (`prNumber`/`prUrl`), its **recorded activities** (`axis_id`), and its **annotations**
-(`axis_id`). A `confirmed` claim with an empty evidence list throws and **rolls the whole update back**
-(no laundering a guess into a fact). Claims = `state` **only if the caller mentions it**, plus
-`current_state`/`blocker` **only when they carry text** (`store.ts:1698–1700, 6791–6798`).
+### 5.1 The `confirmed` guard is axis-scoped — `state`, `current_state`, `blocker` only
 
-**Consequences for the baseline-seed packet:**
+`assertClaimsAreBacked` is the **only** store-level enforcement of the "confirmed needs evidence" rule, and
+it grades **axis** claims and nothing else. After the write loops, `reconcile_topic` calls it for every
+touched axis **inside the transaction** (`store.ts:6027–6037`; rule at `store.ts:6786–6816`). The claims it
+grades are exactly three per axis (`store.ts:6790–6798`):
+
+- `state` — only when the caller **mentions** `state` (`store.ts:1698–1700`: the column default is where an
+  axis starts, not something anyone asserted);
+- `current_state` — only when the patched/stored text is non-empty;
+- `blocker` — only when the patched/stored text is non-empty.
+
+It requires same-call evidence when such a claim is `confirmed`; the evidence definition is `axisEvidence`
+(`store.ts:2506`): the axis's **branch**, its **PR** (`prNumber`/`prUrl`), its **recorded activities**
+(`axis_id`) and its **annotations** (`axis_id`). A `confirmed` claim with an empty evidence list throws and
+**rolls the whole update back**. **Problem claims are not covered by this guard.**
+
+### 5.2 Problem confidence is a fixture policy, NOT store enforcement
+
+The packet's problems are declared `confirmed`, and the **policy** is that a `confirmed` problem should be
+backed by an evidence link (F14a). That policy is a *rule the seed follows by hand*, **not** a store
+invariant: no guard fires, and omitting the evidence would roll nothing back. Keep the two apart — reading a
+problem's `confirmed` as "guard-enforced" would overstate the store and understate the seed's own
+discipline. The evidence link itself is `reconcile_topic.activities[].problemId`, which resolves an
+**existing** problem only (§5.4). Do **not** duplicate an event or invent a link to "satisfy" the policy.
+
+### 5.3 Explicit confidence — no defaults
+
+The read model reports a text-carrying claim's confidence as `confirmed` when the column is unset
+(`store.ts:800–808`), and `insertAxis` writes `confirmed` when the caller omits it (`store.ts:6187–6198`).
+A seed that leans on that default silently asserts `confirmed` and trips the guard. The seed therefore sets
+**every** axis claim's confidence explicitly (§2.3): `stateConfidence` **inferred** on all six axes;
+`currentStateConfidence` **inferred** on axes 1,2,3,5,6; axis 4's `blockerConfidence` **confirmed** — backed
+by the same-transaction AGENDA activity (§3.4 row 5). **No claim relies on a default.**
+
+### 5.4 Consequences for the baseline-seed packet
 
 1. **Initial axis evidence == same-transaction activities.** Each axis that carries a `confirmed` claim
-   (the axis-4 blocker; the packet's `confirmed` problems) must carry its backing activity **in the same
-   `reconcile_topic` call**. The activity targets the axis by **`axisTitle`**, which resolves to the axis
-   created earlier in the same transaction (axes loop `store.ts:5750` runs before the activities loop
-   `store.ts:5806`).
+   (here only **axis 4's blocker**) must carry its backing activity **in the same `reconcile_topic` call**.
+   The activity targets the axis by **`axisTitle`**, which resolves to the axis created earlier in the same
+   transaction (axes loop `store.ts:5750` runs before the activities loop `store.ts:5806`).
 2. **`inferred` where evidence is not atomic.** Where the source is a design-review hypothesis rather than
    a same-call record, write **`inferred`**, per the packet. Do not promote to `confirmed` for convenience.
 3. **Existing-problem evidence is supported (F14a) — but only for a pre-existing problem.** An activity's
@@ -245,9 +312,9 @@ manufacturing an initial claim's evidence. This is the sequencing defect the fir
    `store.ts:6599–6609`). In one `reconcile_topic` call the write order is **activities → problems**
    (`store.ts:5806` → `5929`) and `activities.problem_id` is a real FK with `PRAGMA foreign_keys = ON`
    (`migrations/004:351`, `store.ts:2152`).
-4. **Do NOT promise a newly created problem's evidence in the same call (F14b).** There is **no
-   title-like handle** for a newly generated problem, and the id handle requires the problem to pre-exist,
-   so a same-call event→new-problem link is **unavailable** — record the limitation, never improvise a
+4. **Do NOT promise a newly created problem's evidence in the same call (F14b).** There is **no**
+   title-like handle for a newly generated problem, and the id handle requires the problem to pre-exist, so
+   a same-call event→new-problem link is **unavailable** — record the limitation, never improvise a
    workaround. If source-backed evidence for a problem is required, it is added by a **subsequent**
    `reconcile_topic` (the problem then exists), not in the creating call.
 5. **`record_activity` cannot target any problem (F14c).** The manifest *advertises* `problemId` but its
@@ -255,9 +322,13 @@ manufacturing an initial claim's evidence. This is the sequencing defect the fir
    (`src/actions.ts:361–387`). This is a recorded **schema defect**, not a workaround target; problem
    evidence therefore goes through `reconcile_topic.activities[].problemId`, never `record_activity`.
 
-**Per-topic atomicity.** `reconcile_topic` is per-topic atomic: one call per topic carries that topic's
-axes, their same-call evidence, plans, problems and links. The baseline seed is therefore **two atomic
-transactions** (one per topic), not one global call.
+### 5.5 Creation transactions — two, plus explicitly-approved later passes
+
+`reconcile_topic` is per-topic atomic: one call per topic carries that topic's axes, their same-call
+evidence, plans, problems and links. The baseline seed is therefore **two CREATION transactions** (one per
+topic). That is **not** a guaranteed total of two: any **explicitly-approved** problem-evidence pass (F14a,
+§5.4 items 3–4) is a *later* `reconcile_topic` call and is separately authorized. No event is ever
+**duplicated** to satisfy the problem-evidence policy (§5.2).
 
 ---
 
@@ -309,16 +380,17 @@ memory):
 | repositories | 3 | packet §4 |
 | plan steps | 4 | packet §5.3 (axis 4), explicit positions 1–4 |
 | problems | 3 | packet §5.3 (1 on axis 4, 2 on axis 6) |
-| initial activities | 8 | packet §5.4 (PRs #44/#69/#67/#1, AGENDA doc, commits `5a62749`/`da7996b`/`95ec34e`) |
+| initial activities | 8 | §3.4 manifest (axis 1: PRs #44,#69; axis 2: PR #67; axis 3: PR #1; axis 4: AGENDA doc; axis 5: commits `95ec34e`/`da7996b`/`5a62749`; axis 6: none) — 8 unique events |
 | topic→repo links | 3 | infra→Dashboard `primary`; experimental→UDV `primary`, →Grablink `supporting` |
 | topic→person links | 2 | both topics → the person |
-| axis→repo links | 6 | 4 experimental (`supporting`) written directly + 2 infra (D1/D2, **withheld pending §9 D-A role**) |
+| axis→repo links | 6 intended → **0 written** | all six roles **unresolved** pending human approval (§9 D-A); every link withheld, because omitting the role would silently store the `supporting` default |
 | axis→person links | 6 | axes 1–4 (packet) + axes 5–6 (WP2 D3/D4 accepted) |
 | problem→repo links | 3 | diagnostics→Grablink; 2 consultation→Dashboard (WP2 D5/D6) |
 
 **Dedup identity.** The WP2 dedup is authoritative: **0 new repositories, 0 new people, 0 already-present
 pairs** — the six candidate pairs (D1–D6) are the accepted source-backed relationship set; a baseline seed
-that encodes them creates **no duplicate objects**.
+that encodes them creates **no duplicate objects**. The axis→repository links are **withheld** (§9 D-A), so
+nothing is written there until a role is decided.
 
 ---
 
@@ -327,13 +399,17 @@ that encodes them creates **no duplicate objects**.
 These are **not resolved here**. The design records them so a future session abstains rather than deciding
 silently.
 
-- **D-A — the two infra axis→repository roles (WP2 D1/D2).** The reviewer left the role **undecided**
-  (`null`), explicitly rejecting both `supporting` and `primary`. **The schema cannot store "undecided":**
-  `axis_repositories.relationship` is `NOT NULL DEFAULT 'supporting'` with `CHECK (primary|supporting)`, and
-  `reconcile_topic` writes `repository.relationship ?? "supporting"` (`store.ts:5783`). **Therefore omitting
-  the field does not leave it undecided — it silently stores `supporting`, the value the reviewer rejected.**
-  The baseline seed must **not** write these two links until a human selects `primary`/`supporting` per axis;
-  until then the pair is an explicit open item and F01 is knowingly unfixed for those axes.
+- **D-A — the axis→repository roles (all six).** The reviewer left the axis→repository role **undecided**
+  (`null`) for the two infra axes (WP2 D1/D2), explicitly rejecting both `supporting` and `primary`. By the
+  same reasoning the **retained fixture's `supporting` on axes 1–4 is a fixture link, not an approved
+  role** — "a fixture default or another fixture link does not establish the semantics" (WP2 §9.1/§H.1).
+  **So the axis→repository role is unresolved for all six axes** pending explicit human approval (or an
+  explicit owner ratification). **The schema cannot store "undecided":** `axis_repositories.relationship` is
+  `NOT NULL DEFAULT 'supporting'` with `CHECK (primary|supporting)`, and `reconcile_topic` writes
+  `repository.relationship ?? "supporting"` (`store.ts:5783`). **Therefore omitting the field does not leave
+  it undecided — it silently stores `supporting`, the value the reviewer refused.** The baseline seed must
+  **not** write **any** of the six links until a human selects `primary`/`supporting` per axis; until then
+  each pair is an explicit open item and F01 is knowingly unfixed for all six axes.
 - **D-B — axis-4 `currentState` (F08).** The source supports a conservative factual state; whether to
   populate the **optional** field and the **exact wording** are human/editorial decisions. Leave blank
   unless approved.
@@ -362,13 +438,14 @@ These are the properties a future WP5 check would assert. They are stated so the
 
 1. **Count identity** — read-back counts equal §8 (topics/axes/people/repos/plan steps/problems/links).
 2. **No null positions** — every seeded plan step has an explicit integer position 1..n.
-3. **Confirmed ⟹ same-call evidence** — every `confirmed` axis claim has an activity/annotation/branch/PR
-   on that axis in the same call; the suite can go red on a negative control (a `confirmed` claim with no
-   evidence must fail).
+3. **Confirmed ⟹ same-call evidence** — every `confirmed` **axis** claim (`state`/`current_state`/`blocker`)
+   has an activity/annotation/branch/PR on that axis in the same call; the suite can go red on a negative
+   control (a `confirmed` axis claim with no evidence must fail). Problem claims are **not** covered by this
+   guard (a fixture policy, not store-enforced, §5.2).
 4. **No silent role default** — no `axis_repositories` row exists whose role was omitted (would default to
-   `supporting`); every axis→repo role is an approved value.
+   `supporting`); every axis→repo role is an approved value. All six are withheld until decided (§9 D-A).
 5. **Source dates** — no activity's `occurredAt` equals its ingestion time; each date matches its §3 basis
-   and precision.
+   and precision, and the AGENDA event is **present** with `occurredAt` = `2026-09-24` (not omitted).
 6. **Source URLs public** — every activity with an available public URL carries one; no private URL.
 7. **Dedup** — zero duplicate topic/axis/person/repository rows; the accepted pairs present once.
 8. **Problem→repo set exact** — each problem's `repositoryFullNames` equals its approved set (the write
@@ -377,6 +454,10 @@ These are the properties a future WP5 check would assert. They are stated so the
    DB byte identity (methodology §6).
 10. **No invented fields** — every required field non-empty; every optional field either populated from an
     approved source or explicitly blank.
+11. **Recency is not activity (F06 side-effect).** A link touch or an axis patch advances the axis's
+    `updated_at`/recency but adds **no** activity; the check asserts the seed's **event count, each event's
+    `occurredAt`, and `lastActivityAt`** carry the §3.4 values, while a recency/`updatedAt` field may still
+    advance — a bumped recency is not mistaken for a phantom new research event.
 
 ---
 
@@ -398,8 +479,8 @@ These are the properties a future WP5 check would assert. They are stated so the
 ## 12. Boundaries and open decisions
 
 - **Design only.** No write, no dispatch, no authorization of WP4/WP5/WP-G.
-- **Open (owner/human):** §9 D-A (two infra axis→repo roles — **undecided, blocked**; the seed withholds
-  those two links rather than defaulting them to `supporting`), D-B (axis-4 `currentState` wording), D-C
+- **Open (owner/human):** §9 D-A (all six axis→repo roles — **undecided, blocked**; the seed withholds
+  all six links rather than defaulting any to `supporting`), D-B (axis-4 `currentState` wording), D-C
   (topic descriptions/summaries), D-D (problem evidence links), D-F (remaining wording/confidence calls).
   **D-E is resolved** (§9): the clean-slate seed encodes the accepted D1–D6; D1/D2 stay gated on D-A. Also
   outstanding: the explicit **target org** and **owner authorization** (no fixture write without both).
@@ -423,7 +504,10 @@ These are the properties a future WP5 check would assert. They are stated so the
     (`store.ts:5783` `?? "supporting"`).
   - `migrations/002` (`relationship NOT NULL DEFAULT 'supporting'`; one-primary per topic/axis),
     `migrations/004` (`plan_steps.position INTEGER` + "no ordering synthesized"; `problems`; `plans`).
-- **Bounded source harvest (public, read-only):** GitHub repo `about`/`default_branch` read **current**
-  (used only to distinguish as-of-read from as-of-pin); pinned `README.md` at the frozen UDV pin
-  (`841964d4…`) and Grablink pin (`e6f83b2f…`) fetched to confirm verbatim description source text. No
-  authoritative WP1/WP2 re-run was performed.
+- **Bounded source harvest (public, read-only):** the three repos' **current** GitHub `about` /
+  `default_branch` read (used only to distinguish as-of-read from as-of-pin); the **pinned** `README.md` at
+  each frozen pin (UDV `841964d4…`, Grablink `e6f83b2f…`, Dashboard `95ec34e5…`) fetched to confirm the
+  verbatim description source text (§3.3); and the **8 initial events' own public URLs and event dates**
+  read from the GitHub API (§3.4 — PR merge timestamps for `#44/#69/#67/#1`, commit committer dates for
+  `95ec34e`/`da7996b`/`5a62749`, and the AGENDA file-touch commit `44ba1a4`). **No authoritative WP1/WP2
+  re-run was performed** — this is bounded, public, read-only source confirmation only.
