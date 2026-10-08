@@ -979,3 +979,55 @@ owner authorization; a passing execution is **not** authorization for the next w
 
 **PR links.** Branch `docs/research-fixture-methodology`; draft PR #4
 (`https://github.com/ajegorovs/nakama-research-dashboard/pull/4`); committed docs-only on top of `5c18db0…`.
+
+## W. F08 **visual verification completed** + served-asset **bytecount erratum** (appended 2026-10-08)
+
+> **Appended, not an amendment.** §A–§V above are preserved unchanged. This section records a **completed
+> read-only visual verification** of the F08 diagnostics-axis `currentState` — superseding the §V F08 row
+> (which correctly described the state then observed: "visually unverified") — and an **erratum** for the
+> served-asset byte figure quoted in §U and the execution record. Published in
+> [`2026-10-08-f08-visual-verification-supplement.md`](2026-10-08-f08-visual-verification-supplement.md)
+> (code-adjacent wording corrected there; the execution report and its evidence JSON are **not** rewritten).
+> **Docs-only / read-only:** no **new** fixture read or write, no `reconcile_topic`/`record_activity`, no
+> inference, no service/deploy/restart, no product/UI/harness/source change, no merge. Public labels and
+> sanitized references only.
+
+**F08 visual verification (measured 2026-10-08T20:04:23Z, `http://127.0.0.1:3003`, plugin
+`research-dashboard`, org label `Public Research Exercise`, build `0.2.0+dev.78af5cbb87b4` rev `9`).**
+
+| Item | Result |
+|---|---|
+| F08 `currentState` DOM presence | **present, byte-exact** (411 chars, `exact: true`) |
+| Visual full-text readability | **✘ CLIPPED to 2 lines** — `clientHeight 39px` / `scrollHeight 117px`, `-webkit-line-clamp: 2`; visible 153 chars, hidden 258 |
+| After "More on this axis" (real click) | **still clipped** — `fullTextBecameVisuallyReadable: false` |
+| Classification | **expected existing axis-reading CSS**, **not** a regression of the F08 write, **not** a product defect |
+| Product/UI fix | **none made or proposed** (observational record) |
+| Representative shot | [`../screenshots/f08-axis4-expanded.png`](../screenshots/f08-axis4-expanded.png) — sanitized (plugin card only; public labels) |
+
+**Bytecount erratum (same sha256, two different figures).** The served `ui/app.js` sha256
+`41e61ef5…` is **154598 bytes**; §U / the execution record quoted **154417 bytes**. Root cause (proven with
+tools over the actual asset): `154417` is the **JavaScript-string `.length`** (UTF-16 code units /
+characters) of the fetched asset text, **mislabeled as bytes** — the runner's check was
+`(await res.text()).length === 154417` (`.hermes/scratch/wpg-exec-a.mjs`). The asset has 119 non-ASCII code
+points contributing **181** extra bytes (57×1 + 62×2); `154417 + 181 = 154598`. The sha256 is identical on
+both figures (taken over the same bytes). **No content discrepancy; the actual repo/served asset is 154598
+bytes.**
+
+### W.1 Supplemental final state (retained scope — visual present, accepted)
+
+| Item | Disposition |
+|---|---|
+| F08 visual state | **VISUAL PRESENT** (DOM-exact) · **full-text readability NOT PASS** (2-line clamp) · **accepted** (existing CSS, not a write defect) |
+| Bytecount | **corrected**: actual asset **154598 bytes**; `154417` was a char count mislabeled (sha unchanged `41e61ef5…`) |
+| Mutation | **UNCHANGED** — this supplement adds no read or write; observational only |
+| Product/UI fix | **none** |
+| Owner grant | **CONSUMED** (unchanged) |
+| SCOPE-BASELINE | **unselected / NOT authorized** (unchanged) |
+| Merge | **not performed** |
+
+**No earlier work package is reopened.** §V stands as recorded for the state then observed; this section adds
+the completed visual measurement and the bytecount erratum only, and changes **no** fixture, product, harness
+or service. The retained write authorization remains **closed**.
+
+**PR links.** Branch `docs/f08-visual-verification` (new, off `main` @ `93359a3…`); the supplemental record
+above.
