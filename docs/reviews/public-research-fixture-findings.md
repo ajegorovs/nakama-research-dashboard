@@ -1149,3 +1149,50 @@ this section appends and rewrites no design constant.
   no service/deploy/restart, no merge. The rows remain **design-accepted proposals, NOT owner-selected**;
   the WP-G grant stays **consumed**; no external reviewer has accepted the concrete payload and no
   authorization builder has been granted.
+
+### X.2 Retained-amendment execution chronology (appended 2026-10-09)
+
+> **Appended — append-only.** §A–§W and §X/§X.1 above stand as recorded and are **not rewritten**. This
+> subsection records the **execution** of the amendment rows (F02 + F07/F09 + F12) and its verification, as
+> a chronology. Published in
+> [`2026-10-09-retained-amendment-execution-report.md`](2026-10-09-retained-amendment-execution-report.md),
+> with machine evidence in
+> [`2026-10-09-retained-amendment-execution-evidence.json`](2026-10-09-retained-amendment-execution-evidence.json).
+> Public labels, sanitized ids and digests only; the exact operational ids, the frozen payload and the raw
+> envelopes are held **local** (git-ignored).
+
+- **Review moved from scope to concrete payload, then owner-authorized.** The historical **scope** verdict
+  stands (`Verdict: ACCEPT THE PROPOSED SCOPE, WITHHOLD WRITE AUTHORIZATION.`). The **concrete-payload**
+  review then returned, **verbatim**, `CONCRETE PAYLOAD ACCEPTED — WRITE AUTHORIZATION WITHHELD.` — it
+  **accepted the payload and withheld write authorization**. The **owner** then granted a **new,
+  digest-bound, one-shot write authorization** in the exact words **"i agree. proceed"**. That grant is
+  **CONSUMED**. Paraphrases of either verdict are summaries, not quotes.
+- **Bundle retained, not regenerated.** The frozen amendment bundle re-derived and matched before any call:
+  bundle `ba1b9050…`; payloads T1 `23a4c01d…`, T2 `31241657…`; frozen bytes `06d8a619…`. **No regeneration,
+  no silent re-derive.**
+- **Boundary: no material drift.** Fresh pre-T1 readback at the exact target org (label
+  `Public Research Exercise`, explicitly selected, never `orgs[0]`): served `ui/app.js` sha256
+  `f6e6b8f3…`, **155420** bytes, byte-equal to the repo, release `0.2.0+dev.a5f76a608db2` rev `17`; ax5/ax6
+  version `2`, ax4 version `2`, topic versions `1`, diagnostics plan version `1`; ax5/ax6 people `[]` (F02
+  gap); all repo metadata blank (F07/F09 gap); the four plan-step positions `null` (F12 gap); F01/F04/F08
+  writes present. Counts `2/6/3/1`; **8 events**. All boundary checks PASS.
+- **T1 executed once** (`reconcile_topic`, HTTP 200 · `result.ok` true): ax5/ax6 person links to the
+  **already-stored** person (githubLogin `ajegorovs`, no new person), axis versions `2 → 3`, dashboard repo
+  `url`/`description`/`defaultBranch` set, topic `relationship` `primary` **preserved**. Axis→repo links,
+  counts, events, axes 1–4, topic versions, plans and ax4 **unchanged**.
+- **T2 executed once** (`reconcile_topic`, HTTP 200 · `result.ok` true), after a fresh T2 prerequisite read:
+  UDV + Grablink metadata set, topic relationships preserved, plan-step positions written `1..4` in the
+  authored order (same `stepId`s, verbatim titles, state `pending`), plan **version stays `1`** (verbatim
+  summary echo) and plan `updatedAt` unchanged; only each step's `updatedAt` advanced. ax4, ax5/ax6, axes
+  1–4, counts, events, problems, people and `lastActivityAt` **unchanged**.
+- **Full postflight PASS (29/29)** on a single-schema readback byte-comparable to the pre-T1 snapshot.
+  Mutation-public digest `b9218047…` (pre-T1) → `535b5f41…` (post-T1) → `5b965d6a…` (post-T2).
+- **Protected (un-targeted) stores unchanged** by their own readback (stable projection, pre vs post, not
+  DB byte identity): `Layout Demo` `eda52f72…` (2/7/3/2), `Nakama E2E Fixture` `a75bc4c6…` (2/8/1/0).
+- **No deployment, no restart, no merge.** Served `ui/app.js` sha256 and bytecount identical before and
+  after; **PR7 stays draft**, status corrected to **executed, pending review**; **no reviewer has accepted
+  the execution** (none is invented). **SCOPE-BASELINE remains unselected and NOT authorized.**
+- **Store-contract note.** Measured at source: the axis patch enforces `expectedVersion` and **bumps the
+  axis version unconditionally**; repositories/plans are unguarded in the reconcile path; `updatePlanStep`
+  looks a step up by `id` with no ownership check (the payload used the four correct step ids, confirmed
+  against the fresh snapshot before the write).
