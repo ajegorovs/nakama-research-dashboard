@@ -156,6 +156,18 @@ overwrite a good record with an aborted run's transcript by hand.
    fails a gate rather than waiting for a reviewer. Do not hand-edit a committed transcript to hide it: fix the
    emitter and regenerate the record; a write-pass record that still carries the old detail is regenerated only by
    a write run (which mutates the fixture) and is a stated boundary, not an exemption.
+10. **A visual clamp is not a text-content fact — `textContent` and the block inventory pass while the reader
+   cannot see the text.** `-webkit-line-clamp` hides glyphs without touching `textContent`, so a text-exact
+   check and the per-axis block count stay green on a card the reader cannot read (finding U03: a 411-char axis
+   `currentState` clipped to 2 lines even with its disclosure open). A full-text access change therefore needs a
+   **geometry-based** assertion — `clientHeight` vs `scrollHeight`, the visible-glyph walk over
+   `Range.getClientRects()`, the tail clause present, and horizontal overflow 0 — plus a **negative control**
+   that re-clamps while the disclosure is open and **must go red**. Prove scoping, do not assume it: assert the
+   new rule is **inert** when collapsed (`el.matches(rule) === false`) and that a **fold-less** row does **not**
+   match. `harness/full-text-clamp/check.mjs` (`bun run harness:fulltext`) is the worked example — it mounts the
+   **built** bundle through the preview host (no instance, no credentials, no service restart) and **refuses**
+   (exit 3) a build whose bundle does not contain the rule byte-for-byte, so a green run cannot come from CSS
+   the check injected itself.
 
 ## Outcome-based autonomy and review cadence
 

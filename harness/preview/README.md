@@ -81,6 +81,17 @@ and SIGTERM included). Two safety rules:
 `--keep` leaves everything in place for inspection; a stale manifest from a crashed run is recovered on the
 next start. The manifest and any `.preview-bak` files are removed on cleanup too.
 
+### The identity endpoint (`--run-token`), and why it is not a file
+
+When a caller passes `--run-token` (the full-text-clamp check does, so it can prove the responder on a reused
+port is *its own* child), the generated `preview.vite.config.ts` captures that token — plus the boot bundle's
+sha256 and byte length — **once, at config load** (that server's startup), and serves it from an in-memory
+`configureServer` middleware at `/preview-identity.json`. Nothing is written to disk, the endpoint reads no
+file when a request arrives, and it is served before Vite's own static middleware with `Cache-Control:
+no-store`. A server therefore keeps **its own** identity even after a newer run rewrites the shared generated
+files on the same webroot, so a stale or foreign responder is refused rather than measured — the property a
+filesystem-served token cannot have. Absent `--run-token`, no identity endpoint is registered.
+
 ## Prerequisite
 
 A **Nakama checkout** (`v0.4.31` is the version this plugin targets) — the host's packages are not
