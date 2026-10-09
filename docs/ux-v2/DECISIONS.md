@@ -639,11 +639,17 @@ byte-equality is claimed).
   a child that exits before readiness **aborts immediately**; the generated fixture is rebuilt on every
   self-served run, and the reported build size is the file's byte length (`155420 B`), not its UTF-16
   code-unit count (`155239`). The red/green guards are exercised by
-  `harness/full-text-clamp/integrity.test.mjs` (`bun run harness:fulltext:test`, 6 cases).
+  `harness/full-text-clamp/integrity.test.mjs` (`bun run harness:fulltext:test`, 7 cases — the seventh is the
+  same-webroot stale-Vite race).
 - **Where the work lands:** `src/ui.tsx` (the rule) and the rebuilt committed `ui/app.js`; the check under
   `harness/full-text-clamp/`; the implementation-preview record in
   [`U12-fulltext-clamp-release.md`](U12-fulltext-clamp-release.md).
-- **Not done, by instruction:** **no deploy, no vendor, no reinstall, no restart, no fixture write, no served
-  run.** This is an **implementation preview against the built bundle**, not served-build acceptance; the
-  served acceptance remains a separate decision (which names the org explicitly — `--org-id`/`--org-name`, a
-  backend that does not rebind `orgs[0]`).
+- **Not done, at this decision stage (historical):** **no deploy, no vendor, no reinstall, no restart, no fixture
+  write, no served run** *when the implementation was authorized*. This decision is an **implementation preview
+  against the built bundle**, not served-build acceptance; the served acceptance was a separate decision (which
+  names the org explicitly — `--org-id`/`--org-name`, a backend that does not rebind `orgs[0]`). That separate,
+  owner-authorized act then followed: the deployment and its read-only served runtime measurement are recorded in
+  [`U12-fulltext-clamp-release.md`](U12-fulltext-clamp-release.md#served-build-deployment-and-read-only-served-runtime-verification-2026-10-09)
+  and accepted in
+  [`../reviews/2026-10-09-u12-acceptance-record.md`](../reviews/2026-10-09-u12-acceptance-record.md). The
+  decision-stage wording above stands as historical; it is not rewritten to pretend the deployment never happened.

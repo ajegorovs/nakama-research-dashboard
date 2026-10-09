@@ -1,6 +1,8 @@
 # U12 — full-text clamp release on the axis reading (implementation preview, 2026-10-09)
 
-> **Status: implemented + regression-tested; served-build acceptance measured (read-only), awaiting owner review.**
+> **Status: implemented + regression-tested; served-build runtime measured (read-only) and reviewer-accepted —**
+> **`SERVE · RUNTIME — ACCEPTED`; merge owner-gated (not merged).** The acceptance record is
+> [`../reviews/2026-10-09-u12-acceptance-record.md`](../reviews/2026-10-09-u12-acceptance-record.md).
 > The change lands the owner-approved behavior into the source and the committed bundle, with an executable browser
 > check that measures the **built** bundle. **No deploy, no vendor, no reinstall, no restart, no fixture write, no
 > served run** was performed *by this record* — that was a separate, owner-authorized act. See
@@ -111,10 +113,14 @@ Written by the check to `.hermes/scratch/full-text-clamp/pack/` (generated, git-
 
 ## Boundaries (stated, not implied)
 
-- **Not served-build acceptance.** The measurements are of the **built bundle** through the host runtime, not
-  of a served release. Whatever an instance serves is unchanged until a deploy/reinstall, which this record
-  does **not** perform and does **not** authorize. **Deployment is pending**; no live/served run backs any
-  number here.
+- **Not served-build acceptance at this record's stage.** The measurements are of the **built bundle** through the
+  host runtime, not of a served release. Whatever an instance serves was unchanged until a deploy/reinstall, which
+  this record did **not** perform and does **not** authorize. **Deployment was pending at this stage**; no
+  live/served run backs the implementation-preview numbers here. That pending state was then closed by a
+  **separate, owner-authorized** deployment whose read-only served runtime measurement is recorded in the
+  [served section](#served-build-deployment-and-read-only-served-runtime-verification-2026-10-09) below and
+  accepted in [`../reviews/2026-10-09-u12-acceptance-record.md`](../reviews/2026-10-09-u12-acceptance-record.md);
+  this boundary is left as its stage statement, not rewritten.
 - **The payload is a synthetic preview, not live data.** The check mounts a corpus-derived preview payload
   with the **F08 candidate** subject patched in (the 411-char wording is the approved design's *candidate*,
   carried as a shared constant — never an instance's live row). The viewer sees the rule's behavior on that
