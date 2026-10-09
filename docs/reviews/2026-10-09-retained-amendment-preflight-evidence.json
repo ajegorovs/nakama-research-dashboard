@@ -6,7 +6,7 @@
   "authorization": "planning scope + read-only preflight only",
   "head": "64f63934e025d8c8c3f3fabf4af60c82d878d75c",
   "branch": "docs/retained-metadata-plan-amendment",
-  "measuredAt": "2026-10-09T00:00:00Z-local",
+  "measuredAt": "2026-10-09T08:18:31.822Z",
   "target": {
     "label": "Public Research Exercise",
     "freshVerified": true,
@@ -24,8 +24,21 @@
     "isU12Build": true,
     "guardOrgAware": false
   },
-  "counts": { "topics": 2, "axes": 6, "repositories": 3, "people": 1, "events": 8 },
-  "versions": { "ax5": 2, "ax6": 2, "ax4": 2, "topicInfra": 1, "topicExp": 1, "diagPlan": 1 },
+  "counts": {
+    "topics": 2,
+    "axes": 6,
+    "repositories": 3,
+    "people": 1,
+    "events": 8
+  },
+  "versions": {
+    "ax5": 2,
+    "ax6": 2,
+    "ax4": 2,
+    "topicInfra": 1,
+    "topicExp": 1,
+    "diagPlan": 1
+  },
   "alreadyApplied": {
     "ax5RepoLink": "dashboard primary (present)",
     "ax6RepoLink": "dashboard primary (present)",
@@ -35,19 +48,70 @@
     "ax4Evidence": 0
   },
   "amendmentRows": {
-    "F02": { "ax5PeopleBefore": 0, "ax6PeopleBefore": 0, "after": "link existing person by github_login" },
-    "F07F09": {
-      "reposBefore": { "dashboard": { "url": "", "description": "", "defaultBranch": "" }, "udv": { "url": "", "description": "", "defaultBranch": "" }, "grablink": { "url": "", "description": "", "defaultBranch": "" } },
-      "descriptionsFrom": "pinned README (approved, byte-equal)",
-      "defaultBranchAsOfRead": { "dashboard": "main", "udv": "master", "grablink": "master" }
+    "F02": {
+      "ax5PeopleBefore": 0,
+      "ax6PeopleBefore": 0,
+      "after": "link existing person by github_login"
     },
-    "F12": { "stepsBefore": [null, null, null, null], "stepsAfter": [1, 2, 3, 4], "stepIdsUnchanged": true, "titlesVerbatim": true }
+    "F07F09": {
+      "reposBefore": {
+        "dashboard": {
+          "url": "",
+          "description": "",
+          "defaultBranch": ""
+        },
+        "udv": {
+          "url": "",
+          "description": "",
+          "defaultBranch": ""
+        },
+        "grablink": {
+          "url": "",
+          "description": "",
+          "defaultBranch": ""
+        }
+      },
+      "descriptionsFrom": "pinned README (approved, byte-equal)",
+      "defaultBranchAsOfRead": {
+        "dashboard": "main",
+        "udv": "master",
+        "grablink": "master"
+      }
+    },
+    "F12": {
+      "stepsBefore": [
+        null,
+        null,
+        null,
+        null
+      ],
+      "stepsAfter": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "stepIdsUnchanged": true,
+      "titlesVerbatim": true
+    }
   },
-  "topicRelationshipsPreserved": { "infra": "dashboard=primary", "experimental": "udv=primary, grablink=supporting" },
+  "topicRelationshipsPreserved": {
+    "infra": "dashboard=primary",
+    "experimental": "udv=primary, grablink=supporting"
+  },
   "freshGithubMetadata": {
-    "dashboard": { "htmlUrl": "https://github.com/ajegorovs/nakama-research-dashboard", "defaultBranch": "main" },
-    "udv": { "htmlUrl": "https://github.com/ajegorovs/udv-echo-process", "defaultBranch": "master" },
-    "grablink": { "htmlUrl": "https://github.com/ajegorovs/Grablink-Full-sequence-acquisition", "defaultBranch": "master" }
+    "dashboard": {
+      "htmlUrl": "https://github.com/ajegorovs/nakama-research-dashboard",
+      "defaultBranch": "main"
+    },
+    "udv": {
+      "htmlUrl": "https://github.com/ajegorovs/udv-echo-process",
+      "defaultBranch": "master"
+    },
+    "grablink": {
+      "htmlUrl": "https://github.com/ajegorovs/Grablink-Full-sequence-acquisition",
+      "defaultBranch": "master"
+    }
   },
   "bundle": {
     "bundleSchema": "ramd-retained-amendment-bundle/1",
@@ -59,14 +123,40 @@
       "T2": "31241657e6386c581552f6a7ce633d4e093f3d4f4248405ffeb9240489866778"
     },
     "digestsReDerived": true,
-    "schemaValidation": { "validator": "static, against manifest reconcile_topic inputSchema", "errors": 0, "pass": true },
+    "schemaValidation": {
+      "validator": "static, against manifest reconcile_topic inputSchema",
+      "errors": 0,
+      "pass": true
+    },
     "executionStatus": "NOT EXECUTED"
   },
   "protectedStores": {
-    "layoutDemo": { "counts": [2, 7, 3, 2], "digest": "46c7d11108217159d6e0ba75a9f33c001eb685ffb8f8d9547d5e75b2fa877b01" },
-    "nakamaE2EFixture": { "counts": [2, 8, 1, 0], "digest": "79d49a1f5b9d3154495e6db8e035c222515791634a2abb87de18196a3da5444c" }
+    "layoutDemo": {
+      "counts": [
+        2,
+        7,
+        3,
+        2
+      ],
+      "digest": "46c7d11108217159d6e0ba75a9f33c001eb685ffb8f8d9547d5e75b2fa877b01"
+    },
+    "nakamaE2EFixture": {
+      "counts": [
+        2,
+        8,
+        1,
+        0
+      ],
+      "digest": "79d49a1f5b9d3154495e6db8e035c222515791634a2abb87de18196a3da5444c"
+    }
   },
-  "drift": { "material": false, "expectedOnly": ["axes5/6 and axis4 version 1->2 (WP-G T1/T2)", "U12 served build revision 9 -> 17"] },
+  "drift": {
+    "material": false,
+    "expectedOnly": [
+      "axes5/6 and axis4 version 1->2 (WP-G T1/T2)",
+      "U12 served build revision 9 -> 17"
+    ]
+  },
   "checks": {
     "pass": 20,
     "fail": 0,
@@ -93,6 +183,43 @@
       "bundle + payload digests re-derived and matched"
     ]
   },
-  "remainingGate": ["concrete bundle review", "separate explicit owner write authorization"],
-  "ownerGrantStatus": "NOT granted for the amendment rows; WP-G grant consumed"
+  "remainingGate": [
+    "concrete bundle review",
+    "separate explicit owner write authorization"
+  ],
+  "ownerGrantStatus": "NOT granted for the amendment rows; WP-G grant consumed",
+  "measuredAtSource": "retained preflight preflightTimestamp (local raw snapshot; not date-only, not invented)",
+  "publishedInCommit": "9eb60f618b5910e0254cc338761bcb084f87e839",
+  "commitEmbedding": "none — the measured head is the source base 64f63934...; this record never embeds its own commit SHA",
+  "reviewerVerdict": {
+    "text": "Verdict: ACCEPT THE PROPOSED SCOPE, WITHHOLD WRITE AUTHORIZATION.",
+    "kind": "scope verdict (accepts the scope; withholds write authorization)",
+    "verbatim": true,
+    "notAPayloadAcceptance": true,
+    "note": "Any paraphrase is a summary, not the reviewer’s exact words."
+  },
+  "privateReviewPackage": {
+    "present": true,
+    "heldLocalGitIgnored": true,
+    "pathInLocalHandoff": "not in this public record",
+    "contents": [
+      "frozen payload bytes (byte-exact copy + sha256)",
+      "digest manifest (sha256 method, bundle digest, per-tx payload digests, public digest matching)",
+      "membership mapping (owning topic/axis/plan per record)",
+      "before-full-state snapshot",
+      "contract notes (store guard gaps, stop-on-drift, T1/T2 single-shot)",
+      "validation results"
+    ],
+    "frozenSha256": "06d8a6190459c10166fdc39609fbb02dbba5264b9034def42b4356db5cc0f66a",
+    "publicDigestMatching": true,
+    "credentialsIncluded": false,
+    "reviewStatus": "PENDING — this record claims neither that the concrete payload was reviewed nor accepted"
+  },
+  "payloadValidation": {
+    "method": "static schema vs manifest reconcile_topic inputSchema + direct field-by-field comparison against the fresh preflight raw snapshots; membership/ownership each checked",
+    "allPass": true,
+    "checkCount": 37,
+    "passCount": 37,
+    "noRegenerateOrSilentRederive": true
+  }
 }

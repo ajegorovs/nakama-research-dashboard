@@ -1109,3 +1109,43 @@ this section appends and rewrites no design constant.
 
 **PR links.** Branch `docs/retained-metadata-plan-amendment` (new, off `main` @ `64f6393…`); draft PR
 (new).
+
+### X.1 PR7 correction chronology (appended 2026-10-09)
+
+> **Appended correction — append-only.** §A–§W stand as recorded and are **not rewritten**; this
+> subsection records a **correction to the current PR7 records only** (§X above and its report/evidence
+> files). It is a chronology, not a rewrite of any prior accepted record.
+
+- **Timestamp corrected.** The preflight report (§X) carried an **incomplete** measured value
+  (`2026-10-09T`) and the evidence JSON carried a **malformed** value (`2026-10-09T00:00:00Z-local`). Both
+  are corrected to the **retained preflight `preflightTimestamp` `2026-10-09T08:18:31.822Z`** (the
+  read-only preflight's own completion time, from the local raw snapshot) — an **actual retained
+  timestamp**, not a date-only fallback and not an invented time. A future read would not be laundered in:
+  a correction here revises only the current PR7 records.
+- **Source / commit provenance made explicit (no circular commit embedding).** The measurement is of the
+  **source base** `64f63934…`; the record was **first published** in commit `9eb60f6…`. The record does not
+  embed the SHA of the commit that carries it, and this correction is a **later appended docs commit**
+  (SHA deliberately not embedded).
+- **Reviewer verdict recorded verbatim.** The reviewer's verdict on the **scope** is quoted **exactly** —
+  `Verdict: ACCEPT THE PROPOSED SCOPE, WITHHOLD WRITE AUTHORIZATION.` — and is labelled a **scope** verdict
+  that **withholds write authorization**, **not** a concrete-payload acceptance. Every paraphrase is a
+  **summary, not a verbatim quote**.
+- **Concrete-review receipt added (review PENDING).** §X's report now points to a **private, self-contained
+  review package** (held local, git-ignored) that makes **every concrete record field** independently
+  hash-validatable — frozen payload bytes + digest manifest + public digest matching + membership mapping +
+  before-full-state + contract notes. The public record carries **no** host path, operational id or
+  credential; the review is **PENDING**, not completed.
+- **Payload re-validated.** The prepared payloads were re-checked **directly** — static schema against the
+  manifest `reconcile_topic` `inputSchema`, and field-by-field against the fresh preflight raw snapshots —
+  with ownership/membership confirmed for every record: **37/37 checks PASS**. The frozen bundle bytes were
+  **not regenerated or silently re-derived**; the quoted bundle/payload digests re-derive and match.
+- **Store guard finding recorded (reviewer lesson).** `src/store.ts` confirms the guard is **axis-only**:
+  the axis patch enforces `expectedVersion`; **repositories** and **plans** are **unguarded** in the
+  reconcile path, and `updatePlanStep` looks a step up by `id` with **no enclosing plan/axis/topic
+  ownership check**. The payload uses the four correct step ids, but the store cannot itself prove that
+  ownership — a reviewer must read the step ids first. This is why the concrete review is required before
+  any write.
+- **Boundaries unchanged.** No fixture/domain write, no `reconcile_topic`/`record_activity`, no inference,
+  no service/deploy/restart, no merge. The rows remain **design-accepted proposals, NOT owner-selected**;
+  the WP-G grant stays **consumed**; no external reviewer has accepted the concrete payload and no
+  authorization builder has been granted.

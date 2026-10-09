@@ -12,8 +12,15 @@
 > **not** re-run here. The **concrete bundle review** and a **separate explicit owner write
 > authorization** remain the gate before any write (§10).
 >
-> **Measured:** `2026-10-09T` at head `64f63934e025d8c8c3f3fabf4af60c82d878d75c` (branch
-> `docs/retained-metadata-plan-amendment`).
+> **Measured:** `2026-10-09T08:18:31.822Z` — the retained preflight `preflightTimestamp` (the read-only
+> preflight's own completion time, from the local raw snapshot; **not** a date-only value and **not**
+> invented). The observation was taken at source head
+> `64f63934e025d8c8c3f3fabf4af60c82d878d75c` (branch `docs/retained-metadata-plan-amendment`). This
+> record was **first published** in commit `9eb60f618b5910e0254cc338761bcb084f87e839`; the measurement is
+> of the **source base**, never of the commit that carries this document — so **no circular commit
+> embedding**: this record does not contain its own commit SHA. A correction is a **later appended docs
+> commit** (SHA deliberately not embedded), and it revises only the current PR7 records, never a prior
+> accepted record.
 >
 > **Public-safe.** This record carries **public labels and sanitized ids only** — no live org id, no
 > axis/person/problem id, no host name or host path. The **exact operational ids and the executable
@@ -222,3 +229,40 @@ consumed** and is not reusable.
   local-only; this record carries public labels, sanitized id references and digests.
 - **Proposed, not authorized.** The bundle is prepared, not granted; the rows are design-accepted, not
   owner-selected.
+
+## 12. Reviewer verdict (verbatim — a **scope** verdict, not a payload acceptance and not a write grant)
+
+The reviewer's verdict on the **proposed scope** (planning scope + read-only preflight + prepared bundle),
+quoted **exactly**:
+
+> Verdict: ACCEPT THE PROPOSED SCOPE, WITHHOLD WRITE AUTHORIZATION.
+
+**This is a scope verdict.** It accepts the *scope*, and it explicitly **withholds write authorization** —
+it is **not** a concrete-payload review and **not** a grant. Any paraphrase (for example, "the scope was
+accepted, but no write is authorized") is a **summary, not a verbatim quote**, and is labelled as a summary
+wherever it appears; the reviewer's exact words are only the line above.
+
+## 13. Review receipt — how to independently validate the concrete payload (**review PENDING**)
+
+The **concrete bundle review is not completed** by this record; nothing here pretends it is. The concrete
+payload is made independently checkable through a **private, self-contained review package** held **local
+and git-ignored** (its exact path and every operational id stay in the local handoff — this public record
+carries **no host path, no org/axis/person/plan/step id, and no credential**). The package contains:
+
+- the **frozen payload bytes** (a byte-exact copy of the prepared bundle, with its own sha256);
+- a **digest manifest** (the declared sha256 method, the bundle digest, the per-transaction payload
+  digests, and the **public digest matching** — the digests quoted in the public evidence JSON);
+- the **membership mapping** (each payload record's owning topic/axis/plan);
+- the **before-full-state** snapshot (to compare at the write boundary); and
+- **contract notes** (store guard gaps, stop-on-drift rules, the T1/T2 single-shot contract).
+
+An independent reviewer who can read that local package can **hash-validate every concrete record field** —
+the axis ids + `expectedVersion`; each repository `fullName`/`url`/`description`/`defaultBranch`/
+`relationship`; the plan id/axis/`summary` and the four step ids/titles/positions — by: (1) hashing the
+frozen bytes and re-deriving the bundle + payload digests with the declared method; (2) matching those
+digests against the public evidence JSON; (3) walking the membership mapping to confirm ownership; and
+(4) diffing each field against the fresh snapshot and the manifest `reconcile_topic` `inputSchema`.
+
+**Status: review PENDING.** This record claims neither that the concrete payload was reviewed nor that it
+was accepted; quoting the scope verdict (§12) does **not** complete the concrete review, and the two
+remaining gates (§10) still withhold every write.

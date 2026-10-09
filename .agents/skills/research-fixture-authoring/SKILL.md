@@ -301,3 +301,13 @@ lays out the human choices; **WP-G grants no write authorization**, and no run w
    (honest, not a defect) and accepted as a limitation — not fabricated and not read as inactivity.
 6. **Designing around a suspect fixture.** Never fold UI design into a fixture whose data linking is under
    review; settle the data first (UI is a separate, deferred track).
+7. **`expectedVersion` guards the axis only.** In `reconcileTopic` the optimistic guard is applied to an
+   **axis** patch (`src/store.ts` `applyAxisPatch(…, { expectedVersion: axisInput.expectedVersion })`) and
+   to a **topic** patch only when an `input.topic` patch is present. **Repositories** (`upsertRepository`)
+   and **plans** (`updatePlan` called without `expectedVersion` in the reconcile branch) are **unguarded**,
+   and `updatePlanStep` resolves a step by `SELECT … WHERE id = ?` with **no enclosing plan/axis/topic
+   ownership check** — a step id from another plan would be silently updated. Before writing metadata or
+   plan positions, **read the full current step membership (ids/titles/states/positions) first**, confirm
+   every step id belongs to the intended plan, and carry the **stored** topic/repo `relationship` verbatim
+   (omitting it defaults to `supporting` and demotes a `primary` link). The store cannot prove ownership
+   for you.
