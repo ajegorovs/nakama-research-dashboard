@@ -62,8 +62,11 @@ grant. The frozen payload bytes were **retained, not regenerated**.
   `f6e6b8f3cec9476ad55be4f7067eb116690ae0b26c03cd98c58b654cb9024548`, **155420** bytes, **byte-equal** to
   the repo's `ui/app.js`; the target org serves release **`0.2.0+dev.a5f76a608db2`** revision **`17`** (the
   U12 full-text clamp-release build). **No deployment change** (same before and after).
-- **Object versions:** ax5 **2**, ax6 **2**, ax4 **2**; topic versions **1**; diagnostics plan version **1**
-  — all matching the bundle's `expectedVersion`.
+- **Object versions:** ax5 **2**, ax6 **2**, ax4 **2**; topic versions **1**; diagnostics plan version
+  **1**. The bundle binds `expectedVersion` on **T1's two axis patches only** (ax5/ax6 = 2); **ax4, both
+  topics and the diagnostics plan carry no `expectedVersion`** — their versions were **measured, not bound**
+  (topic, repositories and plans are **unguarded** in the reconcile path). (Wording corrected in the execution
+  audit closeout; see the findings ledger §X.3.)
 - **Amendment gaps present (the deltas this run writes):** ax5/ax6 people **`[]`** (F02); all three
   repositories `url:'' description:'' defaultBranch:''` (F07/F09); the diagnostics plan's **four** step
   positions **all `null`** (F12, same `stepId`s and verbatim titles).
@@ -115,7 +118,7 @@ grant. The frozen payload bytes were **retained, not regenerated**.
 | plan-step `position`s (4) | `null, null, null, null` | `1, 2, 3, 4` (authored order) |
 | plan version | `1` | `1` (**unchanged** — verbatim summary echo) |
 | plan `updatedAt` | *(pre-T2)* | **unchanged** |
-| each step `updatedAt` | *(pre-T2)* | **advanced** (the only per-row change) |
+| each step `updatedAt` | *(pre-T2)* | **advanced** (the only per-row **timestamp** change; the same rows' `position`s also changed, `null → 1..4`) |
 
 - **Changed:** UDV + Grablink metadata set; the four step positions written `1..4` in the authored order
   (same `stepId`s, verbatim titles, state still `pending`); each step's `updatedAt` advanced — the only

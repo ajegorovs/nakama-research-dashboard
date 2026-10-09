@@ -1196,3 +1196,72 @@ this section appends and rewrites no design constant.
   axis version unconditionally**; repositories/plans are unguarded in the reconcile path; `updatePlanStep`
   looks a step up by `id` with no ownership check (the payload used the four correct step ids, confirmed
   against the fresh snapshot before the write).
+
+### X.3 Retained-amendment **execution audit closeout** — independent read-only audit, corrections and boundary disclosures (appended 2026-10-09)
+
+> **Appended correction — append-only.** §A–§W and §X/§X.1/§X.2 above stand as recorded and are **not
+> rewritten**. This subsection records the outcome of an **independent, read-only audit** of §X.2's execution
+> evidence and the corrections and boundary disclosures that close it out. It adds **no write** and consumes
+> **no grant**.
+
+- **Audit provenance and method.** A **separate, independent read-only audit** re-checked §X.2's claims from
+  local files only — **no write, no commit, no merge, no live/domain call**. It re-derived the frozen
+  bundle/payload digests (`ba1b9050…`, `23a4c01d…`, `31241657…`), re-counted the `reconcile_topic` call sites
+  and re-ran the file-only verifiers.
+- **Confirmed, no blocker.** **Exactly two WRITE calls** exist in the run — one `reconcile_topic` in the T1
+  runner, one in the T2 runner; **T1 was verified before T2 began**; the bundle, pre-T1 snapshot and postflight
+  digests **re-derive and match**; the **29/29 postflight PASS is real** and **no mutation failure was masked**.
+  The executed evidence is **substantively verified** by that audit.
+- **Internal audit only; external review stays PENDING.** This is an **internal independent audit** of the
+  *evidence*; it is **not** an external reviewer's **execution acceptance**, which remains **PENDING**, and it
+  does **not** accept the execution. PR7 stays **draft**.
+- **Correction — `expectedVersion` scope.** §X.2 and its report stated the object versions matched "the
+  bundle's `expectedVersion`". The bundle binds **`expectedVersion` on T1's two axis patches only** (ax5/ax6
+  = 2); **ax4, both topics and the diagnostics plan carry no `expectedVersion`** — their versions were **measured,
+  not bound** (topic, repositories and plans are **unguarded** in the reconcile path). The report wording is
+  corrected accordingly.
+- **Correction — "only per-row change".** The report's T2 table said each step's `updatedAt` advanced
+  "(the only per-row change)"; the **step `position`s on the same rows also changed** (`null → 1..4`). The
+  prose and the evidence JSON already qualified it as "the only **timestamp** change"; the table row is
+  corrected to match.
+- **Disclosure — two pre-write boundary stops.** Before any write, the fresh boundary preflight **stopped
+  twice**, each time **before the write** — **no write occurred on either stopped run**, and the frozen payload
+  bytes were unchanged:
+  - **Served-asset reader-unit stop:** the served-asset check compared the response's **character length**
+    (`155239`) against the expected **byte length** (`155420`) — a UTF-8 multibyte **reader-unit** bug, not a
+    served-bytes change. Resolved by hashing the **raw response buffer**, which confirms `f6e6b8f3…` / `155420`
+    bytes (re-confirmed by a standalone served probe).
+  - **F12 plan-path stop:** the F12 check read `axis.plans` where the plan lives at **`axis.plan`** (singular)
+    on the scoped axis read — a **reader-path** bug, not a plan difference.
+  Both were **checker defects corrected in the runner**; the writes then ran **once each** (T1, then T2 after
+  the T1 readback).
+- **Disclosure — four post-checker failures at the first postflight (reader-schema, not data drift).** The first
+  postflight run reported **four** failing checks — a step `createdAt` check (the `createdAt` **values were
+  identical**, merely **re-ordered by the newly-applied `position`**), a `lastActivity` / `axisCounts`
+  **schema** difference, and the two **protected-store** checks (fields present in one reader's projection but
+  not the other). None was real drift. The correction was a **schema harmonization** — the postflight reader
+  re-expressed as a **single projection identical to the pre-T1 (phase-A) reader**, so target and protected
+  projections are **byte-comparable** — applied **per check id**, with **no data fix**. The harmonized re-run
+  is the **29/29 PASS** recorded in §X.2.
+- **Preservation boundary — measured fields, not full-fixture byte identity.** The "unchanged" claim rests on
+  the **captured projection** the audited readers compare. That projection **does not carry every field**: it
+  **omits activity text/actor**, **person timestamps**, **topic `description`** and **problem-evidence
+  timestamps** (among others). The record therefore preserves the **measured fields**, **not** the full fixture
+  at byte identity — "unchanged" must not be read as an **all-fields-complete** verification. There is **no**
+  all-fields-complete check and **no** "immutable person record" claim; the person check is **count-only**.
+- **Protected-store baseline is projection-relative, not historical-canonical.** §X's preflight recorded the two
+  un-targeted stores with a **counts-only projection** (`Layout Demo` `46c7d111…`, `Nakama E2E Fixture`
+  `79d49a1f…`). §X.2's execution compared them with the **full same captured projection**, **immediate pre-T1
+  vs post** (`Layout Demo` `eda52f72…`, `Nakama E2E Fixture` `a75bc4c6…`). The digests differ **because the
+  projection differs**, **not** because the stores changed; the §X.2 "unchanged" claim is a
+  **same-projection, immediate-pre vs post** match — **not** a historical-canonical full-state claim.
+- **Public-evidence sync limit — counts are not independent semantic invariants.** The public check counts
+  (payload validation **37/37**, read-only preflight **20/20**, postflight **29/29**) are **counts of the checks
+  each run makes**; matching totals do **not** by themselves establish that the checks assert **independent**
+  properties. A reader should treat the counts as **sync indicators**, not as proof that every invariant was
+  separately tested. **No execution is re-run here and no grant is consumed.**
+- **Boundaries unchanged.** Docs-only; no fixture/domain write, no `reconcile_topic`/`record_activity`, no
+  service/deploy/restart, no merge. The grant stays **CONSUMED**; SCOPE-BASELINE remains unselected/not
+  authorized. An **offline private review archive** (local, git-ignored) collects the audited runners, the raw
+  pre-T1/post requests, the same-projection snapshots and the frozen review pack so an independent reviewer can
+  **re-derive** the claims **without executing anything**.
