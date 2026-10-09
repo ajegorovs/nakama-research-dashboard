@@ -125,6 +125,22 @@ main { max-width: 1480px; margin: 0 auto; padding: 22px 28px 60px; }
 .select-row .row-meta { color: var(--muted); font-size: 12.5px; margin-top: 4px; }
 .select-row .row-purpose { color: var(--text); font-size: 13px; margin-top: 6px; }
 
+/* topic selector row: ONE real <button> carrying the whole row (name · status · short description ·
+   counts). No nested controls, no person/repo tags — the row is the control and selection is its
+   pressed state (aria-pressed), so Enter/Space/Tab and a click anywhere on the row all select it. */
+.select-row.topic-row { display: flex; flex-direction: column; gap: 5px; }
+.select-row.topic-row .sel-head { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
+.select-row.topic-row .row-description { color: var(--text); font-size: 13px; }
+.select-row.topic-row .row-meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 0; }
+.select-row.topic-row .meta-sep { color: var(--line-strong); }
+.proto-banner {
+  display: inline-block; margin-top: 2px; width: max-content; max-width: 100%;
+  font-size: 11px; letter-spacing: .02em; color: var(--parked);
+  background: var(--parked-bg); border: 1px solid #f0dfb8; border-radius: 999px; padding: 1px 8px;
+}
+.topic-detail .lede { margin-top: 10px; }
+.topic-detail .proto-banner { margin-top: 8px; }
+
 /* ---------- axis / problem cards ---------- */
 .axis-block { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; background: var(--panel); }
 .axis-block + .axis-block { margin-top: 12px; }

@@ -17,6 +17,7 @@
 const STATE = {
   data: null,
   build: null,
+  editorial: null,
   view: "overview",
   topic: null,
   axis: null,
@@ -52,6 +53,66 @@ const reposByAlias = () => Object.fromEntries(STATE.data.repositories.map((r) =>
 const peopleByAlias = () => Object.fromEntries(STATE.data.people.map((p) => [p.alias, p]));
 
 const STATUS_LABEL = { active: "active", paused: "paused", completed: "completed", archived: "archived" };
+
+/* ---------- topic descriptions: source field vs authored overlay ----------
+ * `data.json` is the frozen, read-only source export; `editorial.json` is a SEPARATE, author-drafted
+ * prototype overlay. Copy is read from the overlay only, always rendered with a small "prototype copy"
+ * badge, and is never written back into the frozen export. When the overlay has no entry the page falls
+ * back to the honest missing state. The source "summary" field stays in the export, unrenamed and
+ * unrendered: it was labelled "approved summary" in an earlier prototype cut and its purpose is undefined,
+ * so this prototype does not show it (see the pivot spec, §7).
+ */
+function editorialFor(alias) {
+  const e = STATE.editorial && STATE.editorial.topics ? STATE.editorial.topics[alias] : null;
+  return e && e.short ? e : null;
+}
+function prototypeBadge() {
+  return el("span", {
+    class: "proto-banner",
+    title: "Author-drafted prototype copy — not source-approved, and not part of the frozen export.",
+    text: "prototype copy · not source-approved",
+  });
+}
+/* Per-topic activity count. The frozen export carries a per-topic `activityCount` ROLLUP (captured in
+ * the source's own window) AND a flat `activity` event list. When the rollup totals match the snapshot
+ * list the rollup is complete for the capture and is labelled "recorded activities"; when they disagree
+ * (as they do here: 3 + 4 = 7 vs 8 events) the rollup is not a complete account of the snapshot, so the
+ * count of the frozen `activity` entries is shown instead, labelled "events in snapshot". No new events
+ * are manufactured and nothing is called "active". The exact time window and the completed-rollup rule
+ * are OPEN questions in the pivot spec. */
+function activityCount(topic) {
+  const rollupTotal = STATE.data.topics.reduce((s, t) => s + (t.activityCount || 0), 0);
+  const snapshotTotal = STATE.data.activity.length;
+  if (rollupTotal === snapshotTotal) {
+    const n = topic.activityCount || 0;
+    return { n, label: n === 1 ? "recorded activity" : "recorded activities" };
+  }
+  const n = STATE.data.activity.filter((e) => e.topicAlias === topic.alias).length;
+  return { n, label: n === 1 ? "event in snapshot" : "events in snapshot" };
+}
+function topicSelectorRow(topic, selected) {
+  const copy = editorialFor(topic.alias);
+  const act = activityCount(topic);
+  return el("button", {
+    class: "select-row topic-row", type: "button",
+    "data-topic": topic.alias,
+    "data-selected": selected ? "true" : "false",
+    "aria-pressed": selected ? "true" : "false",
+    onclick: () => go("topics", { topic: topic.alias }),
+  }, [
+    el("span", { class: "sel-head" }, [
+      el("span", { class: "row-title", text: topic.name }),
+      stateBadge(topic.status),
+    ]),
+    copy ? el("span", { class: "row-description", text: copy.short }) : null,
+    el("span", { class: "row-meta" }, [
+      el("span", { text: `${topic.axes.length} ${topic.axes.length === 1 ? "axis" : "axes"}` }),
+      el("span", { class: "meta-sep", "aria-hidden": "true", text: "·" }),
+      el("span", { text: `${act.n} ${act.label}` }),
+    ]),
+    copy ? prototypeBadge() : null,
+  ]);
+}
 
 /* ---------- small pieces ---------- */
 function stateBadge(state) {
@@ -105,15 +166,19 @@ function renderOverview() {
   const topicsPanel = el("section", { class: "panel" }, [el("h2", { text: "Research directions" })]);
   const tl = el("ul", { class: "select-list" });
   for (const t of d.topics) {
+    const copy = editorialFor(t.alias);
+    const act = activityCount(t);
     tl.appendChild(el("li", {}, [el("button", {
-      class: "select-row", type: "button", "data-topic": t.alias,
+      class: "select-row topic-row", type: "button", "data-topic": t.alias,
       onclick: () => go("topics", { topic: t.alias }),
     }, [
-      el("div", { class: "axis-head" }, [
+      el("span", { class: "sel-head" }, [
         el("span", { class: "row-title", text: t.name }),
         stateBadge(t.status),
       ]),
-      el("div", { class: "row-meta", text: `${t.axes.length} development axes · ${t.activityCount} recorded activities` }),
+      copy ? el("span", { class: "row-description", text: copy.short }) : null,
+      el("span", { class: "row-meta", text: `${t.axes.length} ${t.axes.length === 1 ? "axis" : "axes"} · ${act.n} ${act.label}` }),
+      copy ? prototypeBadge() : null,
     ])]));
   }
   topicsPanel.appendChild(tl);
@@ -146,50 +211,20 @@ function renderTopics() {
   const left = el("section", { class: "panel" }, [el("h2", { text: `Research directions (${d.topics.length})` })]);
   const list = el("ul", { class: "select-list" });
   for (const topic of d.topics) {
-    const selected = t && topic.alias === t.alias;
-    const blocker = firstBlocker(topic);
-    const rowBody = el("div", {
-      class: "select-row", "data-topic": topic.alias, "data-selected": selected ? "true" : "false",
-    }, [
-      el("div", { class: "axis-head" }, [
-        el("span", { class: "row-title", text: topic.name }),
-        stateBadge(topic.status),
-      ]),
-      el("div", { class: "row-purpose" }, [clampText(topicPurpose(topic), `tp:${topic.alias}`)]),
-      el("div", { class: "row-meta" }, [
-        el("span", { text: `${topic.axes.length} axes · ${topic.activityCount} activities · ` }),
-        ...linkChips(topic.personAliases, peopleByAlias()),
-      ]),
-      blocker ? el("div", { class: "row-meta" }, [el("span", { class: "soft", text: "Blocker: " }), el("span", { text: blocker })]) : null,
-      el("div", { class: "links" }, [
-        selected ? el("span", { class: "chip", text: "● selected" }) : navButton("Select", () => go("topics", { topic: topic.alias }), true),
-        navButton("Open axis →", () => {
-          const withAxis = topic.axes.find((a) => a.problemAliases.length) || topic.axes[0];
-          go("progress", { axis: withAxis ? withAxis.alias : null });
-        }),
-      ]),
-    ]);
-    const row = el("li", {}, [rowBody]);
-    list.appendChild(row);
+    const selected = !!(t && topic.alias === t.alias);
+    list.appendChild(el("li", {}, [topicSelectorRow(topic, selected)]));
   }
   left.appendChild(list);
   wrap.appendChild(left);
 
-  // detail
+  // detail — the selected direction's in-depth (long) description, then its axes unchanged this round.
   const detail = el("div", {});
   if (t) {
-    detail.appendChild(el("section", { class: "panel" }, [
+    const copy = editorialFor(t.alias);
+    detail.appendChild(el("section", { class: "panel topic-detail" }, [
       el("div", { class: "axis-head" }, [el("h1", { class: "axis-title", text: t.name }), stateBadge(t.status)]),
-      el("div", { class: "links" }, [
-        ...linkChips(t.repositoryAliases, reposByAlias()),
-        ...linkChips(t.personAliases, peopleByAlias()),
-      ]),
-      el("dl", { class: "kv" }, [
-        el("dt", { text: "description" }),
-        el("dd", {}, [t.description ? el("span", { text: t.description }) : el("span", { class: "soft", text: "No description recorded in the source." })]),
-        el("dt", { text: "approved summary" }),
-        el("dd", {}, [t.summary ? el("span", { text: t.summary }) : el("span", { class: "soft", text: "No approved summary recorded in the source." })]),
-      ]),
+      el("p", { class: copy ? "lede" : "lede none", text: copy ? copy.long : "No description recorded in the source." }),
+      copy ? prototypeBadge() : null,
     ]));
 
     const axesPanel = el("section", { class: "panel" }, [el("h2", { text: `Development axes (${t.axes.length})` })]);
@@ -199,15 +234,6 @@ function renderTopics() {
   wrap.appendChild(detail);
 
   $("#view-topics").replaceChildren(el("div", { class: "split" }, [left, detail]));
-}
-
-function topicPurpose(topic) {
-  return topic.description || topic.summary || "";
-}
-
-function firstBlocker(topic) {
-  for (const a of topic.axes) if (a.blocker) return a.blocker;
-  return "";
 }
 
 function axisBlock(a, { context }) {
@@ -470,12 +496,16 @@ function runSearch(q) {
 
 /* ---------- boot ---------- */
 async function boot() {
-  const [data, build] = await Promise.all([
+  const [data, build, editorial] = await Promise.all([
     fetch("data.json", { cache: "no-store" }).then((r) => r.json()),
     fetch("build.json", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
+    // editorial.json is author-drafted prototype copy (a separate overlay). It is optional: when it
+    // is absent or blank the page falls back to the honest missing state, exactly as before.
+    fetch("editorial.json", { cache: "no-store" }).then((r) => r.json()).catch(() => null),
   ]);
   STATE.data = data;
   STATE.build = build;
+  STATE.editorial = editorial;
   const prov = data.provenance;
   $("#data-provenance").textContent =
     `data ${prov.schema} · captured ${prov.capturedAt.slice(0, 19)}Z · ${prov.counts.topics} topics / ${prov.counts.axes} axes / ${prov.counts.problems} problems / ${prov.counts.events} events`;

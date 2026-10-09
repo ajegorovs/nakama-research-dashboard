@@ -30,8 +30,8 @@ one-file static server (no dependencies) on loopback only.
 | Area | Behaviour |
 |---|---|
 | Shell | Five peer tabs — **Overview, Topics, People, Repositories, Progress**. Overview is the default landing. |
-| Overview | Honest baseline from the frozen data: counts, research directions, recent activity. |
-| Topics | Left = research-direction rows (short title, purpose, status, blocker brief, people, explicit **Select** and **Open axis →**). Right = the direction's development axes. |
+| Overview | Honest baseline from the frozen data: counts, research directions (each with its short description), recent activity. |
+| Topics | Left = research-direction rows, each **one real `<button>`** (name · status · short description · N axes · activity count) that selects the direction — **no nested Select control, no person/repo tags, no per-row navigation button**; selection is the row's pressed state (`aria-pressed`), so a click anywhere on the row and Tab/Enter/Space all select it. Right = the direction's in-depth (long) description above its development axes (unchanged). |
 | Progress | Left = the axis index (grouped by topic). Main = the **selected axis's full context** (purpose + reading, never summarised), the **problem index**, the **axis plan**, and the selected problem's full statement/status/blocker/work context. |
 | People / Repositories | Functional baseline over the frozen data (name/handle/axes; repo description/branch/url/axes). |
 | Search | Flat search across topics, axes and problems (top-right). |
@@ -57,10 +57,40 @@ one-file static server (no dependencies) on loopback only.
 | `index.html` | the shell: top bar, five tab buttons, five view sections, footer. |
 | `styles.css` | tokens (lifted from the frozen contract prototypes) + composition. |
 | `app.js` | vanilla render + navigation (hash), search, clamp toggles. No dependencies. |
-| `data.json` | the **frozen sanitized export** (the only data the page reads). |
+| `data.json` | the **frozen sanitized export** (the read-only source; never written by the prototype). |
+| `editorial.json` | the **author-drafted copy overlay** — prototype editorial text (see *Editorial overlay*). |
 | `build.json` | build identity: sha256 of `data.json` + git HEAD, shown in the footer. |
 | `make-build.mjs` | regenerate `build.json` after a data change. |
 | `serve.mjs` | Bun static server (loopback). |
+
+## Editorial overlay
+
+The two stored topics carry **no description** in the frozen export (blank by design). To let a reviewer
+see how a direction reads *with* copy, the prototype layers a **separate, author-drafted overlay**
+(`editorial.json`) on top of the frozen export:
+
+- It is **prototype editorial copy — draft, not source-approved.** It is not written to any instance, it
+  is **not part of `data.json`** (whose bytes and sha256 are unchanged), and it asserts no fact the source
+  does not already carry — each entry is **grounded in that topic's own recorded axes**.
+- Each topic has a **short** form (used by the selector row and the Overview list) and a **long,
+  in-depth** form (used by the selected topic's detail panel). Every place the copy appears carries a
+  small **"prototype copy · not source-approved"** badge; there is no missing-state placeholder and no
+  page-wide warning.
+- The overlay is optional: remove it and the page falls back to the honest missing state.
+- The source `summary` field is **left in the export, unrenamed and unrendered** — an earlier prototype cut
+  showed it as an "approved summary", but its purpose is undefined, so this prototype does not claim an
+  approval. Description-vs-summary remains an OPEN question in the pivot spec.
+
+## Counts shown
+
+- **Axes** — the selector shows the topic's **total** axis count (`N axes`). Whether a count should instead
+  be *nonterminal* (active/blocked only) is an **OPEN** owner decision (pivot spec §7); the prototype does
+  not silently choose it.
+- **Activity** — the frozen export carries both a per-topic `activityCount` **rollup** and a flat `activity`
+  event list. When the rollup totals match the snapshot list, the rollup is shown and labelled
+  **"recorded activities"**; when they disagree (here `3 + 4 = 7` vs `8` events) the count of the frozen
+  snapshot events is shown instead, labelled **"events in snapshot"**. Nothing is called "active" and no
+  event is manufactured. The exact time window and the completed-rollup rule are **OPEN** (pivot spec §7).
 
 ## Provenance
 

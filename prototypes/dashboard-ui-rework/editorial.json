@@ -1,0 +1,28 @@
+{
+  "schema": "dashboard-ui-rework/editorial-overlay@1",
+  "kind": "authored-prototype-copy",
+  "status": "draft-editorial",
+  "label": "Author-drafted prototype copy. Not source-approved, not written to any instance, and not part of the frozen export — data.json is unchanged.",
+  "authoredAt": "2026-10-09",
+  "basis": "Grounded in each topic's own recorded development axes; asserts no fact the frozen source does not already carry.",
+  "topics": {
+    "topic-1": {
+      "short": "Tools and coordination for research work.",
+      "long": "Tools and coordination for research work. Current work covers the research dashboard and focused retrieval, and agent consultation and automation evidence.",
+      "grounding": [
+        "axis-1",
+        "axis-2"
+      ]
+    },
+    "topic-2": {
+      "short": "Experimental methods, measurement acquisition and data analysis.",
+      "long": "Develop experimental methods and the tools needed to acquire, process and interpret measurements. Current work covers experimental-device control and acquisition, measurement-data processing, and validation of optical and UDV workflows.",
+      "grounding": [
+        "axis-3",
+        "axis-4",
+        "axis-5",
+        "axis-6"
+      ]
+    }
+  }
+}

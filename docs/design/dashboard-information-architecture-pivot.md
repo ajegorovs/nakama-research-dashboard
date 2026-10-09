@@ -288,6 +288,14 @@ Stated, not resolved. None of these is answered by this document.
   **explicit roles**; the model carries no person-level role field today. **OPEN.**
 - **Q7 — Repository search.** "Search candidate, front/local" — not implemented; keep it simple, no options
   to over-engineer. **OPEN.**
+- **Q8 — Axis-count policy.** Should a displayed axis count be **total** or **nonterminal only**
+  (`state ∈ {active, blocked}`, the working recommendation), and does the selector use one policy while a
+  "current axes" label uses another? The owner's "worth counting only *active* axes" intent needs an exact
+  definition of *active*; the prototype shows the **total** until ruled. **OPEN** ([§7.6](#76-counts-shown--axes-and-activity-open)).
+- **Q9 — Activity count & window.** Is the per-topic `activityCount` **rollup** complete for the capture,
+  and what **time window** does it cover (it disagrees with the snapshot event list — rollup `3 + 4 = 7` vs
+  `8` snapshot events)? Should a future **active-activity** filter (distinct from axis state) exist? Until
+  ruled, the prototype labels the frozen snapshot reading **"events in snapshot"**. **OPEN** ([§7.6](#76-counts-shown--axes-and-activity-open)).
 
 ---
 
@@ -360,6 +368,74 @@ alias-only export and performs no write.
   semantics, tree shape, step numbering, description-vs-summary — all remain **OPEN**).
 - It is a **trial** — if many files, it is archived as a read-only, auth-free zip with semantic aliases
   and no private ids or paths, under public-record hygiene.
+
+### 7.4 Topics selector — one real control, not a row of nested buttons (AGREED)
+
+The owner's current focus is the Topics **selector** (left column). Its requirements, carried into the
+prototype:
+
+- **The whole row is a single real `<button>`.** There is **no nested "Select" control**, **no per-row
+  "Open axis →" button**, and **no in-row person or repo tags**. A click anywhere on the row (including the
+  name) selects that direction — the row *is* the control.
+- **Keyboard:** the row is reachable by `Tab` and activated by `Enter` / `Space` (native button behaviour),
+  and its **selected** state is exposed via **`aria-pressed`** with a clear accessible name.
+- **Content:** name, status, the topic's **short description**, the **axis count**, and the **activity
+  count** only. A per-row **blocker brief** and any **problem count** are dropped for now ("optional
+  problems, pending"; the problem-count field is excluded this round).
+- **Navigating to Progress** stays a deliberate act through the axis blocks' **"Open axis in Progress →"**
+  control on the RHS (the row no longer navigates), per §2's "the row is not itself a link" principle.
+
+### 7.5 Topic descriptions — author-drafted prototype copy, in a separate overlay (draft, NOT source-approved)
+
+Both stored topics have a **blank `description`** (and blank `summary`), so the prototype renders copy from
+a **separate, author-drafted overlay** (`prototypes/dashboard-ui-rework/editorial.json`) instead of the
+missing-state placeholder. This overlay is **prototype editorial text**:
+
+- It is **draft, not source-approved**; it is **not written to any instance**; it is **not part of the
+  frozen export** (`data.json`'s bytes and sha256 are unchanged); and it **asserts no fact the source does
+  not already carry** — each entry is **grounded in that topic's own recorded axes**.
+- It is a **separate overlay UI concern**: every place the copy appears carries a small per-card badge
+  ("prototype copy · not source-approved"). There is **no page-wide warning** and **no missing-state
+  placeholder** where copy exists.
+
+**Exact copy (verbatim, draft):**
+
+- `topic-2` — **Experimental research** (grounded in `axis-3`, `axis-4`, `axis-5`, `axis-6`):
+  - **short:** *Experimental methods, measurement acquisition and data analysis.*
+  - **long (in-depth):** *Develop experimental methods and the tools needed to acquire, process and
+    interpret measurements. Current work covers experimental-device control and acquisition,
+    measurement-data processing, and validation of optical and UDV workflows.*
+- `topic-1` — **Research infrastructure / team management** (grounded in `axis-1`, `axis-2`; optional,
+  clearly proposed editorial, no owner-approved new facts):
+  - **short:** *Tools and coordination for research work.*
+  - **long (in-depth):** *Tools and coordination for research work. Current work covers the research
+    dashboard and focused retrieval, and agent consultation and automation evidence.*
+
+**Short vs long:** the **short** description is reused by the selector row and the Overview list; the
+**long** description is shown only on the **selected topic** detail (plain reading — the short form is not
+repeated above it).
+
+**The stored `summary` field is not an "approved summary".** The source keeps `topic.summary` as a stored,
+optional string (`src/store.ts:106`; §1.8). An earlier prototype cut rendered it under the label *"approved
+summary"*, implying an approval the prototype has no basis to claim; that label is **removed from the
+prototype's visible UI**. The field stays in the export **unrenamed and unrendered** until its purpose is
+defined (still OPEN — [§4, Q5](#4-open-architecture-questions-not-ratified)).
+
+### 7.6 Counts shown — axes and activity (OPEN)
+
+- **Axis count.** The selector shows the topic's **total** axis count (`N axes`). The owner's "worth
+  counting only *active* axes" intent needs an explicit definition of *active* — the working
+  recommendation is **nonterminal** (`state ∈ {active, blocked}`), but that is a **human choice** and is
+  **not silently made**: the prototype shows the **total** until the owner rules. A separate "current
+  axes" label is deferred with the same decision. **OPEN** ([§4, Q8](#4-open-architecture-questions-not-ratified)).
+- **Activity count.** The export carries both a per-topic `activityCount` **rollup** (the source's own
+  window; a server number, not a list length — §1.7) and a flat `activity` event list. The prototype
+  labels the count **"recorded activities"** only when the rollup totals **match** the snapshot list;
+  otherwise it shows the count of the frozen snapshot events, labelled **"events in snapshot"**. Here the
+  rollup totals **7** (`3 + 4`) against **8** snapshot events, so the snapshot reading is used. The
+  **exact time window**, whether the rollup is *complete*, and whether a future **active-activity** filter
+  should exist are all **OPEN** ([§4, Q9](#4-open-architecture-questions-not-ratified)). Nothing is called
+  "active", and no event is manufactured.
 
 ## Appendix A — Old-spec inventory (preserved, not rewritten)
 
