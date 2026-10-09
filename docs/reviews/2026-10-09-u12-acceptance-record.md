@@ -1,21 +1,24 @@
 # U12 — full-text clamp release — final acceptance record (2026-10-09)
 
 **Status: reviewer-accepted at the served-runtime stage.** This record covers what was measured, and only that.
-**Merge is owner-gated: no merge is performed or authorized this turn.**
+**No merge authorization has been requested or granted for this closeout.** This records the absence of a merge
+grant; it is not — and is not to be read as — an owner refusal. No denial is asserted or implied.
 
 Unit / implementation record: [`../ux-v2/U12-fulltext-clamp-release.md`](../ux-v2/U12-fulltext-clamp-release.md).
 Machine detail: [`2026-10-09-u12-served-measurement-evidence.json`](./2026-10-09-u12-served-measurement-evidence.json).
 Standing decision: [`DECISIONS.md` §17](../ux-v2/DECISIONS.md).
 
-## 1. Verdict (owner-supplied, quoted verbatim)
+## 1. Verdict (reviewer, quoted verbatim)
 
-> **SERVE · RUNTIME — ACCEPTED** (reviewer). **Owner: no merge** — withheld this turn.
+> Verdict: U12 SERVED-RUNTIME ACCEPTED. The deployment and live behavior are sufficiently evidenced to close the
+> runtime gate. I would require only documentary closeout corrections before treating PR #6 itself as merge-ready.
 
-**Citation boundary (stated, not hidden).** The reviewer returned this decision through a chat surface whose prose
-is not reconstructable from the artifacts here; the full reviewer text was **not retrievable**. What is recorded
-above are the owner's exact verdict tokens, **quoted verbatim**; no reviewer sentence is reconstructed,
-paraphrased or invented. The verdict accepts the **served runtime measurement**; it is **not** source approval and
-**not** a merge grant.
+**Provenance (stated, not hidden).** This is the reviewer's verdict, relayed by the owner from the review message;
+the review was made against the served measurement at `c0d5541…`. The full reviewer text is **present in the
+project conversation**, and the excerpt above is copied from it **verbatim**. The source is retrievable; these
+tokens are **not** reconstructed, paraphrased or invented. The verdict accepts the **served runtime measurement**
+and closes the runtime gate; it is **not** source approval and **not** a merge grant, and it asks only for
+documentary closeout corrections before PR #6 itself is treated as merge-ready.
 
 ## 2. What was accepted (measured)
 
@@ -106,6 +109,7 @@ and no existing gate is reopened.
 
 ## 7. Merge disposition
 
-The reviewer's `SERVE · RUNTIME — ACCEPTED` closes the **runtime measurement** stage. This acceptance does **not**
-authorize or perform a merge. The documentation closeout is committed and pushed to the draft pull request; the
-**merge remains owner-gated** and is withheld this turn.
+The reviewer's verdict closes the **runtime measurement** stage and returns only documentary closeout corrections.
+This acceptance does **not** authorize or perform a merge. The documentation closeout is committed and pushed to the
+draft pull request. **No merge authorization has been requested or granted for this closeout**; the **merge remains
+owner-gated** — the record neither asserts nor implies an owner refusal.

@@ -1,7 +1,10 @@
 # U12 — full-text clamp release on the axis reading (implementation preview, 2026-10-09)
 
-> **Status: implemented + regression-tested; served-build runtime measured (read-only) and reviewer-accepted —**
-> **`SERVE · RUNTIME — ACCEPTED`; merge owner-gated (not merged).** The acceptance record is
+> **Status: implemented + regression-tested; served-build runtime measured (read-only) and reviewer-accepted.**
+> Reviewer verdict, quoted verbatim: *"Verdict: U12 SERVED-RUNTIME ACCEPTED. The deployment and live behavior are
+> sufficiently evidenced to close the runtime gate. I would require only documentary closeout corrections before
+> treating PR #6 itself as merge-ready."* **No merge authorization has been requested or granted for this
+> closeout.** The acceptance record is
 > [`../reviews/2026-10-09-u12-acceptance-record.md`](../reviews/2026-10-09-u12-acceptance-record.md).
 > The change lands the owner-approved behavior into the source and the committed bundle, with an executable browser
 > check that measures the **built** bundle. **No deploy, no vendor, no reinstall, no restart, no fixture write, no
