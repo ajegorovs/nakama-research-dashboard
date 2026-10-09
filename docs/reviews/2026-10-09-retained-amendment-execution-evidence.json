@@ -1,0 +1,164 @@
+{
+  "artifact": "retained-amendment-execution-evidence/1",
+  "scope": "SCOPE-RETAINED-AMENDMENT (F02 + F07/F09 + F12)",
+  "record": "docs/reviews/2026-10-09-retained-amendment-execution-report.md",
+  "executedAtUtcFirstWrite": "2026-10-09T09:25:03Z",
+  "executedAtUtcSecondWrite": "2026-10-09T09:25:52Z",
+  "status": "EXECUTED — ACCEPTED (DOCUMENTARY QUALIFICATIONS); not merged; PR7 stays draft",
+  "grant": {
+    "state": "CONSUMED",
+    "scope": "SCOPE-RETAINED-AMENDMENT only (T1 once + T2 once); SCOPE-BASELINE not authorized",
+    "boundBundleSha256": "ba1b9050db18f3bd9baea630ab606e74a8e3bc80ca3bd4f2d10533a9a7ae27ca",
+    "ownerGrantVerbatim": "i agree. proceed",
+    "concretePayloadVerdictVerbatim": "CONCRETE PAYLOAD ACCEPTED — WRITE AUTHORIZATION WITHHELD.",
+    "scopeVerdictVerbatim": "Verdict: ACCEPT THE PROPOSED SCOPE, WITHHOLD WRITE AUTHORIZATION.",
+    "reusability": "one-shot; not reusable"
+  },
+  "bundleVerification": {
+    "canonicalAlgorithm": "sha256(JSON.stringify(bundle minus {bundleDigest,payloadDigests}))",
+    "reDerivedBundleDigest": "ba1b9050db18f3bd9baea630ab606e74a8e3bc80ca3bd4f2d10533a9a7ae27ca",
+    "bundleMatch": true,
+    "T1PayloadSha256": "23a4c01d8c42a4d5605a50b887c7cd7b29ef0e7287299561f20ae6e229a1432a",
+    "T2PayloadSha256": "31241657e6386c581552f6a7ce633d4e093f3d4f4248405ffeb9240489866778",
+    "payloadsMatch": true,
+    "frozenFileBytesSha256": "06d8a6190459c10166fdc39609fbb02dbba5264b9034def42b4356db5cc0f66a",
+    "frozenBytesRetainedNotRegenerated": true,
+    "transactions": 2
+  },
+  "boundary": {
+    "targetOrgLabel": "Public Research Exercise",
+    "targetResolvedBy": "id AND name, explicitly selected (never orgs[0])",
+    "activeOrgEchoEqualsTarget": true,
+    "servedAssetSha256": "f6e6b8f3cec9476ad55be4f7067eb116690ae0b26c03cd98c58b654cb9024548",
+    "servedAssetBytes": 155420,
+    "servedAssetHashMethod": "T1 runner hashed the decoded text re-encoded to UTF-8 (sha256(assetText)); NOT a raw-Buffer hash. The standalone probe ramd-served-probe2.mjs also hashed the raw response buffer (bufSha) and both equal f6e6b8f3.../155420.",
+    "servedAssetCharLen": 155239,
+    "servedRelease": "0.2.0+dev.a5f76a608db2",
+    "servedRevision": 17,
+    "servedMatchesRepo": true,
+    "deploymentChanged": false,
+    "versionsBefore": { "ax5": 2, "ax6": 2, "ax4": 2, "topicInfra": 1, "topicExp": 1, "diagPlan": 1 },
+    "gapsBefore": {
+      "ax5People": 0,
+      "ax6People": 0,
+      "repoMetadataBlank": true,
+      "diagPlanStepPositions": [null, null, null, null]
+    },
+    "alreadyAppliedPresent": {
+      "ax5DashLink": "dashboard primary",
+      "ax6DashLink": "dashboard primary",
+      "consultationProblemRepoSets": "present",
+      "ax4CurrentState": "exact 411-char string, currentStateConfidence=inferred",
+      "ax4BlockerConfidence": "inferred",
+      "ax4Evidence": 0
+    },
+    "countsBefore": { "topics": 2, "axes": 6, "repositories": 3, "people": 1 },
+    "eventsBefore": 8,
+    "boundaryPass": true,
+    "materialDrift": false
+  },
+  "transactions": [
+    {
+      "id": "T1",
+      "action": "reconcile_topic",
+      "topicLabel": "Research infrastructure / team management",
+      "httpStatus": 200,
+      "resultOk": true,
+      "verifiedDelta": {
+        "ax5.people": { "before": [], "after": "existing person (githubLogin ajegorovs)" },
+        "ax6.people": { "before": [], "after": "existing person (githubLogin ajegorovs)" },
+        "ax5.version": { "before": 2, "after": 3 },
+        "ax6.version": { "before": 2, "after": 3 },
+        "dashboardRepo.url": { "before": "", "after": "https://github.com/ajegorovs/nakama-research-dashboard" },
+        "dashboardRepo.defaultBranch": { "before": "", "after": "main" },
+        "dashboardRepo.description": "set to approved pinned README string (byte-equal)",
+        "dashboardRepo.relationship": "primary (preserved)",
+        "ax5ax6RepositoryLinks": "unchanged (still dashboard primary)",
+        "counts": "unchanged",
+        "events": "unchanged (8)",
+        "axes1to4": "unchanged (links/people/versions)",
+        "topicVersions": "unchanged (1)",
+        "newPersonCreated": false
+      }
+    },
+    {
+      "id": "T2",
+      "action": "reconcile_topic",
+      "topicLabel": "Experimental research",
+      "axisLabel": "Grablink diagnostics and sustained-rate validation",
+      "httpStatus": 200,
+      "resultOk": true,
+      "verifiedDelta": {
+        "udvRepo.url": { "before": "", "after": "https://github.com/ajegorovs/udv-echo-process" },
+        "udvRepo.defaultBranch": { "before": "", "after": "master" },
+        "udvRepo.description": "set to approved pinned README string (byte-equal)",
+        "grablinkRepo.url": { "before": "", "after": "https://github.com/ajegorovs/Grablink-Full-sequence-acquisition" },
+        "grablinkRepo.defaultBranch": { "before": "", "after": "master" },
+        "grablinkRepo.description": "set to approved pinned README string (byte-equal)",
+        "planStepPositions": { "before": [null, null, null, null], "after": [1, 2, 3, 4] },
+        "planVersion": { "before": 1, "after": 1 },
+        "planUpdatedAt": "unchanged",
+        "stepUpdatedAt": "advanced on all four (the only per-row timestamp change)",
+        "stepIdsTitlesStatesCreatedAt": "unchanged",
+        "topicRelationships": "udv primary, grablink supporting (preserved)",
+        "ax4": "unchanged (version 2, 411-char currentState, inferred confidences, evidence 0)",
+        "ax5ax6": "unchanged from T1 (people linked, version 3)",
+        "counts": "unchanged",
+        "events": "unchanged (8)",
+        "lastActivityAt": "unchanged"
+      }
+    }
+  ],
+  "postflight": {
+    "verdict": "FULL POSTFLIGHT PASS",
+    "method": "single-schema canonical readback, identical projection to the pre-T1 snapshot (target + protected byte-comparable)",
+    "checksPassed": 29,
+    "checksTotal": 29,
+    "countsAfter": { "topics": 2, "axes": 6, "repositories": 3, "people": 1 },
+    "eventsAfter": 8,
+    "digestAlgorithm": "canonical projection hash = sha256(JSON.stringify(projection)) (compact, UTF-8); NOT the raw pretty-printed file-bytes sha256",
+    "mutationPublicDigestPreT1": "b92180471ea42c24ea52dfc3886e3bd9aa26bb6aad8b939eec4858959d93b64d",
+    "mutationPublicDigestPostT1": "5ab8e3e676e3c4434527a50bab1a97d80b846d24c01c3d740194fc96324320d9",
+    "mutationPublicDigestFinal": "4fcf2b7a9b77db68ef0837533afe0721424e046e49478863908b51ef38caac0c",
+    "mutationPublicDigestPriors": {
+      "note": "Earlier draft chain values, now labelled/superseded: 535b5f41... is the Phase-B runner pre-T2 reader digest (ramd-exec-b.json /pret2, a different projection reader); 5b965d6a... is the raw pretty-printed file-bytes sha256 of ramd-exec-postflight-mutation-public.json, a different algorithm than the canonical projection hash above.",
+      "phaseBPreT2ReaderDigest": "535b5f41857ec4a7b81fca574b14965ccef202a3c45dc0d0de1510527436c954",
+      "postflightRawFileBytesSha256": "5b965d6a56e13806b7d64a63bc6a6fc2476bbc2ff0e633783e1a348bd27e37c4"
+    },
+    "ax4Preserved": { "version": 2, "currentStateChars": 411, "currentStateConfidence": "inferred", "blockerConfidence": "inferred", "evidence": 0 },
+    "topicRelationshipsPreserved": { "infra": "dashboard=primary", "exp": "udv=primary, grablink=supporting" },
+    "lastActivityAtUnchanged": true,
+    "noNewActivities": true,
+    "noNewProblems": true
+  },
+  "protectedStores": {
+    "compareMethod": "own full canonical readback, stable single-schema projection, fresh immediate-pre-T1 vs post (not DB byte identity)",
+    "digestAlgorithm": "canonical projection hash = sha256(JSON.stringify(projection)) (compact, UTF-8)",
+    "retainedFiles": {
+      "preT1": ["ramd-exec-pret1-untargeted_org_…b2b1029-mutation-public.json", "ramd-exec-pret1-untargeted_org_…dbc885d6-mutation-public.json"],
+      "postHarmonized": ["ramd-exec-postflight-untargeted_org_…b2b1029-mutation-public.json", "ramd-exec-postflight-untargeted_org_…dbc885d6-mutation-public.json"],
+      "byteIdenticalPreVsPost": true,
+      "nonHarmonizedFirstRunFiles": "ramd-exec-post-untargeted_org_*.json gave a different reader projection (NakamaE2E 4962e129..., LayoutDemo bb2dac2b...) — superseded by the harmonized run, not store drift",
+      "preflightCountsOnlyDigests": "Layout Demo 46c7d111..., Nakama E2E Fixture 79d49a1f... — a third, counts-only projection, not comparable"
+    },
+    "Layout Demo": { "counts": { "topics": 2, "axes": 7, "repositories": 3, "people": 2 }, "digestBefore": "eda52f7234cadd4785db10abf93298d7a3ef500f221a2eef1ef5a96c30c337cf", "digestAfter": "eda52f7234cadd4785db10abf93298d7a3ef500f221a2eef1ef5a96c30c337cf", "unchanged": true },
+    "Nakama E2E Fixture": { "counts": { "topics": 2, "axes": 8, "repositories": 1, "people": 0 }, "digestBefore": "a75bc4c61267e8c46e4eaae40418ee95008131c8a928f7aae77b0ce27170be31", "digestAfter": "a75bc4c61267e8c46e4eaae40418ee95008131c8a928f7aae77b0ce27170be31", "unchanged": true }
+  },
+  "deployment": { "reinstall": false, "deploy": false, "restart": false, "note": "API :4399 and web :3003 were already serving; served ui/app.js sha256 and bytecount identical before and after" },
+  "reviewerVerdicts": {
+    "scopeVerdict": { "text": "Verdict: ACCEPT THE PROPOSED SCOPE, WITHHOLD WRITE AUTHORIZATION.", "verbatim": true, "kind": "scope verdict (historical); withholds write authorization" },
+    "concretePayloadVerdict": { "text": "CONCRETE PAYLOAD ACCEPTED — WRITE AUTHORIZATION WITHHELD.", "verbatim": true, "kind": "concrete-payload acceptance; withholds write authorization" },
+    "executionVerdict": { "text": "Verdict: EXECUTION ACCEPTED — DOCUMENTARY QUALIFICATIONS.", "verbatim": true, "kind": "execution acceptance; documentary-qualified (offline archived evidence; no live re-proof, no full-DB-bytes claim, no merge grant)" },
+    "executionVerdictNote": "The execution is reviewer-accepted with documentary qualifications. The acceptance rests on the archived offline assertions and is NOT a live re-proof, NOT full-DB-bytes verification and NOT a merge/ready grant."
+  },
+  "acceptanceRecord": "docs/reviews/2026-10-09-retained-amendment-acceptance-record.md",
+  "ownerGrant": { "verbatim": "i agree. proceed", "state": "CONSUMED", "oneShot": true },
+  "limitations": [
+    "One-shot amendment grant; SCOPE-BASELINE remains unselected and NOT authorized; no further write is authorized.",
+    "No rollback exists for a committed transaction; the run stopped cleanly with no partial or ambiguous state.",
+    "Protected-store comparison uses a stable single-schema projection (not DB byte identity, not the volatile per-read envelope digest).",
+    "No concurrent fixture writer was known; T1 and T2 were executed serially with T1 verified before T2 began.",
+    "The write changed the fixture/domain store only; the served build was untouched (no deploy/restart)."
+  ],
+  "executionStatus": "EXECUTED — ACCEPTED (DOCUMENTARY QUALIFICATIONS); not merged; PR7 stays draft"
+}

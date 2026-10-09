@@ -1041,3 +1041,291 @@ or service. The retained write authorization remains **closed**.
 
 **PR links.** Branch `docs/f08-visual-verification` (new, off `main` @ `93359a3…`); the supplemental record
 above.
+
+
+## X. Retained-amendment **planning scope + read-only preflight** — F02 + F07/F09 + F12 (appended 2026-10-09)
+
+> **Appended, not an amendment.** §A–§W above are preserved unchanged. This section records the
+> **planning scope** and a **fresh, live, read-only preflight** for the retained-amendment rows the
+> retained decision (§S) left **unselected** — **F02** (axis→person on axes 5/6), **F07/F09** (repository
+> `url`/`description`/`defaultBranch`) and **F12** (plan-step positions `1..4`) — plus the **preparation**
+> (not execution) of the write bundle. Published in
+> [`2026-10-09-retained-amendment-preflight-report.md`](2026-10-09-retained-amendment-preflight-report.md),
+> with machine evidence in
+> [`2026-10-09-retained-amendment-preflight-evidence.json`](2026-10-09-retained-amendment-preflight-evidence.json).
+> **Docs only / read-only:** no fixture/domain write, no `reconcile_topic`/`record_activity`, no inference,
+> no new research, no service/deploy/restart, no product/UI/harness/source change, no merge. Public labels
+> and sanitized ids only; exact operational ids and the payload are held **local** (git-ignored).
+
+**Authorization measured (scope).** The brief authorized **planning scope + read-only preflight** only.
+The amendment **write stays NOT authorized**: the two intended `reconcile_topic` transactions are **NOT
+executed**, and the **concrete bundle review** plus a **separate explicit owner write authorization**
+remain the gate. The **WP-G grant is CONSUMED** and is not reusable; **no retrospective write approval**
+is granted here.
+
+**Already-applied writes confirmed present (not re-sent).** The F01/F04 links (ax5/6 `primary` +
+both consultation problem→repo sets) and the F08 ax4 `currentState` (**exact 411-char** §3.1 string,
+`inferred`; `blockerConfidence: inferred`; evidence `0`) are **measured present** — F01/F04/F08 are
+**not** re-run by this amendment.
+
+**Measured (read-only) at the exact target org** (label `Public Research Exercise`; exact id in the local
+handoff; **fresh-verified and explicitly selected**, never `orgs[0]`), head `64f6393…`:
+
+- **Served identity (org-aware, browser-actually-served):** `ui/app.js` sha256
+  `f6e6b8f3cec9476ad55be4f7067eb116690ae0b26c03cd98c58b654cb9024548`, **155420** bytes, **byte-equal** to
+  the repo; the target org serves release **`0.2.0+dev.a5f76a608db2`** revision **`17`** — the **U12
+  full-text clamp-release build**, re-confirmed by measurement (the guard remains **not org-aware**).
+- **Counts:** `2 topics / 6 axes / 3 repositories / 1 person`; **8 events**. **Amendment gaps measured:**
+  ax5/6 have **empty** people (F02); all three repositories carry `url:'' description:'' defaultBranch:''`
+  (F07/F09); the diagnostics plan's **four** step positions are **all `null`** (F12, same `stepId`s and
+  verbatim titles). Topic→repo relationships to preserve verbatim: infra → dashboard `primary`;
+  experimental → udv `primary`, grablink `supporting`.
+- **Fresh public GitHub metadata (bounded verification only):** `default_branch` as-of-read =
+  `main`/`master`/`master` (matches the accepted design); `description` is each repo's **pinned README**
+  string (approved, byte-equal) — GitHub's mutable `about` is **recorded, not used**. No field invented,
+  no editorial word choice.
+- **Drift verdict: NO material drift** — the only differences from the WP-G baseline are the **expected**
+  ones (axes 5/6 and axis 4 version `1→2` from WP-G T1/T2; the U12 served build `78af5cbb…` rev `9` →
+  `a5f76a60…` rev `17`), each **verified not assumed**. **20/20 checks PASS**. The two un-targeted stores
+  were baselined by their **own readback** (`Layout Demo` `46c7d111…`, `Nakama E2E Fixture` `79d49a1f…`).
+
+**Prepared, not executed.** The amendment bundle is **two** `reconcile_topic` transactions, grouped **one
+per topic**: T1 = F02 (peoples on ax5/6) + F07/F09 (dashboard metadata, `relationship` **preserved**);
+T2 = F07/F09 (udv + grablink metadata, relationships preserved) + F12 (positions `1..4`). The exact ids,
+the executable payload and the bundle digest (`ba1b9050…`; payloads T1 `23a4c01d…`, T2 `31241657…`) are
+held **local** (git-ignored); **no executor and no auto-write script** exist, and the bundle is a
+**temporary-validity** artifact to be **re-measured at the write boundary**, where **any version/served-sha
+drift STOPS**. Both payloads **PASSED** a **static** validation against the manifest's `reconcile_topic`
+`inputSchema` (0 errors); **no live/store call** was made.
+
+**Rows are design-accepted proposals, NOT owner-selected.** F02, F07/F09 and F12 carry **no owner write
+authorization**; a blank/unspecified row withholds and requires the owner's explicit grant bound to the
+resolved payloads and versions. **No role/persona is invented** (the axis→person link uses the already-
+stored person; topic-link relationships are carried verbatim, never defaulted to `supporting`).
+
+**Boundaries.** Read-only; **SCOPE-BASELINE** remains unselected/unapproved; **SCOPE-RETAINED-AMENDMENT**
+is **prepared, not authorized**; no merge. WP0–WP5 and §S–§W stand as recorded and are **not reopened**;
+this section appends and rewrites no design constant.
+
+**PR links.** Branch `docs/retained-metadata-plan-amendment` (new, off `main` @ `64f6393…`); draft PR
+(new).
+
+### X.1 PR7 correction chronology (appended 2026-10-09)
+
+> **Appended correction — append-only.** §A–§W stand as recorded and are **not rewritten**; this
+> subsection records a **correction to the current PR7 records only** (§X above and its report/evidence
+> files). It is a chronology, not a rewrite of any prior accepted record.
+
+- **Timestamp corrected.** The preflight report (§X) carried an **incomplete** measured value
+  (`2026-10-09T`) and the evidence JSON carried a **malformed** value (`2026-10-09T00:00:00Z-local`). Both
+  are corrected to the **retained preflight `preflightTimestamp` `2026-10-09T08:18:31.822Z`** (the
+  read-only preflight's own completion time, from the local raw snapshot) — an **actual retained
+  timestamp**, not a date-only fallback and not an invented time. A future read would not be laundered in:
+  a correction here revises only the current PR7 records.
+- **Source / commit provenance made explicit (no circular commit embedding).** The measurement is of the
+  **source base** `64f63934…`; the record was **first published** in commit `9eb60f6…`. The record does not
+  embed the SHA of the commit that carries it, and this correction is a **later appended docs commit**
+  (SHA deliberately not embedded).
+- **Reviewer verdict recorded verbatim.** The reviewer's verdict on the **scope** is quoted **exactly** —
+  `Verdict: ACCEPT THE PROPOSED SCOPE, WITHHOLD WRITE AUTHORIZATION.` — and is labelled a **scope** verdict
+  that **withholds write authorization**, **not** a concrete-payload acceptance. Every paraphrase is a
+  **summary, not a verbatim quote**.
+- **Concrete-review receipt added (review PENDING).** §X's report now points to a **private, self-contained
+  review package** (held local, git-ignored) that makes **every concrete record field** independently
+  hash-validatable — frozen payload bytes + digest manifest + public digest matching + membership mapping +
+  before-full-state + contract notes. The public record carries **no** host path, operational id or
+  credential; the review is **PENDING**, not completed.
+- **Payload re-validated.** The prepared payloads were re-checked **directly** — static schema against the
+  manifest `reconcile_topic` `inputSchema`, and field-by-field against the fresh preflight raw snapshots —
+  with ownership/membership confirmed for every record: **37/37 checks PASS**. The frozen bundle bytes were
+  **not regenerated or silently re-derived**; the quoted bundle/payload digests re-derive and match.
+- **Store guard finding recorded (reviewer lesson).** `src/store.ts` confirms the guard is **axis-only**:
+  the axis patch enforces `expectedVersion`; **repositories** and **plans** are **unguarded** in the
+  reconcile path, and `updatePlanStep` looks a step up by `id` with **no enclosing plan/axis/topic
+  ownership check**. The payload uses the four correct step ids, but the store cannot itself prove that
+  ownership — a reviewer must read the step ids first. This is why the concrete review is required before
+  any write.
+- **Boundaries unchanged.** No fixture/domain write, no `reconcile_topic`/`record_activity`, no inference,
+  no service/deploy/restart, no merge. The rows remain **design-accepted proposals, NOT owner-selected**;
+  the WP-G grant stays **consumed**; no external reviewer has accepted the concrete payload and no
+  authorization builder has been granted.
+
+### X.2 Retained-amendment execution chronology (appended 2026-10-09)
+
+> **Appended — append-only.** §A–§W and §X/§X.1 above stand as recorded and are **not rewritten**. This
+> subsection records the **execution** of the amendment rows (F02 + F07/F09 + F12) and its verification, as
+> a chronology. Published in
+> [`2026-10-09-retained-amendment-execution-report.md`](2026-10-09-retained-amendment-execution-report.md),
+> with machine evidence in
+> [`2026-10-09-retained-amendment-execution-evidence.json`](2026-10-09-retained-amendment-execution-evidence.json).
+> Public labels, sanitized ids and digests only; the exact operational ids, the frozen payload and the raw
+> envelopes are held **local** (git-ignored).
+
+- **Review moved from scope to concrete payload, then owner-authorized.** The historical **scope** verdict
+  stands (`Verdict: ACCEPT THE PROPOSED SCOPE, WITHHOLD WRITE AUTHORIZATION.`). The **concrete-payload**
+  review then returned, **verbatim**, `CONCRETE PAYLOAD ACCEPTED — WRITE AUTHORIZATION WITHHELD.` — it
+  **accepted the payload and withheld write authorization**. The **owner** then granted a **new,
+  digest-bound, one-shot write authorization** in the exact words **"i agree. proceed"**. That grant is
+  **CONSUMED**. Paraphrases of either verdict are summaries, not quotes.
+- **Bundle retained, not regenerated.** The frozen amendment bundle re-derived and matched before any call:
+  bundle `ba1b9050…`; payloads T1 `23a4c01d…`, T2 `31241657…`; frozen bytes `06d8a619…`. **No regeneration,
+  no silent re-derive.**
+- **Boundary: no material drift.** Fresh pre-T1 readback at the exact target org (label
+  `Public Research Exercise`, explicitly selected, never `orgs[0]`): served `ui/app.js` sha256
+  `f6e6b8f3…`, **155420** bytes, byte-equal to the repo, release `0.2.0+dev.a5f76a608db2` rev `17`; ax5/ax6
+  version `2`, ax4 version `2`, topic versions `1`, diagnostics plan version `1`; ax5/ax6 people `[]` (F02
+  gap); all repo metadata blank (F07/F09 gap); the four plan-step positions `null` (F12 gap); F01/F04/F08
+  writes present. Counts `2/6/3/1`; **8 events**. All boundary checks PASS.
+- **T1 executed once** (`reconcile_topic`, HTTP 200 · `result.ok` true): ax5/ax6 person links to the
+  **already-stored** person (githubLogin `ajegorovs`, no new person), axis versions `2 → 3`, dashboard repo
+  `url`/`description`/`defaultBranch` set, topic `relationship` `primary` **preserved**. Axis→repo links,
+  counts, events, axes 1–4, topic versions, plans and ax4 **unchanged**.
+- **T2 executed once** (`reconcile_topic`, HTTP 200 · `result.ok` true), after a fresh T2 prerequisite read:
+  UDV + Grablink metadata set, topic relationships preserved, plan-step positions written `1..4` in the
+  authored order (same `stepId`s, verbatim titles, state `pending`), plan **version stays `1`** (verbatim
+  summary echo) and plan `updatedAt` unchanged; only each step's `updatedAt` advanced. ax4, ax5/ax6, axes
+  1–4, counts, events, problems, people and `lastActivityAt` **unchanged**.
+- **Full postflight PASS (29/29)** on a single-schema readback byte-comparable to the pre-T1 snapshot.
+  Mutation-public digest `b9218047…` (pre-T1) → `535b5f41…` (post-T1) → `5b965d6a…` (post-T2).
+- **Protected (un-targeted) stores unchanged** by their own readback (stable projection, pre vs post, not
+  DB byte identity): `Layout Demo` `eda52f72…` (2/7/3/2), `Nakama E2E Fixture` `a75bc4c6…` (2/8/1/0).
+- **No deployment, no restart, no merge.** Served `ui/app.js` sha256 and bytecount identical before and
+  after; **PR7 stays draft**, status corrected to **executed, pending review**; **no reviewer has accepted
+  the execution** (none is invented). **SCOPE-BASELINE remains unselected and NOT authorized.**
+- **Store-contract note.** Measured at source: the axis patch enforces `expectedVersion` and **bumps the
+  axis version unconditionally**; repositories/plans are unguarded in the reconcile path; `updatePlanStep`
+  looks a step up by `id` with no ownership check (the payload used the four correct step ids, confirmed
+  against the fresh snapshot before the write).
+
+### X.3 Retained-amendment **execution audit closeout** — independent read-only audit, corrections and boundary disclosures (appended 2026-10-09)
+
+> **Appended correction — append-only.** §A–§W and §X/§X.1/§X.2 above stand as recorded and are **not
+> rewritten**. This subsection records the outcome of an **independent, read-only audit** of §X.2's execution
+> evidence and the corrections and boundary disclosures that close it out. It adds **no write** and consumes
+> **no grant**.
+
+- **Audit provenance and method.** A **separate, independent read-only audit** re-checked §X.2's claims from
+  local files only — **no write, no commit, no merge, no live/domain call**. It re-derived the frozen
+  bundle/payload digests (`ba1b9050…`, `23a4c01d…`, `31241657…`), re-counted the `reconcile_topic` call sites
+  and re-ran the file-only verifiers.
+- **Confirmed, no blocker.** **Exactly two WRITE calls** exist in the run — one `reconcile_topic` in the T1
+  runner, one in the T2 runner; **T1 was verified before T2 began**; the bundle, pre-T1 snapshot and postflight
+  digests **re-derive and match**; the **29/29 postflight PASS is real** and **no mutation failure was masked**.
+  The executed evidence is **substantively verified** by that audit.
+- **Internal audit only; external review stays PENDING.** This is an **internal independent audit** of the
+  *evidence*; it is **not** an external reviewer's **execution acceptance**, which remains **PENDING**, and it
+  does **not** accept the execution. PR7 stays **draft**.
+- **Correction — `expectedVersion` scope.** §X.2 and its report stated the object versions matched "the
+  bundle's `expectedVersion`". The bundle binds **`expectedVersion` on T1's two axis patches only** (ax5/ax6
+  = 2); **ax4, both topics and the diagnostics plan carry no `expectedVersion`** — their versions were **measured,
+  not bound** (topic, repositories and plans are **unguarded** in the reconcile path). The report wording is
+  corrected accordingly.
+- **Correction — "only per-row change".** The report's T2 table said each step's `updatedAt` advanced
+  "(the only per-row change)"; the **step `position`s on the same rows also changed** (`null → 1..4`). The
+  prose and the evidence JSON already qualified it as "the only **timestamp** change"; the table row is
+  corrected to match.
+- **Disclosure — two pre-write boundary stops.** Before any write, the fresh boundary preflight **stopped
+  twice**, each time **before the write** — **no write occurred on either stopped run**, and the frozen payload
+  bytes were unchanged:
+  - **Served-asset reader-unit stop:** the served-asset check compared the response's **character length**
+    (`155239`) against the expected **byte length** (`155420`) — a UTF-8 multibyte **reader-unit** bug, not a
+    served-bytes change. Resolved by hashing the **raw response buffer**, which confirms `f6e6b8f3…` / `155420`
+    bytes (re-confirmed by a standalone served probe).
+  - **F12 plan-path stop:** the F12 check read `axis.plans` where the plan lives at **`axis.plan`** (singular)
+    on the scoped axis read — a **reader-path** bug, not a plan difference.
+  Both were **checker defects corrected in the runner**; the writes then ran **once each** (T1, then T2 after
+  the T1 readback).
+- **Disclosure — four post-checker failures at the first postflight (reader-schema, not data drift).** The first
+  postflight run reported **four** failing checks — a step `createdAt` check (the `createdAt` **values were
+  identical**, merely **re-ordered by the newly-applied `position`**), a `lastActivity` / `axisCounts`
+  **schema** difference, and the two **protected-store** checks (fields present in one reader's projection but
+  not the other). None was real drift. The correction was a **schema harmonization** — the postflight reader
+  re-expressed as a **single projection identical to the pre-T1 (phase-A) reader**, so target and protected
+  projections are **byte-comparable** — applied **per check id**, with **no data fix**. The harmonized re-run
+  is the **29/29 PASS** recorded in §X.2.
+- **Preservation boundary — measured fields, not full-fixture byte identity.** The "unchanged" claim rests on
+  the **captured projection** the audited readers compare. That projection **does not carry every field**: it
+  **omits activity text/actor**, **person timestamps**, **topic `description`** and **problem-evidence
+  timestamps** (among others). The record therefore preserves the **measured fields**, **not** the full fixture
+  at byte identity — "unchanged" must not be read as an **all-fields-complete** verification. There is **no**
+  all-fields-complete check and **no** "immutable person record" claim; the person check is **count-only**.
+- **Protected-store baseline is projection-relative, not historical-canonical.** §X's preflight recorded the two
+  un-targeted stores with a **counts-only projection** (`Layout Demo` `46c7d111…`, `Nakama E2E Fixture`
+  `79d49a1f…`). §X.2's execution compared them with the **full same captured projection**, **immediate pre-T1
+  vs post** (`Layout Demo` `eda52f72…`, `Nakama E2E Fixture` `a75bc4c6…`). The digests differ **because the
+  projection differs**, **not** because the stores changed; the §X.2 "unchanged" claim is a
+  **same-projection, immediate-pre vs post** match — **not** a historical-canonical full-state claim.
+- **Public-evidence sync limit — counts are not independent semantic invariants.** The public check counts
+  (payload validation **37/37**, read-only preflight **20/20**, postflight **29/29**) are **counts of the checks
+  each run makes**; matching totals do **not** by themselves establish that the checks assert **independent**
+  properties. A reader should treat the counts as **sync indicators**, not as proof that every invariant was
+  separately tested. **No execution is re-run here and no grant is consumed.**
+- **Boundaries unchanged.** Docs-only; no fixture/domain write, no `reconcile_topic`/`record_activity`, no
+  service/deploy/restart, no merge. The grant stays **CONSUMED**; SCOPE-BASELINE remains unselected/not
+  authorized. An **offline private review archive** (local, git-ignored) collects the audited runners, the raw
+  pre-T1/post requests, the same-projection snapshots and the frozen review pack so an independent reviewer can
+  **re-derive** the claims **without executing anything**.
+
+  ### X.4 Retained-amendment execution **acceptance + documentary corrections** (appended 2026-10-09)
+
+  > **Appended correction — append-only.** §A–§W and §X/§X.1/§X.2/§X.3 above stand as recorded and are **not
+  > rewritten**. This subsection records the **execution acceptance** and the **documentary corrections** (to
+  > the current PR7 records and their offline evidence archive) that close it out. It adds **no write** and
+  > consumes **no grant**. The measured values below were **re-derived offline from the retained files**
+  > (`sha256` only — no network, no instance, no write).
+
+  - **Execution verdict (reviewer, verbatim).**
+
+    > Verdict: EXECUTION ACCEPTED — DOCUMENTARY QUALIFICATIONS.
+
+    The reviewer **accepted the execution**, subject to **documentary qualifications**. It is an acceptance of
+    the *execution* on the **archived offline evidence** — it makes **no live re-proof** and **no
+    full-DB-bytes** claim, and it is **not** a merge or "ready" grant. Recorded verbatim, with its boundaries,
+    in [`2026-10-09-retained-amendment-acceptance-record.md`](2026-10-09-retained-amendment-acceptance-record.md).
+    No reviewer acceptance is claimed **beyond** this verdict and its offline assertions.
+  - **Canonical digest chain corrected (one schema, one algorithm).** §X.2 quoted the mutation-public snapshot
+    digest as `b9218047…` (pre-T1) → `535b5f41…` (post-T1) → `5b965d6a…` (post-T2). Re-derived offline from
+    the **retained projection files** with the runner's own algorithm — the **canonical projection hash**
+    `sha256(JSON.stringify(projection))` (compact, UTF-8) over the **same corrected Phase-A projection** the
+    pre-T1 reader and the harmonized postflight share — the correct chain is:
+
+    | Point | Retained file | canonical projection hash |
+    |---|---|---|
+    | pre-T1 | `ramd-exec-pret1-mutation-public.json` | `b92180471ea42c24ea52dfc3886e3bd9aa26bb6aad8b939eec4858959d93b64d` |
+    | immediately post-T1 | `ramd-exec-postt1-mutation-public.json` | `5ab8e3e676e3c4434527a50bab1a97d80b846d24c01c3d740194fc96324320d9` |
+    | final (post-T2) | `ramd-exec-postflight-mutation-public.json` | `4fcf2b7a9b77db68ef0837533afe0721424e046e49478863908b51ef38caac0c` |
+
+    The two superseded values are **labelled, not lost**: `535b5f41…` is the **Phase-B runner's pre-T2 reader
+    digest** (`ramd-exec-b.json` `/pret2`, a **different projection reader** than Phase A), and `5b965d6a…` is
+    the **raw pretty-printed file-bytes sha256** of `ramd-exec-postflight-mutation-public.json` — a **different
+    algorithm** than the canonical projection hash `4fcf2b7a…`, since the saved files are written with
+    `JSON.stringify(obj, null, 2)`. A **raw file hash** (`sha256(file bytes)`) and a **canonical projection
+    hash** (`sha256(JSON.stringify(obj))`) are distinct and are now distinguished explicitly in the report and
+    the evidence JSON. §X.2's draft chain is **corrected by this subsection**, not edited in place.
+  - **Served-asset hash method corrected.** The T1 boundary runner (`ramd-exec-a.mjs`) hashed the **decoded
+    text re-encoded to UTF-8** (`sha256(assetText)`) — **not** a raw-`Buffer` hash; it also recorded the
+    JS **string character count** `155239`, which is why the first check compared `155239` (chars) with
+    `155420` (bytes) — a UTF-8 reader-unit bug, not a served-bytes change. A standalone probe
+    (`ramd-served-probe2.mjs`) hashed **both** the decoded text (`textSha`) **and** the raw response buffer
+    (`bufSha`); both equal `f6e6b8f3…` / `155420`. The records no longer attribute a raw-buffer hash to the T1
+    runner.
+  - **Protected-store projection provenance made explicit.** The **retained immediate-pre** full-projection
+    files are `ramd-exec-pret1-untargeted_org_…b2b1029-mutation-public.json` (Nakama E2E
+    Fixture) and `ramd-exec-pret1-untargeted_org_…dbc885d6-mutation-public.json` (Layout
+    Demo); the **retained post** harmonized files are the matching `ramd-exec-postflight-untargeted_org_*.json`.
+    The pre and post files are **byte-identical**, and their canonical projection digests match:
+    `Layout Demo` `eda52f72…` (2/7/3/2); `Nakama E2E Fixture` `a75bc4c6…` (2/8/1/0). The **first, non-harmonized**
+    postflight files (`ramd-exec-post-untargeted_org_*.json`) gave `bb2dac2b…`/`4962e129…` from a **different
+    reader projection** — **superseded**, not store drift. The §X counts-only digests
+    (`46c7d111…`/`79d49a1f…`) are a **third, counts-only** projection. The comparison was done **read-only from
+    the retained files**, never by a fresh/live re-measure and never by reconstructing a baseline.
+  - **Offline evidence archive updated.** The local (git-ignored) archive `.hermes/scratch/ramd-execution-review-final.zip`
+    collects the 29 prior evidence files **plus** the two **retained protected-store pre-projections**, with an
+    updated README and a digest manifest carrying **both** the per-file raw sha256 and the canonical projection
+    digests (the two algorithms distinguished) and the **final public head**. An offline verifier re-derives
+    every digest from the archive alone. The frozen bundle bytes sha256
+    `06d8a6190459c10166fdc39609fbb02dbba5264b9034def42b4356db5cc0f66a` is unchanged.
+  - **Boundaries unchanged.** Docs-only; no fixture/domain write, no `reconcile_topic`/`record_activity`, no
+    service/deploy/restart, no merge. The grant stays **CONSUMED**; SCOPE-BASELINE remains unselected/not
+    authorized; **PR7 stays draft**. This subsection is a **correction to the current PR7 records**, not a
+    rewrite of any prior accepted record.
