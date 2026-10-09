@@ -32,10 +32,13 @@
  * ------------------------
  * The run allocates an ephemeral port (`bind 127.0.0.1:0`, then release), so the child re-binds it. That
  * release is a known race: another process can take the port in between. The check closes it by passing
- * a random **run token** to the child, which serves its identity (token + the bundle sha256/bytes) at
- * `/preview-identity.json`; readiness requires that a responder echo **exactly this run's** token and
- * sha. A stale or foreign responder is **refused**, not measured; a child that exits before readiness
- * (e.g. the port is occupied and Vite's `strictPort` fails) **aborts immediately**, it does not poll.
+ * a random **run token** to the child, whose generated Vite config captures it at config load (startup)
+ * together with the bundle sha256/bytes and serves it from an **in-memory** middleware at
+ * `/preview-identity.json` — no static token file is written or served, and nothing is read on a request,
+ * so a responder keeps the identity of the process that booted it. Readiness requires that a responder
+ * echo **exactly this run's** token and sha. A stale or foreign responder is **refused**, not measured; a
+ * child that exits before readiness (e.g. the port is occupied and Vite's `strictPort` fails) **aborts
+ * immediately**, it does not poll.
  *
  * Exit contract (matches the acceptance pass): 0 = verdict PASS, 1 = verdict FAIL, 2 = ABORTED,
  * 3 = REFUSED (a precondition failed, so nothing was established). The rule bytes it will inject as the

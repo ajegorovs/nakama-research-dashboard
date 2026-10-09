@@ -37,10 +37,13 @@ No migration, manifest or payload change.
 - It mounts the built `ui/app.js` through the plugin's own host runtime (`harness/preview/run.mjs`) on a
   **fresh ephemeral loopback port** (bind `127.0.0.1:0`, released, re-bound by the child) — **no Nakama
   instance, no credentials, no service restart, nothing written to a served org.** Because that release is a
-  known bind→serve race, the check passes a per-run **run token** to the child, which serves its identity
-  (token + the built bundle's sha256 and byte length) at `/preview-identity.json`; readiness requires the
-  responder to echo **exactly this run's** token and sha, so a stale or foreign responder is **refused**
-  (exit 3), and a child that exits before readiness **aborts immediately** (exit 2) rather than polling.
+  known bind→serve race, the check passes a per-run **run token** to the child, whose generated Vite config
+  **captures it at config load** (that server's startup) together with the boot bundle's sha256 and byte
+  length, and serves it from an **in-memory** middleware at `/preview-identity.json` — no static token file
+  is written or served, and nothing is read from disk on a request, so the responder keeps the identity of
+  the process that booted it. Readiness requires the responder to echo **exactly this run's** token and sha,
+  so a stale or foreign responder is **refused** (exit 3), and a child that exits before readiness **aborts
+  immediately** (exit 2) rather than polling.
 - **Refuses** (exit 3) unless the built bundle contains the approved rule **byte-for-byte**; **aborts** (exit 2)
   on an unreachable preview; exits 0/1 as a verdict. Same contract as the acceptance pass.
 - It **regenerates the generated fixture on every self-served run**, even when one already exists, and it
@@ -84,11 +87,15 @@ The negative control is the proof that a green run can go red: with the fold ope
 `client 39 < scroll 98` and the readability assertion fails.
 
 **The check's own guards can go red too** — `harness/full-text-clamp/integrity.test.mjs`
-(`bun run harness:fulltext:test`, **6 cases · 6 pass**): a default run reports the byte length (not the
+(`bun run harness:fulltext:test`, **7 cases · 7 pass**): a default run reports the byte length (not the
 code-unit count); a stale pre-existing fixture is overwritten and measured; a fixture with a **wrong F08
 title** fails (exit 1); one with a **wrong F08 length/text** fails (exit 1); an **occupied fixed port**
-fails (the child exits before readiness, exit 2); and a **foreign responder** whose identity does not echo
-this run's token/sha is **refused** (exit 3).
+fails (the child exits before readiness, exit 2); a **foreign responder** whose identity does not echo
+this run's token/sha is **refused** (exit 3); and — the runtime-identity race — a **stale Vite on the same
+webroot** keeps its captured-at-startup identity after a newer run rewrites the shared generated files, so
+a check with a new token pointed at the occupied port is **refused against the OLD token** (exit 3) and the
+newer child that cannot take the port **does not pass**. That case runs against an **isolated sandbox
+checkout**, never the live one.
 
 ### New implementation captures (for the owner's visual review, before final approval)
 
@@ -110,9 +117,10 @@ Written by the check to `.hermes/scratch/full-text-clamp/pack/` (generated, git-
   carried as a shared constant — never an instance's live row). The viewer sees the rule's behavior on that
   subject, not a claim about any org's stored state.
 - **Repeatable green, provably able to go red.** The check allocates a **fresh ephemeral port** per run,
-  proves the responder is its own child by echoing a per-run token and the build sha/bytes, **regenerates**
-  its generated fixture every run and reports the **byte** length (never UTF-16 units). Its own guards are
-  exercised by `harness/full-text-clamp/integrity.test.mjs` (6 cases).
+  proves the responder is its own child by echoing a per-run token and the build sha/bytes **captured at
+  startup from an in-memory endpoint** (no static token file), **regenerates** its generated fixture every
+  run and reports the **byte** length (never UTF-16 units). Its own guards are exercised by
+  `harness/full-text-clamp/integrity.test.mjs` (7 cases), including the same-webroot stale-Vite race.
 - **Coverage boundary, by design.** Only fold-owning rows unclamp: the Topics axis detail card and the People
   axis rows. Rows with no fold — the Repositories scan rows and the transient pre-detail `AxisItem` fallback —
   stay clamped. Extending the fold to those rows is out of this bounded scope.

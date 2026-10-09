@@ -15,15 +15,21 @@
  *                     never report PASS.
  *   6. foreign responder — a responder that does not echo this run's token/sha must be REFUSED (exit 3),
  *                     never measured.
+ *   7. stale Vite, same webroot — a server booted by an earlier run keeps ITS boot identity (captured
+ *                     in memory at config load) even after a newer run rewrites the shared generated
+ *                     files on disk, so a check with a new token pointed at the occupied port is
+ *                     REFUSED against the OLD token, and the newer child that cannot take the port does
+ *                     not pass. Runs against an ISOLATED sandbox checkout, never the live checkout.
  *
  *   bun test harness/full-text-clamp/integrity.test.mjs
  */
 import { test, expect, beforeAll } from "bun:test";
 import { spawn, spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { createServer as createHttpServer } from "node:http";
 import { createServer as createNetServer } from "node:net";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 
 import { F08_STATE, F08_TITLE } from "./make-clamp-fixtures.mjs";
@@ -57,6 +63,72 @@ const runCheckAsync = (extra) =>
     child.stderr.on("data", (d) => { stderr += d; });
     child.on("exit", (status) => resolve({ status, stdout, stderr }));
   });
+
+// ── helpers for case 7 (stale Vite, same webroot) ────────────────────────────────────────────────
+const CHECKOUT = process.env.NAKAMA_CHECKOUT ?? path.join(homedir(), "Repos", "nakama");
+const CHECKOUT_HAS_VITE = existsSync(path.join(CHECKOUT, "apps", "web", "node_modules", "vite"));
+
+/**
+ * Build an ISOLATED sandbox checkout shaped like the live one but never the live one: the host
+ * apps/web files are copied (minus node_modules), and `packages` plus every node_modules entry are
+ * symlinked back to the host. Vite's own cache is therefore written under the sandbox's own
+ * node_modules — a run here cannot touch the host checkout or disturb another preview it is running.
+ */
+const buildSandbox = (dest) => {
+  rmSync(dest, { recursive: true, force: true });
+  const web = path.join(dest, "apps", "web");
+  mkdirSync(web, { recursive: true });
+  symlinkSync(path.join(CHECKOUT, "packages"), path.join(dest, "packages"));
+  const hostWeb = JSON.stringify(path.join(CHECKOUT, "apps", "web"));
+  const copy = spawnSync(
+    "bash",
+    ["-c", `tar -C ${hostWeb} --exclude=node_modules --exclude=.vite --exclude=.vite-temp -cf - . | tar -C ${JSON.stringify(web)} -xf -`],
+    { encoding: "utf8" }
+  );
+  if (copy.status !== 0) throw new Error(`sandbox copy failed: ${copy.stderr}`);
+  const nm = path.join(web, "node_modules");
+  mkdirSync(nm);
+  for (const name of readdirSync(path.join(CHECKOUT, "apps", "web", "node_modules"))) {
+    // Never link the host's Vite cache: the sandbox must own its own, or the test would write into the
+    // live checkout.
+    if (name === ".vite" || name === ".vite-temp") continue;
+    symlinkSync(path.join(CHECKOUT, "apps", "web", "node_modules", name), path.join(nm, name));
+  }
+};
+
+/** A free ephemeral loopback port (bind :0, read it, release it). */
+const freePort = () =>
+  new Promise((resolve) => {
+    const s = createNetServer();
+    s.listen(0, "127.0.0.1", () => { const p = s.address().port; s.close(() => resolve(p)); });
+  });
+
+/** Start a real preview server in the sandbox with `token`; detached so cleanup can kill its group. */
+const startPreview = (sandbox, port, token) => {
+  const child = spawn(
+    "bun",
+    [path.join(HERE, "..", "preview", "run.mjs"), "--checkout", sandbox, "--no-fixtures",
+      "--fixtures", GENERATED_FIXTURE, "--port", String(port), "--run-token", token],
+    { cwd: REPO, stdio: ["ignore", "pipe", "pipe"], detached: true }
+  );
+  let log = "";
+  child.stdout.on("data", (d) => { log += d; });
+  child.stderr.on("data", (d) => { log += d; });
+  return { child, log: () => log };
+};
+
+/** Poll the identity endpoint until it answers, or time out. */
+const waitIdentity = async (port, ms = 30_000) => {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/preview-identity.json`, { cache: "no-store", signal: AbortSignal.timeout(2000) });
+      if (res.ok) return await res.json();
+    } catch { /* not up yet */ }
+    await new Promise((r) => setTimeout(r, 300));
+  }
+  return null;
+};
 
 const topicKey = (payload) => Object.keys(payload.responses).find((k) => k.startsWith("get_topic:"));
 
@@ -153,3 +225,74 @@ test("6. a foreign responder that does not echo this run's identity → REFUSED 
     await new Promise((resolve) => foreign.close(resolve));
   }
 }, CASE_TIMEOUT);
+
+test("7. stale Vite on the SAME webroot keeps its boot identity → the check REFUSES the OLD token, never measures it", async () => {
+  if (!CHECKOUT_HAS_VITE) {
+    console.log(`skipping case 7: no Vite checkout at ${CHECKOUT} (set NAKAMA_CHECKOUT).`);
+    return;
+  }
+  const sandbox = mkdtempSync(path.join(tmpdir(), "ftc-stale-"));
+  const OLD_TOKEN = `old-token-${randomBytes(8).toString("hex")}`;
+  const NEW_TOKEN = `new-token-${randomBytes(8).toString("hex")}`;
+  const port = await freePort();
+  let old = null;
+  let second = null;
+  try {
+    buildSandbox(sandbox);
+
+    // FIRST: a real preview server, booted by "an earlier run" with its own token, on the sandbox webroot.
+    old = startPreview(sandbox, port, OLD_TOKEN);
+    const before = await waitIdentity(port, 30_000);
+    expect(before?.token).toBe(OLD_TOKEN);
+    const bootPid = before.pid;
+
+    // A NEWER run rewrites the SHARED generated files on that same webroot: the generated config becomes
+    // byte-different (as a new run would write it), and the static identity a filesystem-based mechanism
+    // served is dropped in carrying the NEW token. Neither is read back at request time.
+    const cfg = path.join(sandbox, "apps", "web", "preview.vite.config.ts");
+    writeFileSync(cfg, `${readFileSync(cfg, "utf8")}\n// a newer run rewrote this shared generated config\n`);
+    writeFileSync(
+      path.join(sandbox, "apps", "web", "preview-identity.json"),
+      `${JSON.stringify({ token: NEW_TOKEN, buildSha256: "0".repeat(64), buildBytes: 1 })}\n`
+    );
+    await new Promise((r) => setTimeout(r, 2000));
+
+    // The running server's identity is CAPTURED at startup: unchanged by the rewrite, its own token, not
+    // the token the new files on disk carry — and it is still the same process.
+    const after = await waitIdentity(port, 10_000);
+    expect(after?.token).toBe(OLD_TOKEN);
+    expect(after?.token).not.toBe(NEW_TOKEN);
+    expect(after?.buildSha256).toBe(before.buildSha256);
+    expect(after?.pid).toBe(bootPid);
+
+    // A SECOND check, with its own (new) run token, is forced onto the occupied port. The old server
+    // answers with ITS token, so the check REFUSES an unknown responder instead of measuring it.
+    const forced = await runCheckAsync([
+      "--url", `http://127.0.0.1:${port}/preview.html`,
+      "--identity", `http://127.0.0.1:${port}/preview-identity.json`,
+    ]);
+    expect(forced.status).toBe(3);
+    expect(forced.stderr).toContain("is not this run's preview child");
+    expect(forced.stderr).toContain("REFUSED");
+
+    // A real second child cannot take the occupied port: it FAILS (strictPort), and the check above never
+    // passed — so a false green cannot be mistaken for a measured server.
+    second = startPreview(sandbox, port, NEW_TOKEN);
+    const exit = await new Promise((resolve) => {
+      const t = setTimeout(() => resolve("timeout"), 15_000);
+      second.child.on("exit", (code, signal) => { clearTimeout(t); resolve({ code, signal }); });
+    });
+    expect(exit).not.toBe("timeout");
+    expect(exit.code).not.toBe(0);
+
+    // The old server is still answering with its own token — the second run's cleanup did not break it.
+    const stillOld = await waitIdentity(port, 8_000);
+    expect(stillOld?.token).toBe(OLD_TOKEN);
+  } finally {
+    for (const c of [old, second]) {
+      if (!c) continue;
+      try { process.kill(-c.child.pid, "SIGKILL"); } catch { /* already gone */ }
+    }
+    rmSync(sandbox, { recursive: true, force: true });
+  }
+}, CASE_TIMEOUT * 2);
