@@ -12,6 +12,10 @@
       "grounding": [
         "axis-1",
         "axis-2"
+      ],
+      "plan": [
+        "Establish reliable research-dashboard consultation",
+        "Retain auditable evidence from automated workflows"
       ]
     },
     "topic-2": {
@@ -22,7 +26,67 @@
         "axis-4",
         "axis-5",
         "axis-6"
+      ],
+      "plan": [
+        "Establish a repeatable measurement-acquisition baseline",
+        "Validate processing and analysis against controlled measurements",
+        "Demonstrate a reproducible end-to-end experimental workflow"
       ]
     }
-  }
+  },
+  "tasks": {
+    "problem-1": {
+      "title": "Verify coordinator skill loading"
+    },
+    "problem-2": {
+      "title": "Retain dashboard consultation trace"
+    },
+    "problem-3": {
+      "title": "Explain dropped frames at sustained acquisition rates",
+      "state": "blocked",
+      "basis": "Prototype-only task-state example selected for the diagnostics task; not a source state or live mutation.",
+      "plan": [
+        "Connect capture statistics to the production acquisition path",
+        "Collect a controlled sustained-rate run with driver counters",
+        "Correlate dropped frames and validate the proposed remedy"
+      ],
+      "activity": [
+        {
+          "date": "2026-10-09",
+          "summary": "Implementation plan outlined; task remains blocked pending instrumentation."
+        }
+      ]
+    }
+  },
+  "axes": {
+    "axis-1": {
+      "short": "Published research dashboard and scoped retrieval, accepted for the tested scope."
+    },
+    "axis-2": {
+      "short": "Validate agent consultation and retain evidence of automated research workflows."
+    },
+    "axis-3": {
+      "short": "Validate sustained optical acquisition rates and investigate dropped frames.",
+      "activity": [
+        {
+          "date": "2026-10-09",
+          "summary": "Proposed next run: collect capture statistics and driver counters together."
+        },
+        {
+          "date": "2026-10-08",
+          "summary": "Investigation approach drafted; instrumentation remains the next dependency."
+        }
+      ]
+    },
+    "axis-4": {
+      "short": "Acquire high-rate optical measurements with buffered capture and asynchronous saving."
+    },
+    "axis-5": {
+      "short": "Validate reproducible sparse-analysis results within the frozen comparison scope."
+    },
+    "axis-6": {
+      "short": "Automate UDV acquisition and verify the tested instrument transitions."
+    }
+  },
+  "activityNotice": "Illustrative progress reports for layout testing, not real events. No invented source links or attribution."
 }

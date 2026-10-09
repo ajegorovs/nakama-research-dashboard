@@ -90,31 +90,42 @@ function activityCount(topic) {
   const n = STATE.data.activity.filter((e) => e.topicAlias === topic.alias).length;
   return { n, label: n === 1 ? "event in snapshot" : "events in snapshot" };
 }
+function formatActivityDate(value) {
+  return new Intl.DateTimeFormat("en-GB", {
+    weekday: "short", day: "numeric", month: "short", timeZone: "UTC",
+  }).format(new Date(value));
+}
+function selectorRecency(events) {
+  const latest = events.filter(e => e.occurredAt).sort((a,b) => b.occurredAt.localeCompare(a.occurredAt))[0];
+  if (!latest) return el("span", { class: "selector-recency", text: "No recorded activity" });
+  const reference = Math.max(...STATE.data.activity.map(e => Date.parse(e.occurredAt)).filter(Number.isFinite));
+  const days = Math.max(0, Math.floor((reference - Date.parse(latest.occurredAt)) / 86400000));
+  return el("span", { class: "selector-recency", title: `${formatActivityDate(latest.occurredAt)} · relative to latest snapshot event`, text: days === 0 ? "Today" : `${days} day${days === 1 ? "" : "s"} ago` });
+}
+function selectorTitle(text, state) {
+  return el("span", { class: "row-title" }, [el("span", { class: "status-dot", "data-state": state, title: `Status: ${state}`, "aria-label": `Status: ${state}` }), text]);
+}
 function topicSelectorRow(topic, selected) {
   const copy = editorialFor(topic.alias);
   const act = activityCount(topic);
   return el("button", {
-    class: "select-row topic-row", type: "button",
-    "data-topic": topic.alias,
-    "data-selected": selected ? "true" : "false",
-    "aria-pressed": selected ? "true" : "false",
-    onclick: () => go("topics", { topic: topic.alias }),
+    class: "select-row topic-row status-selector", type: "button", "data-state": topic.status,
+    "data-topic": topic.alias, "data-selected": selected ? "true" : "false",
+    "aria-pressed": selected ? "true" : "false", onclick: () => go("topics", { topic: topic.alias }),
   }, [
-    el("span", { class: "sel-head" }, [
-      el("span", { class: "row-title", text: topic.name }),
-      stateBadge(topic.status),
-    ]),
+    el("span", { class: "sel-head" }, [selectorTitle(topic.name, topic.status), selectorRecency(STATE.data.activity.filter(e => e.topicAlias === topic.alias))]),
     copy ? el("span", { class: "row-description", text: copy.short }) : null,
-    el("span", { class: "row-meta" }, [
-      el("span", { text: `${topic.axes.length} ${topic.axes.length === 1 ? "axis" : "axes"}` }),
-      el("span", { class: "meta-sep", "aria-hidden": "true", text: "·" }),
-      el("span", { text: `${act.n} ${act.label}` }),
+    el("span", { class: "chips selector-tags" }, [
+      el("span", { class: "chip", text: `${topic.axes.length} workstreams` }),
+      el("span", { class: "chip", text: `${act.n} events in snapshot` }),
     ]),
-    copy ? prototypeBadge() : null,
   ]);
 }
 
 /* ---------- small pieces ---------- */
+function taskState(task) {
+  return STATE.editorial?.tasks?.[task.alias]?.state || task.state;
+}
 function stateBadge(state) {
   return el("span", { class: "state", "data-state": state || "draft", text: state || "unknown" });
 }
@@ -178,7 +189,7 @@ function renderOverview() {
       ]),
       copy ? el("span", { class: "row-description", text: copy.short }) : null,
       el("span", { class: "row-meta", text: `${t.axes.length} ${t.axes.length === 1 ? "axis" : "axes"} · ${act.n} ${act.label}` }),
-      copy ? prototypeBadge() : null,
+
     ])]));
   }
   topicsPanel.appendChild(tl);
@@ -204,11 +215,11 @@ function renderTopics() {
   const t = STATE.topic ? topicsByAlias()[STATE.topic] : d.topics[0];
   const wrap = el("div", {});
   wrap.appendChild(el("div", { class: "page-head" }, [
-    el("h1", { text: "Topics" }),
+    el("h1", { text: "Projects" }),
     el("p", { text: "Research directions. Pick a direction, then open an axis into Progress to follow its problems." }),
   ]));
 
-  const left = el("section", { class: "panel" }, [el("h2", { text: `Research directions (${d.topics.length})` })]);
+  const left = el("details", { class: "panel section-fold", open: true }, [el("summary", { text: `Projects (${d.topics.length})` })]);
   const list = el("ul", { class: "select-list" });
   for (const topic of d.topics) {
     const selected = !!(t && topic.alias === t.alias);
@@ -221,13 +232,26 @@ function renderTopics() {
   const detail = el("div", {});
   if (t) {
     const copy = editorialFor(t.alias);
-    detail.appendChild(el("section", { class: "panel topic-detail" }, [
-      el("div", { class: "axis-head" }, [el("h1", { class: "axis-title", text: t.name }), stateBadge(t.status)]),
-      el("p", { class: copy ? "lede" : "lede none", text: copy ? copy.long : "No description recorded in the source." }),
-      copy ? prototypeBadge() : null,
+    detail.appendChild(el("details", { class: "panel topic-detail", open: true }, [
+      el("summary", {}, [el("span", { class: "axis-title", text: t.name }), " ", stateBadge(t.status)]),
+      el("div", { class: "context-body" }, [
+        el("span", { class: "context-label", text: "About this project" }),
+        el("p", { class: copy ? "lede" : "lede none", text: copy ? copy.long : "No description recorded in the source." }),
+      ]),
+      scopedPlan(copy?.plan, "Intermediate checkpoints"),
+      el("div", { class: "topic-participants" }, [
+        el("span", { class: "small soft", text: "Participants · " }),
+        el("div", { class: "chips" }, (t.personAliases || []).map((alias) => {
+          const person = peopleByAlias()[alias];
+          return person ? el("button", { class: "chip", type: "button", text: person.displayName,
+            onclick: () => go("people") }) : null;
+        })),
+      ]),
+
+
     ]));
 
-    const axesPanel = el("section", { class: "panel" }, [el("h2", { text: `Development axes (${t.axes.length})` })]);
+    const axesPanel = el("details", { class: "panel section-fold", open: true }, [el("summary", { text: `Workstreams (${t.axes.length})` })]);
     for (const a of t.axes) axesPanel.appendChild(axisBlock(a, { context: "topics" }));
     detail.appendChild(axesPanel);
   }
@@ -238,6 +262,23 @@ function renderTopics() {
 
 function axisBlock(a, { context }) {
   const problems = a.problemAliases.map((p) => problemsByAlias()[p]).filter(Boolean);
+  if (context === "topics") {
+    const summary = STATE.editorial?.axes?.[a.alias]?.short || a.currentState || a.title;
+    const open = problems.filter((p) => p.state === "open").length;
+    const latest = STATE.data.activity.filter((event) => event.axisAlias === a.alias)
+      .sort((x, y) => (y.occurredAt || "").localeCompare(x.occurredAt || ""))[0];
+    return el("article", { class: "axis-block", "data-axis": a.alias }, [
+      el("div", { class: "axis-head" }, [el("h3", { class: "axis-title" }, [el("a", { class: "workstream-title-link", href: `#/progress/${a.alias}`, text: a.title })]), el("div", { class: "chips workstream-badges" }, [stateBadge(a.state), el("span", { class: "chip", text: `${open} open task${open === 1 ? "" : "s"}` }), ...((problems.filter(p => taskState(p) === "blocked").length) ? [el("span", { class: "chip blocked-count", text: `${problems.filter(p => taskState(p) === "blocked").length} blocked` })] : [])])]),
+      el("p", { class: "lede", text: summary }),
+
+      el("p", { class: "small soft" }, latest ? [
+        formatActivityDate(latest.occurredAt) + " | ",
+        latest.sourceUrl ? el("a", { href: latest.sourceUrl, target: "_blank", rel: "noopener noreferrer", text: latest.summary })
+          : el("span", { text: latest.summary }),
+      ] : ["No activity recorded for this workstream"]),
+
+    ]);
+  }
   return el("article", { class: "axis-block", "data-axis": a.alias }, [
     el("div", { class: "axis-head" }, [
       el("div", {}, [
@@ -277,21 +318,27 @@ function renderProgress() {
 
   // left: axis index (grouped by topic) + selected axis context (non-summarised)
   const left = el("div", {});
-  const idxPanel = el("section", { class: "panel" }, [el("h2", { text: `Development axes (${d.provenance.counts.axes})` })]);
+  const idxPanel = el("details", { class: "panel section-fold", open: true }, [el("summary", { text: `Workstreams (${d.provenance.counts.axes})` })]);
   for (const t of d.topics) {
-    idxPanel.appendChild(el("div", { class: "small soft", text: t.name }));
+    const group = el("div", { class: "project-selector-group" }, [el("div", { class: "small soft", text: t.name })]);
     const ul = el("ul", { class: "select-list", style: "margin:6px 0 12px" });
     for (const a of t.axes) {
       ul.appendChild(el("li", {}, [el("button", {
-        class: "select-row", type: "button", "data-axis": a.alias,
+        class: "select-row status-selector", type: "button", "data-state": a.state, "data-axis": a.alias,
         "data-selected": axis && a.alias === axis.alias ? "true" : "false",
         onclick: () => go("progress", { axis: a.alias }),
       }, [
-        el("div", { class: "axis-head" }, [el("span", { class: "row-title", text: a.title }), stateBadge(a.state)]),
-        el("div", { class: "row-meta", text: `${a.problemAliases.length} open problem${a.problemAliases.length === 1 ? "" : "s"}${a.plan ? " · has plan" : ""}` }),
+        el("div", { class: "axis-head" }, [selectorTitle(a.title, a.state), selectorRecency(STATE.data.activity.filter(e => e.axisAlias === a.alias))]),
+        el("div", { class: "chips selector-tags" }, [
+          el("span", { class: "chip", text: `${a.problemAliases.filter(id => problemsByAlias()[id]?.state !== "resolved").length} open tasks` }),
+          !a.plan ? el("span", { class: "chip plan-reminder", text: "No plan" }) : null,
+          ...(() => { const n = a.problemAliases.filter(id => problemsByAlias()[id] && taskState(problemsByAlias()[id]) === "blocked").length; return n ? [el("span", { class: "chip blocked-count", text: `${n} blocked` })] : []; })(),
+        ]),
+
       ])]));
     }
-    idxPanel.appendChild(ul);
+    group.appendChild(ul);
+    idxPanel.appendChild(group);
   }
   left.appendChild(idxPanel);
   wrap.appendChild(el("div", { class: "split-wide" }, [
@@ -304,21 +351,17 @@ function renderProgress() {
 /* The selected axis's own context — full purpose and reading, never summarised. Shown at the top of
    the Progress main column so the frame the problem index sits in is always visible. */
 function axisContextPanel(axis) {
-  return el("section", { class: "panel axis-context", "data-selected-axis": axis.alias }, [
-    el("h2", { text: "Selected axis — full context" }),
-    el("div", { class: "axis-head" }, [el("h3", { class: "axis-title", text: axis.title }), stateBadge(axis.state)]),
-    el("dl", { class: "kv" }, [
-      el("dt", { text: "kind" }), el("dd", { text: axis.kind || "axis" }),
-      el("dt", { text: "purpose" }),
-      el("dd", {}, [axis.description ? el("span", { text: axis.description }) : el("span", { class: "soft", text: "No axis description recorded in the source — shown as absent, never invented." })]),
-      el("dt", { text: "current reading" }),
-      el("dd", {}, [axis.currentState ? el("span", { text: axis.currentState }) : el("span", { class: "soft", text: "No current reading recorded." })]),
-      axis.blocker ? el("dt", { text: "blocker" }) : null,
-      axis.blocker ? el("dd", { text: axis.blocker }) : null,
+  return el("details", { class: "panel axis-context", open: true, "data-selected-axis": axis.alias }, [
+    el("summary", {}, [el("span", { class: "axis-title", text: axis.title }), " ", stateBadge(axis.state)]),
+    el("div", { class: "context-body" }, [
+      el("span", { class: "context-label", text: "Current workstream context" }),
+      el("p", { class: "lede", text: axis.currentState || "No workstream description recorded." }),
     ]),
-    el("div", { class: "links" }, [...linkChips(axis.repositoryAliases, reposByAlias())]),
-    el("div", { class: "links" }, [
-      navButton("Open owning topic", () => go("topics", { topic: axis.topicAlias }), true),
+    scopedPlan(axis.plan ? axis.plan.steps.map(s => `${s.title} · ${s.state}`) : null, "Workstream plan"),
+    resourceContext(axis, "axes"),
+    el("div", { class: "context-footer" }, [
+      el("span", { class: "small soft", text: "Project · " + (topicsByAlias()[axis.topicAlias]?.name || "Not recorded") }),
+      navButton("Return to project →", () => go("topics", { topic: axis.topicAlias }), true),
     ]),
   ]);
 }
@@ -335,49 +378,57 @@ function progressMain(axis) {
 
   main.appendChild(axisContextPanel(axis));
 
-  main.appendChild(el("section", { class: "panel" }, [
-    el("h2", { text: `Problem index — ${axis.title} (${problems.length})` }),
+  main.appendChild(el("details", { class: "panel section-fold", open: true }, [
+    el("summary", { text: `Tasks (${problems.length})` }),
     problems.length === 0
       ? el("div", { class: "banner", text: "No problems are attached to this axis in the source." })
       : el("ul", { class: "problist" }, problems.map((p) => el("li", {}, [el("button", {
-          class: "select-row", type: "button", "data-problem": p.alias,
+          class: "select-row" + (taskState(p) === "blocked" ? " task-blocked" : ""), type: "button", "data-problem": p.alias,
           "data-selected": selected && p.alias === selected.alias ? "true" : "false",
-          onclick: () => go("progress", { axis: axis.alias, problem: p.alias }),
+          "aria-expanded": selected?.alias === p.alias ? "true" : "false",
+          "aria-controls": `task-detail-${p.alias}`,
+          onclick: () => go("progress", { axis: axis.alias, problem: selected?.alias === p.alias ? null : p.alias }),
         }, [
-          el("div", { class: "axis-head" }, [el("span", { class: "row-title clamp", "data-expanded": "false", text: p.statement }), stateBadge(p.state)]),
+          el("div", { class: "axis-head" }, [el("span", { class: "row-title clamp", "data-expanded": "false", text: STATE.editorial?.tasks?.[p.alias]?.title || p.statement }), stateBadge(taskState(p))]),
           el("div", { class: "row-meta", text: `${p.planStepTitle ? "plan step: " + p.planStepTitle : "no plan step"} · ${(p.recencyAt || "").slice(0, 10)}` }),
-        ])]))),
+        ]), selected?.alias === p.alias ? taskDetail(p, axis) : null]))),
   ]));
 
-  // axis plan (SHARED — never attributed to a problem)
-  if (axis.plan) {
-    main.appendChild(el("section", { class: "panel plan" }, [
-      el("div", { class: "plan-label", text: "Axis plan — shared by this axis, not owned by any single problem" }),
-      el("h3", { class: "axis-title", text: axis.plan.summary || "Plan" }),
-      el("ol", {}, axis.plan.steps.map((s) =>
-        el("li", {}, [el("span", { text: s.title }), el("span", { class: "step-state", text: `· ${s.state} · stored position ${s.position}` })]))),
-    ]));
-  }
-
-  if (selected) {
-    main.appendChild(el("section", { class: "panel" }, [
-      el("button", { class: "backlink", type: "button", onclick: () => go("progress", { axis: axis.alias }), text: "← Back to the axis" }),
-      el("h2", { text: "Selected problem" }),
-      clampText(selected.statement, `pm:${selected.alias}`, { lines: 3 }),
-      el("dl", { class: "kv" }, [
-        el("dt", { text: "status" }), el("dd", { text: selected.state }),
-        el("dt", { text: "axis blocker" }),
-        el("dd", {}, [axis.blocker ? el("span", { text: axis.blocker }) : el("span", { class: "soft", text: "No axis blocker recorded." })]),
-        el("dt", { text: "work context" }),
-        el("dd", {}, [el("span", { class: "small", text: `axis “${axis.title}”${selected.planStepTitle ? ` · plan step “${selected.planStepTitle}”` : " · no plan step"}` })]),
-        el("dt", { text: "repositories" }),
-        el("dd", {}, [selected.repositoryAliases.length ? el("span", { text: selected.repositoryAliases.map((r) => (reposByAlias()[r] || {}).fullName || r).join(", ") }) : el("span", { class: "soft", text: "None recorded." })]),
-      ]),
-    ]));
-  } else {
-    main.appendChild(el("div", { class: "banner" }, [el("strong", { text: "Select a problem" }), " to see its full statement, status and work context. Selection is view-only — nothing is written."]));
-  }
   return main;
+}
+
+function scopedPlan(steps, label = "Plan / approach") {
+  return steps?.length ? el("details", { class: "scoped-plan section-fold", open: true }, [
+    el("summary", { text: label }),
+    el("ol", {}, steps.map(text => el("li", { text }))),
+  ]) : null;
+}
+
+function resourceContext(entity, kind) {
+  const aliases = entity.repositoryAliases || [];
+  const examples = STATE.editorial?.[kind]?.[entity.alias]?.activity || [];
+  const recorded = kind === "axes" ? STATE.data.activity.filter(e => e.axisAlias === entity.alias).sort((a,b) => (b.occurredAt || "").localeCompare(a.occurredAt || "")) : [];
+  return el("div", { class: "resource-context" }, [
+    aliases.length ? el("div", { class: "repository-reference" }, [
+      el("span", { class: "context-label", text: "Supporting code · " }),
+      ...aliases.map((alias, i) => { const r = reposByAlias()[alias]; return el("span", {}, [i ? " · " : "", r?.url ? el("a", { href: r.url, target: "_blank", rel: "noopener noreferrer", text: r.fullName }) : el("span", { text: r?.fullName || alias })]); }),
+    ]) : null,
+    recorded.length || examples.length ? el("details", { class: "scoped-plan section-fold activity-context", open: true }, [
+      el("summary", { text: "Recent activity" }),
+      el("ul", { class: "context-events" }, [
+        ...recorded.slice(0,3).map(e => el("li", {}, [el("span", { class: "small soft", text: formatActivityDate(e.occurredAt) + " · " }), e.sourceUrl ? el("a", { href: e.sourceUrl, target: "_blank", rel: "noopener noreferrer", text: e.summary }) : el("span", { text: e.summary })])),
+        ...examples.map(e => el("li", {}, [el("span", { class: "small soft", text: formatActivityDate(e.date) + " · Example report · " }), el("span", { text: e.summary })])),
+      ]),
+    ]) : null,
+  ]);
+}
+
+function taskDetail(task, axis) {
+  return el("div", { class: "task-detail", id: `task-detail-${task.alias}` }, [
+    el("p", { class: "lede", text: task.statement }),
+    scopedPlan(STATE.editorial?.tasks?.[task.alias]?.plan),
+    resourceContext(task, "tasks"),
+  ]);
 }
 
 /* ---------- view: People ---------- */
@@ -451,6 +502,13 @@ function applyHash() {
 }
 
 /* ---------- render dispatch ---------- */
+const VIEW_PURPOSE = {
+  overview: "See our research directions at a glance, their purpose and recent activity, then choose where to explore.",
+  topics: "Understand each project: its purpose, people, current workstreams and recent activity. Open a workstream in Progress for the full work details.",
+  people: "See who each person is, the research and work they are involved in, their repositories and latest activity.",
+  repositories: "Understand what each repository is for, the work underway, the topics it supports, its people and recent activity.",
+  progress: "Browse the full work: topics, axes and specific problems, with complete descriptions, status, blockers, plans and supporting detail. Selection changes what you view, not the research state.",
+};
 function render() {
   for (const v of ["overview", "topics", "people", "repositories", "progress"]) {
     const sec = $("#view-" + v);
@@ -462,6 +520,7 @@ function render() {
       else if (v === "people") renderPeople();
       else if (v === "repositories") renderRepositories();
       else renderProgress();
+      sec.prepend(el("p", { class: "view-purpose", text: VIEW_PURPOSE[v] }));
     }
   }
   document.querySelectorAll(".tab").forEach((b) => {

@@ -3,6 +3,44 @@
    rework reads against the same token set; the composition is the change, not the colours. */
 
 * { box-sizing: border-box; }
+.topic-participants { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin: 12px 0 0; border-top: 1px solid var(--line); padding-top: 12px; }
+.topic-detail > summary, .axis-context > summary { cursor: pointer; }
+.panel > summary { color: var(--soft); font-size: 13px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; cursor: pointer; }
+.panel > summary .axis-title { color: inherit; font-size: inherit; font-weight: inherit; }
+.section-fold > summary { margin-bottom: 12px; }
+.section-fold:not([open]) > summary { margin-bottom: 0; }
+.picker-blocker { display: inline-block; margin-top: 7px; color: #854e00; font-size: 12px; font-weight: 600; }
+.work-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; }
+.workstream-badges .state, .workstream-badges .chip { font-size: 12px; font-weight: 600; line-height: 18px; padding: 2px 9px; border: 1px solid transparent; margin-top: 0; border-radius: 999px; }
+.workstream-badges .blocked-count { color: #a12626; background: #fdecec; }
+.workstream-title-link { color: inherit; text-decoration: none; }
+.workstream-title-link:hover { text-decoration: underline; }
+.scoped-plan { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; }
+.scoped-plan > summary { font-weight: 700; }
+.repository-reference { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; font-size: 13px; line-height: 1.6; }
+.context-events { list-style: none; padding: 0; margin: 12px 0 0; }
+.context-events li { padding: 8px 0; font-size: 13px; line-height: 1.6; }
+.context-events li + li { border-top: 1px solid var(--line); }
+.blocker-alert { border-left: 4px solid #ad6500; background: #fff4df; color: #714400; padding: 9px 12px; margin: 10px 0; font-size: 13px; }
+.view-purpose { color: var(--muted); margin: 0 0 20px; }
+.select-row.status-selector { --status-color: var(--soft); }
+.project-selector-group { background: transparent; padding: 0; margin-top: 18px; }
+.project-selector-group + .project-selector-group { margin-top: 26px; }
+.project-selector-group > .small { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: var(--soft); }
+.project-selector-group > .small::before, .project-selector-group > .small::after { content: ""; border-top: 1px solid var(--line-strong); flex: 1; }
+.project-selector-group > .small::before { flex: 0 0 12px; }
+.project-selector-group .select-list { margin: 10px 0 0 !important; border-left: 0; padding-left: 0; }
+.project-selector-group .select-row { background: white; }
+.status-selector[data-state="active"] { --status-color: var(--active); }
+.status-selector[data-state="usable"] { --status-color: var(--usable); }
+.status-selector[data-state="blocked"] { --status-color: var(--blocked); }
+.select-row.status-selector[data-selected="true"] { border-color: var(--line-strong); outline: none; background: #eef3fa; }
+.status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--status-color); margin-right: 7px; }
+.selector-recency { font-size: 11px; color: var(--soft); text-align: right; flex-shrink: 0; max-width: 100px; }
+.selector-tags { margin-top: 8px; }
+.selector-tags .chip { font-size: 12px; line-height: 18px; padding: 2px 9px; }
+.selector-tags .plan-reminder { color: #854e00; background: #fff4df; }
+.selector-tags .blocked-count { color: #a12626; background: #fdecec; }
 
 :root {
   --bg: #f6f7f9;
@@ -109,6 +147,14 @@ main { max-width: 1480px; margin: 0 auto; padding: 22px 28px 60px; }
 
 /* the selected axis context gets a quiet accent so the frame reads above its problem index */
 .axis-context { border-left: 3px solid var(--usable); }
+.topic-detail, .axis-context { background: #ffffff; }
+.task-detail { padding: 12px 16px; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 var(--radius) var(--radius); background: white; }
+.topic-detail > summary, .axis-context > summary { padding-bottom: 12px; }
+.topic-detail[open] > summary, .axis-context[open] > summary { border-bottom: 1px solid var(--line); }
+.context-body { padding: 14px 0 4px; }
+.context-label { font-weight: 650; font-size: 13px; color: var(--text); }
+.context-body .lede { margin: 7px 0; line-height: 1.65; color: var(--text); }
+.context-footer { border-top: 1px solid var(--line); padding-top: 10px; margin-top: 8px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 
 /* ---------- selector rows ---------- */
 .select-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -144,6 +190,17 @@ main { max-width: 1480px; margin: 0 auto; padding: 22px 28px 60px; }
 /* ---------- axis / problem cards ---------- */
 .axis-block { border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; background: var(--panel); }
 .axis-block + .axis-block { margin-top: 12px; }
+.topic-detail > summary, .axis-context > summary { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+details > summary { list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "▸"; display: inline-block; width: 12px; font-size: 15px; line-height: 1; margin-right: 6px; flex: 0 0 12px; }
+details[open] > summary::before { content: "▾"; }
+.topic-detail > summary::before, .axis-context > summary::before { margin-right: 0; }
+.topic-detail > summary .axis-title, .axis-context > summary .axis-title { flex: 1; }
+.state { flex-shrink: 0; }
+.state[data-state="open"] { color: var(--usable); background: var(--usable-bg); }
+.state[data-state="resolved"] { color: var(--active); background: var(--active-bg); }
+.task-blocked { border-color: #ad6500; box-shadow: inset 3px 0 #ad6500; }
 .axis-head { display: flex; align-items: flex-start; gap: 10px; justify-content: space-between; }
 .axis-title { font-size: 15px; font-weight: 640; letter-spacing: -.01em; margin: 0; }
 .axis-kind { color: var(--soft); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }

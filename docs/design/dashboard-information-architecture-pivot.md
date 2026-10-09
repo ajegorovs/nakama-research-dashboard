@@ -1,5 +1,81 @@
 # Dashboard information-architecture pivot — working spec
 
+## Current prototype agreement — supersedes earlier layout proposals
+
+These are owner-agreed directions for the standalone prototype, not production implementation,
+live-data mutation, deployment or publication authorization. Historical/source-analysis sections
+below remain background; where they differ, this section defines the current prototype direction.
+
+### Entity hierarchy and content
+- Display **Project → Workstream → Task**; frozen export keys and live schema remain unchanged.
+- Projects provide orientation and short workstream summaries; Progress supplies full descriptions.
+- Tasks have a concise title distinct from their full description. Current short titles are authored
+  overlays; separate title/description fields are a later live-model requirement.
+- Task state can be explicitly supplied by users or composed by a librarian. Current live data has
+  open/resolved states; the diagnostics blocked state is a prototype-only example, never inferred
+  from a workstream blocker. No live state extension is implemented.
+
+### Description, checkpoints and plans
+- Keep description surfaces white, with consistent bold muted collapse labels, matching arrows,
+  title/status alignment, supporting labels and thin dividers.
+- Project prose may be followed by intermediate checkpoints. Workstreams advance project checkpoints
+  with scoped plans; individual tasks may have their own implementation/investigation plans.
+- Plans are optional data, but **No plan** is a useful reminder to supply one. Do not render **Has plan**.
+- Place plans beside their entity description, not in a detached panel below the task list.
+  Plan labels are bold and preceded by a horizontal divider; plans collapse independently.
+- Prototype project checkpoints and the diagnostics task plan are authored overlays, not reported
+  completion. Existing workstream steps remain workstream-owned. Automatic checkpoint linkage and
+  parent/child progress rollups are not implemented.
+- Task details unfold directly below the clicked row; at most one task is unfolded at a time.
+  Clicking it again collapses it. Use **Tasks (N)**, without repeating the workstream title.
+- Task bodies omit repeated status and workstream-context fields. Repository references now have
+  their own supporting-reference row rather than the earlier redundant metadata table.
+
+### Selectors and Projects cards
+- Project/workstream selectors show status through a coloured dot before the name, not status pills
+  or coloured contours. Current selection remains distinguishable independently from status.
+- Counts are compact tags. Known blocked-task counts are red; all adjacent pills share typography,
+  padding and height. Never infer blocked-task counts from a workstream-level blocker.
+- Relative recency sits at the upper right. Use entity-associated recorded events only; absent
+  events mean **No recorded activity**. Frozen-prototype dates use the latest snapshot event as
+  their reference, explained alongside the exact date in the tooltip.
+- Progress project names interrupt a thin horizontal rule spanning the selector width. Workstreams
+  remain unindented: no vertical guide, darker group background or enclosing group box.
+- Projects workstream cards show title, short summary, status/open-task/known-blocked-task tags and
+  one latest recorded event. Their titles link to Progress; separate Open workstream/Review blocker
+  buttons and the orange Blocker reported banner are removed.
+- Participants remain a quiet inline row beneath a divider. Project-header supporting repositories
+  remain removed for now; do not reintroduce them through unrelated layout changes.
+- Remove per-entry prototype-copy badges from the visual UI. Preserve provenance in editorial.json,
+  the prototype documentation and this spec rather than cluttering content cards.
+
+### Repository associations and navigation
+- A workstream may use multiple supporting repositories. A repository may support multiple
+  workstreams across different projects: this is a many-to-many association, not project ownership.
+- Tasks may also reference multiple repositories, although many tasks will use just one. Associations
+  are explicit; tasks do not automatically inherit all parent repositories or activity.
+- Use **Supporting repositories**, not Supporting code: repositories can contain data, calibration
+  material and procedures as well as code. Multiple names may wrap in the compact reference row.
+- Default name click should open the **exact entry in Repositories**. A separate accessible **↗**
+  control opens the actual external URL in a new tab. Do not merely switch tabs without identifying
+  the intended repository. Tooltips/accessible labels identify the external destination.
+- **Implementation status:** current draft links still open GitHub directly; exact-entry internal
+  navigation and the separate external icon are agreed follow-ups, not completed functionality.
+
+### Activity and supporting-reference placement
+- Keep the current placement draft: full description → scoped plan → compact supporting-repository
+  row → independently collapsible Recent activity, inside the workstream or expanded task card.
+- Activity is a record of updates, not a plan or inferred completion. Preserve exact scope and real
+  source URLs. Do not substitute repository-wide events for missing workstream/task events.
+- Diagnostics illustrative reports live only in editorial.json and carry a quiet **Example report**
+  label. No invented PR URLs, attribution or live progress claims. They do not affect recorded-event
+  counts or selector recency; data.json remains unchanged.
+- Activity may link to a related **Repositories** entry when an explicit association exists, and/or
+  to its external source when available. With neither, keep plain text; never guess a destination.
+- Owner is satisfied with the current supporting-reference and activity listing layouts as the basis
+  for the next iteration. Next establish the Repositories destination, then add viable activity
+  navigation. People follows; neither tab redesign is completed by this spec update.
+
 **Status: working design document. NOT ratified. No standing decision has been taken.**
 
 This document starts a new spec for the dashboard's information-architecture pivot. It **collects** the
@@ -8,8 +84,8 @@ claim against the source currently checked out. It is a working surface for the 
 **not** a product decision, not an acceptance record, and not a substitute for
 [`docs/ux-v2/DECISIONS.md`](../ux-v2/DECISIONS.md).
 
-- **Design only.** No candidate implementation is selected. Preview and implementation are later,
-  separately agreed stages; this document does not authorize either.
+- **Prototype scope only.** The standalone HTML trial is authorized for iteration. No production
+  implementation is selected or authorized by this document; porting remains a separate decision.
 - **No source change is made by this document.** A source change still travels
   `bun run check → vendor → reinstall → served-build guard` ([`AGENTS.md`](../../AGENTS.md) *Build → vendor
   → serve*); any fixture/dataset deploy is a **separate** act with its own authorization.
