@@ -311,3 +311,14 @@ lays out the human choices; **WP-G grants no write authorization**, and no run w
    every step id belongs to the intended plan, and carry the **stored** topic/repo `relationship` verbatim
    (omitting it defaults to `supporting` and demotes a `primary` link). The store cannot prove ownership
    for you.
+8. **Hash conventions — a canonical projection hash is not a raw file hash.** A before/after evidence chain
+   must use **one projection reader** and **one algorithm**. Record the **canonical projection hash** —
+   `sha256(JSON.stringify(obj))` (compact, UTF-8) — which is exactly what the runner's in-memory `sha(o)`
+   computes. A snapshot saved with `JSON.stringify(obj, null, 2)` is **pretty-printed**, so its **raw
+   file-bytes sha256** is a *different* value; a chain that mixes a raw file hash, a second runner's reader
+   digest, and the canonical projection hash is not one chain. This is how a recorded
+   `b9218047 → 535b5f41 → 5b965d6a` progression paired a Phase-B **reader** digest (`535b5f41`) and a **raw
+   file hash** (`5b965d6a`) with the Phase-A **canonical** chain; re-deriving offline gave the corrected
+   `b9218047 → 5ab8e3e6 → 4fcf2b7a`. Label every superseded value with its schema/algorithm instead of
+   dropping it, and re-derive offline from the **retained files** (never a fresh/live measure, never an
+   inferred baseline).
