@@ -1,6 +1,8 @@
 # Retained-amendment (F02 + F07/F09 + F12) — **execution report**: T1 + T2 committed, full postflight PASS, protected stores unchanged
 
-> **Status: EXECUTED under a separate explicit owner write authorization; grant CONSUMED. Review: PENDING.**
+> **Status: EXECUTED under a separate explicit owner write authorization; grant CONSUMED. Review: EXECUTION
+> ACCEPTED — DOCUMENTARY QUALIFICATIONS (reviewer verdict quoted verbatim in §9; a documentary-qualified
+> acceptance, not a merge grant — see §10).**
 > This record reports the live execution of the **two reviewed retained-amendment `reconcile_topic`
 > transactions** (T1 + T2) from the digest-bound amendment bundle, plus the **fresh boundary preflight**
 > and the **full post-write verification**. It is the **second live write** of the authoring path (the first
@@ -62,6 +64,15 @@ grant. The frozen payload bytes were **retained, not regenerated**.
   `f6e6b8f3cec9476ad55be4f7067eb116690ae0b26c03cd98c58b654cb9024548`, **155420** bytes, **byte-equal** to
   the repo's `ui/app.js`; the target org serves release **`0.2.0+dev.a5f76a608db2`** revision **`17`** (the
   U12 full-text clamp-release build). **No deployment change** (same before and after).
+  - **Served-asset hash method (corrected).** The T1 boundary runner (`ramd-exec-a.mjs`) fetched the asset
+    with `await res.text()` and hashed the **decoded text re-encoded to UTF-8** — `sha256(assetText)`, a
+    string hash, **not** a raw-`Buffer` hash. Because the asset is valid UTF-8 the re-encoded text is
+    `155420` bytes and the digest is `f6e6b8f3…`; the runner also recorded the JavaScript **string character
+    count** `155239`, which is why the first check compared `charLen 155239` with `bytes 155420` — a
+    reader-unit (UTF-8 multibyte) mismatch, **not** a served-bytes change. A separate standalone probe
+    (`ramd-served-probe2.mjs`) hashed **both** the decoded text (`textSha`) **and** the raw response buffer
+    (`bufSha`); both equal `f6e6b8f3…` / `155420`. The record does **not** claim the T1 runner hashed the raw
+    buffer.
 - **Object versions:** ax5 **2**, ax6 **2**, ax4 **2**; topic versions **1**; diagnostics plan version
   **1**. The bundle binds `expectedVersion` on **T1's two axis patches only** (ax5/ax6 = 2); **ax4, both
   topics and the diagnostics plan carry no `expectedVersion`** — their versions were **measured, not bound**
@@ -142,17 +153,50 @@ are byte-comparable) — **29/29 checks PASS**:
   topic versions unchanged; topic→repo relationships preserved (`dashboard `primary`` / `udv `primary``,
   `grablink `supporting``); no new activities; no new problems; `lastActivityAt` unchanged; consultation
   problem repo sets unchanged;
-- **Protected (un-targeted) stores — unchanged** by their own fresh readback (stable projection, immediate
-  pre-T1 vs post, **not** DB byte identity): `Layout Demo` digest `eda52f72…` (2/7/3/2), `Nakama E2E
-  Fixture` digest `a75bc4c6…` (2/8/1/0) — **identical before and after**.
+- **Protected (un-targeted) stores — unchanged** by their own fresh readback (stable **canonical
+  projection**, immediate pre-T1 vs post, **not** DB byte identity). The retained immediate-pre and post
+  full-projection files are `ramd-exec-pret1-untargeted_org_<id>-mutation-public.json` (immediate pre-T1)
+  and `ramd-exec-postflight-untargeted_org_<id>-mutation-public.json` (post-harmonized); the two are
+  **byte-identical**, so their canonical digests match: `Layout Demo` (org `…dbc885d6`) `eda52f72…`
+  (2/7/3/2), `Nakama E2E Fixture` (org `…b2b1029`) `a75bc4c6…` (2/8/1/0) — **identical before and after**.
+  (The earlier *non-harmonized* first-postflight files `ramd-exec-post-untargeted_org_*.json` gave
+  `bb2dac2b…`/`4962e129…` from a **different reader projection** — superseded by the harmonized run, **not**
+  store drift. The preflight §X counts-only digests `46c7d111…`/`79d49a1f…` are a **third, counts-only
+  projection**.)
 
-**Mutation-public snapshot digest:** `b9218047…` (pre-T1) → `535b5f41…` (post-T1) → `5b965d6a…` (post-T2).
+**Mutation-public snapshot digest (corrected chain — one schema, one algorithm).** All three values are the
+**canonical projection hash** `sha256(JSON.stringify(projection))` (compact, UTF-8) over the **same corrected
+Phase-A projection** shared by the pre-T1 reader and the harmonized postflight:
+
+- pre-T1 (retained `ramd-exec-pret1-mutation-public.json`):
+  `b92180471ea42c24ea52dfc3886e3bd9aa26bb6aad8b939eec4858959d93b64d`
+- immediately post-T1 (retained `ramd-exec-postt1-mutation-public.json`):
+  `5ab8e3e676e3c4434527a50bab1a97d80b846d24c01c3d740194fc96324320d9`
+- final / post-T2 (retained harmonized `ramd-exec-postflight-mutation-public.json`):
+  `4fcf2b7a9b77db68ef0837533afe0721424e046e49478863908b51ef38caac0c`
+
+**Algorithm distinction (explicit).** Two different hashes were conflated in an earlier draft of this
+chain: `535b5f41…` is the **Phase-B runner's pre-T2 reader digest** (`ramd-exec-b.json` `/pret2`, a
+*different projection reader* than Phase A), and `5b965d6a…` is the **raw pretty-printed file-bytes sha256**
+of `ramd-exec-postflight-mutation-public.json` (`sha256(file bytes)`), **not** the canonical projection hash
+`4fcf2b7a…`. A **raw file hash** (`sha256` of the saved file, written with `JSON.stringify(obj, null, 2)`)
+differs from the **canonical projection hash** (`sha256(JSON.stringify(obj))`, compact) whenever the
+pretty-printing differs. This record quotes only the canonical projection chain above; the old mixed
+`b9218047 / 535b5f41 / 5b965d6a` progression is **superseded** (see the findings ledger §X.4).
 
 ## 7. Deployment and served bytes
 
 No reinstall, deploy or restart. The API (`:4399`) and web (`:3003`) were already serving; the served
 `ui/app.js` sha256 (`f6e6b8f3…`, `155420` bytes) is **identical before and after** — the write touched the
 **fixture/domain store**, not the served build.
+
+**Served-asset hash method.** The `f6e6b8f3…` value is the digest of the **decoded text re-encoded to
+UTF-8** (the T1 runner's `sha256(assetText)`); the **raw response buffer** hashes to the same value, as
+re-confirmed by the standalone probe `ramd-served-probe2.mjs`, which computes **both** `textSha` (decoded
+text) and `bufSha` (raw `Buffer`) and reports them equal. The earlier **pre-write boundary stop** compared
+the string **character count** (`155239`) with the **byte count** (`155420`) — a UTF-8 reader-unit bug
+corrected in the runner, **not** a served-bytes change (disclosed in the findings ledger §X.3). The record
+does **not** claim the T1 runner hashed the raw buffer.
 
 ## 8. Store-contract findings (measured, not assumed)
 
@@ -168,7 +212,7 @@ No reinstall, deploy or restart. The API (`:4399`) and web (`:3003`) were alread
 
 ## 9. Reviewer verdicts (verbatim) and the owner grant
 
-Two review verdicts and the owner authorization are recorded, exactly, in chronological order.
+Three review verdicts and the owner authorization are recorded, exactly, in chronological order.
 
 **Scope verdict (historical, §X):**
 
@@ -182,16 +226,26 @@ Two review verdicts and the owner authorization are recorded, exactly, in chrono
 
 > i agree. proceed
 
+**Execution verdict (supplied; accepts the execution, documentary-qualified):**
+
+> Verdict: EXECUTION ACCEPTED — DOCUMENTARY QUALIFICATIONS.
+
 The concrete-payload verdict **accepted the payload** but **withheld write authorization**; the **owner**
-then granted the one-shot write authorization above, which this run **consumed**. Any paraphrase of either
-verdict is a **summary, not a verbatim quote**.
+then granted the one-shot write authorization above, which this run **consumed**; the **execution verdict**
+then **accepted the execution** subject to **documentary qualifications** — it is an acceptance of the
+*execution*, made **offline** on the archived evidence (see the acceptance record
+[`2026-10-09-retained-amendment-acceptance-record.md`](2026-10-09-retained-amendment-acceptance-record.md)),
+**not** a live re-proof, **not** full-DB-bytes verification, and **not** a merge or "ready" grant. Any
+paraphrase of any verdict is a **summary, not a verbatim quote**.
 
 ## 10. Execution status
 
-**EXECUTED — PENDING REVIEW.** T1 and T2 committed once each; full postflight PASS; protected stores
-unchanged. This is **not** a merge and **not** a "ready" state: **PR7 stays draft**, its status corrected to
-*executed, pending review*. **No reviewer has accepted the execution** (no such verdict is invented here);
-the owner's one-shot grant is **CONSUMED** and is not reusable.
+**EXECUTED — ACCEPTED (DOCUMENTARY QUALIFICATIONS).** T1 and T2 committed once each; full postflight PASS;
+protected stores unchanged; the execution is **reviewer-accepted** subject to the documentary qualifications
+in §9 and the acceptance record. This is **not** a merge and **not** a "ready" state: **PR7 stays draft**.
+The acceptance rests on the **archived offline evidence** and makes **no** live re-proof and **no**
+full-DB-bytes claim; the owner's one-shot grant is **CONSUMED** and is not reusable. No **merge** is
+authorized by any verdict here.
 
 ## 11. Boundaries and limitations
 
@@ -201,8 +255,11 @@ the owner's one-shot grant is **CONSUMED** and is not reusable.
 - **No deployment change, no restart** — none was needed and none was performed.
 - **No rollback** exists for a committed transaction; the run stopped cleanly with no partial/ambiguous
   state.
-- **Digest hygiene.** The protected-store comparison uses a **stable single-schema projection** compared
-  fresh pre-T1 vs post — **not** DB byte identity and **not** the volatile per-read envelope digest.
+- **Digest hygiene.** The protected-store comparison uses a **stable single-schema canonical projection**
+  compared fresh pre-T1 vs post — **not** DB byte identity and **not** the volatile per-read envelope
+  digest. The three mutation-public snapshot digests quoted in §6 use one **canonical projection hash**
+  (`sha256(JSON.stringify(projection))`); a **raw pretty-file hash** (`sha256(file bytes)`) is a different
+  value (see §6 algorithm note).
 - **Single-execution serialized.** No concurrent fixture writer was known; the two transactions were
   executed serially in one process each, with the T1 result verified before T2 began.
 
@@ -211,7 +268,20 @@ the owner's one-shot grant is **CONSUMED** and is not reusable.
 Exact operational identity, the executable payload, the frozen bundle bytes, the raw request/response
 envelopes and the digest-bound grant record are held **local only** in `.hermes/scratch/`
 (`ramd-exec-a.mjs`, `ramd-exec-b.mjs`, `ramd-postflight.mjs`, `ramd-exec-*.json`,
-`ramd-private-review-package/`). Nothing operational is committed here.
+`ramd-private-review-package/`). Nothing operational is committed here. The updated offline review archive
+`.hermes/scratch/ramd-execution-review-final.zip` (local, git-ignored; with its README and digest manifest,
+including the **retained protected-store pre-projections**) lets a reviewer re-derive the claims without
+executing anything.
+
+## 13. Acceptance record and corrections
+
+- **Acceptance record:**
+  [`2026-10-09-retained-amendment-acceptance-record.md`](2026-10-09-retained-amendment-acceptance-record.md)
+  — records the reviewer's **execution** verdict (`Verdict: EXECUTION ACCEPTED — DOCUMENTARY
+  QUALIFICATIONS.`) verbatim, with its documentary boundaries.
+- **Findings ledger corrections:** appended **§X.4** (retained-amendment execution acceptance + documentary
+  digest/algorithm corrections). §A–§W and §X/§X.1/§X.2/§X.3 stand as recorded and are **not** rewritten; the
+  digest chain in §X.2 is **corrected by §X.4**, not edited in place.
 
 **PR links.** Branch `docs/retained-metadata-plan-amendment`; draft PR #7
 (`https://github.com/ajegorovs/nakama-research-dashboard/pull/7`).

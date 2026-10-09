@@ -1265,3 +1265,67 @@ this section appends and rewrites no design constant.
   authorized. An **offline private review archive** (local, git-ignored) collects the audited runners, the raw
   pre-T1/post requests, the same-projection snapshots and the frozen review pack so an independent reviewer can
   **re-derive** the claims **without executing anything**.
+
+  ### X.4 Retained-amendment execution **acceptance + documentary corrections** (appended 2026-10-09)
+
+  > **Appended correction — append-only.** §A–§W and §X/§X.1/§X.2/§X.3 above stand as recorded and are **not
+  > rewritten**. This subsection records the **execution acceptance** and the **documentary corrections** (to
+  > the current PR7 records and their offline evidence archive) that close it out. It adds **no write** and
+  > consumes **no grant**. The measured values below were **re-derived offline from the retained files**
+  > (`sha256` only — no network, no instance, no write).
+
+  - **Execution verdict (reviewer, verbatim).**
+
+    > Verdict: EXECUTION ACCEPTED — DOCUMENTARY QUALIFICATIONS.
+
+    The reviewer **accepted the execution**, subject to **documentary qualifications**. It is an acceptance of
+    the *execution* on the **archived offline evidence** — it makes **no live re-proof** and **no
+    full-DB-bytes** claim, and it is **not** a merge or "ready" grant. Recorded verbatim, with its boundaries,
+    in [`2026-10-09-retained-amendment-acceptance-record.md`](2026-10-09-retained-amendment-acceptance-record.md).
+    No reviewer acceptance is claimed **beyond** this verdict and its offline assertions.
+  - **Canonical digest chain corrected (one schema, one algorithm).** §X.2 quoted the mutation-public snapshot
+    digest as `b9218047…` (pre-T1) → `535b5f41…` (post-T1) → `5b965d6a…` (post-T2). Re-derived offline from
+    the **retained projection files** with the runner's own algorithm — the **canonical projection hash**
+    `sha256(JSON.stringify(projection))` (compact, UTF-8) over the **same corrected Phase-A projection** the
+    pre-T1 reader and the harmonized postflight share — the correct chain is:
+
+    | Point | Retained file | canonical projection hash |
+    |---|---|---|
+    | pre-T1 | `ramd-exec-pret1-mutation-public.json` | `b92180471ea42c24ea52dfc3886e3bd9aa26bb6aad8b939eec4858959d93b64d` |
+    | immediately post-T1 | `ramd-exec-postt1-mutation-public.json` | `5ab8e3e676e3c4434527a50bab1a97d80b846d24c01c3d740194fc96324320d9` |
+    | final (post-T2) | `ramd-exec-postflight-mutation-public.json` | `4fcf2b7a9b77db68ef0837533afe0721424e046e49478863908b51ef38caac0c` |
+
+    The two superseded values are **labelled, not lost**: `535b5f41…` is the **Phase-B runner's pre-T2 reader
+    digest** (`ramd-exec-b.json` `/pret2`, a **different projection reader** than Phase A), and `5b965d6a…` is
+    the **raw pretty-printed file-bytes sha256** of `ramd-exec-postflight-mutation-public.json` — a **different
+    algorithm** than the canonical projection hash `4fcf2b7a…`, since the saved files are written with
+    `JSON.stringify(obj, null, 2)`. A **raw file hash** (`sha256(file bytes)`) and a **canonical projection
+    hash** (`sha256(JSON.stringify(obj))`) are distinct and are now distinguished explicitly in the report and
+    the evidence JSON. §X.2's draft chain is **corrected by this subsection**, not edited in place.
+  - **Served-asset hash method corrected.** The T1 boundary runner (`ramd-exec-a.mjs`) hashed the **decoded
+    text re-encoded to UTF-8** (`sha256(assetText)`) — **not** a raw-`Buffer` hash; it also recorded the
+    JS **string character count** `155239`, which is why the first check compared `155239` (chars) with
+    `155420` (bytes) — a UTF-8 reader-unit bug, not a served-bytes change. A standalone probe
+    (`ramd-served-probe2.mjs`) hashed **both** the decoded text (`textSha`) **and** the raw response buffer
+    (`bufSha`); both equal `f6e6b8f3…` / `155420`. The records no longer attribute a raw-buffer hash to the T1
+    runner.
+  - **Protected-store projection provenance made explicit.** The **retained immediate-pre** full-projection
+    files are `ramd-exec-pret1-untargeted_org_…b2b1029-mutation-public.json` (Nakama E2E
+    Fixture) and `ramd-exec-pret1-untargeted_org_…dbc885d6-mutation-public.json` (Layout
+    Demo); the **retained post** harmonized files are the matching `ramd-exec-postflight-untargeted_org_*.json`.
+    The pre and post files are **byte-identical**, and their canonical projection digests match:
+    `Layout Demo` `eda52f72…` (2/7/3/2); `Nakama E2E Fixture` `a75bc4c6…` (2/8/1/0). The **first, non-harmonized**
+    postflight files (`ramd-exec-post-untargeted_org_*.json`) gave `bb2dac2b…`/`4962e129…` from a **different
+    reader projection** — **superseded**, not store drift. The §X counts-only digests
+    (`46c7d111…`/`79d49a1f…`) are a **third, counts-only** projection. The comparison was done **read-only from
+    the retained files**, never by a fresh/live re-measure and never by reconstructing a baseline.
+  - **Offline evidence archive updated.** The local (git-ignored) archive `.hermes/scratch/ramd-execution-review-final.zip`
+    collects the 29 prior evidence files **plus** the two **retained protected-store pre-projections**, with an
+    updated README and a digest manifest carrying **both** the per-file raw sha256 and the canonical projection
+    digests (the two algorithms distinguished) and the **final public head**. An offline verifier re-derives
+    every digest from the archive alone. The frozen bundle bytes sha256
+    `06d8a6190459c10166fdc39609fbb02dbba5264b9034def42b4356db5cc0f66a` is unchanged.
+  - **Boundaries unchanged.** Docs-only; no fixture/domain write, no `reconcile_topic`/`record_activity`, no
+    service/deploy/restart, no merge. The grant stays **CONSUMED**; SCOPE-BASELINE remains unselected/not
+    authorized; **PR7 stays draft**. This subsection is a **correction to the current PR7 records**, not a
+    rewrite of any prior accepted record.
