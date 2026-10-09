@@ -1,0 +1,426 @@
+{
+  "provenance": {
+    "schema": "dashboard-ui-rework/prototype-data@1",
+    "capturedAt": "2026-10-09T14:12:22.716771+00:00",
+    "generatedAt": "2026-10-09T14:10:08.104Z",
+    "source": "org-scoped read actions get_overview, list_topics, get_topic, get_progress over the plugin HTTP transport",
+    "boundary": "read-only; no database access, no write action called, no credentials or identifiers retained",
+    "endpointLabel": "127.0.0.1 (loopback)",
+    "org": "Public Research Exercise",
+    "counts": {
+      "topics": 2,
+      "axes": 6,
+      "problems": 3,
+      "repositories": 3,
+      "people": 1,
+      "plans": 1,
+      "planSteps": 4,
+      "events": 8
+    }
+  },
+  "topics": [
+    {
+      "alias": "topic-1",
+      "name": "Research infrastructure / team management",
+      "status": "active",
+      "description": "",
+      "summary": "",
+      "activityCount": 3,
+      "lastActivityAt": "2026-10-07",
+      "repositoryAliases": [
+        "repo-2"
+      ],
+      "personAliases": [
+        "person-1"
+      ],
+      "axisAliases": [
+        "axis-2",
+        "axis-1"
+      ],
+      "axes": [
+        {
+          "alias": "axis-2",
+          "topicAlias": "topic-1",
+          "title": "Agent consultation and automation evidence",
+          "kind": "test",
+          "description": "",
+          "currentState": "Direct dashboard consultation is demonstrated, but the accepted stage remains qualified: normal assigned-skill loading was not exercised end-to-end, and N-7 automation lacks a retained tool trace.",
+          "blocker": "",
+          "state": "usable",
+          "repositoryAliases": [
+            "repo-2"
+          ],
+          "problemAliases": [
+            "problem-1",
+            "problem-2"
+          ],
+          "plan": null
+        },
+        {
+          "alias": "axis-1",
+          "topicAlias": "topic-1",
+          "title": "Research dashboard and focused retrieval",
+          "kind": "feature",
+          "description": "",
+          "currentState": "The dashboard product and scoped `get_topic` retrieval are published and accepted for the tested scope. A follow-up pagination edge case was corrected without reopening the historical live acceptance.",
+          "blocker": "",
+          "state": "usable",
+          "repositoryAliases": [
+            "repo-2"
+          ],
+          "problemAliases": [],
+          "plan": null
+        }
+      ]
+    },
+    {
+      "alias": "topic-2",
+      "name": "Experimental research",
+      "status": "active",
+      "description": "",
+      "summary": "",
+      "activityCount": 4,
+      "lastActivityAt": "2026-10-07T14:32:13.984Z",
+      "repositoryAliases": [
+        "repo-3",
+        "repo-1"
+      ],
+      "personAliases": [
+        "person-1"
+      ],
+      "axisAliases": [
+        "axis-3",
+        "axis-4",
+        "axis-5",
+        "axis-6"
+      ],
+      "axes": [
+        {
+          "alias": "axis-3",
+          "topicAlias": "topic-2",
+          "title": "Grablink diagnostics and sustained-rate validation",
+          "kind": "investigation",
+          "description": "",
+          "currentState": "High-rate optical acquisition has a hardware-validated baseline (≈351 FPS preview; a 200-frame capture wrote Image_00000.bmp–Image_00199.bmp; a 2000-frame capacity run's manual Stop & Save wrote partial sequences of 652 and 1028 frames). Sustained 300–350 FPS operation with dropped-frame measurement remains outstanding; core/CaptureStats is implemented and covered by 13 tests but no production code calls it.",
+          "blocker": "Connected-camera sustained-rate and full-buffer validation remain required; dropped-frame behavior at 300–350 FPS is not yet fully instrumented.",
+          "state": "active",
+          "repositoryAliases": [
+            "repo-1"
+          ],
+          "problemAliases": [
+            "problem-3"
+          ],
+          "plan": {
+            "alias": "plan-1",
+            "summary": "Complete camera-connected validation and production diagnostics for sustained high-rate acquisition.",
+            "stepsDone": 0,
+            "steps": [
+              {
+                "alias": "step-1",
+                "position": 1,
+                "title": "Wire CaptureStats into the callback and save path.",
+                "state": "pending"
+              },
+              {
+                "alias": "step-2",
+                "position": 2,
+                "title": "Measure callback duration, effective FPS, save duration and disk throughput.",
+                "state": "pending"
+              },
+              {
+                "alias": "step-3",
+                "position": 3,
+                "title": "Read relevant driver/drop counters and surface diagnostics.",
+                "state": "pending"
+              },
+              {
+                "alias": "step-4",
+                "position": 4,
+                "title": "Run sustained 300–350 FPS and full-buffer-to-disk validation.",
+                "state": "pending"
+              }
+            ]
+          }
+        },
+        {
+          "alias": "axis-4",
+          "topicAlias": "topic-2",
+          "title": "High-rate optical acquisition",
+          "kind": "feature",
+          "description": "",
+          "currentState": "The RAM-buffered capture and asynchronous-save architecture is operational and has passed hardware-free and several connected-camera validations. Clean-machine MultiCam SDK setup is documented and configurable through one build property.",
+          "blocker": "",
+          "state": "usable",
+          "repositoryAliases": [
+            "repo-1"
+          ],
+          "problemAliases": [],
+          "plan": null
+        },
+        {
+          "alias": "axis-5",
+          "topicAlias": "topic-2",
+          "title": "UDV sparse-analysis validation",
+          "kind": "test",
+          "description": "",
+          "currentState": "Cross-sitting sparse-analysis publication is reproducible and independently verified for the frozen SA5 comparison set. The published result deliberately stops short of recurrence, interpolation, cross-grid mapping or population inference.",
+          "blocker": "",
+          "state": "usable",
+          "repositoryAliases": [
+            "repo-3"
+          ],
+          "problemAliases": [],
+          "plan": null
+        },
+        {
+          "alias": "axis-6",
+          "topicAlias": "topic-2",
+          "title": "UDV acquisition automation",
+          "kind": "experiment",
+          "description": "",
+          "currentState": "Automated UDV acquisition can mutate and verify the tested emissions/profile boundary and persist evidence-backed BDD/job records. Live commissioning passed for E20/E64 transitions; subsequent bring-up documentation records the two independent storage-directory surfaces.",
+          "blocker": "",
+          "state": "usable",
+          "repositoryAliases": [
+            "repo-3"
+          ],
+          "problemAliases": [],
+          "plan": null
+        }
+      ]
+    }
+  ],
+  "problems": [
+    {
+      "alias": "problem-1",
+      "statement": "Normal assigned `research-coordinator` skill loading has not yet been demonstrated end-to-end; the accepted consultation fixture used profile system-prompt guidance instead.",
+      "state": "open",
+      "axisAlias": "axis-2",
+      "axisTitle": "Agent consultation and automation evidence",
+      "topicAlias": "topic-1",
+      "topicName": "Research infrastructure / team management",
+      "repositoryAliases": [
+        "repo-2"
+      ],
+      "planStepTitle": null,
+      "recencyAt": "2026-10-07T14:33:51.962Z",
+      "lastActivityAt": null
+    },
+    {
+      "alias": "problem-2",
+      "statement": "N-7 automation completes, but its ephemeral session does not retain the tool trace required to prove dashboard consultation.",
+      "state": "open",
+      "axisAlias": "axis-2",
+      "axisTitle": "Agent consultation and automation evidence",
+      "topicAlias": "topic-1",
+      "topicName": "Research infrastructure / team management",
+      "repositoryAliases": [
+        "repo-2"
+      ],
+      "planStepTitle": null,
+      "recencyAt": "2026-10-07T14:33:51.962Z",
+      "lastActivityAt": null
+    },
+    {
+      "alias": "problem-3",
+      "statement": "Sustained 300–350 FPS operation has measured dropped frames, while driver TimeCode/OverrunCount and production CaptureStats instrumentation are not yet available to explain them.",
+      "state": "open",
+      "axisAlias": "axis-3",
+      "axisTitle": "Grablink diagnostics and sustained-rate validation",
+      "topicAlias": "topic-2",
+      "topicName": "Experimental research",
+      "repositoryAliases": [
+        "repo-1"
+      ],
+      "planStepTitle": null,
+      "recencyAt": "2026-10-07T14:31:51.622Z",
+      "lastActivityAt": null
+    }
+  ],
+  "repositories": [
+    {
+      "alias": "repo-1",
+      "fullName": "ajegorovs/Grablink-Full-sequence-acquisition",
+      "url": "https://github.com/ajegorovs/Grablink-Full-sequence-acquisition",
+      "description": "Windows MFC application for capturing high-frame-rate 8-bit monochrome image sequences from an Euresys Grablink/MultiCam capture card.",
+      "defaultBranch": "master",
+      "axisAliases": [
+        "axis-3",
+        "axis-4"
+      ],
+      "activityCount": null,
+      "lastActivityAt": "2026-10-07T14:32:13.984Z"
+    },
+    {
+      "alias": "repo-2",
+      "fullName": "ajegorovs/nakama-research-dashboard",
+      "url": "https://github.com/ajegorovs/nakama-research-dashboard",
+      "description": "A dashboard page plus agent tools over shared coordination state — topics, development axes and the evidence attached to them — for a self-hosted Nakama instance. One page (the overview, with the editing surface underneath it), eight actions of which five are agent tools, one skill, org-scoped SQLite storage.",
+      "defaultBranch": "main",
+      "axisAliases": [
+        "axis-1",
+        "axis-2"
+      ],
+      "activityCount": null,
+      "lastActivityAt": "2026-10-07"
+    },
+    {
+      "alias": "repo-3",
+      "fullName": "ajegorovs/udv-echo-process",
+      "url": "https://github.com/ajegorovs/udv-echo-process",
+      "description": "Multi-sensor Ultrasonic Doppler Velocimetry (UDV) processing for rotating machinery analysis. Supports echo (amplitude) and velocity measurements from single-sensor continuous recordings and multi-sensor rolling (round-robin) arrays, in both raw time-series and statistical-summary formats.",
+      "defaultBranch": "master",
+      "axisAliases": [
+        "axis-5",
+        "axis-6"
+      ],
+      "activityCount": null,
+      "lastActivityAt": "2026-09-28"
+    }
+  ],
+  "people": [
+    {
+      "alias": "person-1",
+      "displayName": "Aleksandrs Jegorovs",
+      "githubLogin": "ajegorovs",
+      "attributable": false,
+      "axes": [
+        {
+          "alias": "axis-3",
+          "title": "Grablink diagnostics and sustained-rate validation",
+          "state": "active",
+          "topicAlias": "topic-2"
+        },
+        {
+          "alias": "axis-2",
+          "title": "Agent consultation and automation evidence",
+          "state": "usable",
+          "topicAlias": "topic-1"
+        },
+        {
+          "alias": "axis-1",
+          "title": "Research dashboard and focused retrieval",
+          "state": "usable",
+          "topicAlias": "topic-1"
+        },
+        {
+          "alias": "axis-4",
+          "title": "High-rate optical acquisition",
+          "state": "usable",
+          "topicAlias": "topic-2"
+        },
+        {
+          "alias": "axis-5",
+          "title": "UDV sparse-analysis validation",
+          "state": "usable",
+          "topicAlias": "topic-2"
+        },
+        {
+          "alias": "axis-6",
+          "title": "UDV acquisition automation",
+          "state": "usable",
+          "topicAlias": "topic-2"
+        }
+      ],
+      "axisCounts": {
+        "active": 1,
+        "draft": 0,
+        "blocked": 0,
+        "parked": 0,
+        "completed": 0,
+        "abandoned": 0,
+        "usable": 5
+      }
+    }
+  ],
+  "activity": [
+    {
+      "summary": "Commit 95ec34e: record publication acceptance and the scoped note-page correction.",
+      "sourceType": "github_commit",
+      "sourceRef": "95ec34e",
+      "sourceUrl": "",
+      "occurredAt": "2026-10-07",
+      "recordedAt": "2026-10-07T14:34:01.982Z",
+      "actorType": "agent",
+      "topicAlias": "topic-1",
+      "axisAlias": "axis-1"
+    },
+    {
+      "summary": "Commit da7996b: filter scoped axis notes before applying the page limit.",
+      "sourceType": "github_commit",
+      "sourceRef": "da7996b",
+      "sourceUrl": "",
+      "occurredAt": "2026-10-07",
+      "recordedAt": "2026-10-07T14:34:01.948Z",
+      "actorType": "agent",
+      "topicAlias": "topic-1",
+      "axisAlias": "axis-1"
+    },
+    {
+      "summary": "Commit 5a62749: record the agent-consultation and focused-retrieval stage and its acceptance.",
+      "sourceType": "github_commit",
+      "sourceRef": "5a62749",
+      "sourceUrl": "",
+      "occurredAt": "2026-10-07",
+      "recordedAt": "2026-10-07T14:34:01.914Z",
+      "actorType": "agent",
+      "topicAlias": "topic-1",
+      "axisAlias": "axis-1"
+    },
+    {
+      "summary": "Grablink repository agenda document.",
+      "sourceType": "repo_document",
+      "sourceRef": "docs/AGENDA.md",
+      "sourceUrl": "",
+      "occurredAt": "2026-10-07T14:32:13.984Z",
+      "recordedAt": "2026-10-07T14:32:13.984Z",
+      "actorType": "agent",
+      "topicAlias": "topic-2",
+      "axisAlias": "axis-4"
+    },
+    {
+      "summary": "Pull request #1 merged: SDK MulticamRoot override, clean-machine Debug/Release builds.",
+      "sourceType": "github_pr",
+      "sourceRef": "PR #1",
+      "sourceUrl": "",
+      "occurredAt": "2026-09-24",
+      "recordedAt": "2026-10-07T14:32:13.949Z",
+      "actorType": "agent",
+      "topicAlias": "topic-2",
+      "axisAlias": "axis-4"
+    },
+    {
+      "summary": "Pull request #67 merged: cross-sitting sparse-analysis publication independently verified for the frozen SA5 comparison set.",
+      "sourceType": "github_pr",
+      "sourceRef": "PR #67",
+      "sourceUrl": "",
+      "occurredAt": "2026-09-28",
+      "recordedAt": "2026-10-07T14:32:13.912Z",
+      "actorType": "agent",
+      "topicAlias": "topic-2",
+      "axisAlias": "axis-5"
+    },
+    {
+      "summary": "Pull request #69 merged: brought-up documentation of Working directory vs Save dir, non-storing preflight.",
+      "sourceType": "github_pr",
+      "sourceRef": "PR #69",
+      "sourceUrl": "",
+      "occurredAt": "2026-09-28",
+      "recordedAt": "2026-10-07T14:32:13.876Z",
+      "actorType": "agent",
+      "topicAlias": "topic-2",
+      "axisAlias": "axis-6"
+    },
+    {
+      "summary": "Pull request #44 merged: durable generalized param mutation/emissions writer commissioned (E20/E64 transitions), real instrument, equal boundaries.",
+      "sourceType": "github_pr",
+      "sourceRef": "PR #44",
+      "sourceUrl": "",
+      "occurredAt": "2026-09-28",
+      "recordedAt": "2026-10-07T14:32:13.839Z",
+      "actorType": "agent",
+      "topicAlias": "topic-2",
+      "axisAlias": "axis-6"
+    }
+  ]
+}

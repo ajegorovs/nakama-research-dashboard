@@ -35,7 +35,8 @@
     "preview": "bun harness/preview/run.mjs",
     "preview:fixture": "bun harness/preview/run.mjs --dataset fixture",
     "preview:capture": "bun harness/preview/capture.mjs",
-    "preview:fidelity": "bun harness/preview/fidelity.mjs"
+    "preview:fidelity": "bun harness/preview/fidelity.mjs",
+    "prototype:serve": "bun prototypes/dashboard-ui-rework/serve.mjs"
   },
   "devDependencies": {
     "@types/bun": "^1.4.2",

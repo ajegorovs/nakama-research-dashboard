@@ -31,6 +31,8 @@ tagged `ux-v2-composition-complete`. `docs/ux-v2/` holds the product decisions a
 | `vendor/` | the one-line allowlist patch + the script that places the plugin into a Nakama checkout |
 | `docs/ux-v2/` | composition docs, `DECISIONS.md` (the standing decisions), unit docs, fidelity reviews |
 | `docs/reviews/` | per-unit acceptance records (reviewer verdicts verbatim) |
+| `docs/design/` | the working pivot spec — a working surface, **not** a decision record |
+| `prototypes/dashboard-ui-rework/` | the information-architecture rework prototype **trial** (self-contained; frozen alias-only data) — see its `README.md` |
 | `docs/corpus/`, `docs/layout-fixtures/` | the committed acceptance transcripts and screenshots |
 | `.agents/skills/` | **contributor procedures** for this repo (see *Skills*) |
 
@@ -192,7 +194,9 @@ Evidence accumulates faster than source, so the checkout carries three buckets (
 
 - **Tracked permanently** — source, tests, migrations, the bundles install needs (`ui/app.js`, `actions/`),
   the datasets' seed and provenance, the approved prototypes, the current canonical screenshot and acceptance
-  transcript per dataset and viewport, and the final acceptance records.
+  transcript per dataset and viewport, and the final acceptance records. The **frozen approved contract
+  prototypes** under `docs/ux-v2/contract/prototypes/` are never overwritten; a new prototype is added under
+  its own directory (`prototypes/<name>/`) instead.
 - **Generated, never tracked** — side-by-side montages and their HTML wrappers, write-pass screenshots,
   preview montage packs, per-iteration visual comparisons. If it can be rebuilt from the first bucket it
   belongs in `.gitignore`, not in the index.
