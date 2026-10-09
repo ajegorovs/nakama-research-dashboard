@@ -1,0 +1,98 @@
+{
+  "stage": "retained-amendment F02 + F07/F09 + F12 — planning scope + read-only preflight + prepared bundle",
+  "record": "docs/reviews/2026-10-09-retained-amendment-preflight-report.md",
+  "date": "2026-10-09",
+  "status": "READ-ONLY PREFLIGHT PASS — no write authorized; bundle prepared (not executed)",
+  "authorization": "planning scope + read-only preflight only",
+  "head": "64f63934e025d8c8c3f3fabf4af60c82d878d75c",
+  "branch": "docs/retained-metadata-plan-amendment",
+  "measuredAt": "2026-10-09T00:00:00Z-local",
+  "target": {
+    "label": "Public Research Exercise",
+    "freshVerified": true,
+    "explicitlySelected": true,
+    "neverOrgsIndexZero": true,
+    "exactIdHeld": "local-only"
+  },
+  "servedIdentity": {
+    "assetRouteOrgIsTarget": true,
+    "uiAppSha256": "f6e6b8f3cec9476ad55be4f7067eb116690ae0b26c03cd98c58b654cb9024548",
+    "bytes": 155420,
+    "release": "0.2.0+dev.a5f76a608db2",
+    "revision": 17,
+    "matchesLocal": true,
+    "isU12Build": true,
+    "guardOrgAware": false
+  },
+  "counts": { "topics": 2, "axes": 6, "repositories": 3, "people": 1, "events": 8 },
+  "versions": { "ax5": 2, "ax6": 2, "ax4": 2, "topicInfra": 1, "topicExp": 1, "diagPlan": 1 },
+  "alreadyApplied": {
+    "ax5RepoLink": "dashboard primary (present)",
+    "ax6RepoLink": "dashboard primary (present)",
+    "consultationProblemRepoSets": "both = [dashboard] (present)",
+    "ax4CurrentState": "exact 411-char string, currentStateConfidence=inferred (present)",
+    "ax4BlockerConfidence": "inferred (unchanged)",
+    "ax4Evidence": 0
+  },
+  "amendmentRows": {
+    "F02": { "ax5PeopleBefore": 0, "ax6PeopleBefore": 0, "after": "link existing person by github_login" },
+    "F07F09": {
+      "reposBefore": { "dashboard": { "url": "", "description": "", "defaultBranch": "" }, "udv": { "url": "", "description": "", "defaultBranch": "" }, "grablink": { "url": "", "description": "", "defaultBranch": "" } },
+      "descriptionsFrom": "pinned README (approved, byte-equal)",
+      "defaultBranchAsOfRead": { "dashboard": "main", "udv": "master", "grablink": "master" }
+    },
+    "F12": { "stepsBefore": [null, null, null, null], "stepsAfter": [1, 2, 3, 4], "stepIdsUnchanged": true, "titlesVerbatim": true }
+  },
+  "topicRelationshipsPreserved": { "infra": "dashboard=primary", "experimental": "udv=primary, grablink=supporting" },
+  "freshGithubMetadata": {
+    "dashboard": { "htmlUrl": "https://github.com/ajegorovs/nakama-research-dashboard", "defaultBranch": "main" },
+    "udv": { "htmlUrl": "https://github.com/ajegorovs/udv-echo-process", "defaultBranch": "master" },
+    "grablink": { "htmlUrl": "https://github.com/ajegorovs/Grablink-Full-sequence-acquisition", "defaultBranch": "master" }
+  },
+  "bundle": {
+    "bundleSchema": "ramd-retained-amendment-bundle/1",
+    "transactionCount": 2,
+    "grouping": "one per topic (infra: F02+F07/F09 dashboard; experimental: F07/F09 udv+grablink + F12)",
+    "bundleDigest": "ba1b9050db18f3bd9baea630ab606e74a8e3bc80ca3bd4f2d10533a9a7ae27ca",
+    "payloadDigests": {
+      "T1": "23a4c01d8c42a4d5605a50b887c7cd7b29ef0e7287299561f20ae6e229a1432a",
+      "T2": "31241657e6386c581552f6a7ce633d4e093f3d4f4248405ffeb9240489866778"
+    },
+    "digestsReDerived": true,
+    "schemaValidation": { "validator": "static, against manifest reconcile_topic inputSchema", "errors": 0, "pass": true },
+    "executionStatus": "NOT EXECUTED"
+  },
+  "protectedStores": {
+    "layoutDemo": { "counts": [2, 7, 3, 2], "digest": "46c7d11108217159d6e0ba75a9f33c001eb685ffb8f8d9547d5e75b2fa877b01" },
+    "nakamaE2EFixture": { "counts": [2, 8, 1, 0], "digest": "79d49a1f5b9d3154495e6db8e035c222515791634a2abb87de18196a3da5444c" }
+  },
+  "drift": { "material": false, "expectedOnly": ["axes5/6 and axis4 version 1->2 (WP-G T1/T2)", "U12 served build revision 9 -> 17"] },
+  "checks": {
+    "pass": 20,
+    "fail": 0,
+    "list": [
+      "target found in org list",
+      "target name matches",
+      "active org explicitly selected and echoed",
+      "counts 2/6/3/1",
+      "events = 8",
+      "ax5 repository link present primary",
+      "ax6 repository link present primary",
+      "both consultation problem repo sets present",
+      "ax5 people empty (F02 gap)",
+      "ax6 people empty (F02 gap)",
+      "ax4 currentState exact 411-char, inferred",
+      "ax4 blockerConfidence inferred",
+      "ax4 evidence zero",
+      "diagnostics plan steps positions all null (F12 gap)",
+      "repository metadata all empty (F07/F09 gap)",
+      "axes 1-4 person links present",
+      "served sha == local ui/app.js",
+      "served release/revision = U12 (0.2.0+dev.a5f76a608db2 / 17)",
+      "two protected stores read back",
+      "bundle + payload digests re-derived and matched"
+    ]
+  },
+  "remainingGate": ["concrete bundle review", "separate explicit owner write authorization"],
+  "ownerGrantStatus": "NOT granted for the amendment rows; WP-G grant consumed"
+}

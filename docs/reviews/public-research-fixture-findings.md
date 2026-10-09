@@ -1041,3 +1041,71 @@ or service. The retained write authorization remains **closed**.
 
 **PR links.** Branch `docs/f08-visual-verification` (new, off `main` @ `93359a3…`); the supplemental record
 above.
+
+
+## X. Retained-amendment **planning scope + read-only preflight** — F02 + F07/F09 + F12 (appended 2026-10-09)
+
+> **Appended, not an amendment.** §A–§W above are preserved unchanged. This section records the
+> **planning scope** and a **fresh, live, read-only preflight** for the retained-amendment rows the
+> retained decision (§S) left **unselected** — **F02** (axis→person on axes 5/6), **F07/F09** (repository
+> `url`/`description`/`defaultBranch`) and **F12** (plan-step positions `1..4`) — plus the **preparation**
+> (not execution) of the write bundle. Published in
+> [`2026-10-09-retained-amendment-preflight-report.md`](2026-10-09-retained-amendment-preflight-report.md),
+> with machine evidence in
+> [`2026-10-09-retained-amendment-preflight-evidence.json`](2026-10-09-retained-amendment-preflight-evidence.json).
+> **Docs only / read-only:** no fixture/domain write, no `reconcile_topic`/`record_activity`, no inference,
+> no new research, no service/deploy/restart, no product/UI/harness/source change, no merge. Public labels
+> and sanitized ids only; exact operational ids and the payload are held **local** (git-ignored).
+
+**Authorization measured (scope).** The brief authorized **planning scope + read-only preflight** only.
+The amendment **write stays NOT authorized**: the two intended `reconcile_topic` transactions are **NOT
+executed**, and the **concrete bundle review** plus a **separate explicit owner write authorization**
+remain the gate. The **WP-G grant is CONSUMED** and is not reusable; **no retrospective write approval**
+is granted here.
+
+**Already-applied writes confirmed present (not re-sent).** The F01/F04 links (ax5/6 `primary` +
+both consultation problem→repo sets) and the F08 ax4 `currentState` (**exact 411-char** §3.1 string,
+`inferred`; `blockerConfidence: inferred`; evidence `0`) are **measured present** — F01/F04/F08 are
+**not** re-run by this amendment.
+
+**Measured (read-only) at the exact target org** (label `Public Research Exercise`; exact id in the local
+handoff; **fresh-verified and explicitly selected**, never `orgs[0]`), head `64f6393…`:
+
+- **Served identity (org-aware, browser-actually-served):** `ui/app.js` sha256
+  `f6e6b8f3cec9476ad55be4f7067eb116690ae0b26c03cd98c58b654cb9024548`, **155420** bytes, **byte-equal** to
+  the repo; the target org serves release **`0.2.0+dev.a5f76a608db2`** revision **`17`** — the **U12
+  full-text clamp-release build**, re-confirmed by measurement (the guard remains **not org-aware**).
+- **Counts:** `2 topics / 6 axes / 3 repositories / 1 person`; **8 events**. **Amendment gaps measured:**
+  ax5/6 have **empty** people (F02); all three repositories carry `url:'' description:'' defaultBranch:''`
+  (F07/F09); the diagnostics plan's **four** step positions are **all `null`** (F12, same `stepId`s and
+  verbatim titles). Topic→repo relationships to preserve verbatim: infra → dashboard `primary`;
+  experimental → udv `primary`, grablink `supporting`.
+- **Fresh public GitHub metadata (bounded verification only):** `default_branch` as-of-read =
+  `main`/`master`/`master` (matches the accepted design); `description` is each repo's **pinned README**
+  string (approved, byte-equal) — GitHub's mutable `about` is **recorded, not used**. No field invented,
+  no editorial word choice.
+- **Drift verdict: NO material drift** — the only differences from the WP-G baseline are the **expected**
+  ones (axes 5/6 and axis 4 version `1→2` from WP-G T1/T2; the U12 served build `78af5cbb…` rev `9` →
+  `a5f76a60…` rev `17`), each **verified not assumed**. **20/20 checks PASS**. The two un-targeted stores
+  were baselined by their **own readback** (`Layout Demo` `46c7d111…`, `Nakama E2E Fixture` `79d49a1f…`).
+
+**Prepared, not executed.** The amendment bundle is **two** `reconcile_topic` transactions, grouped **one
+per topic**: T1 = F02 (peoples on ax5/6) + F07/F09 (dashboard metadata, `relationship` **preserved**);
+T2 = F07/F09 (udv + grablink metadata, relationships preserved) + F12 (positions `1..4`). The exact ids,
+the executable payload and the bundle digest (`ba1b9050…`; payloads T1 `23a4c01d…`, T2 `31241657…`) are
+held **local** (git-ignored); **no executor and no auto-write script** exist, and the bundle is a
+**temporary-validity** artifact to be **re-measured at the write boundary**, where **any version/served-sha
+drift STOPS**. Both payloads **PASSED** a **static** validation against the manifest's `reconcile_topic`
+`inputSchema` (0 errors); **no live/store call** was made.
+
+**Rows are design-accepted proposals, NOT owner-selected.** F02, F07/F09 and F12 carry **no owner write
+authorization**; a blank/unspecified row withholds and requires the owner's explicit grant bound to the
+resolved payloads and versions. **No role/persona is invented** (the axis→person link uses the already-
+stored person; topic-link relationships are carried verbatim, never defaulted to `supporting`).
+
+**Boundaries.** Read-only; **SCOPE-BASELINE** remains unselected/unapproved; **SCOPE-RETAINED-AMENDMENT**
+is **prepared, not authorized**; no merge. WP0–WP5 and §S–§W stand as recorded and are **not reopened**;
+this section appends and rewrites no design constant.
+
+**PR links.** Branch `docs/retained-metadata-plan-amendment` (new, off `main` @ `64f6393…`); draft PR
+(new).
