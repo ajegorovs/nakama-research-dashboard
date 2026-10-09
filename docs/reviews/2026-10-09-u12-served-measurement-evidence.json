@@ -1,0 +1,99 @@
+{
+  "unit": "U12 — full-text clamp release on the axis reading",
+  "record": "served-build deployment + org-explicit read-only served runtime verification",
+  "date": "2026-10-09",
+  "status": "served measured pass — awaiting review; NOT source approval; no merge",
+  "actor": "owner-authorized deployment of the accepted build to the named target organization only",
+  "source": {
+    "head": "4638f7580afc7993efa0624ddf7c0135459dca4b",
+    "pr": "6 (draft — not merged)",
+    "branch": "feat/fulltext-clamp-release"
+  },
+  "build": {
+    "ui/app.js": { "sha256": "f6e6b8f3cec9476ad55be4f7067eb116690ae0b26c03cd98c58b654cb9024548", "bytes": 155420 },
+    "actions/actions.js": { "sha256": "068315050565bce4b416211164e8a8e5e00c0692bc0912f7702f7c869f27a2e0", "byteUnchanged": true }
+  },
+  "target": {
+    "datasetLabel": "public research exercise",
+    "authorization": "explicit org id (no orgs[0] fallback); loopback-only instance",
+    "releaseBefore": "0.2.0+dev.78af5cbb87b4",
+    "releaseAfter": "0.2.0+dev.a5f76a608db2",
+    "revisionBefore": 9,
+    "revisionAfter": 17,
+    "lifecycleState": "enabled"
+  },
+  "servedAssetAuthoritative": {
+    "note": "measured from the asset URL the browser actually fetched while logged into the target org; raw Buffer hash, not a string length",
+    "bytes": 155420,
+    "sha256": "f6e6b8f3cec9476ad55be4f7067eb116690ae0b26c03cd98c58b654cb9024548",
+    "revision": 17,
+    "version": "0.2.0+dev.a5f76a608db2"
+  },
+  "protectedOrganizations": [
+    { "datasetLabel": "layout demo", "release": "0.2.0+dev.164ccaafbca4", "revision": 20, "servedAppSha256": "41e61ef5891bfd630a1704d26f144880730f3d842f7d81b79426dd48709787fc", "unchanged": true },
+    { "datasetLabel": "nakama e2e fixture", "release": "0.2.0+dev.64a201410338", "revision": 28, "servedAppSha256": "41e61ef5891bfd630a1704d26f144880730f3d842f7d81b79426dd48709787fc", "unchanged": true }
+  ],
+  "dataUnchanged": {
+    "note": "release binding updated; NO product data written. Canonical overview + search projections are byte-identical before/after once the volatile generatedAt is excluded; store generation unchanged; counts identical.",
+    "target": {
+      "databaseGenerationBefore": "g7451bd036a1644e6be032b2acd6ddd82",
+      "databaseGenerationAfter": "g7451bd036a1644e6be032b2acd6ddd82",
+      "counts": { "topics": 2, "axes": 6, "repositories": 3, "people": 1 }
+    },
+    "protectedLayoutDemo": { "generationUnchanged": true, "counts": { "topics": 2, "axes": 7, "repositories": 3, "people": 2 } },
+    "noFixtureReseed": true,
+    "noReconcileCalls": true
+  },
+  "deploymentCallsActions": [
+    "bun run check (typecheck + build + 313 unit tests) — green",
+    "typecheck:host against the checkout whose units run — green",
+    "vendor-into-nakama.sh <actual checkout> — ui/app.js f6e6b8f3… (rule present); actions unchanged",
+    "reinstall-plugin.mjs --org-id <target> (explicit; single mutating call)",
+    "served-asset fetch per org (read-only)",
+    "harness/served-build-guard.mjs (read-only; org-unaware — see limits)",
+    "served U12 runtime verification over a real browser session (read-only; transient negative CSS removed)",
+    "canonical data capture per org (read-only) before/after"
+  ],
+  "gates": {
+    "bunRunCheck": "313 pass / 0 fail",
+    "typecheckHost": "green",
+    "fulltextExecutableCheck": "46 pass / 0 fail / 0 blocked (1440x900 + 1280x800)",
+    "fulltextIntegritySuite": "7 pass / 0 fail",
+    "recordsGuard": "green — 276 text files scanned, 0 offences",
+    "datasetIdentity": "82 checks pass"
+  },
+  "servedRuntime": {
+    "note": "real dashboard session, explicit org switch, served asset under test; both reference viewports",
+    "subject": "the served topic 'Experimental research', axis 'Grablink diagnostics and sustained-rate validation' located by exact title",
+    "subjectTextExact411": true,
+    "beforeDeploy": {
+      "expandedFullReadable": false,
+      "detail": "expanded: clamp=2 display=flow-root overflow=hidden, client<scroll, tail not visible — the defect the change fixes"
+    },
+    "afterDeploy": {
+      "collapsedClamped": true,
+      "collapsedRuleInert": true,
+      "expandedFullReadable": true,
+      "detail1440x900": "clamp=none display=block overflow=visible h=117/117 hOv=0/0/0 full=true tail=true open=true",
+      "detail1280x800": "clamp=none display=block overflow=visible h=156/156 hOv=0/0/0 full=true tail=true open=true",
+      "focusReachedByRealTab": true,
+      "focusContrast": "4.61:1 (2px rgb(180,83,9) over oklch(0.97 0 0))",
+      "spaceTogglesFold": true,
+      "negativeControlGoesRed": true,
+      "negativeControlRestored": true,
+      "foldlessRowStaysClamped": true,
+      "peopleLinkedAxisReleases": { "sample": "long (144-char) linked-axis reading", "clamp": "none", "display": "block", "h": "59/59" }
+    },
+    "counts": { "total": 30, "pass": 28, "fail": 0, "blocked": 2 }
+  },
+  "unreached": [
+    "People view: no SHORT (<=40 char) linked-axis reading exists in the target org, so that sample class is reported unreached, not counted as a pass.",
+    "The generic served-build-guard is org-unaware: on a multi-org account it measures whatever org the session resolves (here 'layout demo'), so it reports a mismatch by design. Deployment is verified by the org-explicit served-asset fetch and the served runtime session, not by the generic guard's org-agnostic output."
+  ],
+  "boundaries": [
+    "Read-only served runtime verification: no service restart was required (the reinstall snapshots the vendored tree; the running instance served the new release without one). No restart was performed.",
+    "Presentation/transient DOM only: the negative control injects one <style> element and removes it; no store, migration, manifest or payload change.",
+    "No canonical acceptance record or screenshot was overwritten; the served screenshots live in the harness scratch pack, not in the tracked tree.",
+    "Awaiting owner visual review of the served screenshots before any final acceptance; this record does not grant source approval or merge."
+  ]
+}

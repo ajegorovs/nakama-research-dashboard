@@ -1,11 +1,14 @@
 # U12 — full-text clamp release on the axis reading (implementation preview, 2026-10-09)
 
-> **Status: implemented + regression-tested; served-build acceptance NOT closed.** The change lands the
-> owner-approved behavior into the source and the committed bundle, with an executable browser check that
-> measures the **built** bundle. **No deploy, no vendor, no reinstall, no restart, no fixture write, no served
-> run** was performed — that is a separate decision. The two comparison screenshots this record names are the
-> **new implementation captures** the owner reviews before any final approval; the earlier transient preview
-> (`.hermes/scratch/preview-clamp/`) was the pack the owner visually accepted to authorize implementation.
+> **Status: implemented + regression-tested; served-build acceptance measured (read-only), awaiting owner review.**
+> The change lands the owner-approved behavior into the source and the committed bundle, with an executable browser
+> check that measures the **built** bundle. **No deploy, no vendor, no reinstall, no restart, no fixture write, no
+> served run** was performed *by this record* — that was a separate, owner-authorized act. See
+> [Served-build deployment and read-only served runtime verification](#served-build-deployment-and-read-only-served-runtime-verification-2026-10-09)
+> at the end for that measurement, and `docs/reviews/2026-10-09-u12-served-measurement-evidence.json`. The two
+> comparison screenshots this record names are the **new implementation captures** the owner reviews before any
+> final approval; the earlier transient preview (`.hermes/scratch/preview-clamp/`) was the pack the owner visually
+> accepted to authorize implementation.
 
 The product decision is [`DECISIONS.md` §17](DECISIONS.md). This unit doc is its implementation-preview record.
 
@@ -129,3 +132,61 @@ Written by the check to `.hermes/scratch/full-text-clamp/pack/` (generated, git-
 - **`:has()`** requires a modern host Chromium (≥105); the harness' cached Chromium qualifies.
 - **Public payloads only.** The check mounts a corpus-derived preview payload; it writes nothing to any store
   and reads nothing from a live org.
+
+## Served-build deployment and read-only served runtime verification (2026-10-09)
+
+Owner-authorized deployment of the accepted implementation to the **named target organization only**, plus a
+read-only verification of what a real browser session receives. This section is a **measurement**, not source
+approval: the outcome is recorded as *served measured pass — awaiting review; not source approval; no merge*.
+Full machine detail is in
+[`docs/reviews/2026-10-09-u12-served-measurement-evidence.json`](../reviews/2026-10-09-u12-served-measurement-evidence.json).
+
+**Deployment.** The accepted build was re-derived from the isolated checkout (source head `4638f75`):
+`bun run check` green (typecheck + build + 313 tests), `typecheck:host` green against the checkout the review
+units run from, and a reproducible `ui/app.js`
+(sha256 `f6e6b8f3cec9476ad55be4f7067eb116690ae0b26c03cd98c58b654cb9024548`, **155,420 B**). The tree was vendored
+into that checkout and `reinstall-plugin.mjs` was run with the **target organization named explicitly**
+(`--org-id`, no `orgs[0]` fallback) and the instance URL taken as one coherent parameter set. The target org's
+release moved `0.2.0+dev.78af5cbb87b4` → `0.2.0+dev.a5f76a608db2` (revision 9 → 17, `enabled`). **No service
+restart was required or performed** — the reinstall snapshots the vendored tree and the running instance served
+the new release without one.
+
+**The served bytes, authoritatively.** The asset URL the browser actually fetched *while logged into the target
+org* carries revision **17** / version **0.2.0+dev.a5f76a608db2**, and its raw **Buffer** sha256 is
+`f6e6b8f3…` at **155,420 B** — the build this record quotes. The two other organizations on the same instance
+(`layout demo`, `nakama e2e fixture`) were verified to still serve the **previous** bytes
+(`41e61ef5…`, 154,598 B) at unchanged revisions: the change reached only the named target. The generic
+`served-build-guard.mjs` is **org-unaware** on a multi-org account (it measures whatever org the session
+resolves), so its output is not the deployment evidence here — the org-explicit fetch and the served runtime
+session are.
+
+**Product data unchanged.** The release binding moved; no data did. Each org's canonical overview + search
+projection is byte-identical before and after (excluding the volatile `generatedAt`), the target store generation
+is unchanged, and the counts are identical (target: 2 topics / 6 axes / 3 repositories / 1 person). No reseed, no
+reconcile, no fixture mutation.
+
+**Served runtime (real UI, both reference viewports).** Against the served target org, the subject topic
+`Experimental research` and the axis **`Grablink diagnostics and sustained-rate validation`** (located by its
+exact title; the axis's `currentState` is the source-approved **411-char** constant, character-exact):
+
+| Observation | Before deploy (served) | After deploy (served) |
+|---|---|---|
+| collapsed reading | clamp `2`, clipped, 411-char text-exact | unchanged: clamp `2`, clipped, text-exact |
+| collapsed rule | non-match (fold closed) | non-match (fold closed) |
+| **expanded reading** | **clamp `2`, `display:flow-root`, `overflow:hidden`, clipped — the defect** | **clamp `none`, `display:block`, `overflow:visible`, `client==scroll`, whole state visible, no ellipsis** |
+| summary focus | reached by a real `Tab`, `:focus-visible`, **4.61:1** | **4.61:1** |
+| `Enter` / `Space` | opens / toggles the native fold | opens / toggles |
+| negative control (re-clamp while open) | — | readability **goes red**, then restores on removal |
+| fold-less Repositories scan row | stays clamped (`2`) | stays clamped (`2`) |
+| People linked-axis disclosure | — | existing long linked-axis reading releases (`clamp none`, `block`, `59/59`) |
+
+Served-runtime result: **28 pass · 0 fail · 2 blocked** (1440×900 and 1280×800). The two blocked items are the
+**People short-sample class** — the target org has no short (≤40-char) linked-axis reading, so that class is
+reported **unreached**, not counted as a pass. The served screenshots are in the harness scratch pack
+(`.hermes/scratch/full-text-clamp/`-style, git-ignored), not in the tracked tree; they are the material for the
+owner's visual review.
+
+**Boundaries.** Deployment and verification were read-only apart from the single reinstall that updates the
+target org's release binding; nothing was restarted, no migration/manifest/payload changed, and no canonical
+acceptance record or screenshot was overwritten. **This section grants no source approval and authorizes no
+merge** — it records the served measurement for the owner's review.
