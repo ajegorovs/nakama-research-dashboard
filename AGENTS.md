@@ -13,9 +13,15 @@ The repo is **public**. Its acceptance records, montages and screenshots are rea
 clone, so everything committed here is written to be read from a clone and to carry no personal or machine
 identity (see *Public-record hygiene*).
 
-Status: **UX-v2 composition phase complete** — composition C1–C5 accepted, H1 keyboard focus accepted, baseline
-tagged `ux-v2-composition-complete`. `docs/ux-v2/` holds the product decisions and unit docs;
-`docs/reviews/` holds the acceptance records that closed each unit.
+Status: **UX-v2 composition phase complete** (historical) — composition C1–C5 accepted, H1 keyboard focus
+accepted, baseline tagged `ux-v2-composition-complete`. The later **rework-hardening-tests** stage — the
+prototype information-architecture rework, its hardening and its harness work — is **CLOSED**: three commits
+merged to `main` as PR #8, `bun run check` green (376 src + 47 harness), canonical `133·0·59` and focused
+`49·49` accepted (bounded local evidence, **not production acceptance**); see
+[`docs/reviews/2026-10-11-dashboard-rework-stage-closeout.md`](docs/reviews/2026-10-11-dashboard-rework-stage-closeout.md).
+The shipped runtime is the four-view surface (Projects · People · Repositories · Progress; Overview retired to
+the Dashboard-summary disclosure); **UI restyling is deferred**. `docs/ux-v2/` holds the product decisions and
+unit docs; `docs/reviews/` holds the acceptance records that closed each unit.
 
 ## Orientation
 

@@ -1,5 +1,13 @@
 # Preview — see the real page without an instance
 
+> **Staleness note (2026-10-11).** The body below describes the page as a **five-tab** shell
+> (Overview · Topics · People · Repositories · Progress) with Overview as the landing. The shipped runtime is
+> the **four-view** product — **Projects · People · Repositories · Progress** — with Overview retired to the
+> Dashboard-summary disclosure (`VIEW_OPTIONS` in `src/ui.tsx`). The capture helper still clicks the
+> five-tab shape, so it is **not claimed to be working** against the four-view runtime; re-pointing it is part
+> of the deferred UI restyling, **not done here**. The dated measurement section near the foot is a historical
+> record and is left as written.
+
 `src/ui.tsx` is a host-injected React module: it is handed React, the component library, a stylesheet sink
 and a data channel by the dashboard, and it cannot render without them. The only place it *was* renderable
 was a served instance, and the plugin asset is served from the org's installed **release snapshot** — not

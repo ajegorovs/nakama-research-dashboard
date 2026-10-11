@@ -4,6 +4,12 @@ The contract in `docs/ux-v2/contract/` is **frozen and published verbatim**; not
 carries the decisions taken *after* it that a reader needs in order to read it correctly. Each entry says what
 was decided, what it supersedes, and where the work lands.
 
+> **Stage closeout pointer (2026-10-11).** The later **rework-hardening-tests** stage (the prototype
+> information-architecture rework, its hardening and harness work, merged as PR #8) is **closed** — see
+> [`../reviews/2026-10-11-dashboard-rework-stage-closeout.md`](../reviews/2026-10-11-dashboard-rework-stage-closeout.md).
+> This is a pointer only: **no new product decision is made here**, and the entries below are historical and
+> preserved unchanged.
+
 ## 1. Topics editing controls — the checklist's wording is the intended final behavior (2026-10-02)
 
 > **Post-contract clarification — Topics editing controls.** The later UX review supersedes earlier language

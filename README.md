@@ -18,6 +18,12 @@ here: `vendor/` holds the recipe that puts the plugin into a checkout, because N
 > Everything needed to build is in here: `bun run check` is the whole story — it typechecks, bundles and
 > runs the tests. No network access, private registry or credentials required.
 >
+> **Stage status.** The **rework-hardening-tests** development stage is **closed**: three commits merged to
+> `main` as PR #8, `bun run check` green (376 src + 47 harness), canonical `133·0·59` and focused `49·49`
+> accepted — all bounded local evidence, **not production acceptance**. UI restyling is deferred. See
+> [`docs/reviews/2026-10-11-dashboard-rework-stage-closeout.md`](docs/reviews/2026-10-11-dashboard-rework-stage-closeout.md).
+> The body below is the earlier record and is not rewritten.
+>
 > **The V2 rework this review triggered is planned in [`docs/V2-PLAN.md`](docs/V2-PLAN.md)** — chunked
 > work packages with acceptance tests, the platform facts that changed three points of the proposal,
 > and the open decisions. **Progress: C0–C10 are done**; the real-corpus pass replaced the demo contents
