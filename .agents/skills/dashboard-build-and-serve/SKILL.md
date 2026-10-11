@@ -74,9 +74,10 @@ anything; if the estate is genuinely absent here, reconstructing a fresh instanc
 
 ## Procedure
 
-1. **Gate the tree.** `bun run check` — typecheck + build + unit tests. Completion: three greens. A build that
-   compiles is not a build whose types were verified: run `bun run typecheck:host` too when the host's types are
-   in play.
+1. **Gate the tree.** `bun run check` — typecheck + build + `bun test src` + the **harness test suite**
+   (`harness:suite:test` = `bun test harness/*.test.mjs`, all 6 top-level files, 47 tests). Completion: every
+   suite green. A build that compiles is not a build whose types were verified: run `bun run typecheck:host` too
+   when the host's types are in play.
 2. **Vendor.** `./vendor/vendor-into-nakama.sh <nakama checkout>`. Completion: the script reports the files it
    placed, and the built output in the checkout now contains your change (grep for a token you added).
 3. **Reinstall, with the instance's own parameter set.** Pass the URL explicitly; the corpus env file carries no
@@ -88,14 +89,18 @@ anything; if the estate is genuinely absent here, reconstructing a fresh instanc
        bun harness/reinstall-plugin.mjs --env-file <instance env file> --org-id <org id>
    ```
 
-   Completion: it prints an old → new `0.2.0+dev.<digest>` and a revision. **That print is not evidence** — it
-   is the API's reply, not the bytes the browser receives.
-4. **Verify with the guard.** `bun harness/served-build-guard.mjs` (with `NAKAMA_DASHBOARD` set for the
+   Completion: it prints an old → new `0.2.0+dev.<digest>` and a revision. **That print is not evidence** —
+   it is the API's reply, not the bytes the browser receives.
+4. **Re-assign the agent tools.** A reinstall replaces the plugin's tool rows, so the previously assigned tools
+   are gone and the agent silently calls nothing. `bun harness/assign-capabilities.mjs --env-file <env>
+   --org-id <id> --profile-id <profile>` reads the live registry and re-adds exactly the plugin tools plus the
+   `research-coordinator` skill, skipping what is already there and removing nothing.
+5. **Verify with the guard.** `bun harness/served-build-guard.mjs` (with `NAKAMA_DASHBOARD` set for the
    instance; the corpus dashboard binds the tailnet address, the fixture's binds loopback). Completion: it
    reports the served `ui/app.js` sha256 and the release, and that both match this build. If it still reports the
    previous release, restart that instance's web and API units and re-check — do not conclude the change failed
    to apply, and do not record anything until the guard is green.
-5. **Record the identity** you will quote: release `0.2.0+dev.<digest>`, the instance revision, and `ui/app.js`'s
+6. **Record the identity** you will quote: release `0.2.0+dev.<digest>`, the instance revision, and `ui/app.js`'s
    sha256 (`sha256sum ui/app.js`).
 
 ## Quick Reference
@@ -103,6 +108,7 @@ anything; if the estate is genuinely absent here, reconstructing a fresh instanc
 | Task | Command |
 | --- | --- |
 | typecheck + build + tests | `bun run check` |
+| harness test suite (6 files, 47 tests) | `bun run harness:suite:test` |
 | host types | `bun run typecheck:host` |
 | vendor into a checkout | `./vendor/vendor-into-nakama.sh <checkout>` |
 | mint a release / rebind | `bun harness/reinstall-plugin.mjs --env-file <env>` |
@@ -201,8 +207,11 @@ fine, but a *partial* set throws.
     carries `chromium-<rev>/chrome-linux64/`. A symlink `chrome-linux -> chrome-linux64` under the cached
     revision (and the headless-shell equivalent) makes it work with no code change — `harness/chromium.mjs`
     already handles `chrome-linux64`; the guard's private resolver predates it.
-15. **The guard needs `NAKAMA_DASHBOARD`, not the API port.** Its default is the API URL, which answers a page
-    route with "Authentication required"; set `NAKAMA_DASHBOARD` to the web origin (the env file does).
+15. **The guard needs `NAKAMA_DASHBOARD`, and it has no default.** It refuses (exit 2) when it is unset
+    rather than falling back to the API URL — which answers a page route with "Authentication required" and
+    makes the guard report "the page never fetched a plugin UI asset", a wrong target that reads like a
+    digest failure. Set `NAKAMA_DASHBOARD` to the web origin (the env file does). A *unified* origin serving
+    both the web app and the API is accepted; only absence is refused.
     And `NAKAMA_BUILD_FILE` is process-wide: if a diagnostic exported it, `unset` it or later guards compare
     against the wrong file.
 16. **Vendor into the checkout the units actually run from.** Vendoring is additive (a plugin tree plus a

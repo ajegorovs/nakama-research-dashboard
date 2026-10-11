@@ -1,0 +1,53 @@
+# harness/focus-pass.sh — keyboard focus visibility · dataset corpus · viewport 1280x800
+# dashboard: http://127.0.0.1:4451
+# instance: http://127.0.0.1:4451 (0.2.0, revision 4)
+# negative control: a focus-killing rule is injected, and the pass MUST report failures
+# generated: 2026-10-11T13:36:56+03:00
+
+PASS  login — status 200
+# NEGATIVE CONTROL — every focus indication was removed by injected CSS; the per-class measure must fail
+# topics: 38 enabled focusable(s), the first reached on tab 17 — button[view-option] x4 · button[host:button-default] x1 · summary(in .rd-panel) x1 · button[index-row-topic].rd-index-item x2 · summary.rd-topic-summary x1 · button[entity-tag].rd-tag x20 · a.rd-work-link x5 · summary(in .rd-completed-fold) x1 · summary(in .rd-scoped-plan) x1 · button.rd-pager-btn x2
+# progress: 12 enabled focusable(s), the first reached on tab 17 — button[view-option] x4 · button[host:button-default] x1 · button[index-row-topic].rd-index-item x7
+# people: 11 enabled focusable(s), the first reached on tab 17 — button[view-option] x4 · button[host:button-default] x1 · button[index-row-person].rd-index-item x2 · summary.rd-topic-summary x1 · button[entity-tag].rd-tag.rd-tag-compact x1 · button[host:button-sm] x1 · a.rd-work-link x1
+# repositories: 9 enabled focusable(s), the first reached on tab 17 — button[view-option] x4 · button[host:button-default] x1 · button[index-row-repository].rd-index-item x3 · summary.rd-topic-summary x1
+
+FAIL  button[view-option] paints a focus indicator (topics,progress,people,repositories) — focusing painted nothing — focused render equals the unfocused one ("Projects")
+PASS  button[host:button-default] paints a focus indicator (topics,progress,people,repositories) — border-colour 1px rgb(180, 83, 9)
+PASS  button[host:button-default] indicator survives its clippers (topics,progress,people,repositories) — not clipped
+PASS  button[host:button-default] stays on screen when focused (topics,progress,people,repositories) — within the viewport
+PASS  button[host:button-default] indicator reaches 3:1 against its background (topics,progress,people,repositories) — 5.02:1
+FAIL  summary(in .rd-panel) paints a focus indicator (topics) — focusing painted nothing — focused render equals the unfocused one ("Dashboard summary")
+FAIL  button[index-row-topic].rd-index-item paints a focus indicator (topics,progress) — focusing painted nothing — focused render equals the unfocused one ("[synthetics] Canonical Served Validation")
+FAIL  summary.rd-topic-summary paints a focus indicator (topics,people,repositories) — focusing painted nothing — focused render equals the unfocused one ("[synthetics] Canonical Served Validation")
+FAIL  button[entity-tag].rd-tag paints a focus indicator (topics) — focusing painted nothing — focused render equals the unfocused one ("[synthetics] Second Actor")
+FAIL  a.rd-work-link paints a focus indicator (topics,people) — focusing painted nothing — focused render equals the unfocused one ("[synthetics] Workstream One")
+FAIL  summary(in .rd-completed-fold) paints a focus indicator (topics) — focusing painted nothing — focused render equals the unfocused one ("Completed and abandoned work (1)")
+FAIL  summary(in .rd-scoped-plan) paints a focus indicator (topics) — focusing painted nothing — focused render equals the unfocused one ("Activity (18)")
+FAIL  button.rd-pager-btn paints a focus indicator (topics) — focusing painted nothing — focused render equals the unfocused one ("1")
+FAIL  button[index-row-person].rd-index-item paints a focus indicator (people) — focusing painted nothing — focused render equals the unfocused one ("[synthetics] Second Actor1 active · 1 wo")
+FAIL  button[entity-tag].rd-tag.rd-tag-compact paints a focus indicator (people) — focusing painted nothing — focused render equals the unfocused one ("[synthetics] Canonical Served Validation")
+PASS  button[host:button-sm] paints a focus indicator (people) — border-colour 1px rgb(180, 83, 9)
+PASS  button[host:button-sm] indicator survives its clippers (people) — not clipped
+PASS  button[host:button-sm] stays on screen when focused (people) — within the viewport
+PASS  button[host:button-sm] indicator reaches 3:1 against its background (people) — 5.02:1
+FAIL  button[index-row-repository].rd-index-item paints a focus indicator (repositories) — focusing painted nothing — focused render equals the unfocused one ("[synthetics] bare/empty-currentno projec")
+
+# topics coverage: 38 indexed, 38 tab stops walked, 2 not reached
+# topics not reached: button.rd-pager-btn — the element is gone (the view re-rendered during the walk)
+# topics not reached: button.rd-pager-btn — the element is gone (the view re-rendered during the walk)
+PASS  the topics walk never moves focus backwards in document order — 38 step(s), all forward
+# progress coverage: 12 indexed, 12 tab stops walked, none skipped
+PASS  the progress walk never moves focus backwards in document order — 12 step(s), all forward
+# people coverage: 11 indexed, 11 tab stops walked, none skipped
+PASS  the people walk never moves focus backwards in document order — 11 step(s), all forward
+# repositories coverage: 9 indexed, 9 tab stops walked, none skipped
+PASS  the repositories walk never moves focus backwards in document order — 9 step(s), all forward
+PASS  every control class the walk measured was reached by keyboard — 14 class(es) reached and measured: a.rd-work-link, button.rd-pager-btn, button[entity-tag].rd-tag, button[entity-tag].rd-tag.rd-tag-compact, button[host:button-default], button[host:button-sm], button[index-row-person].rd-index-item, button[index-row-repository].rd-index-item, button[index-row-topic].rd-index-item, button[view-option], summary(in .rd-completed-fold), summary(in .rd-panel), summary(in .rd-scoped-plan), summary.rd-topic-summary
+PASS  nothing is clickable by mouse but unreachable by keyboard
+PASS  the walk enters the plugin from the shell without bypassing it — first plugin control is tab stop 17 from the top of the document
+
+PASS  the Projects tab can be reached and holds keyboard focus — stopped at: topics
+PASS  Enter on the Projects tab renders the Projects view — the Projects view rendered
+
+18 passed · 12 failed · 0 skipped · focus-matrix: 12 failure(s)
+negative control: the measure detected the injected removal of every focus indicator (expected)

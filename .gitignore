@@ -31,3 +31,10 @@ __pycache__/
 # Librarian semantic-eval generation captures + external run authorization (never committed)
 harness/librarian-generation/capture/
 harness/librarian-generation/run-authorization.json
+
+# Reviewer-corrections regression: the derived fixture, captures, result and defix scratch copy are
+# rebuilt on demand from the committed corpus fixture (`build-fixture.mjs`) — never committed.
+harness/reviewer-corrections/fixtures-corrections.json
+harness/reviewer-corrections/shots/
+harness/reviewer-corrections/result.json
+harness/reviewer-corrections/fixed-src/

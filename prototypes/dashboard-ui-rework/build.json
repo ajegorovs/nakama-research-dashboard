@@ -1,0 +1,8 @@
+{
+  "schema": "dashboard-ui-rework/build-identity@1",
+  "builtAt": "2026-10-09T14:15:54.481Z",
+  "dataFile": "data.json",
+  "dataBytes": 15148,
+  "dataSha256": "a9213cb1df2484fe8d4ed20d18931258b3647be45b05018564b5ff43d7ca5862",
+  "gitHead": "a21fc1ba9165547a453386320fd2d7197bdbe9c1"
+}

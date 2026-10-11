@@ -522,7 +522,7 @@ Acceptance (all four are harness/store assertions, not reading):
 | One call per topic | Opening a card issues exactly one `get_topic`; the C4 assertions (no `list_topics`) still hold on first paint |
 | Per-axis depth, unmerged | Each axis renders its own `History (n)` with only its own events, its own notes, and an evidence line in words |
 | Notes stay out of activity | An axis note never appears in that axis's history list; topic-level notes are listed separately (the harness checks the exact strings) |
-| Confidence on a claim only | An axis with no evidence renders `no evidence on record — a 'confirmed' claim is impossible here`, and shows **no** badge for a progress claim it never made |
+| Confidence on a claim only | An axis with no evidence renders `no evidence on record — a 'confirmed' reading needs evidence`, and shows **no** badge for a progress claim it never made |
 | Stale correction is refused, in place | With a second writer bumping the axis, the save is refused with the banner *inside that axis* ("This development axis changed since you opened it.") and the person's note intact — nothing written |
 | Reload re-reads, then lands | `Reload this topic` re-reads the axis and carries the rationale across while the claim fields are re-read; saving again lands it, and the note under the axis becomes the evidence for `confirmed` |
 | Atomic on refusal | Store test: a stale correction carrying a note writes neither the axis mutation nor the note |

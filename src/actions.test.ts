@@ -45,6 +45,8 @@ const MIGRATIONS = [
   "002-coordination-model.sql",
   "003-drop-legacy.sql",
   "004-ux-v2-model.sql",
+  "005-external-evidence.sql",
+  "006-task-plan-text.sql",
 ].map((name) => readFileSync(join(repoRoot, "migrations", name), "utf8"));
 
 /** The five agent tools, and nothing else (D4). */
@@ -677,6 +679,106 @@ describe("write actions", () => {
     const activity = await call("list_activity", { limit: 5 }, { path });
     expect(activity.ok).toBe(true);
     expect(activity.activity).toHaveLength(0);
+  });
+
+  test("the public person filter is `personActorId`; unmapped is an empty page, the reserved `actorId` is ignored, scopes AND and page, and the recorded actor is the principal not input", async () => {
+    const path = freshDatabase();
+    const made = await call("reconcile_topic", { topicName: "Person Filter" }, { path });
+    const topicId = (made.topic as Record<string, unknown>).id as string;
+    const withAxis = await call(
+      "reconcile_topic",
+      { axes: [{ title: "Workstream A" }], topicId },
+      { path }
+    );
+    const axisId = ((withAxis.axes as Array<Record<string, unknown>>)[0]?.id ?? "") as string;
+
+    // The recorded actor is the **context** principal (`record_activity` never reads a caller identity
+    // from `input`), so different principals are produced by different call contexts, not by input.
+    await call(
+      "record_activity",
+      { axisId, repositoryFullName: "owner/alpha", summary: "a1", topicId },
+      { path, actorId: "principal-a" }
+    );
+    await call(
+      "record_activity",
+      { axisId, summary: "a2", topicId },
+      { path, actorId: "principal-a" }
+    );
+    await call(
+      "record_activity",
+      { axisId, summary: "b1", topicId },
+      { path, actorId: "principal-b" }
+    );
+
+    // personActorId filters to the person's own recorded rows — 2 of the 3, never the whole window.
+    const a = await call(
+      "list_activity",
+      { pageSize: 10, personActorId: "principal-a", topicId },
+      { path }
+    );
+    const aPage = a.activityPage as { items: Array<{ actorId: string }>; total: number };
+    expect(aPage.total).toBe(2);
+    expect(aPage.items).toHaveLength(2);
+    expect(aPage.items.every((row) => row.actorId === "principal-a")).toBe(true);
+
+    // A person with no recorded rows is an honest empty page — not a fallback to the unscoped window.
+    const unmapped = await call(
+      "list_activity",
+      { pageSize: 10, personActorId: "no-such-actor", topicId },
+      { path }
+    );
+    expect((unmapped.activityPage as { total: number }).total).toBe(0);
+    expect((unmapped.activityPage as { items: unknown[] }).items).toEqual([]);
+
+    // The old reserved key is ignored, not honoured: the host strips a top-level `actorId` before the
+    // plugin runs, so a caller sending it sees the same unscoped window it would see with no person
+    // filter. (3 = principal-a ×2 + principal-b ×1.)
+    const reserved = await call(
+      "list_activity",
+      { actorId: "principal-a", pageSize: 10, topicId },
+      { path }
+    );
+    expect((reserved.activityPage as { total: number }).total).toBe(3);
+
+    // A person scope ANDs with a repository scope: principal-a's single repo-linked row.
+    const repositoryId = (a.activity as Array<{ repositoryId: string | null }>).find(
+      (row) => row.repositoryId
+    )?.repositoryId as string;
+    expect(repositoryId).toBeTruthy();
+    const both = await call(
+      "list_activity",
+      { pageSize: 10, personActorId: "principal-a", repositoryId, topicId },
+      { path }
+    );
+    expect((both.activityPage as { total: number }).total).toBe(1);
+
+    // Paging still holds under the person scope: 13 rows read as 5 / 5 / 3.
+    for (let i = 0; i < 11; i += 1) {
+      await call(
+        "record_activity",
+        {
+          axisId,
+          occurredAt: `2026-05-${String(i + 1).padStart(2, "0")}T00:00:00.000Z`,
+          summary: `a-more-${i}`,
+          topicId,
+        },
+        { path, actorId: "principal-a" }
+      );
+    }
+    const p0 = await call(
+      "list_activity",
+      { offset: 0, pageSize: 5, personActorId: "principal-a", topicId },
+      { path }
+    );
+    const p2 = await call(
+      "list_activity",
+      { offset: 10, pageSize: 5, personActorId: "principal-a", topicId },
+      { path }
+    );
+    expect((p0.activityPage as { total: number }).total).toBe(13);
+    expect((p0.activityPage as { items: unknown[] }).items).toHaveLength(5);
+    expect((p2.activityPage as { items: unknown[] }).items).toHaveLength(3);
+    expect((p0.activityPage as { hasMore: boolean }).hasMore).toBe(true);
   });
 });
 
@@ -1734,6 +1836,7 @@ describe("U4 — Progress reads the model as the store computes it", () => {
       "activityInWindow",
       "blocker",
       "blockerConfidence",
+      "description",
       "id",
       "lastActivityAt",
       "openProblems",
@@ -1769,6 +1872,7 @@ describe("U4 — Progress reads the model as the store computes it", () => {
       "id",
       "lastActivityAt",
       "people",
+      "plan",
       "planStepId",
       "planStepTitle",
       "recencyAt",
@@ -1778,6 +1882,7 @@ describe("U4 — Progress reads the model as the store computes it", () => {
       "stateConfidence",
       "statement",
       "steering",
+      "title",
       "topicId",
       "topicName",
     ]);

@@ -34,7 +34,7 @@ unknown key is refused (this is what stops `actor`/`databasePath` from being smu
 | `axes[].repositories[]`, `axes[].people[]` | ≤ 10 items each |
 | `activities[]` | ≤ 50 items; `summary` 1–1000, `sourceRef` ≤200, `sourceUrl` ≤500, `occurredAt` ≤40 |
 | `annotations[]` | ≤ 20 items; `text` 1–2000 |
-| `problems[]` | ≤ 25 items; `statement` 1–2000, `repositoryFullNames[]` ≤20, `personIds[]` ≤50 |
+| `problems[]` | ≤ 25 items; `statement` 1–2000, `title` 1–300, `repositoryFullNames[]` ≤20, `personIds[]` ≤50 |
 | `plans[]` | ≤ 10 items; `summary` 1–2000; `steps[]` ≤50, `title` 1–300 |
 | `transitions[]` | ≤ 25 items; `toState` 1–40, `blocker` ≤500 |
 
@@ -43,7 +43,7 @@ axis `kind` `feature|experiment|test|investigation|maintenance`; axis `state`
 `active|usable|draft|blocked|parked|completed|abandoned`; confidences
 `confirmed|inferred|uncertain`; activity `sourceType` `manual|github_pr|github_commit|github_issue|
 repo_document|group_chat|experiment|agent_review`; annotation `kind` `note|interpretation|steering`;
-problem `state` `open|resolved`.
+problem `state` `open|blocked|resolved`.
 
 ## Behavioural (not schema) rules the seeder must respect
 

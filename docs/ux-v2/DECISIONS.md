@@ -653,3 +653,77 @@ byte-equality is claimed).
   and accepted in
   [`../reviews/2026-10-09-u12-acceptance-record.md`](../reviews/2026-10-09-u12-acceptance-record.md). The
   decision-stage wording above stands as historical; it is not rewritten to pretend the deployment never happened.
+
+## 18. The selected workstream states its evidence, or says there is none (2026-10-11)
+
+**Decision.** The four-tab pivot moved the axis's "evidence line" off the compact Projects card and onto the
+**Progress view's workstream context panel**. That panel now renders a small textual **Evidence** line read
+straight off the scoped read's own `axis.evidence` set — the union of the axis's structural branch/PR and the
+activities and notes recorded against it, which is *the one definition* of "this axis has evidence" the
+store's own write rule uses (`axisEvidence`, `src/store.ts`). When the set is empty the line says so in words:
+**"no evidence on record — a 'confirmed' reading needs evidence."** (Corrected 2026-10-11 from "a 'confirmed'
+claim is impossible here": an axis that names no state keeps the column's own `confirmed` default, so an
+evidence-free axis *can* carry a `confirmed` state — nobody asserted it — and the rule refuses an **asserted**
+`confirmed` claim, not the value.)
+
+- **What was decided, and why.** The evidence line is a **presentation** of the projection's recorded
+  evidence; it is **not** a new evidence model and not a broadened source. The count and the labels are read
+  from `axis.evidence`; nothing turns an activity total, a progress reading or a state confidence into an
+  "evidence count", and no `confirmed` claim is invented to fill the absence. This satisfies the standing
+  requirements **#17** ("every axis carries an evidence line, in words") and **#18** ("an axis with no evidence
+  says so and shows no confirmed claim").
+- **#18 and confidence are not conflated.** A `confirmed` claim a caller **asserts** is only ever *persisted* on
+  an axis that carries evidence: `assertClaimsAreBacked` runs on every axis write path and refuses an asserted
+  `confirmed` for a claim with no evidence, so an evidence-free axis can read at most `inferred` or `uncertain`
+  for a claim it actually made (a state nobody asserted keeps the column's `confirmed` default). The evidence
+  line therefore does **not** downgrade a persisted claim or restate its confidence — it states the recorded
+  evidence beside the claims, and the existing confidence badges keep rendering exactly what was persisted.
+- **Superseded by this decision:** the SKIP wording that reads the evidence line as living only on the
+  retired Projects card. Nothing here re-opens the pivot; it restores one reading the pivot re-homed.
+- **Where the work lands:** `src/ui.tsx` (the Progress context panel's evidence line, hooks
+  `data-rd-axis-evidence` / `data-rd-has-evidence`), the rebuilt committed `ui/app.js`, the served probe
+  `harness/canonical-served/evidence-line.mjs`, and the store-invariant unit assertion that `confirmed`
+  requires evidence.
+
+## 19. The migrated per-axis history is the scoped Progress Recent-activity feed (2026-10-11)
+
+**Decision.** Requirement **#24** ("a per-axis history expands inside its own axis") is satisfied, as a
+**migrated** presentation, by the Progress view's **Recent activity** feed
+(`ul.rd-feed[data-rd-progress-feed]`), which renders the **selected** workstream's *own* events
+(`axis.history` from the scoped `get_topic { axisId }`) and **excludes its sibling workstreams' events**. The
+per-axis in-card disclosure itself was **retired** by the four-tab pivot; it is **not** re-introduced, because
+a workstream's history is now read where the workstream is read.
+
+- **Not exact equivalence — historical, stated.** This is a **migrated** presentation, not the retired
+  in-card expandable disclosure. The historical form is retained in the record (the SKIP lineage in the
+  coverage ledger and the retired `data-rd-axis-more` surface) and is **not** rewritten to pretend it never
+  existed, and no claim is made that the two are byte-for-byte equivalent. What is asserted is the substance
+  that survives: the selected workstream's own history, in order, excluding siblings, read-only.
+- **Reuse, not a duplicate component.** The assertion already exists —
+  `harness/canonical-served/history-scope.mjs` (run via `bun run harness:history-scope`) — and is **reused**
+  rather than duplicated; it is strengthened only where the substance needs it. No second copy of the retired
+  per-axis disclosure is built to satisfy the old hook.
+- **Where the work lands:** the reused probe `harness/canonical-served/history-scope.mjs`, this entry, and the
+  served run recorded in the implementation record under `.hermes/scratch/`.
+
+### 19.1 addendum — reviewer verdict (2026-10-11)
+
+> Reviewer verdict: EVIDENCE AND HISTORY DECISIONS ACCEPTED — FINAL SERVED VALIDATION PENDING.
+
+The reviewer **accepted** the evidence-line decision (§18, requirement #17/#18) and the migrated-history
+decision (§19, requirement #24) as recorded here. This is **not** served acceptance: the **final served
+validation** of both decisions remains **PENDING** — no served pass has recorded these two probes against a
+build, and nothing here authorises a deployment, a host write, a fixture write, a merge, a push or a tag.
+
+- **Accepted:** the §18/#18 semantics (an evidence-free axis may carry the column's own unasserted
+  `confirmed` default; the rule refuses an **asserted** `confirmed` claim, not the value) and the §19/#24
+  migrated presentation (the scoped Progress **Recent-activity** feed, `ul.rd-feed[data-rd-progress-feed]`).
+- **Pending:** the **final served validation** — running `harness/canonical-served/evidence-line.mjs` and
+  `harness/canonical-served/history-scope.mjs` against a served build at an explicitly named org. That is a
+  separate, explicitly-scoped act; it is **not** performed by the source/probe corrections below.
+- **Instrument corrections recorded with this addendum (no backend behaviour change, no UI hook added):** the
+  two probes now select the target organization **explicitly** (never `orgs[0]`) and confirm the session's
+  active org by the host's own `POST /v1/auth/active-org` readback; the history probe asserts the **whole
+  paged** feed, not one screen, and states that the DOM carries no stable per-event id today; the evidence
+  probe carries a **default-confirmed, no-evidence** regression and no longer scores the state badge in its
+  "no confirmed claim" checks (an unasserted `confirmed` default beside an empty evidence line is correct).

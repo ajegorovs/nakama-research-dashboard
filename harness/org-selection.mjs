@@ -99,3 +99,31 @@ export function selectOrgId(orgs, selector = {}) {
       `one to act on; refusing to guess`,
   };
 }
+
+/**
+ * The shared resolver expressed as **injectable source**, for the browser session contract (the canonical
+ * pass and the served probes). A page cannot `import` a Node module, so `page.evaluate` embeds THIS string
+ * and re-creates `selectOrgId` in the page context — one resolver, one behaviour: an explicit selector
+ * resolves exactly, a single-org account falls back to its only org, a multi-org account with no selector is
+ * refused. `orgs[0]` is never used.
+ */
+export const SELECT_ORG_ID_SOURCE = `(${selectOrgId.toString()})`;
+
+/**
+ * Require an explicit selector. The canonical-served runs and the served probes name their target
+ * organization rather than letting a lone-org fallback guess; a run that names nothing is refused before it
+ * acts. Returns `{ ok: true }` when a selector is present, otherwise a refusal message.
+ *
+ * @param {{orgId?: string, orgName?: string}} [selector]
+ */
+export function requireExplicitOrgSelector(selector = {}) {
+  if (!String(selector.orgId ?? "").trim() && !String(selector.orgName ?? "").trim()) {
+    return {
+      ok: false,
+      message:
+        "name the target organization explicitly with --org-id (or --org-name, or NAKAMA_ORG_ID / " +
+        "NAKAMA_ORG_NAME); refusing to guess",
+    };
+  }
+  return { ok: true };
+}

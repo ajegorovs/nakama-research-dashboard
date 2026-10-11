@@ -101,9 +101,10 @@ export const RECONCILE_TOPIC_SCHEMA = S.object({
   problems: S.array(25, S.object({
     problemId: S.string(100, 1),
     statement: S.string(2000, 1),
+    title: S.string(300, 1),
     axisId: S.string(100, 1),
     axisTitle: S.string(160, 1),
-    state: S.enum(["open", "resolved"]),
+    state: S.enum(["open", "blocked", "resolved"]),
     stateConfidence: S.enum(["confirmed", "inferred", "uncertain"]),
     planStepId: S.nullableString(100),
     repositoryFullNames: S.array(20, S.string(200, 1)),

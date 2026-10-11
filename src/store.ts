@@ -61,8 +61,13 @@ export const AXIS_STATES = [
    */
   "usable",
 ] as const;
-/** A problem is unresolved or resolved — nothing else. Work context lives on its axis, its steps or a note. */
-export const PROBLEM_STATES = ["open", "resolved"] as const;
+/**
+ * A task is open, blocked or resolved. `blocked` was added by migration 006: being blocked is now a
+ * recorded property of the task itself (a recorded transition, not a free-string note), distinct from a
+ * blocked workstream — the axis vocabulary already carried `blocked` and stays separate. Appended after
+ * `open` and before `resolved` so any reader that orders by this list still sees `open` first.
+ */
+export const PROBLEM_STATES = ["open", "blocked", "resolved"] as const;
 export const PLAN_STEP_STATES = ["pending", "active", "done", "blocked"] as const;
 /** The claim kinds an annotation may carry. `note` is the historical shape and stays the default. */
 export const ANNOTATION_KINDS = ["note", "interpretation", "steering"] as const;
@@ -337,6 +342,12 @@ export type Problem = {
   id: string;
   axisId: string;
   statement: string;
+  /**
+   * The task's concise, independently authored short text, distinct from its full `statement`. `""` where
+   * none has been written — a reader must never synthesize one from `statement` (see the pivot's text
+   * semantics). Stored in the side table `problem_titles`; absence of a row reads as `""`.
+   */
+  title: string;
   state: ProblemState;
   stateConfidence: Confidence;
   planStepId: string | null;
@@ -347,10 +358,26 @@ export type Problem = {
   updatedAt: string;
 };
 
+/**
+ * A plan's owner: exactly one of a project (topic), a workstream (axis) or a task (problem). Stored in the
+ * side table `plan_owners`; migration 006 moved ownership out of the `plans` body so a task-title or owner
+ * value is never rewritten by a replay.
+ */
+export type PlanOwner =
+  | { scope: "topic"; topicId: string }
+  | { scope: "axis"; axisId: string }
+  | { scope: "problem"; problemId: string };
+
 /** Optional by design: most axes will never have one, and creating a problem must never invent one. */
 export type Plan = {
   id: string;
-  axisId: string;
+  owner: PlanOwner;
+  /**
+   * Legacy axis owner, retained for axis-plan readers: `owner.axisId` on an axis plan, `null` otherwise.
+   * Kept so a pre-existing axis-plan reader (and `listPlans(axisId)`) keeps its field; adding `owner` is
+   * additive, dropping or renaming this would be an output-contract break.
+   */
+  axisId: string | null;
   summary: string;
   authorType: "human" | "agent";
   authorId: string;
@@ -471,6 +498,8 @@ type ProblemRow = {
   id: string;
   axis_id: string;
   statement: string;
+  /** From the `problem_titles` side table via LEFT JOIN; null when no title row exists. */
+  title: string | null;
   state: string;
   state_confidence: string;
   plan_step_id: string | null;
@@ -481,9 +510,16 @@ type ProblemRow = {
   updated_at: string;
 };
 
+/**
+ * A plan body row joined to its owner. The owner columns come from `plan_owners`; exactly one is set for a
+ * valid plan. `axis_id` here is the owner's axis (null for a topic/task plan), which is what the legacy
+ * `Plan.axisId` and axis-plan readers need.
+ */
 type PlanRow = {
   id: string;
-  axis_id: string;
+  topic_id: string | null;
+  axis_id: string | null;
+  problem_id: string | null;
   summary: string;
   author_type: string;
   author_id: string;
@@ -514,12 +550,44 @@ type StateLogRow = {
   recorded_at: string;
 };
 
+/**
+ * The one shape every `problems` read uses: the row plus its title from the side table. `LEFT JOIN` keeps a
+ * titleless (migrated or never-titled) problem readable — its title reads as `""`, never synthesized from
+ * `statement`. Every problem read goes through this so no site silently drops the title column.
+ */
+const PROBLEM_SELECT = `SELECT p.id, p.axis_id, p.statement, p.state, p.state_confidence,
+  p.plan_step_id, p.author_type, p.author_id, p.version, p.created_at, p.updated_at,
+  t.title AS title
+  FROM problems p
+  LEFT JOIN problem_titles t ON t.problem_id = p.id`;
+
+/**
+ * The one shape every `plans` read uses: the body row joined to its owner. Ownership lives in `plan_owners`
+ * (migration 006); the join exposes the owner's columns as `topic_id`/`axis_id`/`problem_id`, which is what
+ * `toPlan` turns into `owner` and the legacy `axisId`.
+ */
+const PLAN_SELECT = `SELECT p.id, p.summary, p.author_type, p.author_id, p.version,
+  p.created_at, p.updated_at,
+  o.topic_id AS topic_id, o.axis_id AS axis_id, o.problem_id AS problem_id
+  FROM plans p
+  JOIN plan_owners o ON o.plan_id = p.id`;
+
 export const DEFAULT_ACTIVITY_LIMIT = 25;
+/**
+ * The window the rollups fall back to when a caller sends no `activitySinceDays`: a default of recent
+ * work, not "all time". Exported so the action boundary can thread the **same** effective window into a
+ * page sibling that sits beside a rollup — otherwise the array would window at 14 days and the page at
+ * none, and the two would describe different periods.
+ */
+export const DEFAULT_ACTIVITY_WINDOW_DAYS = 14;
 export const MAX_ACTIVITY_LIMIT = 100;
 export const DEFAULT_ANNOTATION_LIMIT = 25;
 export const MAX_ANNOTATION_LIMIT = 100;
 /** How many people (and how many repositories) a rollup names before it reports a truncation. */
 export const MAX_ROLLUP_LIMIT = 50;
+/** The prototype's page size: five entries per numbered page. A page's `limit` may narrow or widen it. */
+export const DEFAULT_PAGE_SIZE = 5;
+export const MAX_PAGE_SIZE = 100;
 /** How many attributable events one person / repository rollup carries inside the window. */
 export const DEFAULT_ROLLUP_ACTIVITY_LIMIT = 5;
 /** How many events one axis shows in the progress view before it says how many more there are. */
@@ -726,6 +794,34 @@ function clampLimit(value: unknown, fallback: number, max: number): number {
 }
 
 /**
+ * A page offset: a non-negative integer, defaulting to 0. A negative or non-finite offset is refused rather
+ * than silently clamped — a caller asking for page `-1` has a bug, and returning page 0 would hide it.
+ */
+function pageOffset(value: unknown): number {
+  if (value === undefined || value === null) {
+    return 0;
+  }
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    throw new ResearchStoreError("offset must be a non-negative integer.", "invalid-input");
+  }
+  return value;
+}
+
+/** A page limit: an integer in `[1, MAX_PAGE_SIZE]`, defaulting to `DEFAULT_PAGE_SIZE`. Out of range is refused. */
+function pageLimit(value: unknown): number {
+  if (value === undefined || value === null) {
+    return DEFAULT_PAGE_SIZE;
+  }
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1 || value > MAX_PAGE_SIZE) {
+    throw new ResearchStoreError(
+      `pageSize must be an integer between 1 and ${MAX_PAGE_SIZE}.`,
+      "invalid-input"
+    );
+  }
+  return value;
+}
+
+/**
  * Fold `(limit, returned, total, limitScope)` into the coverage shape; see `CollectionCoverage`.
  *
  * `truncated` is `total > returned` regardless of scope: it says rows exist that were not returned,
@@ -906,21 +1002,62 @@ function toProblem(row: ProblemRow): Problem {
     createdAt: row.created_at,
     id: row.id,
     planStepId: row.plan_step_id,
-    state: row.state === "resolved" ? "resolved" : "open",
+    state:
+      row.state === "resolved"
+        ? "resolved"
+        : row.state === "blocked"
+          ? "blocked"
+          : "open",
     stateConfidence: (row.state_confidence as Confidence) ?? "confirmed",
     statement: row.statement,
+    title: row.title ?? "",
     updatedAt: row.updated_at,
     version: row.version,
   };
 }
 
+/** Owner columns from a plan row; a row with no owner is a schema violation, not a case to paper over. */
+function planOwnerOf(row: PlanRow): PlanOwner {
+  if (row.topic_id !== null) {
+    return { scope: "topic", topicId: row.topic_id };
+  }
+  if (row.axis_id !== null) {
+    return { scope: "axis", axisId: row.axis_id };
+  }
+  if (row.problem_id !== null) {
+    return { scope: "problem", problemId: row.problem_id };
+  }
+  throw new ResearchStoreError(
+    `Plan "${row.id}" has no owner — the plan_owners row is missing or empty.`
+  );
+}
+
+/** Owner equality on the discriminated union — used to check an echoed owner against the stored one. */
+function samePlanOwner(a: PlanOwner, b: PlanOwner): boolean {
+  if (a.scope !== b.scope) {
+    return false;
+  }
+  if (a.scope === "topic" && b.scope === "topic") {
+    return a.topicId === b.topicId;
+  }
+  if (a.scope === "axis" && b.scope === "axis") {
+    return a.axisId === b.axisId;
+  }
+  if (a.scope === "problem" && b.scope === "problem") {
+    return a.problemId === b.problemId;
+  }
+  return false;
+}
+
 function toPlan(row: PlanRow): Plan {
+  const owner = planOwnerOf(row);
   return {
     authorId: row.author_id,
     authorType: row.author_type === "human" ? "human" : "agent",
     axisId: row.axis_id,
     createdAt: row.created_at,
     id: row.id,
+    owner,
     summary: row.summary,
     updatedAt: row.updated_at,
     version: row.version,
@@ -1034,6 +1171,8 @@ export type ReconcileTopicInput = {
   problems?: Array<{
     problemId?: string;
     statement: string;
+    /** The task's concise short text, distinct from `statement`. Omitted or empty stores no title row. */
+    title?: string;
     axisId?: string;
     axisTitle?: string;
     state?: ProblemState;
@@ -1043,13 +1182,16 @@ export type ReconcileTopicInput = {
     personIds?: string[];
   }>;
   /**
-   * An axis's plan, optional by design: a problem never invents one, and an axis without a plan is a normal
-   * state of affairs rather than a gap to be filled.
+   * A plan, owned by exactly one of a project (topic), a workstream (axis) or a task (problem). The owner
+   * is resolved and validated before any write; a task-owned plan must name an **existing** task id (plans
+   * are processed before problems, so a task and its plan cannot be created in one call).
    */
   plans?: Array<{
     planId?: string;
+    topicId?: string;
     axisId?: string;
     axisTitle?: string;
+    problemId?: string;
     summary: string;
     steps?: Array<{
       stepId?: string;
@@ -1129,8 +1271,56 @@ export type SearchResults = {
   axes: Array<SearchHit<Axis>>;
   activities: Array<SearchHit<Activity>>;
   annotations: Array<SearchHit<Annotation>>;
+  /** Tasks whose `statement` or `title` matched — the flat task search the contract asked for. */
+  problems: Array<SearchHit<Problem>>;
   /** True when a group hit the limit, i.e. there may be more matches than returned. */
   truncated: boolean;
+};
+
+/**
+ * One page of a scoped collection: the rows, where they start, the cap applied, the true total the scope
+ * holds, and whether rows exist beyond this page. `total` is counted under **the same predicate, in the
+ * same read snapshot** as `items`, so a page and its total can never describe two different scopes.
+ *
+ * Offset paging gives numbered pages but **no stability under concurrent inserts** — a new row shifts
+ * what a later offset returns, so the caller refreshes on write rather than pinning a set. That limit is
+ * stated, not papered over with a timestamp bound this page does not carry.
+ */
+export type ScopedPage<T> = {
+  items: T[];
+  offset: number;
+  limit: number;
+  total: number;
+  hasMore: boolean;
+};
+
+/**
+ * The scope an activity page reads. Every field is optional and the predicate is the same one its `total`
+ * uses: a project (`topicId`), a workstream (`axisId`), a task (`problemId`), a person (`actorId`) or a
+ * repository (`repositoryId`), each optionally bounded to `sinceDays`. Absent fields do not narrow.
+ */
+export type ActivityPageScope = {
+  topicId?: string;
+  axisId?: string;
+  problemId?: string;
+  actorId?: string;
+  repositoryId?: string;
+  sinceDays?: number;
+  /**
+   * When set, the page applies the same archived-topic rule the rollups do: `false` hides rows whose
+   * topic is archived, `true` includes them. Left `undefined`, no archive filter is applied — the
+   * behavior a read scoped to one explicitly-named entity has always had. Passing it is what keeps a
+   * `get_progress` page describing the same scope as the `activity` array beside it.
+   */
+  includeArchived?: boolean;
+};
+
+/** The scope a task page reads: a workstream's tasks (`axisId`) or a project's (`topicId`). */
+export type ProblemPageScope = {
+  topicId?: string;
+  axisId?: string;
+  /** See `ActivityPageScope.includeArchived`: `undefined` applies no archive filter. */
+  includeArchived?: boolean;
 };
 
 /**
@@ -1173,6 +1363,12 @@ export type Overview = {
     topicsByStatus: Record<TopicStatus, number>;
   };
   axesByState: Record<AxisState, number>;
+  /**
+   * Tasks by stored state, counted the same way as `axesByState` — one grouped query over `problems`, so
+   * the Open/Blocked counts come from the authoritative rows, not from whatever page is on screen. A
+   * blocked workstream and a blocked task are counted separately.
+   */
+  problemsByState: Record<ProblemState, number>;
   /**
    * The front page proper: one entry per topic with its axes grouped underneath. Archived topics are
    * excluded unless the caller asks for them.
@@ -1269,6 +1465,11 @@ export type AxisDetail = Axis & {
 export type ProblemDetail = Problem & {
   history: StateLogEntry[];
   planStepTitle: string | null;
+  /**
+   * The task's **own** plan, or null. Never an inherited workstream plan: a task's plan is the one owned by
+   * the task (`planForProblem`), so a workstream plan on the parent axis does not appear here.
+   */
+  plan: { plan: Plan; steps: PlanStep[] } | null;
   /** Evidence links, in no hierarchy: a problem concerns these codebases, it does not own them. */
   repositories: Repository[];
   people: Person[];
@@ -1284,6 +1485,11 @@ export type ProblemDetail = Problem & {
 export type TopicDetail = {
   generatedAt: string;
   topic: Topic;
+  /**
+   * The **project** plan (owned by the topic itself), or null. A task's or an axis's plan is not this one;
+   * a project with no plan is ordinary, so absence is a null rather than an empty plan.
+   */
+  plan: { plan: Plan; steps: PlanStep[] } | null;
   people: LinkedPerson[];
   repositories: LinkedRepository[];
   axes: AxisDetail[];
@@ -1498,21 +1704,32 @@ export type OverviewRecency = {
   topics: RecencyCard[];
 };
 
+/**
+ * The bounded plan shape both Progress rows carry: identity, summary, ordered steps and how many are done.
+ * A local shape rather than the store's `Plan`: the card renders a plan, it does not restate ownership.
+ */
+export type ProgressPlan = {
+  id: string;
+  steps: PlanStep[];
+  stepsDone: number;
+  summary: string;
+};
+
 /** One axis as the Progress view needs it: its own facts, plus the recency verdict shared with the Overview. */
 export type ProgressAxisRow = {
   activityInWindow: number;
   /** What it is waiting on, and the strength of that claim — null where no claim has been made. */
   blocker: string;
   blockerConfidence: Confidence | null;
+  /**
+   * The axis's enduring purpose — the authored `description`, never the mutable `currentState` reading. The
+   * card's short purpose is this; a current reading is a different, changing fact.
+   */
+  description: string;
   id: string;
   lastActivityAt: string | null;
   openProblems: number;
-  plan: {
-    id: string;
-    steps: PlanStep[];
-    stepsDone: number;
-    summary: string;
-  } | null;
+  plan: ProgressPlan | null;
   problems: number;
   recencyAt: string | null;
   stale: boolean;
@@ -1545,6 +1762,11 @@ export type ProgressProblemRow = {
   id: string;
   lastActivityAt: string | null;
   people: Array<{ displayName: string; id: string }>;
+  /**
+   * The task's own plan, or null. Never the parent workstream's plan: a task shows the plan it owns
+   * (`planForProblem`), keeping the two ownership scopes separate.
+   */
+  plan: ProgressPlan | null;
   planStepId: string | null;
   planStepTitle: string | null;
   recencyAt: string | null;
@@ -1555,6 +1777,8 @@ export type ProgressProblemRow = {
   statement: string;
   /** Human-authored `interpretation`/`steering` claims aimed at **this problem** — never an ordinary note. */
   steering: ProgressSteering[];
+  /** The concise, independently authored short text; `""` where none has been written (never derived). */
+  title: string;
   topicId: string;
   topicName: string;
 };
@@ -2320,6 +2544,9 @@ export class ResearchStore {
   listActivity(options?: {
     topicId?: string;
     axisId?: string;
+    /** A person's recorded actor account, or a repository id — the same scopes `activityPage` reads. */
+    actorId?: string;
+    repositoryId?: string;
     sinceDays?: number;
     limit?: number;
   }): Activity[] {
@@ -2334,8 +2561,10 @@ export class ResearchStore {
         `SELECT * FROM activities
          WHERE (? IS NULL OR topic_id = ?)
            AND (? IS NULL OR axis_id = ?)
+           AND (? IS NULL OR actor_id = ?)
+           AND (? IS NULL OR repository_id = ?)
            AND (? IS NULL OR occurred_at >= ?)
-         ORDER BY occurred_at DESC, rowid DESC
+         ORDER BY occurred_at DESC, id DESC
          LIMIT ?`
       )
       .all(
@@ -2343,11 +2572,89 @@ export class ResearchStore {
         options?.topicId ?? null,
         options?.axisId ?? null,
         options?.axisId ?? null,
+        options?.actorId ?? null,
+        options?.actorId ?? null,
+        options?.repositoryId ?? null,
+        options?.repositoryId ?? null,
         since,
         since,
         limit
       ) as ActivityRow[];
     return rows.map(toActivity);
+  }
+
+  /**
+   * A page of the activity log, ordered `occurred_at DESC, id DESC` — the portable tie-break, not the
+   * database-local `rowid`. `items` and `total` are read under **the same predicate in one snapshot**, so a
+   * page never totals a scope different from the one it returns.
+   *
+   * The scope mirrors the four views that read activity: a project (`topicId`), a workstream (`axisId`), a
+   * task (`problemId`), a person (`actorId`, the recorded actor) or a repository (`repositoryId`), each
+   * optionally bounded to `sinceDays`. Existing array reads (`listActivity`, `get_topic.activity`, …) are
+   * unchanged — this is an additive sibling.
+   */
+  activityPage(
+    scope?: ActivityPageScope,
+    paging?: { limit?: number; offset?: number }
+  ): ScopedPage<Activity> {
+    const offset = pageOffset(paging?.offset);
+    const limit = pageLimit(paging?.limit);
+    // 0 (or absent) means "no lower bound": the same convention listActivity uses.
+    const since =
+      scope?.sinceDays && scope.sinceDays > 0 ? isoDaysAgo(scope.sinceDays) : null;
+    const predicate = `WHERE (? IS NULL OR topic_id = ?)
+         AND (? IS NULL OR axis_id = ?)
+         AND (? IS NULL OR problem_id = ?)
+         AND (? IS NULL OR actor_id = ?)
+         AND (? IS NULL OR repository_id = ?)
+         AND (? IS NULL OR occurred_at >= ?)
+         AND (? IS NULL OR ? = 1
+              OR topic_id IN (SELECT id FROM topics WHERE status <> 'archived'))`;
+    // `includeArchived` is passed twice (the `IS NULL` guard and the `= 1` test); `undefined` keeps the
+    // archive clause open so a read scoped to one entity is unchanged.
+    const archiveParam =
+      scope?.includeArchived === undefined
+        ? null
+        : scope.includeArchived
+          ? 1
+          : 0;
+    const params: Array<string | number | null> = [
+      scope?.topicId ?? null,
+      scope?.topicId ?? null,
+      scope?.axisId ?? null,
+      scope?.axisId ?? null,
+      scope?.problemId ?? null,
+      scope?.problemId ?? null,
+      scope?.actorId ?? null,
+      scope?.actorId ?? null,
+      scope?.repositoryId ?? null,
+      scope?.repositoryId ?? null,
+      since,
+      since,
+      archiveParam,
+      archiveParam,
+    ];
+    return this.snapshot(() => {
+      const total = (
+        this.db
+          .query(`SELECT count(*) AS n FROM activities ${predicate}`)
+          .get(...params) as { n: number }
+      ).n;
+      const rows = this.db
+        .query(
+          `SELECT * FROM activities ${predicate}
+            ORDER BY occurred_at DESC, id DESC
+            LIMIT ? OFFSET ?`
+        )
+        .all(...params, limit, offset) as ActivityRow[];
+      return {
+        hasMore: offset + rows.length < total,
+        items: rows.map(toActivity),
+        limit,
+        offset,
+        total,
+      };
+    });
   }
 
   listAnnotations(options?: {
@@ -2500,8 +2807,12 @@ export class ResearchStore {
    *
    * **This is the one definition of "that axis has evidence"** — `assertClaimsAreBacked` calls it too,
    * so a claim the rule would reject cannot render as backed, and one it accepts cannot render as bare.
-   * The reverse is the useful direction: an axis with an empty list here can only ever be `inferred` or
-   * `uncertain`, and the page says so.
+   * An empty list here bounds only the **asserted** claim: the rule refuses a `confirmed` claim a caller
+   * stated with nothing to back it, so an empty list rules out a *stated* confirmed reading — the honest
+   * value for that is `inferred` or `uncertain`. It does **not** rule out the value itself: an axis whose
+   * state was never asserted keeps the column's own `confirmed` default beside an empty evidence list
+   * (nobody claimed it), so the page must not print "a confirmed reading is impossible" next to absent
+   * evidence. The list, in short, is the evidence the *rule* consults, not a ban on the confidence value.
    */
   axisEvidence(axis: Axis): AxisEvidence[] {
     const items: AxisEvidence[] = [];
@@ -2611,6 +2922,8 @@ export class ResearchStore {
           ...problem,
           history: this.stateHistory("problem_id", problem.id),
           people: this.listProblemPeople(problem.id),
+          // The task's own plan only (never the axis plan above it); a task with no plan reads null.
+          plan: this.planForProblem(problem.id),
           planStepTitle: problem.planStepId
             ? (this.getPlanStep(problem.planStepId)?.title ?? null)
             : null,
@@ -2649,6 +2962,7 @@ export class ResearchStore {
         generatedAt: nowIso(),
         notes,
         people: this.listTopicPeople(topic.id),
+        plan: this.planForTopic(topic.id),
         repositories: this.listTopicRepositories(topic.id),
         topic,
       };
@@ -2707,16 +3021,14 @@ export class ResearchStore {
       // the collection's own total.
       const notes = this.listAxisNotes(axis.id, notesLimit);
       const problems = this.listProblems(axis.id);
-      const problemDetails: ProblemDetail[] = problems.map((problem) => ({
-        ...problem,
-        history: this.stateHistory("problem_id", problem.id),
-        notes: this.listAnnotations({ limit: notesLimit, problemId: problem.id }),
-        people: this.listProblemPeople(problem.id),
-        planStepTitle: problem.planStepId
-          ? (this.getPlanStep(problem.planStepId)?.title ?? null)
-          : null,
-        repositories: this.listProblemRepositories(problem.id),
-      }));
+      const problemDetails: ProblemDetail[] = problems.map(
+        (problem): ProblemDetail => ({
+          // The task's own plan and links (`problemDetailOf`); the axis's plan is on `axisDetail.plan` and
+          // is never inherited here. Only the problem-scoped notes are added on top.
+          ...this.problemDetailOf(problem),
+          notes: this.listAnnotations({ limit: notesLimit, problemId: problem.id }),
+        })
+      );
 
       const axisDetail: AxisDetail = {
         ...axis,
@@ -2795,7 +3107,7 @@ export class ResearchStore {
     limit?: number;
   }): Overview {
     return this.snapshot(() => {
-      const activitySinceDays = options?.activitySinceDays ?? 14;
+      const activitySinceDays = options?.activitySinceDays ?? DEFAULT_ACTIVITY_WINDOW_DAYS;
       const includeArchived = options?.includeArchived ?? false;
       const limit = clampLimit(options?.limit, 10, 50);
       // 0 means "all time": no lower bound on the window (the same convention as listActivity).
@@ -2823,6 +3135,20 @@ export class ResearchStore {
         .all() as Array<{ n: number; state: string }>) {
         if ((AXIS_STATES as readonly string[]).includes(row.state)) {
           axesByState[row.state as AxisState] = row.n;
+        }
+      }
+
+      // The task aggregate, mirroring `axesByState`: one grouped query over the authoritative rows, so the
+      // Open/Blocked task counts do not depend on any page. `blocked` here is a blocked *task*, counted
+      // separately from the blocked workstreams above.
+      const problemsByState = Object.fromEntries(
+        PROBLEM_STATES.map((state) => [state, 0])
+      ) as Record<ProblemState, number>;
+      for (const row of this.db
+        .query("SELECT state, count(*) AS n FROM problems GROUP BY state")
+        .all() as Array<{ n: number; state: string }>) {
+        if ((PROBLEM_STATES as readonly string[]).includes(row.state)) {
+          problemsByState[row.state as ProblemState] = row.n;
         }
       }
 
@@ -2858,6 +3184,7 @@ export class ResearchStore {
       return {
         activitySinceDays,
         axesByState,
+        problemsByState,
         blocked: blocked.map((row) => ({
           axisId: row.id,
           blocker: row.blocker,
@@ -3037,7 +3364,7 @@ export class ResearchStore {
     visible: (topicId: string) => boolean;
   } {
     const includeArchived = input.includeArchived;
-    const activitySinceDays = input.activitySinceDays ?? 14;
+    const activitySinceDays = input.activitySinceDays ?? DEFAULT_ACTIVITY_WINDOW_DAYS;
     // Zero (or negative) means "no window": the same convention the overview already uses.
     const since = activitySinceDays > 0 ? isoDaysAgo(activitySinceDays) : null;
     const inWindow = (at: string | null | undefined): boolean =>
@@ -3548,6 +3875,27 @@ export class ResearchStore {
         AnnotationRow & { topic_name: string | null }
       >;
 
+      // Tasks match on their full body (`statement`) **and** their concise `title`. The title comes from the
+      // side table via `LEFT JOIN`, so a task with no title still matches on its statement; the owning topic
+      // supplies the archived filter and the `topicName` a caller needs to link the hit.
+      const problemRows = this.db
+        .query(
+          `SELECT p.id, p.axis_id, p.statement, p.state, p.state_confidence,
+                  p.plan_step_id, p.author_type, p.author_id, p.version, p.created_at, p.updated_at,
+                  pt.title AS title, t.name AS topic_name
+           FROM problems p
+           JOIN development_axes a ON a.id = p.axis_id
+           JOIN topics t ON t.id = a.topic_id
+           LEFT JOIN problem_titles pt ON pt.problem_id = p.id
+           WHERE (p.statement LIKE ? ESCAPE '\\' OR pt.title LIKE ? ESCAPE '\\')
+             ${archivedFilter}
+           ORDER BY p.updated_at DESC
+           LIMIT ?`
+        )
+        .all(pattern, pattern, limit + 1) as Array<
+        ProblemRow & { topic_name: string }
+      >;
+
       const fields = (
         row: Record<string, unknown>,
         names: string[]
@@ -3592,6 +3940,14 @@ export class ResearchStore {
         record: toAnnotation(row),
         topicName: row.topic_name,
       }));
+      const problems = problemRows.slice(0, limit).map((row) => ({
+        matchedFields: fields(row as unknown as Record<string, unknown>, [
+          "statement",
+          "title",
+        ]),
+        record: toProblem(row),
+        topicName: row.topic_name,
+      }));
 
       return {
         activities,
@@ -3599,13 +3955,15 @@ export class ResearchStore {
         axes,
         includeArchived,
         limit,
+        problems,
         query,
         topics,
         truncated:
           topicRows.length > limit ||
           axisRows.length > limit ||
           activityRows.length > limit ||
-          annotationRows.length > limit,
+          annotationRows.length > limit ||
+          problemRows.length > limit,
       };
     });
   }
@@ -3856,6 +4214,9 @@ export class ResearchStore {
       if (axis && topicId && axis.topicId !== topicId) {
         throw new ResearchStoreError("Axis does not belong to this topic.");
       }
+      // The problem/axis pairing check is **centralized in `insertActivity`**, the one path every activity
+      // row goes through, so `reconcileTopic` (which calls it directly) cannot bypass it. `addActivity`
+      // deliberately does not repeat it — one guard, one place, so the two paths cannot drift.
       // A named repository is registered inside this transaction, so recording an event that names a
       // repository is still one atomic step for the caller.
       const repositoryId = input.repositoryFullName
@@ -4587,15 +4948,132 @@ export class ResearchStore {
     return this.snapshot(() =>
       (
         this.db
-          .query("SELECT * FROM problems WHERE axis_id = ? ORDER BY created_at, id")
+          .query(`${PROBLEM_SELECT} WHERE p.axis_id = ? ORDER BY p.created_at, p.id`)
           .all(required(axisId, "axisId")) as ProblemRow[]
       ).map(toProblem)
     );
   }
 
+  /**
+   * A page of tasks, ordered `created_at ASC, id ASC` — oldest first, so a task list reads like a history
+   * and the `id` breaks a same-instant tie portably. `items` and `total` share one predicate and one
+   * snapshot, so the page and its count cannot describe two scopes.
+   *
+   * Scoped to a workstream (`axisId`) or a project (`topicId`); `listProblems(axisId)` keeps returning the
+   * full `Problem[]` beside it. Offset paging carries no concurrent-insert stability, which is stated, not
+   * claimed.
+   */
+  problemPage(
+    scope?: ProblemPageScope,
+    paging?: { limit?: number; offset?: number }
+  ): ScopedPage<Problem> {
+    const page = this.problemPageCore(scope, paging);
+    return {
+      hasMore: page.offset + page.rows.length < page.total,
+      items: page.rows,
+      limit: page.limit,
+      offset: page.offset,
+      total: page.total,
+    };
+  }
+
+  /**
+   * The task page the Progress view's visible cards read: the same scoped page as `problemPage`, but each
+   * **returned** row carries the enrichment its card needs — the task's **own** plan (`planForProblem`,
+   * never the parent workstream's), the step it sits on, its supporting repositories and its people. Only
+   * the page's own rows (at most `limit`, five by default) are enriched: the read never fetches the whole
+   * axis to draw one page. Ordering and the single-predicate/single-snapshot guarantee are exactly
+   * `problemPage`'s; this is that page, coloured in.
+   */
+  taskPage(
+    scope?: ProblemPageScope,
+    paging?: { limit?: number; offset?: number }
+  ): ScopedPage<ProblemDetail> {
+    // The enrichment (`problemDetailOf`) reads plans, plan steps, repositories and people per row; wrap
+    // the whole read in one snapshot so those reads join the same one `problemPageCore` already opened
+    // (its snapshot is reentrant). Without this the row/count membership was snapshot-consistent but the
+    // per-row enrichment was not — it could read a plan written after the count was taken.
+    return this.snapshot(() => {
+      const page = this.problemPageCore(scope, paging);
+      return {
+        hasMore: page.offset + page.rows.length < page.total,
+        items: page.rows.map((problem) => this.problemDetailOf(problem)),
+        limit: page.limit,
+        offset: page.offset,
+        total: page.total,
+      };
+    });
+  }
+
+  /** The one predicate/snapshot behind `problemPage`/`taskPage`: bare rows plus the same-scope total. */
+  private problemPageCore(
+    scope?: ProblemPageScope,
+    paging?: { limit?: number; offset?: number }
+  ): { limit: number; offset: number; rows: Problem[]; total: number } {
+    const offset = pageOffset(paging?.offset);
+    const limit = pageLimit(paging?.limit);
+    const where = `WHERE (? IS NULL OR p.axis_id = ?)
+         AND (? IS NULL OR a.topic_id = ?)
+         AND (? IS NULL OR ? = 1
+              OR a.topic_id IN (SELECT id FROM topics WHERE status <> 'archived'))`;
+    const archiveParam =
+      scope?.includeArchived === undefined
+        ? null
+        : scope.includeArchived
+          ? 1
+          : 0;
+    const params: Array<string | number | null> = [
+      scope?.axisId ?? null,
+      scope?.axisId ?? null,
+      scope?.topicId ?? null,
+      scope?.topicId ?? null,
+      archiveParam,
+      archiveParam,
+    ];
+    return this.snapshot(() => {
+      const total = (
+        this.db
+          .query(
+            `SELECT count(*) AS n FROM problems p
+               JOIN development_axes a ON a.id = p.axis_id ${where}`
+          )
+          .get(...params) as { n: number }
+      ).n;
+      const rows = (
+        this.db
+          .query(
+            `${PROBLEM_SELECT}
+             JOIN development_axes a ON a.id = p.axis_id ${where}
+            ORDER BY p.created_at ASC, p.id ASC
+            LIMIT ? OFFSET ?`
+          )
+          .all(...params, limit, offset) as ProblemRow[]
+      ).map(toProblem);
+      return { limit, offset, rows, total };
+    });
+  }
+
+  /**
+   * One task's detail links, built in one place so the axis-scoped workstream read and the visible task
+   * page cannot disagree about what a task owns. The task's plan is its **own** (`planForProblem`); the
+   * state history is its own; the repositories and people are its explicit links, never inherited.
+   */
+  private problemDetailOf(problem: Problem): ProblemDetail {
+    return {
+      ...problem,
+      history: this.stateHistory("problem_id", problem.id),
+      plan: this.planForProblem(problem.id),
+      planStepTitle: problem.planStepId
+        ? (this.getPlanStep(problem.planStepId)?.title ?? null)
+        : null,
+      people: this.listProblemPeople(problem.id),
+      repositories: this.listProblemRepositories(problem.id),
+    };
+  }
+
   getProblem(id: string): Problem | null {
     const row = this.db
-      .query("SELECT * FROM problems WHERE id = ?")
+      .query(`${PROBLEM_SELECT} WHERE p.id = ?`)
       .get(id) as ProblemRow | null;
     return row ? toProblem(row) : null;
   }
@@ -4606,7 +5084,7 @@ export class ResearchStore {
       (
         this.db
           .query(
-            `SELECT p.* FROM problems p
+            `${PROBLEM_SELECT}
                JOIN problem_repositories l ON l.problem_id = p.id
               WHERE l.repository_id = ?
               ORDER BY p.created_at, p.id`
@@ -4625,19 +5103,40 @@ export class ResearchStore {
     return this.stateHistory("axis_id", required(axisId, "axisId"));
   }
 
+  /**
+   * The existing public axis-plan reader, kept as-is: plans whose owner is this axis, oldest first. Sibling
+   * plan readers for the other owner scopes live in `listPlansFor`.
+   */
   listPlans(axisId: string): Plan[] {
     return this.snapshot(() =>
       (
         this.db
-          .query("SELECT * FROM plans WHERE axis_id = ? ORDER BY created_at, id")
+          .query(`${PLAN_SELECT} WHERE o.axis_id = ? ORDER BY p.created_at, p.id`)
           .all(required(axisId, "axisId")) as PlanRow[]
+      ).map(toPlan)
+    );
+  }
+
+  /** Plans for any owner scope. The owner is a discriminated union, so the query is one predicate. */
+  listPlansFor(owner: PlanOwner): Plan[] {
+    const [column, value] =
+      owner.scope === "topic"
+        ? (["topic_id", owner.topicId] as const)
+        : owner.scope === "axis"
+          ? (["axis_id", owner.axisId] as const)
+          : (["problem_id", owner.problemId] as const);
+    return this.snapshot(() =>
+      (
+        this.db
+          .query(`${PLAN_SELECT} WHERE o.${column} = ? ORDER BY p.created_at, p.id`)
+          .all(required(value, `${owner.scope}Id`)) as PlanRow[]
       ).map(toPlan)
     );
   }
 
   getPlan(id: string): Plan | null {
     const row = this.db
-      .query("SELECT * FROM plans WHERE id = ?")
+      .query(`${PLAN_SELECT} WHERE p.id = ?`)
       .get(id) as PlanRow | null;
     return row ? toPlan(row) : null;
   }
@@ -4682,6 +5181,23 @@ export class ResearchStore {
     });
   }
 
+  /** The plan to show for any owner scope: the most recent one, with its steps. */
+  planFor(owner: PlanOwner): { plan: Plan; steps: PlanStep[] } | null {
+    return this.snapshot(() => {
+      const plans = this.listPlansFor(owner);
+      const plan = plans.at(-1) ?? null;
+      return plan ? { plan, steps: this.listPlanSteps(plan.id) } : null;
+    });
+  }
+
+  planForTopic(topicId: string): { plan: Plan; steps: PlanStep[] } | null {
+    return this.planFor({ scope: "topic", topicId });
+  }
+
+  planForProblem(problemId: string): { plan: Plan; steps: PlanStep[] } | null {
+    return this.planFor({ scope: "problem", problemId });
+  }
+
   listPlanSteps(planId: string): PlanStep[] {
     return (
       this.db
@@ -4701,6 +5217,8 @@ export class ResearchStore {
   createProblem(input: {
     axisId: string;
     statement: string;
+    /** The task's concise short text, distinct from `statement`. Omitted or empty stores no title row. */
+    title?: string;
     authorType: Author;
     authorId?: string;
     state?: ProblemState;
@@ -4723,7 +5241,12 @@ export class ResearchStore {
         "confirmed";
       const planStepId = input.planStepId ?? null;
       if (planStepId) {
-        this.assertPlanStepBelongsToAxis(planStepId, axis.id);
+        // On create the task does not exist yet, so only a same-axis step can be named — a task-owned plan
+        // requires the task id, which is the second-reconcile rule (see reconcileTopic).
+        this.assertPlanStepBelongsToProblem(planStepId, {
+          axisId: axis.id,
+          id: null,
+        });
       }
       const id = crypto.randomUUID();
       const at = nowIso();
@@ -4746,6 +5269,7 @@ export class ResearchStore {
           at,
           at
         );
+      this.writeProblemTitle(id, input.title ?? "");
       this.insertStateLogEntry({
         actorId: input.authorId ?? "",
         axisId: null,
@@ -4779,6 +5303,8 @@ export class ResearchStore {
   updateProblem(input: {
     id: string;
     statement?: string;
+    /** The task's concise short text; `""` clears it. Omitted means "leave as stored". */
+    title?: string;
     stateConfidence?: Confidence;
     planStepId?: string | null;
     authorType: Author;
@@ -4801,26 +5327,41 @@ export class ResearchStore {
         problem.version,
         input.expectedVersion
       );
-      const sets: string[] = [];
-      const values: (string | null)[] = [];
-      if (input.statement !== undefined) {
-        const statement = required(input.statement, "statement");
+      // Title and statement share one row and therefore one authorship pair (004:174-175), so the guard
+      // covers the pair: an agent may not change *either* text field on a human-authored row. A change to
+      // one field while the other is echoed still changes text and is guarded; echoing both transfers
+      // nothing and leaves authorship exactly as stored.
+      const nextStatement =
+        input.statement === undefined
+          ? problem.statement
+          : required(input.statement, "statement");
+      const nextTitle =
+        input.title === undefined ? problem.title : text(input.title);
+      const statementChanged = nextStatement !== problem.statement;
+      const titleChanged = nextTitle !== problem.title;
+      if (statementChanged) {
         this.assertTextIsReplaceable(
           problem.authorType,
           authorType,
           problem.statement,
-          statement,
+          nextStatement,
           "the statement of this problem"
         );
-        if (statement !== problem.statement) {
-          sets.push("statement = ?");
-          values.push(statement);
-          // Authorship follows the words: the text this row now holds was written by this caller, so the
-          // next agent along must not be able to replace it. An unchanged echo transfers nothing — the
-          // words are still the human's, and the protection has to stay with them.
-          sets.push("author_type = ?", "author_id = ?");
-          values.push(authorType, input.authorId ?? problem.authorId);
-        }
+      }
+      if (titleChanged) {
+        this.assertTextIsReplaceable(
+          problem.authorType,
+          authorType,
+          problem.title,
+          nextTitle,
+          "the title of this problem"
+        );
+      }
+      const sets: string[] = [];
+      const values: (string | null)[] = [];
+      if (statementChanged) {
+        sets.push("statement = ?");
+        values.push(nextStatement);
       }
       if (input.stateConfidence !== undefined) {
         sets.push("state_confidence = ?");
@@ -4830,10 +5371,19 @@ export class ResearchStore {
       }
       if (input.planStepId !== undefined) {
         if (input.planStepId !== null) {
-          this.assertPlanStepBelongsToAxis(input.planStepId, problem.axisId);
+          this.assertPlanStepBelongsToProblem(input.planStepId, {
+            axisId: problem.axisId,
+            id: problem.id,
+          });
         }
         sets.push("plan_step_id = ?");
         values.push(input.planStepId);
+      }
+      // Authorship follows the words: if either text field changed, the row now holds this caller's words,
+      // so the next agent along must not be able to replace them. An unchanged echo transfers nothing.
+      if (statementChanged || titleChanged) {
+        sets.push("author_type = ?", "author_id = ?");
+        values.push(authorType, input.authorId ?? problem.authorId);
       }
       if (sets.length > 0) {
         sets.push("version = version + 1", "updated_at = ?");
@@ -4841,6 +5391,9 @@ export class ResearchStore {
         this.db
           .query(`UPDATE problems SET ${sets.join(", ")} WHERE id = ?`)
           .run(...values);
+      }
+      if (titleChanged) {
+        this.writeProblemTitle(problem.id, nextTitle);
       }
       if (input.repositoryIds) {
         this.replaceProblemRepositories(problem.id, input.repositoryIds);
@@ -4971,49 +5524,69 @@ export class ResearchStore {
     });
   }
 
+  /**
+   * Creates a plan for a project (topic), a workstream (axis) or a task (problem). Ownership is explicit
+   * and written to `plan_owners`; a legacy `axisId` input is accepted and treated as an axis owner, so an
+   * existing axis-plan caller keeps working. The owner must exist.
+   */
   createPlan(input: {
-    axisId: string;
+    owner?: PlanOwner;
+    axisId?: string;
     summary: string;
     authorType: Author;
     authorId?: string;
   }): Plan {
     return this.atomic(() => {
-      const axis = this.getAxis(required(input.axisId, "axisId"));
-      if (!axis) {
-        throw new ResearchStoreError("Axis not found.");
-      }
+      const owner = this.resolvePlanOwner(input.owner, input.axisId);
       const id = crypto.randomUUID();
       const at = nowIso();
       this.db
         .query(
-          `INSERT INTO plans (id, axis_id, summary, author_type, author_id, version, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, 1, ?, ?)`
+          `INSERT INTO plans (id, summary, author_type, author_id, version, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 1, ?, ?)`
         )
         .run(
           id,
-          axis.id,
           required(input.summary, "summary"),
           oneOf(input.authorType, AUTHOR_TYPES, "authorType"),
           input.authorId ?? "",
           at,
           at
         );
-      this.touch("development_axes", axis.id);
+      const columns = this.ownerColumns(owner);
+      this.db
+        .query(
+          `INSERT INTO plan_owners (plan_id, topic_id, axis_id, problem_id) VALUES (?, ?, ?, ?)`
+        )
+        .run(id, columns.topicId, columns.axisId, columns.problemId);
+      this.touchPlanOwner(owner);
       return this.getPlan(id) as Plan;
     });
   }
 
+  /**
+   * Updates a plan's summary. The owner is **immutable**: the stored owner is never changed, and any owner
+   * fields echoed back by the caller are validated to equal it (a mismatch is refused, not silently
+   * accepted). As on a problem's statement, an unchanged echo keeps authorship where it is.
+   */
   updatePlan(input: {
     id: string;
     summary?: string;
     authorType: Author;
     authorId?: string;
     expectedVersion?: number;
+    /** Echoed owner fields, to be checked against the stored owner. Never written. */
+    owner?: PlanOwner;
   }): Plan {
     return this.atomic(() => {
       const plan = this.getPlan(required(input.id, "id"));
       if (!plan) {
         throw new ResearchStoreError("Plan not found.");
+      }
+      if (input.owner && !samePlanOwner(input.owner, plan.owner)) {
+        throw new ResearchStoreError(
+          "A plan's owner is immutable: it cannot be moved to another topic, axis or problem."
+        );
       }
       const authorType = oneOf(input.authorType, AUTHOR_TYPES, "authorType");
       this.assertVersion("plan", plan.summary, plan.version, input.expectedVersion);
@@ -5026,8 +5599,6 @@ export class ResearchStore {
           summary,
           "this plan's summary"
         );
-        // As on a problem's statement: an unchanged echo keeps the plan's authorship where it is, so an
-        // agent cannot launder a human's summary into its own by repeating it back.
         if (summary !== plan.summary) {
           this.db
             .query(
@@ -5399,10 +5970,34 @@ export class ResearchStore {
       });
       const limit = clampLimit(options?.limit, MAX_ROLLUP_LIMIT, MAX_ROLLUP_LIMIT);
       const problems = this.db
-        .query("SELECT * FROM problems")
+        .query(PROBLEM_SELECT)
         .all() as ProblemRow[];
-      const plans = this.db.query("SELECT * FROM plans").all() as PlanRow[];
+      const plans = this.db.query(PLAN_SELECT).all() as PlanRow[];
+      // The most recent plan per axis, chosen by the same order `planForAxis` uses (`listPlans` is
+      // `created_at, id`) — an explicit `created_at, id` max, never `.at(-1)` over an unordered read.
+      const latestAxisPlan = new Map<string, PlanRow>();
+      for (const row of plans) {
+        if (row.axis_id === null) {
+          continue;
+        }
+        const current = latestAxisPlan.get(row.axis_id);
+        if (
+          !current ||
+          row.created_at > current.created_at ||
+          (row.created_at === current.created_at && row.id > current.id)
+        ) {
+          latestAxisPlan.set(row.axis_id, row);
+        }
+      }
       const steps = this.db.query("SELECT * FROM plan_steps").all() as PlanStepRow[];
+      // The axis's enduring purpose. `AxisScan` deliberately omits `description` (the rollups never needed
+      // it), so it is read here where the card does — the authored `description`, never `currentState`.
+      const descriptions = new Map<string, string>();
+      for (const row of this.db
+        .query("SELECT id, description FROM development_axes")
+        .all() as Array<{ description: string; id: string }>) {
+        descriptions.set(row.id, row.description);
+      }
       const axisTimes = new Map<string, string[]>();
       for (const row of this.db
         .query(
@@ -5420,7 +6015,7 @@ export class ResearchStore {
       const axisSteering = this.humanSteeringBy("axis");
       const rows: ProgressAxisRow[] = [...scope.scans.values()].map((scan) => {
         const mine = problems.filter((row) => row.axis_id === scan.id);
-        const plan = plans.filter((row) => row.axis_id === scan.id).at(-1) ?? null;
+        const plan = latestAxisPlan.get(scan.id) ?? null;
         const planSteps = plan
           ? steps
               .filter((row) => row.plan_id === plan.id)
@@ -5440,6 +6035,7 @@ export class ResearchStore {
           activityInWindow: times.filter((at) => scope.inWindow(at)).length,
           blocker: scan.blocker,
           blockerConfidence: scan.blockerConfidence,
+          description: descriptions.get(scan.id) ?? "",
           id: scan.id,
           lastActivityAt: newestOf(times),
           openProblems: mine.filter((row) => row.state === "open").length,
@@ -5498,6 +6094,44 @@ export class ResearchStore {
         .all() as PlanStepRow[]) {
         stepRows.set(row.id, row);
       }
+      // The latest task-owned plan per problem, by the same order `planForProblem` uses (created_at, then
+      // id). Task plans only: a plan owned by the axis or the topic is a different scope and is not shown
+      // on a task card.
+      const plansByProblem = new Map<string, PlanRow>();
+      for (const row of this.db.query(PLAN_SELECT).all() as PlanRow[]) {
+        if (row.problem_id === null) {
+          continue;
+        }
+        const current = plansByProblem.get(row.problem_id);
+        if (
+          !current ||
+          row.created_at > current.created_at ||
+          (row.created_at === current.created_at && row.id > current.id)
+        ) {
+          plansByProblem.set(row.problem_id, row);
+        }
+      }
+      const planFor = (problemId: string): ProgressPlan | null => {
+        const plan = plansByProblem.get(problemId);
+        if (!plan) {
+          return null;
+        }
+        const steps = [...stepRows.values()]
+          .filter((row) => row.plan_id === plan.id)
+          .map(toPlanStep)
+          .sort(
+            (left, right) =>
+              (left.position ?? Number.MAX_SAFE_INTEGER) -
+                (right.position ?? Number.MAX_SAFE_INTEGER) ||
+              left.createdAt.localeCompare(right.createdAt)
+          );
+        return {
+          id: plan.id,
+          steps,
+          stepsDone: steps.filter((step) => step.state === "done").length,
+          summary: plan.summary,
+        };
+      };
       const problemTimes = new Map<string, string[]>();
       for (const row of this.db
         .query(
@@ -5540,7 +6174,7 @@ export class ResearchStore {
       const evidenceOf = this.evidenceByProblem();
       const steeringOf = this.humanSteeringBy("problem");
       const rows: ProgressProblemRow[] = (
-        this.db.query("SELECT * FROM problems").all() as ProblemRow[]
+        this.db.query(PROBLEM_SELECT).all() as ProblemRow[]
       )
         .map((row) => ({ problem: toProblem(row), row }))
         .filter(({ row }) => {
@@ -5565,6 +6199,7 @@ export class ResearchStore {
             id: problem.id,
             lastActivityAt: newestOf(times),
             people: peopleOf.get(problem.id) ?? [],
+            plan: planFor(problem.id),
             planStepId: problem.planStepId,
             planStepTitle: stepRow?.title ?? null,
             recencyAt,
@@ -5574,6 +6209,7 @@ export class ResearchStore {
             stateConfidence: problem.stateConfidence,
             statement: problem.statement,
             steering: steeringOf.get(problem.id) ?? [],
+            title: problem.title,
             topicId: scan?.topicId ?? "",
             topicName: scope.topicRefs.get(scan?.topicId ?? "")?.name ?? "",
           };
@@ -5879,32 +6515,41 @@ export class ResearchStore {
       const authorType: Author = actor.type === "agent" ? "agent" : "human";
 
       // Plans before problems: a problem may name the plan step it blocks, and that step has to exist first.
+      // A task-owned plan must therefore name an **existing** task id — a task and its plan cannot be
+      // created in one reconcile; create the task, read its id back, then a second reconcile attaches the
+      // plan. This is the intended boundary; no aliases or dependency graph are introduced.
       for (const planInput of input.plans ?? []) {
-        const axisId = this.resolveAxisId(
-          topic.id,
-          planInput.axisId,
-          planInput.axisTitle
-        );
-        if (!axisId) {
-          throw new ResearchStoreError(
-            "plans[] need an axisId or axisTitle: a plan belongs to an axis."
-          );
+        const owner = this.resolveReconcilePlanOwner(topic.id, planInput);
+        if (planInput.planId) {
+          const existing = this.getPlan(planInput.planId);
+          if (!existing) {
+            throw new ResearchStoreError("Plan not found.");
+          }
+          if (!samePlanOwner(owner, existing.owner)) {
+            throw new ResearchStoreError(
+              "A plan's owner is immutable: it cannot be moved to another topic, axis or problem."
+            );
+          }
         }
         const plan = planInput.planId
           ? this.updatePlan({
               authorId: actor.id,
               authorType,
               id: planInput.planId,
+              owner,
               summary: required(planInput.summary, "summary"),
             })
           : this.createPlan({
               authorId: actor.id,
               authorType,
-              axisId,
+              owner,
               summary: required(planInput.summary, "summary"),
             });
         for (const step of planInput.steps ?? []) {
           if (step.stepId) {
+            // Containment: a named step must belong to the plan being written. Without this, a cross-plan
+            // / cross-topic step could be laundered in by id.
+            this.assertStepBelongsToPlan(step.stepId, plan.id);
             this.updatePlanStep({
               id: step.stepId,
               position: step.position,
@@ -5951,6 +6596,7 @@ export class ResearchStore {
                 CONFIDENCES,
                 "stateConfidence"
               ),
+              title: problemInput.title,
             })
           );
           continue;
@@ -5980,6 +6626,7 @@ export class ResearchStore {
               "stateConfidence"
             ),
             statement,
+            title: problemInput.title,
           })
         );
       }
@@ -6533,23 +7180,178 @@ export class ResearchStore {
     }
   }
 
-  /** A problem may only point at a step of a plan on its own axis; anything else is a cross-axis claim. */
-  private assertPlanStepBelongsToAxis(planStepId: string, axisId: string): void {
+  /**
+   * A task may point at a step iff that step's plan is owned by the **same task** (the task's own plan) or
+   * by the **same axis** (the existing same-axis workstream link). A step owned by a topic, another task
+   * or another axis is refused. `owner.id` is null on create, where no task-owned step can exist yet.
+   */
+  private assertPlanStepBelongsToProblem(
+    planStepId: string,
+    owner: { axisId: string; id: string | null }
+  ): void {
     const row = this.db
       .query(
-        `SELECT p.axis_id AS axis_id
+        `SELECT o.axis_id AS axis_id, o.problem_id AS problem_id
            FROM plan_steps s
-           JOIN plans p ON p.id = s.plan_id
+           JOIN plan_owners o ON o.plan_id = s.plan_id
           WHERE s.id = ?`
       )
-      .get(planStepId) as { axis_id: string } | null;
+      .get(planStepId) as {
+      axis_id: string | null;
+      problem_id: string | null;
+    } | null;
     if (!row) {
       throw new ResearchStoreError("Plan step not found.");
     }
-    if (row.axis_id !== axisId) {
+    const sameAxis = row.axis_id !== null && row.axis_id === owner.axisId;
+    const sameProblem = owner.id !== null && row.problem_id === owner.id;
+    if (!(sameAxis || sameProblem)) {
       throw new ResearchStoreError(
-        "That plan step belongs to a plan on another axis."
+        "That plan step belongs to a plan on another axis or another task."
       );
+    }
+  }
+
+  /** Writes (or clears) a task's title row. Absence of a row is `''`; a `''` title deletes the row. */
+  private writeProblemTitle(problemId: string, title: string): void {
+    if (title.length === 0) {
+      this.db
+        .query("DELETE FROM problem_titles WHERE problem_id = ?")
+        .run(problemId);
+      return;
+    }
+    this.db
+      .query(
+        `INSERT INTO problem_titles (problem_id, title) VALUES (?, ?)
+         ON CONFLICT (problem_id) DO UPDATE SET title = excluded.title`
+      )
+      .run(problemId, title);
+  }
+
+  /** The `plan_owners` column values for an owner; exactly one is non-null. */
+  private ownerColumns(owner: PlanOwner): {
+    topicId: string | null;
+    axisId: string | null;
+    problemId: string | null;
+  } {
+    switch (owner.scope) {
+      case "topic":
+        return { axisId: null, problemId: null, topicId: owner.topicId };
+      case "axis":
+        return { axisId: owner.axisId, problemId: null, topicId: null };
+      case "problem":
+        return { axisId: null, problemId: owner.problemId, topicId: null };
+    }
+  }
+
+  /** Resolves and validates a plan owner, accepting a legacy `axisId` as an axis owner. */
+  private resolvePlanOwner(
+    owner: PlanOwner | undefined,
+    axisId: string | undefined
+  ): PlanOwner {
+    if (owner) {
+      if (owner.scope === "topic" && !this.getTopic(owner.topicId)) {
+        throw new ResearchStoreError("Topic not found.");
+      }
+      if (owner.scope === "axis" && !this.getAxis(owner.axisId)) {
+        throw new ResearchStoreError("Axis not found.");
+      }
+      if (owner.scope === "problem" && !this.getProblem(owner.problemId)) {
+        throw new ResearchStoreError("Problem not found.");
+      }
+      return owner;
+    }
+    const id = required(axisId, "axisId");
+    if (!this.getAxis(id)) {
+      throw new ResearchStoreError("Axis not found.");
+    }
+    return { axisId: id, scope: "axis" };
+  }
+
+  /** Moves the owner's containing row's `updated_at` forward, using the existing `touch` union. */
+  private touchPlanOwner(owner: PlanOwner): void {
+    switch (owner.scope) {
+      case "topic":
+        this.touch("topics", owner.topicId);
+        return;
+      case "axis":
+        this.touch("development_axes", owner.axisId);
+        return;
+      case "problem": {
+        const problem = this.getProblem(owner.problemId);
+        if (problem) {
+          this.touch("development_axes", problem.axisId);
+        }
+      }
+    }
+  }
+
+  /**
+   * Resolves a reconcile `plans[]` item's owner from its explicit fields, validating it against the
+   * resolved topic **before any write**. Exactly one owner must be named; a topic-owned plan must name this
+   * topic; a task-owned plan's problem must exist and sit on an axis of this topic.
+   */
+  private resolveReconcilePlanOwner(
+    topicId: string,
+    planInput: {
+      topicId?: string;
+      axisId?: string;
+      axisTitle?: string;
+      problemId?: string;
+    }
+  ): PlanOwner {
+    const named = [
+      planInput.topicId,
+      planInput.axisId ?? planInput.axisTitle,
+      planInput.problemId,
+    ].filter((value) => value !== undefined && value !== null && value !== "");
+    if (named.length !== 1) {
+      throw new ResearchStoreError(
+        "A plan has exactly one owner: name one of topicId, axisId/axisTitle or problemId."
+      );
+    }
+    if (planInput.problemId) {
+      const problem = this.getProblem(required(planInput.problemId, "problemId"));
+      if (!problem) {
+        throw new ResearchStoreError("Problem not found.");
+      }
+      const axis = this.getAxis(problem.axisId);
+      if (!axis || axis.topicId !== topicId) {
+        throw new ResearchStoreError("Problem does not belong to this topic.");
+      }
+      return { problemId: problem.id, scope: "problem" };
+    }
+    if (planInput.topicId) {
+      if (planInput.topicId !== topicId) {
+        throw new ResearchStoreError(
+          "A plan's topic owner must be this topic."
+        );
+      }
+      return { scope: "topic", topicId };
+    }
+    const axisId = this.resolveAxisId(
+      topicId,
+      planInput.axisId,
+      planInput.axisTitle
+    );
+    if (!axisId) {
+      throw new ResearchStoreError(
+        "A plan's axis owner must name an axis of this topic."
+      );
+    }
+    return { axisId, scope: "axis" };
+  }
+
+  /** Containment for a reconcile step: a named `stepId` must belong to the plan being written. */
+  private assertStepBelongsToPlan(stepId: string, planId: string): void {
+    const row = this.db
+      .query("SELECT plan_id FROM plan_steps WHERE id = ?")
+      .get(required(stepId, "stepId")) as { plan_id: string } | null;
+    if (!row) {
+      throw new ResearchStoreError("Plan step not found.");
+    }
+    if (row.plan_id !== planId) {
+      throw new ResearchStoreError("That step does not belong to this plan.");
     }
   }
 
@@ -6594,18 +7396,41 @@ export class ResearchStore {
     // silently happened nowhere. Called before the problems exist in a *single* call (the write order is
     // activities → problems), which is why the fixture references a problem in a second pass; when the row is
     // there, the link is completed.
+    //
+    // The pairing guard lives **here**, on the one path every activity row goes through, not in
+    // `addActivity`. `reconcileTopic` calls this directly, so a guard placed in `addActivity` alone let the
+    // primary agent write path store a row whose `problem_id` disagreed with its own `axis_id`/`topic_id`.
+    // One check on the one insertion path means no caller (reconcile, fixture, collector) can bypass it.
     let topicId = input.topicId;
     let axisId = input.axisId;
-    if (input.problemId && (axisId === null || topicId === null)) {
+    if (input.problemId) {
       const problem = this.db
-        .query("SELECT axis_id FROM problems WHERE id = ?")
-        .get(input.problemId) as { axis_id: string } | null;
+        .query(
+          `SELECT p.axis_id AS axis_id, a.topic_id AS topic_id
+             FROM problems p JOIN development_axes a ON a.id = p.axis_id
+            WHERE p.id = ?`
+        )
+        .get(input.problemId) as { axis_id: string; topic_id: string } | null;
       if (problem) {
-        const axis = this.db
-          .query("SELECT topic_id FROM development_axes WHERE id = ?")
-          .get(problem.axis_id) as { topic_id: string } | null;
+        // A named problem's own axis must be the axis the row is recorded against; without this a problem
+        // from another axis of the same topic (or another topic, with an axis named) is stored mismatched.
+        if (input.axisId !== null && problem.axis_id !== input.axisId) {
+          throw new ResearchStoreError(
+            "The named problem is not on the axis this activity is recorded against.",
+            "invalid-input"
+          );
+        }
+        // And its topic must be the row's topic. This closes the cross-topic case where the axis is derived
+        // from the problem but a topic was already supplied: the row would otherwise carry a topic_id and an
+        // axis_id that name different topics.
+        if (input.topicId !== null && problem.topic_id !== input.topicId) {
+          throw new ResearchStoreError(
+            "The named problem does not belong to this topic.",
+            "invalid-input"
+          );
+        }
         axisId = axisId ?? problem.axis_id;
-        topicId = topicId ?? axis?.topic_id ?? null;
+        topicId = topicId ?? problem.topic_id;
       }
     }
     const recordedAt = nowIso();
