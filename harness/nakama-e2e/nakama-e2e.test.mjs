@@ -14,7 +14,7 @@
  */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { Database } from "bun:sqlite";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -22,7 +22,7 @@ import {
   loadSeedArtifact, assertOracleFree, findForbiddenKeys, listSourceIds,
   buildMainInputs, buildProblemRefInputs, effectiveNoteText, SeedArtifactError,
 } from "./artifact.mjs";
-import { validateReconcileInput, describeReconcileLimits } from "./limits.mjs";
+import { validateReconcileInput, describeReconcileLimits, RECONCILE_TOPIC_SCHEMA } from "./limits.mjs";
 import { createClient, ClientError, isLoopbackBase } from "./client.mjs";
 import { seedSemanticFixture, emptyMapping, assertMappingComplete, assertIdBoundary, SeedError } from "./seed.mjs";
 import { validateProjection, liveId, CASE_EXPECTATIONS } from "./readback.mjs";
@@ -135,6 +135,29 @@ describe("traced reconcile input limits", () => {
       topicName: 120, axesPerCall: 20, activitiesPerCall: 50, annotationsPerCall: 20,
       problemsPerCall: 25, annotationText: 2000,
     });
+  });
+
+  // Transcription drift guard: this file is a hand copy of `nakama.plugin.json`'s declared schema, so it can
+  // silently fall behind it (it previously omitted `problems[].title` and the `blocked` problem state, which
+  // made the offline gate reject payloads the manifest accepts). Assert the copy against the manifest itself
+  // rather than against another copy.
+  test("accepts a problem title and the blocked problem state the manifest declares", () => {
+    const input = { topicName: "x", problems: [{ statement: "s", title: "t", state: "blocked" }] };
+    expect(validateReconcileInput(input)).toEqual({ ok: true, errors: [] });
+  });
+
+  test("the transcribed problem contract stays in step with nakama.plugin.json", () => {
+    const manifestPath = join(import.meta.dir, "..", "..", "nakama.plugin.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    const action = manifest.actions.find((a) => a.key === "reconcile_topic");
+    const declared = action.inputSchema.properties.problems.items.properties;
+    const transcribed = RECONCILE_TOPIC_SCHEMA.properties.problems.items.properties;
+
+    // Field-set drift: `title` (≤300) was missing from the copy.
+    expect(Object.keys(transcribed).sort()).toEqual(Object.keys(declared).sort());
+    expect(transcribed.title.max).toBe(declared.title.maxLength);
+    // Enum drift: the copy modelled `open|resolved` and omitted `blocked`.
+    expect(transcribed.state.values).toEqual(declared.state.enum);
   });
 });
 

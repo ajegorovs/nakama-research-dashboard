@@ -14,7 +14,7 @@
 import { describe, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 
-import { parseOrgSelector, selectOrgId } from "./org-selection.mjs";
+import { parseOrgSelector, requireExplicitOrgSelector, SELECT_ORG_ID_SOURCE, selectOrgId } from "./org-selection.mjs";
 
 const REPO = fileURLToPath(new URL("..", import.meta.url));
 const MULTI = [
@@ -115,8 +115,48 @@ describe("parseOrgSelector", () => {
   });
 });
 
-// ---------------------------------------------------------------------------- 2. the CLI, end to end
+// ------------------------------------------------------- 1b. the browser-session contract helpers
 
+describe("requireExplicitOrgSelector — the served probes name their target", () => {
+  test("no selector is refused with the naming guidance", () => {
+    const result = requireExplicitOrgSelector({});
+    expect(result.ok).toBe(false);
+    expect(result.message).toMatch(/--org-id|NAKAMA_ORG_ID/);
+  });
+
+  test("a blank id/name is refused", () => {
+    expect(requireExplicitOrgSelector({ orgId: "  ", orgName: "" }).ok).toBe(false);
+  });
+
+  test("an id or a name is accepted", () => {
+    expect(requireExplicitOrgSelector({ orgId: "org_alpha" }).ok).toBe(true);
+    expect(requireExplicitOrgSelector({ orgName: "Alpha" }).ok).toBe(true);
+  });
+});
+
+describe("SELECT_ORG_ID_SOURCE — one resolver, re-created in the page", () => {
+  // The page cannot import a Node module, so `page.evaluate` embeds this source. It must re-create the
+  // SAME behaviour as the node-side `selectOrgId`.
+  const inPage = eval(SELECT_ORG_ID_SOURCE); // eslint-disable-line no-eval
+
+  test("it is a callable that matches selectOrgId on every branch", () => {
+    expect(typeof inPage).toBe("function");
+    expect(inPage(MULTI)).toEqual(selectOrgId(MULTI));
+    expect(inPage(MULTI, { orgId: "org_beta" })).toEqual(selectOrgId(MULTI, { orgId: "org_beta" }));
+    expect(inPage([{ id: "org_only", name: "Only" }])).toEqual(
+      selectOrgId([{ id: "org_only", name: "Only" }])
+    );
+    expect(inPage(MULTI, { orgId: "org_not_here" })).toEqual(
+      selectOrgId(MULTI, { orgId: "org_not_here" })
+    );
+  });
+
+  test("it never falls back to orgs[0] on a multi-org account with no selector", () => {
+    expect(inPage(MULTI)).toMatchObject({ ok: false, reason: "ambiguous" });
+  });
+});
+
+// ---------------------------------------------------------------------------- 2. the CLI, end to end
 /**
  * Start a loopback stub of the small host surface `reinstall-plugin.mjs` uses, run the real script against
  * it, and return the exit code plus every request the script made. `orgs` chooses the account shape.

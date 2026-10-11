@@ -45,9 +45,16 @@ const PLUGIN_ID = process.env.NAKAMA_PLUGIN_ID ?? "research-dashboard";
 const TARGET = (flag("url", process.env.NAKAMA_DASHBOARD ?? "")).replace(/\/+$/, "");
 const VIEWPORT = (flag("viewport", "1440x900")).split("x").map(Number);
 const NEGATIVE = args.includes("--negative-control");
+// Local disposable host: run against the preview (the plugin bundle mounted through the host's own runtime)
+// instead of a served instance. The measurement is unchanged — real Tab presses, settled render, 3:1 — only
+// the login and the /plugins/<id> route are absent (the preview serves the page at --url directly).
+const PREVIEW = args.includes("--preview");
 const MIN_CONTRAST = 3.0;
 const MAX_TAB_PER_VIEW = 260;
-const VIEWS = ["overview", "topics", "people", "repositories", "progress"];
+// The four-tab contract (Projects · Progress · People · Repositories). Overview is retired: its aggregate
+// counts live in the collapsed Dashboard summary above the Projects landing, so there is no `overview` view
+// option to walk. "Projects" is the page's `topics` view value (the tab label changed, the value did not).
+const VIEWS = ["topics", "progress", "people", "repositories"];
 
 if (!TARGET) {
   console.error("focus-matrix: pass --url <dashboard origin> (or set NAKAMA_DASHBOARD)");
@@ -99,26 +106,31 @@ const browser = await chromium.launch({
   args: ["--no-sandbox", "--disable-dev-shm-usage"],
 });
 const page = await browser.newPage({ viewport: { width: VIEWPORT[0], height: VIEWPORT[1] } });
-await page.goto(TARGET, { waitUntil: "domcontentloaded" });
-const loginStatus = await page.evaluate(
-  async ([email, password]) => {
-    const response = await fetch("/v1/auth/login", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email, password }),
-      credentials: "include",
-    });
-    return response.status;
-  },
-  [process.env.NAKAMA_DEV_EMAIL ?? "", process.env.NAKAMA_DEV_PASSWORD ?? ""]
-);
-check("login", loginStatus === 200, `status ${loginStatus}`);
-if (loginStatus !== 200) {
-  await browser.close();
-  console.log("\nfocus pass: ABORTED — no authenticated page to read");
-  process.exit(2);
+if (PREVIEW) {
+  console.log("# LOCAL DISPOSABLE HOST — preview: no instance, no login, the plugin bundle over the host runtime");
+  await page.goto(TARGET, { waitUntil: "networkidle" });
+} else {
+  await page.goto(TARGET, { waitUntil: "domcontentloaded" });
+  const loginStatus = await page.evaluate(
+    async ([email, password]) => {
+      const response = await fetch("/v1/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email, password }),
+        credentials: "include",
+      });
+      return response.status;
+    },
+    [process.env.NAKAMA_DEV_EMAIL ?? "", process.env.NAKAMA_DEV_PASSWORD ?? ""]
+  );
+  check("login", loginStatus === 200, `status ${loginStatus}`);
+  if (loginStatus !== 200) {
+    await browser.close();
+    console.log("\nfocus pass: ABORTED — no authenticated page to read");
+    process.exit(2);
+  }
+  await page.goto(`${TARGET}/plugins/${PLUGIN_ID}`, { waitUntil: "networkidle" });
 }
-await page.goto(`${TARGET}/plugins/${PLUGIN_ID}`, { waitUntil: "networkidle" });
 const root = page.locator(`div[data-plugin-id="${PLUGIN_ID}"]`);
 await root.waitFor({ timeout: 30_000 });
 await page.waitForTimeout(600);
@@ -647,56 +659,37 @@ console.log("");
     entered === null ? "Tab never reached the plugin" : `first plugin control is tab stop ${entered} from the top of the document`);
 }
 
-// ---- the Overview-tab / window regression ---------------------------------------------------------------------
+// ---- the way-home regression (Projects tab) -------------------------------------------------------------------
 console.log("");
 {
-  // §13: the shell title is static text now, so it is not the way back. The navigation regression this block
-  // protects is that the **Overview tab** is keyboard reachable from a subview and activating it returns to the
-  // landing without losing the reader's window (the window control lives on Overview's heading).
-  const reached = await goToView("overview");
-  if (!reached) skip("Enter on the Overview tab returns to the landing and keeps the window", "no Overview tab in this build");
+  // Overview is retired (the pivot): there is no separate landing to return to and no window control to preserve
+  // (every view reads all time). The navigation regression this block protects is narrower now — from the
+  // Progress subview the **Projects tab** is keyboard reachable and activating it renders the Projects view.
+  // The retired window-retention clause has no subject, so it is dropped, not weakened.
+  const reached = await goToView("progress");
+  if (!reached) skip("Enter on the Projects tab renders the Projects view", "no Progress tab in this build");
   else {
-    const windows = root.locator("[data-rd-window]");
-    const windowCount = await windows.count();
-    if (windowCount === 0) skip("Enter on the Overview tab returns to the landing and keeps the window", "this build exposes no window control");
-    else {
-      const chosen = windowCount > 1 ? windows.nth(1) : windows.first();
-      const chosenDays = await chosen.getAttribute("data-rd-window");
-      await chosen.click();
-      await page.waitForTimeout(300);
-      // Navigate to a subview, so returning to Overview is a real navigation rather than a no-op.
-      const onSubview = await goToView("topics");
-      if (!onSubview) {
-        skip("Enter on the Overview tab returns to the landing and keeps the window", "no Topics tab to leave Overview with");
-      } else {
-        // Reach the Overview tab the way a keyboard user does: rewind to the top of the document and tab forward
-        // until it holds focus. Tabbing from wherever focus happens to be would never arrive — the tab sits
-        // *before* the view-specific controls in document order.
-        await page.evaluate(() => window.__fmRewind());
-        let focused = null;
-        for (let i = 0; i < MAX_TAB_PER_VIEW && focused !== "overview"; i += 1) {
-          await page.keyboard.press("Tab");
-          // Focus passes through the shell chrome before it reaches the plugin, so `null` here means "not yet",
-          // not "gone" — the loop's budget is what ends this, and the check below reports where it stopped.
-          focused = await page.evaluate((plugin) => {
-            const el = document.activeElement;
-            if (!el || !el.closest(`div[data-plugin-id="${plugin}"]`)) return null;
-            return el.getAttribute("data-rd-view-option") === "overview" ? "overview" : "other";
-          }, PLUGIN_ID);
-        }
-        check("the Overview tab can be reached and holds keyboard focus", focused === "overview", `stopped at: ${focused}`);
-        if (focused === "overview") {
-          await page.keyboard.press("Enter");
-          await page.waitForTimeout(400);
-          const landing = (await root.locator("[data-rd-landing]").count()) > 0;
-          check("Enter on the Overview tab returns to the landing", landing, landing ? "the landing rendered" : "still on the subview");
-          const pressed = await page.evaluate(
-            (days) => document.querySelector(`[data-rd-window="${days}"]`)?.getAttribute("aria-pressed"),
-            chosenDays
-          );
-          check("the return to the landing keeps the reader's window", pressed === "true", `window ${chosenDays}: aria-pressed=${pressed}`);
-        }
-      }
+    // Reach the Projects tab the way a keyboard user does: rewind to the top of the document and tab forward
+    // until it holds focus. Tabbing from wherever focus happens to be would never arrive — the tab sits
+    // *before* the view-specific controls in document order.
+    await page.evaluate(() => window.__fmRewind());
+    let focused = null;
+    for (let i = 0; i < MAX_TAB_PER_VIEW && focused !== "topics"; i += 1) {
+      await page.keyboard.press("Tab");
+      // Focus passes through the shell chrome before it reaches the plugin, so `null` here means "not yet",
+      // not "gone" — the loop's budget is what ends this, and the check below reports where it stopped.
+      focused = await page.evaluate((plugin) => {
+        const el = document.activeElement;
+        if (!el || !el.closest(`div[data-plugin-id="${plugin}"]`)) return null;
+        return el.getAttribute("data-rd-view-option") === "topics" ? "topics" : "other";
+      }, PLUGIN_ID);
+    }
+    check("the Projects tab can be reached and holds keyboard focus", focused === "topics", `stopped at: ${focused}`);
+    if (focused === "topics") {
+      await page.keyboard.press("Enter");
+      await page.waitForTimeout(400);
+      const projectsView = (await root.locator('[data-rd-view="topics"]').count()) > 0;
+      check("Enter on the Projects tab renders the Projects view", projectsView, projectsView ? "the Projects view rendered" : "still on the subview");
     }
   }
 }
