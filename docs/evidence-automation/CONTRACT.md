@@ -1,7 +1,8 @@
 # Evidence Automation V1 — frozen external-worker contract
 
-Status: **frozen for wave 1; implementation underway, not accepted.** This is the transport and envelope
-contract the wave-2 synchronizer is built against. It is expressed against the `research-dashboard` plugin on
+Status: **implemented transport contract**, retained for the supported collector surface.
+This does not establish production scheduling, enrollment or deployment readiness. It is the transport and envelope
+contract the external synchronizer is built against. It is expressed against the `research-dashboard` plugin on
 a host that ships this wave. Changing any field, status or code here is a contract change, not an
 implementation detail.
 

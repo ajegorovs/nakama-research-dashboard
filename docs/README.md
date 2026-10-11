@@ -1,45 +1,40 @@
 # Documentation map
 
-## Current entry points
+## Current reference set
 
 | Need | Read |
 |---|---|
-| Product, build, installation and preview | [Repository README](../README.md) |
-| Completed rework/hardening stage and evidence boundaries | [Stage closeout](reviews/2026-10-11-dashboard-rework-stage-closeout.md) |
-| Contributor procedures and preservation rules | [AGENTS.md](../AGENTS.md), plus `.agents/skills/` |
-| Current dashboard information architecture | [Pivot agreement](design/dashboard-information-architecture-pivot.md) |
-| Data ownership and maintenance semantics | [Data contract](design/dashboard-data-and-maintenance-contract.md) |
-| Implementation design for that agreement | [Minimal implementation design](design/dashboard-minimal-implementation-design.md) |
-| Standing product decisions, with dated supersessions | [DECISIONS](ux-v2/DECISIONS.md) |
-| UI iteration without a hosted instance | [Preview guide](../harness/preview/README.md) |
-| Accepted evidence-automation scope | [Evidence automation status](evidence-automation/STATUS.md) |
+| Product overview and quick start | [README](../README.md) |
+| Four-view design and interaction specification | [Design](design/dashboard-information-architecture-pivot.md) |
+| Implemented schema, tools, authorship and paging | [Data/API contract](design/dashboard-minimal-implementation-design.md) |
+| Source investigation and data maintenance | [Maintenance](design/dashboard-data-and-maintenance-contract.md) |
+| Presentation, evidence and safety policies | [Decisions](ux-v2/DECISIONS.md) |
+| Build, preview, installation and verification | [Development](DEVELOPMENT.md), [preview mechanics](../harness/preview/README.md) |
+| Contributor rules | [AGENTS](../AGENTS.md) and `.agents/skills/` |
+| Used dataset provenance | [Corpus](corpus/README.md), [axis rule](corpus/AXIS-RULE.md), [synthetic fixtures](layout-fixtures/README.md) |
+| Supported collector transport | [Collector contract](evidence-automation/CONTRACT.md) |
 
-The rework/hardening stage is closed; UI restyling has not started. Installation is not production
-acceptance. Historical counts, revisions and open-task wording below do not override the stage closeout.
+There is no active handoff, correspondence archive or execution ledger in this documentation set.
+Important behavior and remaining qualifications belong in the current contract/developer guide.
+Screenshots remain temporarily for upcoming UI work and measure their recorded builds.
 
-## Historical material — retained, not a current work queue
+## Tool inputs are separate from documentation
 
-- `PLATFORM-CONTEXT.md`, `OPEN-QUESTIONS.md` and `V2-PLAN.md`: initial platform reconnaissance,
-  questions and model-rework plan. Many statements describe earlier source/host versions.
-- `ux-v2/`: earlier composition/model units, frozen contract, baseline and measurements.
-  `ux-v2/STATUS.md` is a historical phase ledger, not the current project status.
-- `design/dashboard-production-ui-port.md` and `dashboard-production-ui-review.md`: port checklist
-  and review rounds; subsequent acceptance is summarized in the stage closeout.
-- `design/dashboard-final-bounded-acceptance.md`: chronological preparation and acceptance record;
-  preserve earlier figures and read later addenda with their build identities.
-- `reviews/`: dated verdicts and execution records. A later summary does not rewrite the original verdict.
-- `plans/`: fixture/mutation designs and authorization packets. They are not standing execution grants.
-- `corpus/`, `layout-fixtures/`, `screenshots/` and `ux-v2/fidelity/`: datasets and recorded captures.
-  Each measures its recorded build; old screenshots do not show today's product.
-- `librarian-reconciliation/` and `evidence-automation/`: separate capability work. Their scoped
-  acceptance does not imply provider readiness, scheduling or production deployment.
+The evaluator template and rubric under `librarian-reconciliation/` are byte-pinned harness inputs.
+Their historical proposal references do not prescribe current work. The semantic-pack guide and
+E2E/tooling READMEs explain retained optional tools, not deployment authority. WP1 JSON evidence
+under `reviews/` is read directly by tests and is retained as a fixture, not a current report.
+Do not delete these inputs merely because their names reflect development history.
 
-## Retention rules
+## Historical recovery
 
-Frozen `ux-v2/contract/` files, final acceptance records, raw transcripts, dataset provenance and
-approved prototypes are not rewritten during documentation cleanup. Earlier source descriptions
-are labelled historical rather than silently updated into claims about measurements never taken.
-Current instructions live in the root README, contributor procedures and relevant tooling guides.
+Pre-retirement baseline: `73a411ff56ab0e1a92c506abb5c58777986e08a3`.
 
-For superseded instructions removed from the root README, `git show 8421f72:README.md` recovers
-its pre-cleanup text. No published history is rewritten.
+```bash
+git show 73a411ff56ab0e1a92c506abb5c58777986e08a3:path/to/retired/file
+```
+
+Earlier specs, reviews, handoffs and execution evidence are recoverable there. Source comments
+citing retired paths are historical provenance, not missing runtime instructions. Published
+history is not rewritten. Raw datasets, transcripts, screenshots and HTML prototypes remain;
+retiring their associated prose does not turn old measurements into current claims.

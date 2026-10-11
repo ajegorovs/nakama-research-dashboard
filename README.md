@@ -10,9 +10,8 @@ projects, workstreams or tasks. Evidence and history remain attached to their ac
 The dashboard rework and hardening/testing stage is **closed**, merged through PR #8. UI restyling
 is a separate next stage; production readiness is not established by development acceptance.
 
-- [Stage closeout](docs/reviews/2026-10-11-dashboard-rework-stage-closeout.md): source identity,
-  measured checks, installation results and remaining qualifications.
-- [Documentation index](docs/README.md): current references versus historical records.
+- [Developer guide](docs/DEVELOPMENT.md): UI loop, verification, installation boundaries and known limitations.
+- [Documentation index](docs/README.md): current references and historical recovery.
 - [Contributor rules](AGENTS.md): build/serve, acceptance, preservation and public-record hygiene.
 
 Historical screenshots in `docs/screenshots/` and `docs/ux-v2/fidelity/` belong to their recorded
@@ -125,10 +124,10 @@ Read the [acceptance procedure](.agents/skills/acceptance-pass/SKILL.md) before 
 - Focus is measured with real keyboard input and a negative control; see the
   [focus procedure](.agents/skills/keyboard-focus-pass/SKILL.md).
 
-The closeout records bounded canonical **133/0/59** and focused **49/49** acceptance. Underlying final
+The closed development stage measured bounded canonical **133/0/59** and focused **49/49** acceptance. Underlying final
 raw archives remain local; earlier committed transcripts measure older builds. A summary in a clone
 must not be presented as a clone containing all raw evidence. The remaining qualifications are listed
-in the closeout, not treated as production approval.
+in the current contract and developer guide, not treated as production approval.
 
 ## Repository map
 
@@ -142,8 +141,8 @@ in the closeout, not treated as production approval.
 | `.agents/skills/` | Contributor procedures, not shipped skills |
 | `harness/` | Preview, installation and acceptance tooling |
 | `vendor/` | Bundled-host installation recipe |
-| `docs/` | Current references, decisions and historical evidence |
+| `docs/` | Current specifications, procedures and version receipt |
 | `prototypes/` | Separate design trials, not the served plugin |
 
-For earlier implementation chronology, use the dated review records and `git show 8421f72:README.md`.
+For earlier implementation chronology, use the pinned recovery baseline in `docs/README.md` and `git show 8421f72:README.md`.
 The long historical README is preserved there rather than duplicated as current operating instructions.

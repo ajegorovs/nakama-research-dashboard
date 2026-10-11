@@ -1,5 +1,9 @@
 # dashboard-ui-rework — interactive prototype
 
+> This frozen trial is not the shipped product contract. Use
+> [the current four-view specification](../../docs/design/dashboard-information-architecture-pivot.md)
+> for current behavior. Trial descriptions below refer only to these prototype files.
+
 A **lightweight, self-contained prototype** of the dashboard's information-architecture pivot: a
 five-tab shell with an interactive **Topics → Progress** hierarchy (Topic → Axis → Problem), built to be
 read and clicked by a reviewer without a build, a server dependency or a database.
