@@ -26,6 +26,8 @@ const MIGRATIONS = [
   "002-coordination-model.sql",
   "003-drop-legacy.sql",
   "004-ux-v2-model.sql",
+  "005-external-evidence.sql",
+  "006-task-plan-text.sql",
 ].map((name) => readFileSync(join(migrationsDir, name), "utf8"));
 
 function tempPath(): string {

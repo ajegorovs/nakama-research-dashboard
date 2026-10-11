@@ -38,6 +38,7 @@ import type { PluginExecutionContext } from "@nakama/core";
 import {
   type ActorType,
   type Axis,
+  DEFAULT_ACTIVITY_WINDOW_DAYS,
   EXTERNAL_EVENT_KINDS,
   type ExternalEvidenceEnvelopeV1,
   type ExternalEventKind,
@@ -128,6 +129,24 @@ function optionalEnum<T extends string>(
     );
   }
   return value as T;
+}
+
+/**
+ * The optional paging inputs, read in one place so every page-shaped read validates them identically.
+ *
+ * Returns `null` when **neither** `offset` nor `pageSize` was sent: the caller then returns exactly the
+ * shape it always has, and the new `*Page` sibling is absent. The page sibling appears only when paging was
+ * asked for, so an existing caller's payload gains no key it did not request. `offset` is bounded (a
+ * non-negative integer); `pageSize` is bounded to the store's page range — both refused at the boundary,
+ * not silently clamped.
+ */
+function readPaging(input: Input): { limit?: number; offset?: number } | null {
+  const offset = optionalInt(input.offset, "offset", 0, 1_000_000);
+  const pageSize = optionalInt(input.pageSize, "pageSize", 1, 100);
+  if (offset === undefined && pageSize === undefined) {
+    return null;
+  }
+  return { limit: pageSize, offset };
 }
 
 /**
@@ -270,6 +289,14 @@ async function dispatch(
         includeArchived: input.includeArchived === true,
         limit: optionalInt(input.limit, "limit", 1, 50),
       };
+      // Paging is opt-in: only an `offset`/`pageSize` input adds the page siblings, so a caller that sends
+      // neither gets the arrays exactly as before. The page siblings carry the **same** scope as the arrays
+      // beside them: the same archived-topic rule (`includeArchived`) and the same effective activity window
+      // (the caller's `activitySinceDays`, or the rollups' 14-day default when none was sent). Without this a
+      // page would surface archived topics and out-of-window events the `problems`/`activity` arrays hide.
+      const paging = readPaging(input);
+      const effectiveSinceDays =
+        options.activitySinceDays ?? DEFAULT_ACTIVITY_WINDOW_DAYS;
       return {
         ok: true,
         // Handed over exactly as the store computes them. Every field the Progress view renders is one of
@@ -279,6 +306,21 @@ async function dispatch(
         activity: store.progressActivity(options),
         axes: store.progressAxes(options),
         problems: store.progressProblems(options),
+        ...(paging
+          ? {
+              activityPage: store.activityPage(
+                {
+                  includeArchived: options.includeArchived,
+                  sinceDays: effectiveSinceDays,
+                },
+                paging
+              ),
+              problemPage: store.problemPage(
+                { includeArchived: options.includeArchived },
+                paging
+              ),
+            }
+          : {}),
       };
     }
 
@@ -297,12 +339,23 @@ async function dispatch(
       // the schema but have no effect under `axisId`; do not read their presence as support.
       const scopedAxis = resolveAxis(store, topic, input);
       if (scopedAxis) {
+        const paging = readPaging(input);
         return {
           ok: true,
           ...store.getAxisWorkstream(topic.id, scopedAxis.id, {
             historyLimit: optionalInt(input.historyLimit, "historyLimit", 1, 100),
             notesLimit: optionalInt(input.notesLimit, "notesLimit", 1, 100),
           }),
+          // The page siblings for a workstream: its own activity and its own tasks, each scoped to this
+          // axis id, added only when paging was requested. The task page is **enriched** (`taskPage`), so
+          // the visible cards render each task's own plan, links and provenance from the page itself — the
+          // full `axis.problems` array stays beside it for compatibility, but the pager reads the page.
+          ...(paging
+            ? {
+                activityPage: store.activityPage({ axisId: scopedAxis.id }, paging),
+                problemPage: store.taskPage({ axisId: scopedAxis.id }, paging),
+              }
+            : {}),
         };
       }
       const includeAnnotations = input.includeAnnotations !== false;
@@ -324,6 +377,7 @@ async function dispatch(
         historyLimit: optionalInt(input.historyLimit, "historyLimit", 1, 100),
         notesLimit: optionalInt(input.notesLimit, "notesLimit", 1, 100),
       });
+      const paging = readPaging(input);
       return {
         ...detail,
         // The topic-level note list, under the name it has always had. `notes` is the same list; a note
@@ -332,6 +386,10 @@ async function dispatch(
         axes: includeAnnotations
           ? detail.axes
           : detail.axes.map((axis) => ({ ...axis, notes: [] })),
+        // The topic's own activity page, added only when paging was requested.
+        ...(paging
+          ? { activityPage: store.activityPage({ topicId: topic.id }, paging) }
+          : {}),
         ok: true,
       };
     }
@@ -367,6 +425,10 @@ async function dispatch(
         actorType: actor.type,
         axisId: axis?.id,
         occurredAt: optionalText(input.occurredAt, "occurredAt", 40),
+        // The advertised problem link. Resolved and validated inside `addActivity` (the problem must
+        // exist, and — when an axis is also named — its own axis must equal that axis), so a cross-topic
+        // or cross-axis mismatch is refused before any write.
+        problemId: optionalText(input.problemId, "problemId", 100),
         // Registering the named repository happens inside the store's transaction: still one step.
         repositoryFullName: optionalText(
           input.repositoryFullName,
@@ -500,13 +562,43 @@ async function dispatch(
     }
 
     case "list_activity": {
+      const options = {
+        // The public filter key is `personActorId`, **not** `actorId`. `actorId` is in the host's
+        // reserved/spoofable input set (`SPOOFABLE_INPUT_KEYS`, `plugin-service.ts`), so the host strips
+        // any top-level `actorId` before schema validation and before this code runs — a caller's
+        // `actorId` is silently dropped, the filter falls to `undefined`, and the read returns the whole
+        // window. Reading it here would therefore be dead code that silently looks unscoped. The store's
+        // own scope field stays named `actorId` (it is internal, below the host boundary, and not affected
+        // by the stripper); only the *public* input key is renamed. There is no compatibility fallback:
+        // the host strip makes old `actorId` callers indistinguishable from unscoped ones, so a fallback
+        // could not work and must not pretend to.
+        actorId: optionalText(input.personActorId, "personActorId", 100),
+        axisId: optionalText(input.axisId, "axisId", 100),
+        limit: optionalInt(input.limit, "limit", 1, 100),
+        repositoryId: optionalText(input.repositoryId, "repositoryId", 100),
+        sinceDays: optionalInt(input.sinceDays, "sinceDays", 1, 365),
+        topicId: optionalText(input.topicId, "topicId", 100),
+      };
+      const paging = readPaging(input);
       return {
-        activity: store.listActivity({
-          axisId: optionalText(input.axisId, "axisId", 100),
-          limit: optionalInt(input.limit, "limit", 1, 100),
-          sinceDays: optionalInt(input.sinceDays, "sinceDays", 1, 365),
-          topicId: optionalText(input.topicId, "topicId", 100),
-        }),
+        activity: store.listActivity(options),
+        // The page sibling, added only when paging was requested; `activity` keeps its array. The page
+        // carries the **same** scope as the array: a project, workstream, person (recorded actor) or
+        // repository, so a person's or a repository's rail pages at the backend rather than slicing.
+        ...(paging
+          ? {
+              activityPage: store.activityPage(
+                {
+                  actorId: options.actorId,
+                  axisId: options.axisId,
+                  repositoryId: options.repositoryId,
+                  sinceDays: options.sinceDays,
+                  topicId: options.topicId,
+                },
+                paging
+              ),
+            }
+          : {}),
         ok: true,
       };
     }

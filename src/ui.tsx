@@ -116,12 +116,18 @@ type AxisDetail = Axis & {
   evidence: AxisEvidence[];
   history: Activity[];
   notes: Annotation[];
+  /** The workstream's own plan (`{plan, steps}`), or null — a plan is optional by contract. */
+  plan?: StoredPlan | null;
+  /** The workstream's problems, each carrying its own (never inherited) plan and its links. */
+  problems?: WorkstreamTask[];
 };
 
 /** One topic in depth — everything the detail view needs, from one `get_topic` call. */
 type TopicDetail = {
   generatedAt: string;
   topic: Topic;
+  /** The project plan (owned by the topic), or null; optional on the mirror until the view reads it. */
+  plan?: ProgressPlan | null;
   people: LinkedPerson[];
   repositories: LinkedRepository[];
   axes: AxisDetail[];
@@ -258,6 +264,8 @@ type ProgressAxisRow = {
   activityInWindow: number;
   blocker: string;
   blockerConfidence: Confidence | null;
+  /** The axis's enduring purpose; optional on the mirror until the card reads it. */
+  description?: string;
   id: string;
   lastActivityAt: string | null;
   openProblems: number;
@@ -303,6 +311,9 @@ type ProgressIndex = {
     problems: ProgressProblemRow[];
     staleAfterDays: number;
   };
+  /** Present only when paging was requested. Scoped to the same window as the arrays beside them. */
+  activityPage?: Page<ProgressEventRow>;
+  problemPage?: Page<ProgressProblemRow>;
 };
 
 /**
@@ -347,6 +358,8 @@ type ProgressProblemRow = {
   evidence: ProgressEvidence[];
   id: string;
   people: Array<{ displayName: string; id: string }>;
+  /** The task's own plan, or null; optional on the mirror until the card reads it. */
+  plan?: ProgressPlan | null;
   /** The step this problem sits on, where it sits on one — the other half of the plan ↔ problem link. */
   planStepId: string | null;
   planStepTitle: string | null;
@@ -356,6 +369,8 @@ type ProgressProblemRow = {
   stateConfidence: Confidence;
   statement: string;
   steering: ProgressSteering[];
+  /** The task's concise short text; optional on the mirror until the card reads it. */
+  title?: string;
   /** The problem's topic — the third entity a Progress context line can name, and a tag's destination. */
   topicId: string;
   topicName: string;
@@ -389,6 +404,68 @@ type ProgressSteering = {
   recordedAt: string;
   scope: "axis" | "problem";
   text: string;
+};
+
+/**
+ * A stored plan as the scoped workstream read carries it: the plan record and its ordered steps. This is
+ * the store's own `{plan, steps}` shape (a workstream's or a task's), not the Progress index's flattened
+ * `ProgressPlan` — the two reads differ and the page keeps both honest rather than reshaping one into the
+ * other.
+ */
+type StoredPlan = {
+  plan: {
+    authorId: string;
+    authorType: string;
+    id: string;
+    summary: string;
+    updatedAt: string;
+    version: number;
+  };
+  steps: ProgressPlanStep[];
+};
+
+/**
+ * One task as the scoped workstream read (`get_topic` with an `axisId`) carries it. The task's plan here is
+ * its **own** (`planForProblem`), never the parent workstream's — the pivot's "no inherited plans".
+ */
+type WorkstreamTask = {
+  authorType: "human" | "agent";
+  id: string;
+  axisId: string;
+  people: Array<{ displayName: string; id: string }>;
+  plan: StoredPlan | null;
+  planStepId: string | null;
+  planStepTitle: string | null;
+  repositories: Array<{ fullName: string; id: string; url?: string }>;
+  state: string;
+  stateConfidence: Confidence;
+  statement: string;
+  /** The task's concise, independently authored short text; `""` where none has been written. */
+  title: string;
+};
+
+/**
+ * The scoped `get_topic` read for one workstream (`{topicId, axisId}`): the axis in full. `readWorkstream`
+ * normalizes both responder shapes into this one — the backend's own axis-scoped read (`axis`) and the
+ * topic-wide detail a plain `get_topic` answers (`axes[]`), so one view renders either without a branch.
+ */
+type AxisWorkstream = {
+  axis: AxisDetail;
+  axisId: string;
+  topic: { id: string; name: string; status: string };
+};
+
+/**
+ * A page of a scoped read — the store's own envelope (`ScopedPage<T>`): `items` and `total` come from one
+ * predicate in one snapshot, so the range shown is the backend's and the page never reports a total it did
+ * not receive. `activityPage`/`problemPage` arrive on the payload only when an `offset`/`pageSize` was sent.
+ */
+type Page<T> = {
+  hasMore: boolean;
+  items: T[];
+  limit: number;
+  offset: number;
+  total: number;
 };
 
 type Activity = {
@@ -433,6 +510,12 @@ type Overview = {
     people: number;
   };
   axesByState: Record<string, number>;
+  /**
+   * Tasks by stored state, counted by the same grouped query as `axesByState` — so the Dashboard summary's
+   * Open and Blocked counts come from the authoritative `problems` rows, never from the page on screen and
+   * never inferred from a workstream blocker (pivot: "never infer blocked children from a parent blocker").
+   */
+  problemsByState: Record<string, number>;
   /** Blocked axes, with the blocker each one states. Read by the landing's current-work line. */
   blocked: BlockedAxis[];
   topics: TopicOverview[];
@@ -550,31 +633,22 @@ const CONFIDENCE_OPTIONS = [
 ];
 
 /**
- * The window control is the page's only query-level control. `0` means "no lower bound" and is what
- * the store reads as all time.
+ * The state counts the reviewer's scan asks for, in attention order.
  */
-const WINDOW_OPTIONS = [
-  { days: 7, label: "7 days" },
-  { days: 14, label: "14 days" },
-  { days: 30, label: "30 days" },
-  { days: 0, label: "All time" },
-];
-
-/** The state counts the reviewer's scan asks for, in attention order. */
 const COUNTED_STATES: AxisState[] = ["blocked", "active", "draft", "parked"];
 const OTHER_STATES: AxisState[] = ["completed", "abandoned"];
 
 /**
- * The five peer tabs, in the prototype's order. Overview is the default landing and the only tab whose
- * data is scoped by a window; Topics, People, Repositories and Progress read all time so nothing is
- * hidden behind a window the reader did not choose.
+ * The four peer tabs, in the accepted pivot's order. **Projects** is the landing (`value: "topics"`, so the
+ * entity-navigation contract `ENTITY_VIEW.topic === "topics"` and the prototype's own `data-view="topics"`
+ * for the Projects tab are unchanged). Overview is retired; its aggregate counts live in the collapsed
+ * Dashboard summary above the Projects landing. Every tab reads all time (`activitySinceDays: 0`).
  */
 const VIEW_OPTIONS = [
-  { label: "Overview", value: "overview" },
-  { label: "Topics", value: "topics" },
+  { label: "Projects", value: "topics" },
+  { label: "Progress", value: "progress" },
   { label: "People", value: "people" },
   { label: "Repositories", value: "repositories" },
-  { label: "Progress", value: "progress" },
 ] as const;
 
 type ViewName = (typeof VIEW_OPTIONS)[number]["value"];
@@ -585,14 +659,14 @@ type ViewName = (typeof VIEW_OPTIONS)[number]["value"];
  * nothing rather than something invented.
  */
 const VIEW_HEADINGS: Record<ViewName, string> = {
-  overview: "Topic and repository activity in the window you choose",
-  people: "Recent activity is factual, not a workload score",
-  progress: "Problem first; execution detail beneath it",
-  // The repository rollup is ordered by full name (`ORDER BY full_name COLLATE NOCASE`), so the hint says that.
-  // The prototype's "Most recently active first" was copied from a static mock and described an order this view
-  // does not have — the same class of drift as the landing's ordering labels (C3, ruling 3).
-  repositories: "Alphabetical by name · factual context, never scored",
-  topics: "Most recently active first · primarily read-only",
+  people:
+    "See who each person is, the research and work they are involved in, their repositories and latest activity.",
+  progress:
+    "Read workstreams and tasks in full, with their status, scoped plans, supporting repositories and activity. Selection changes what you view, not the research state.",
+  repositories:
+    "Understand what each repository is for, the work underway, the projects it supports, its people and recent activity.",
+  topics:
+    "Understand each project: its purpose, people, current workstreams and recent activity. Open a workstream in Progress for the full work details.",
 };
 
 /**
@@ -632,6 +706,12 @@ type ProgressIndexMode = (typeof PROGRESS_INDEX_OPTIONS)[number]["value"];
  * one control away. This is a display cap only; it is not the projection's bucket.
  */
 const FEED_LEAD = 5;
+
+/**
+ * The pivot's page size: **five** entries per page in every paged list (tasks and activity on Progress).
+ * The numbered pager hides itself when a list fits one page, so the size is a ceiling, never an obligation.
+ */
+const PROGRESS_PAGE_SIZE = 5;
 
 /**
  * How many activity events the Topics side rail leads with. The reference reading width is 1440×900, and
@@ -702,7 +782,12 @@ const css = `
      long entity names wrapped to three and four lines. One basis, and the rail does not shrink below it:
      where there is not room for both, .rd-split wraps the detail below rather than squeezing the index.
      Progress used to carry its own 16rem override; it takes this one now. */
-  --rd-index-basis: 15rem;
+  /* Pivot port (2026-10-10) — one shared selector-rail width for all four views, matching the accepted
+     prototype's 380px desktop rail. The four side selectors used to disagree (Progress carried a narrower
+     240px variant); the pivot's "All four side selectors use the same pane width (380px at the measured
+     desktop viewports)" is the value the token now holds, and Progress takes this one too — it no longer
+     overrides itself. */
+  --rd-index-basis: 23.75rem;
   /* One box edge and one inner line: a surface is a card, and everything inside it is a rule, not a box. */
   --rd-edge: 1px solid var(--border);
   --rd-rule: 2px solid var(--border);
@@ -823,6 +908,27 @@ const css = `
   @media (max-width: 899px) {
     [data-plugin-id="research-dashboard"] .rd-landing-grid { grid-template-columns: minmax(0, 1fr); }
   }
+  /* The collapsed Dashboard summary above the Projects landing (Overview retired). A quiet disclosure in the
+     shared token vocabulary: a bold muted summary heading, and the six aggregates as a compact stat row. */
+  [data-plugin-id="research-dashboard"] .rd-dashboard-summary { margin-bottom: var(--rd-gap-block); }
+  [data-plugin-id="research-dashboard"] .rd-dashboard-summary > summary {
+    color: var(--rd-muted);
+    cursor: pointer;
+    font-size: var(--rd-label);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  [data-plugin-id="research-dashboard"] .rd-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: var(--rd-gap);
+    list-style: none;
+    margin: var(--rd-gap-block) 0 0;
+    padding: 0;
+  }
+  [data-plugin-id="research-dashboard"] .rd-stat { display: grid; gap: 2px; }
+  [data-plugin-id="research-dashboard"] .rd-stat-value { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.02em; }
 [data-plugin-id="research-dashboard"] .rd-row {
   display: flex;
   align-items: center;
@@ -1079,33 +1185,6 @@ const css = `
   opacity: 1;
 }
 [data-plugin-id="research-dashboard"] .rd-views [aria-pressed="true"] { font-weight: 600; }
-/* The Progress index's subject switch: a control over the left column, so it sits with it rather than in
-   the toolbar — the page it governs is the same page in both positions. */
-/* A joined segmented switch: white selected face against a darker muted track. */
-[data-plugin-id="research-dashboard"] .rd-progress-switch {
-  display: inline-flex;
-  width: fit-content;
-  gap: 0;
-  margin-bottom: 10px;
-  padding: 3px;
-  border: var(--rd-edge);
-  border-radius: 9px;
-  background: var(--muted, #e5e7eb);
-}
-[data-plugin-id="research-dashboard"] .rd-progress-switch [data-rd-progress-subview-option] {
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  opacity: 0.72;
-  padding: 5px 12px;
-}
-[data-plugin-id="research-dashboard"] .rd-progress-switch [aria-pressed="true"] {
-  background: var(--card, #fff);
-  color: var(--foreground, #171717);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
-  font-weight: 600;
-  opacity: 1;
-}
 /* C8: the qualifier on a state is part of the claim, not decoration — quieter, never optional. */
 [data-plugin-id="research-dashboard"] .rd-claim-suffix { font-weight: 400; opacity: var(--rd-quiet); }
 [data-plugin-id="research-dashboard"] .rd-newtopic { flex-wrap: nowrap; }
@@ -1452,6 +1531,17 @@ const css = `
   font-size: var(--rd-meta);
   padding: 0 6px;
 }
+/* A scoped plan step's marker line. The shared cluster is a wrapping flex row and a step number is a
+   block-level meta span, so when a title is long enough the cluster's single flex line breaks and the
+   number is left stranded on its own line above the title (short titles fit, which is why the flaw hid).
+   Keep the number on the title's first line and let the TITLE take the wrap — the same rule the index
+   rows already carry for their status dot — and align the number and the state badge to that first line
+   rather than floating them over a two-line title. One rule, shared by the project, workstream and task
+   plans. */
+[data-plugin-id="research-dashboard"] .rd-plan-step .rd-row { align-items: baseline; }
+[data-plugin-id="research-dashboard"] .rd-plan-step .rd-cluster { flex-wrap: nowrap; align-items: baseline; }
+[data-plugin-id="research-dashboard"] .rd-plan-step .rd-cluster > .rd-meta { margin-top: 0; }
+[data-plugin-id="research-dashboard"] .rd-plan-step .rd-cluster > .rd-strong { min-width: 0; }
 /* The problem inventory is the same kind of secondary section as the plan: a rule above it, quiet rows, and
    each row is a button because picking one drives the card in the middle column. */
 [data-plugin-id="research-dashboard"] .rd-progress-problems {
@@ -1590,9 +1680,15 @@ const css = `
   /* The side rail is proportional, not a fixed 20rem column: at a narrow container a fixed 320px
      rail squeezed Current Work to 1.10x its width, which reads as two near-equal columns rather
      than as the work with a rail beside it. A 0.6fr rail against 1fr keeps it near its current
-     ~320px at 1440 while letting it shrink to a 250px floor at 1280, so the main lane stays
-     visibly dominant (at least 1.25x) at both. It never stacks below the work at desktop widths. */
-  grid-template-columns: minmax(0, 1fr) minmax(250px, 0.6fr);
+     ~320px at 1440. The floor is the rail's OWN share, not a fixed 250px: an absolute 250px floor
+     is larger than the rail's 0.6fr share (37.5% of the panel) once the panel narrows below
+     ~667px, so at 1280 the panel (~500px) forced the rail up to 250px and the lane down to 244px
+     — a real 0.98x, not the 1.25x the composition promises. Capping the floor at min(250px, 37.5%)
+     keeps the rail at its natural 0.6fr share in a narrow panel (measured 190px / lane 304px =
+     1.60x at 1280) and leaves the 250px floor in force above ~667px, so 1440 is unchanged (the
+     floor never exceeds the dominance bound lane ≥ 1.25x rail ⟺ rail ≤ ~44% of the panel). It
+     never stacks below the work at desktop widths. */
+  grid-template-columns: minmax(0, 1fr) minmax(min(250px, 37.5%), 0.6fr);
   align-items: start;
 }
 @media (max-width: 1000px) {
@@ -1614,16 +1710,28 @@ const css = `
   display: grid;
   gap: var(--rd-gap-row);
 }
-/* The rail is context, not a feed. Measured at 1440×900 on the corpus: the rail begins 385px down the page
-   and has ~515px to the fold, while four of the 25 events already occupy 664px (166px per event, because
-   the summary wraps at rail width and every event names its entities). So a count cap alone cannot put
-   Notes and Related repositories in the first screen at any lead that still carries real data. The two
-   lists are therefore *windows*: bounded, scrollable, and with the count and the remainder still stated
-   below each one. Nothing is dropped, nothing is truncated, and the three cards participate in the first
-   screen whatever the data volume. */
+/* A rail is a bounded column: its cards must shrink to the rail's width, never push it wider. Without
+   this, the nested grid/flex containers inside a side card keep their default min-width: auto, so a
+   long entity tag (white-space: nowrap) sets the rail's min-content to the tag's full one-line width,
+   the second .rd-detail-grid track is forced open past the viewport, and the page scrolls sideways
+   at 1280/1440 with the tag and the event text clipped at the right edge. A tag's own max-width: 100%
+   cannot bind while its containing block has grown to fit it, so every link in the chain takes
+   min-width: 0: the tag then truncates on its own ellipsis, keeping its full identity on the title
+   attribute and data-rd-tag-label, and the rail stays inside its column. Composition and placement are
+   unchanged — this is the min-width:0 the Progress rail already carries, applied to the shared side rail. */
+[data-plugin-id="research-dashboard"] .rd-side-stack,
+[data-plugin-id="research-dashboard"] .rd-side-card,
+[data-plugin-id="research-dashboard"] .rd-side-card .rd-activity,
+[data-plugin-id="research-dashboard"] .rd-side-card .rd-view,
+[data-plugin-id="research-dashboard"] .rd-side-card .rd-cluster {
+  min-width: 0;
+}
+/* The rail is context, not a feed — and since activity is a **paged** record now, the page itself bounds
+   the rail (five rows at a time, cut at the backend), so the rail no longer clamps a local window: the
+   page's own five rows render in full and the pager sits below them. Notes keep their own short window. */
 [data-plugin-id="research-dashboard"] .rd-side-card .rd-activity {
-  max-height: 190px;
-  overflow-y: auto;
+  max-height: none;
+  overflow: visible;
 }
 [data-plugin-id="research-dashboard"] .rd-side-card .rd-notes {
   max-height: 120px;
@@ -1647,6 +1755,179 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-narrow-write[open] > summary {
   margin-bottom: var(--rd-gap-row);
 }
+
+/* ---- Pivot port (2026-10-10): shared work cards, project headings, repo links, context panel, pager ----
+   The accepted prototype's composition, built from the existing rd-* token vocabulary and the host's own
+   palette (--border/--card/--muted). No new framework, no new colour scale, no chart. */
+/* A muted project heading grouping workstreams / work cards — no tree indentation, no enclosing box. */
+[data-plugin-id="research-dashboard"] .rd-project-group { margin-top: var(--rd-gap-block); }
+[data-plugin-id="research-dashboard"] .rd-project-group + .rd-project-group { margin-top: 24px; }
+[data-plugin-id="research-dashboard"] .rd-project-heading {
+  align-items: center; display: flex; gap: 8px;
+  color: var(--muted-foreground, #5c6270); font-size: var(--rd-body); font-weight: 700;
+  margin: 0 0 10px;
+}
+[data-plugin-id="research-dashboard"] .rd-project-heading::after {
+  border-top: var(--rd-edge); content: ""; flex: 1;
+}
+/* The project intro row: a short description left, right-aligned Open project action. */
+[data-plugin-id="research-dashboard"] .rd-project-intro {
+  align-items: center; display: flex; gap: 12px; justify-content: space-between;
+  margin-bottom: 12px;
+}
+[data-plugin-id="research-dashboard"] .rd-project-intro p { margin: 0; }
+/* A shared workstream card (Projects, People and Repositories all reuse this one surface). */
+[data-plugin-id="research-dashboard"] .rd-work-card {
+  background: var(--card, #fff);
+  border: var(--rd-edge);
+  border-left: var(--rd-rule);
+  border-radius: 8px;
+  display: grid;
+  gap: var(--rd-gap-tight);
+  padding: 12px 14px;
+}
+[data-plugin-id="research-dashboard"] .rd-work-card + .rd-work-card { margin-top: 12px; }
+/* No status-coloured contour: the pivot retired the workstream status outline (and the orange/red
+   blocker banner). A blocked workstream reads through its state badge and its recorded counts, exactly
+   as an active one does; the blocker's own prose lives in the Progress context, not on this card. */
+/* The Projects detail, restructured (2026-10-10): a **native details element** whose summary carries the
+   project's title and status; the workstream cards run full width across the body; the project's activity
+   is its own collapsible, backend-paged section below. The heading + Dashboard summary sit above the
+   split, so the 380px selector rail is never pushed onto a row of its own. */
+[data-plugin-id="research-dashboard"] .rd-view-topics { display: grid; gap: var(--rd-gap-block); }
+[data-plugin-id="research-dashboard"] .rd-topic-summary {
+  align-items: flex-start; cursor: pointer; display: flex; gap: 10px; justify-content: space-between;
+  list-style: none; padding-bottom: 10px;
+}
+[data-plugin-id="research-dashboard"] .rd-topic-summary::-webkit-details-marker { display: none; }
+/* The shared disclosure affordance (the prototype's caret): a closed panel reads ▸, an open one ▾, on every
+   detail whose header is a native summary — Projects, People and Repositories alike. */
+[data-plugin-id="research-dashboard"] .rd-topic-summary::before {
+  content: "▸"; display: inline-block; flex: 0 0 12px; font-size: 15px; line-height: 1; width: 12px;
+}
+[data-plugin-id="research-dashboard"] .rd-topic-detail[open] > .rd-topic-summary::before { content: "▾"; }
+/* People and Repositories share the same disclosure: their header (DetailHeader) is the summary's one
+   child, so it takes the row and the panel's own padding does the rest. */
+[data-plugin-id="research-dashboard"] .rd-topic-summary > .rd-detail-head { flex: 1 1 auto; min-width: 0; }
+/* The project summary's title row takes the slack so the title sits beside the caret and the status/last-activity
+   cluster stays right — without it the three flex children (caret, title, meta) would centre the title. */
+[data-plugin-id="research-dashboard"] .rd-topic-summary > .rd-row { flex: 1 1 auto; min-width: 0; }
+[data-plugin-id="research-dashboard"] .rd-topic-summary .rd-detail-head .rd-row { margin: 0; }
+[data-plugin-id="research-dashboard"] .rd-topic-summary-meta { align-items: center; display: flex; gap: 8px; }
+[data-plugin-id="research-dashboard"] .rd-topic-detail[open] > .rd-topic-summary { border-bottom: var(--rd-edge); }
+[data-plugin-id="research-dashboard"] .rd-topic-body { display: grid; gap: var(--rd-gap-block); padding-top: 12px; }
+[data-plugin-id="research-dashboard"] .rd-context-tags,
+[data-plugin-id="research-dashboard"] .rd-references {
+  align-items: baseline; border-top: var(--rd-edge); display: flex; flex-wrap: wrap; gap: 8px;
+  padding-top: 10px;
+}
+[data-plugin-id="research-dashboard"] .rd-topic-controls > summary { cursor: pointer; }
+[data-plugin-id="research-dashboard"] .rd-topic-controls[open] > summary { margin-bottom: var(--rd-gap-row); }
+[data-plugin-id="research-dashboard"] .rd-work-head {
+  align-items: flex-start; display: flex; gap: 10px; justify-content: space-between;
+}
+[data-plugin-id="research-dashboard"] .rd-work-title { font-size: 15px; font-weight: 640; letter-spacing: -0.01em; margin: 0; }
+[data-plugin-id="research-dashboard"] .rd-work-link { color: inherit; text-decoration: none; }
+[data-plugin-id="research-dashboard"] .rd-work-link:hover { text-decoration: underline; }
+/* The blocked-task count pill: red, matching sibling pills' typography/padding/height. */
+[data-plugin-id="research-dashboard"] .rd-blocked-pill,
+[data-plugin-id="research-dashboard"] .rd-count[data-rd-state="blocked"] { color: #a12626; background: #fdecec; }
+/* The selected workstream's full-context panel (Progress): purpose, reading, blocker, plan. */
+[data-plugin-id="research-dashboard"] .rd-context-panel {
+  background: var(--card, #fff);
+  border: var(--rd-edge);
+  border-left: 3px solid var(--usable, #3a56a0);
+  border-radius: var(--radius-md, 10px);
+  display: grid;
+  gap: var(--rd-gap-tight);
+  padding: 16px 18px;
+}
+[data-plugin-id="research-dashboard"] .rd-context-body { display: grid; gap: 6px; }
+/* The context body is a grid, and a grid item's default min-width: auto is its min-content width — which
+   the nowrap evidence line inside the reading paragraph makes the full unwrapped line. The track would then
+   widen to fit the whole line and the ellipsis would never bite, pushing the pane past its column instead of
+   clamping. A min-width: 0 on the reading cell lets the line clamp to the pane (one line, ellipsised) as the
+   density contract intends. Scoped to this body's own claim cells; nothing else moves. */
+[data-plugin-id="research-dashboard"] .rd-context-body > .rd-claim-value { min-width: 0; }
+[data-plugin-id="research-dashboard"] .rd-context-label {
+  color: var(--muted-foreground, #5c6270); font-size: var(--rd-label); font-weight: 700;
+  letter-spacing: 0.04em; text-transform: uppercase;
+}
+/* The evidence line (D1/#17/#18): one compact row stating the projection's own recorded evidence, or the
+   explicit absence of it. It is a block-level span inside the reading's own paragraph, so it costs a line
+   and not a line plus a grid row and gap — the density contract measures the newest activity row against
+   the first screen. Clamped to one line so a long evidence set cannot wrap. */
+[data-plugin-id="research-dashboard"] .rd-evidence {
+  display: block; font-size: var(--rd-meta); line-height: 1.2; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+[data-plugin-id="research-dashboard"] .rd-evidence[data-rd-has-evidence="false"] {
+  color: var(--muted-foreground, #5c6270);
+}
+[data-plugin-id="research-dashboard"] .rd-context-footer {
+  align-items: center; border-top: var(--rd-edge); display: flex; gap: 12px;
+  justify-content: space-between; margin-top: 6px; padding-top: 10px;
+}
+/* An optional scoped plan: a bold heading on a rule, steps beneath; absent means absent. */
+[data-plugin-id="research-dashboard"] .rd-scoped-plan { border-top: var(--rd-edge); margin-top: 10px; padding-top: 10px; }
+[data-plugin-id="research-dashboard"] .rd-scoped-plan > summary { cursor: pointer; font-weight: 700; }
+/* A visible task card: title + full statement + status + own plan + links, without opening a row. */
+[data-plugin-id="research-dashboard"] .rd-task-card {
+  background: var(--card, #fff);
+  border: var(--rd-edge);
+  border-radius: var(--radius-md, 10px);
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+}
+[data-plugin-id="research-dashboard"] .rd-task-card + .rd-task-card { margin-top: 12px; }
+[data-plugin-id="research-dashboard"] .rd-task-title { font-size: 15px; font-weight: 640; margin: 0; }
+[data-plugin-id="research-dashboard"] .rd-task-statement { margin: 0; }
+/* Supporting-repository link pairs: internal dashboard name, thin separator, external GitHub ↗. */
+[data-plugin-id="research-dashboard"] .rd-repo-pair { align-items: baseline; display: inline-flex; flex-wrap: wrap; gap: 8px; margin-right: 10px; }
+[data-plugin-id="research-dashboard"] .rd-repo-pair + .rd-repo-pair { border-left: var(--rd-edge); padding-left: 8px; }
+[data-plugin-id="research-dashboard"] .rd-repo-ext { border-left: 1px solid var(--border); padding-left: 8px; white-space: nowrap; }
+/* Participants: a quiet inline label beneath a divider. */
+[data-plugin-id="research-dashboard"] .rd-participants {
+  align-items: baseline; border-top: var(--rd-edge); display: flex; flex-wrap: wrap; gap: 8px;
+  margin-top: 12px; padding-top: 12px;
+}
+/* The pager: the segmented-switch grammar, one numbered control per paged list. */
+[data-plugin-id="research-dashboard"] .rd-pager { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; margin-top: 12px; row-gap: 6px; }
+[data-plugin-id="research-dashboard"] .rd-pager-switch {
+  background: var(--muted, #e5e7eb); border: var(--rd-edge); border-radius: 9px;
+  display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px;
+}
+[data-plugin-id="research-dashboard"] .rd-pager-btn {
+  background: transparent; border: 0; border-radius: 6px; color: var(--muted-foreground, #5c6270);
+  cursor: pointer; font: inherit; opacity: 0.72; padding: 5px 10px;
+}
+[data-plugin-id="research-dashboard"] .rd-pager-btn[aria-current="page"] {
+  background: var(--card, #fff); color: var(--foreground, #171717);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14); font-weight: 600; opacity: 1;
+}
+[data-plugin-id="research-dashboard"] .rd-pager-btn:disabled { cursor: default; opacity: 0.35; }
+[data-plugin-id="research-dashboard"] .rd-pager-sep { color: var(--muted-foreground, #5c6270); padding: 0 2px; }
+/* The rail's per-project list and the visible task list: the shared index grammar, no nesting indent. */
+[data-plugin-id="research-dashboard"] .rd-index-group,
+[data-plugin-id="research-dashboard"] .rd-task-list { list-style: none; margin: 0; padding: 0; }
+/* A grouped stack of shared work cards (People, Repositories): the project group, sparsely spaced. */
+[data-plugin-id="research-dashboard"] .rd-work-groups { display: grid; gap: 4px; }
+/* The selector-row status dot: colour by state, never the only signal (the state word is always beside it).
+   Its default is the muted *foreground* (a mid grey), not the near-white --muted background token — a
+   selector row's dot must read at a glance whatever its state. */
+[data-plugin-id="research-dashboard"] .rd-status-dot {
+  border-radius: 50%; display: inline-block; flex: none; height: 8px; margin-right: 7px; width: 8px;
+  background: var(--muted-foreground, #6b7280);
+}
+[data-plugin-id="research-dashboard"] .rd-status-dot[data-rd-state="active"],
+[data-plugin-id="research-dashboard"] .rd-status-dot[data-rd-state="completed"] { background: #176b4d; }
+[data-plugin-id="research-dashboard"] .rd-status-dot[data-rd-state="blocked"] { background: #a33f2c; }
+[data-plugin-id="research-dashboard"] .rd-status-dot[data-rd-state="parked"] { background: #8a611a; }
+/* The dot and its title share one line in every selector row — the dot never wraps onto a line of its own
+   above a long title. The title, not the row, takes the wrap. */
+[data-plugin-id="research-dashboard"] .rd-index-item > .rd-cluster { flex-wrap: nowrap; }
+[data-plugin-id="research-dashboard"] .rd-index-item > .rd-cluster > .rd-strong { min-width: 0; }
 
 `;
 
@@ -1730,7 +2011,6 @@ export function apply(ctx: Context) {
     Button,
     Card,
     CardContent,
-    CardHeader,
     CardTitle,
     Input,
     Select,
@@ -1815,41 +2095,10 @@ export function apply(ctx: Context) {
     );
   }
 
-  function WindowControl({
-    value,
-    onChange,
-    disabled,
-  }: {
-    value: number;
-    onChange: (next: number) => void;
-    disabled: boolean;
-  }) {
-    return (
-      <div
-        aria-label="Activity window"
-        className="rd-cluster rd-window"
-        role="group"
-      >
-        {WINDOW_OPTIONS.map((option) => (
-          <Button
-            aria-pressed={option.days === value}
-            data-rd-window={option.days}
-            disabled={disabled}
-            key={option.days}
-            onClick={() => onChange(option.days)}
-            size="sm"
-            variant="outline"
-          >
-            {option.label}
-          </Button>
-        ))}
-      </div>
-    );
-  }
-
   /**
-   * Which peer tab is on screen. Five equal buttons, no query of their own: the page already reads the
-   * payload each tab renders, so switching costs nothing the reader waits for.
+   * Which peer tab is on screen. Four equal buttons, no query of their own: the page already reads the
+   * payload each tab renders, so switching costs nothing the reader waits for. Overview is retired, so its
+   * window control went with it and every tab reads all time.
    */
   function ViewControl({
     value,
@@ -2113,32 +2362,6 @@ export function apply(ctx: Context) {
   }
 
   /**
-   * The reviewer's "inferred from PR #88 / repo review / manual note" — stated as what it is. The
-   * store records evidence per axis, not per field, so this says "evidence on this axis" and never
-   * claims to attribute one item to one claim. When the list is empty the claim above it can only be
-   * inferred or uncertain: that is a rule, not a rendering choice, and saying so is the point.
-   */
-  function EvidenceLine({ evidence }: { evidence: AxisEvidence[] }) {
-    const shown = evidence.slice(0, 3);
-    const more = evidence.length - shown.length;
-    return (
-      <div
-        className="rd-evidence"
-        data-rd-evidence-count={evidence.length}
-        data-rd-has-evidence={evidence.length > 0}
-      >
-        {evidence.length > 0
-          ? `evidence: ${shown
-              .map((item) =>
-                item.by ? `${item.label} (${item.by})` : item.label
-              )
-              .join(" · ")}${more > 0 ? ` +${more} more` : ""}`
-          : "no evidence on record"}
-      </div>
-    );
-  }
-
-  /**
    * One way to say where a recorded event came from (C8). "manual note", "agent review", "PR #88" — the
    * same words the evidence line uses, and a ref that already names its source is not said twice.
    */
@@ -2293,7 +2516,10 @@ export function apply(ctx: Context) {
     topicLabel = null,
     unattributedNote = null,
   }: {
-    /** The caller's own marker for this row (e.g. the Progress feed's `data-rd-feed-event`). */
+    /**
+     * The caller's own marker for this row (e.g. the Progress feed's `data-rd-feed-event`, whose value is
+     * the event's own stable id so the DOM asserts ids directly rather than inferring them).
+     */
     attrs?: Record<string, string>;
     axisLabel?: string | null;
     item: ActivityLineItem;
@@ -2430,6 +2656,122 @@ export function apply(ctx: Context) {
   }
 
   /**
+   * A **backend-paged** activity list, scoped to one entity (a person's recorded actor account, or a
+   * repository), used by the People and Repositories rails. This replaces the local slice + "Show all N"
+   * window the two rails used to keep: the rows and the total are the page's own (`list_activity` with an
+   * `offset`/`pageSize` → `activityPage`), so the range shown is the range the backend returned and the
+   * pager requests the next page rather than revealing rows already held in memory. An entity whose scope
+   * holds no rows states that honestly, and the container reports the payload's own count.
+   */
+  function PagedActivityFeed({
+    countAttr,
+    dataAttr,
+    emptyText,
+    labelFor,
+    onOpenEntity,
+    person = null,
+    scope,
+  }: {
+    /** The container's row-count attribute, e.g. `data-rd-person-activity`. */
+    countAttr: string;
+    dataAttr: string;
+    emptyText: string;
+    labelFor?: (item: Activity) => {
+      axis?: string | null;
+      problem?: string | null;
+      repository?: string | null;
+      topic?: string | null;
+    };
+    onOpenEntity: (type: EntityType, id: string) => void;
+    person?: { displayName: string; id: string } | null;
+    scope: { personActorId?: string; axisId?: string; repositoryId?: string; topicId?: string };
+  }) {
+    const [page, setPage] = React.useState<Page<Activity> | null>(null);
+    const [offset, setOffset] = React.useState(0);
+    const [loading, setLoading] = React.useState(false);
+    const scopeKey = JSON.stringify(scope);
+    /**
+     * The scope the current `offset` belongs to. A person/repository change is a change of identity, not a
+     * change of page: the previous entity's offset must not be carried into the new one (repository A on
+     * page 3 holds `offset=10`, which lands on an empty page for a repository B with two records). The
+     * effect resets the offset and drops the previous page **before** it issues a request, so the request
+     * that runs is always at the new scope's own offset — no stale page is shown under the new identity,
+     * and no request is ever sent at the previous entity's offset.
+     */
+    const scopeRef = React.useRef(scopeKey);
+    React.useEffect(() => {
+      if (scopeRef.current !== scopeKey) {
+        scopeRef.current = scopeKey;
+        setPage(null);
+        if (offset !== 0) {
+          setOffset(0);
+          return;
+        }
+      }
+      let active = true;
+      setLoading(true);
+      void (async () => {
+        try {
+          const result = (await ctx.host.call("list_activity", {
+            ...scope,
+            offset,
+            pageSize: PROGRESS_PAGE_SIZE,
+          })) as { activityPage?: Page<Activity> };
+          if (active && !ctx.signal.aborted) {
+            setPage(result.activityPage ?? null);
+          }
+        } finally {
+          if (active) {
+            setLoading(false);
+          }
+        }
+      })();
+      return () => {
+        active = false;
+      };
+      // Re-reads when the scope changes (a different person / repository) or the reader pages.
+    }, [scopeKey, offset]);
+    const items = page?.items ?? [];
+    const total = page?.total ?? 0;
+    return (
+      <>
+        <ul
+          className="rd-activity"
+          data-rd-activity-shown={items.length}
+          {...{ [countAttr]: total }}
+          {...{ [dataAttr]: total }}
+        >
+          {items.map((item) => {
+            const labels = labelFor?.(item) ?? {};
+            return (
+              <ActivityLine
+                axisLabel={labels.axis ?? null}
+                item={item}
+                key={item.id}
+                onOpenEntity={onOpenEntity}
+                person={person}
+                problemLabel={labels.problem ?? null}
+                repositoryLabel={labels.repository ?? null}
+                topicLabel={labels.topic ?? null}
+              />
+            );
+          })}
+          {!loading && items.length === 0 ? (
+            <li className="rd-muted">{emptyText}</li>
+          ) : null}
+        </ul>
+        <Pager
+          label="Activity"
+          offset={offset}
+          onOffset={setOffset}
+          pageSize={PROGRESS_PAGE_SIZE}
+          total={total}
+        />
+      </>
+    );
+  }
+
+  /**
    * §7 / V1 — the view names itself, under the shell (brand) title that stays. V1 raised it to the page-level
    * type step and put the hint on its own line: at the old 14px the view's name was smaller than the shell
    * title above it and shared a line with its own hint, which is what made every page read as compressed. It
@@ -2470,6 +2812,288 @@ export function apply(ctx: Context) {
       <p className="rd-notice rd-muted" data-rd-notice={kind} {...(attrs ?? {})}>
         {children}
       </p>
+    );
+  }
+
+  /**
+   * The independent numbered pager the pivot asks for, in one place: **Previous / numbered pages / Next** on
+   * the shared segmented-switch grammar. Page size is five. The controls render **only** when the list is
+   * longer than one page — a one-page list shows its own range and no control at all, so a button that
+   * cannot act is never drawn. The range and total are the **backend page's own** (`offset`/`limit`/`total`),
+   * never a length re-derived here, so the page reports availability honestly.
+   */
+  function Pager({
+    label,
+    offset,
+    pageSize,
+    total,
+    onOffset,
+  }: {
+    label: string;
+    offset: number;
+    pageSize: number;
+    total: number;
+    onOffset: (next: number) => void;
+  }) {
+    const pages = Math.max(1, Math.ceil(total / pageSize));
+    const page = Math.min(Math.max(0, Math.floor(offset / pageSize)), pages - 1);
+    const from = total === 0 ? 0 : page * pageSize + 1;
+    const to = Math.min((page + 1) * pageSize, total);
+    const go = (next: number) => onOffset(next * pageSize);
+    return (
+      <div className="rd-pager" data-rd-pager={label}>
+        {pages > 1 ? (
+          <div aria-label={`${label} pages`} className="rd-pager-switch" role="group">
+            <button
+              className="rd-pager-btn"
+              disabled={page === 0}
+              onClick={() => go(page - 1)}
+              type="button"
+            >
+              Previous
+            </button>
+            {Array.from({ length: pages }).map((_, index) => {
+              if (index === 0 || index === pages - 1 || Math.abs(index - page) <= 1) {
+                return (
+                  <button
+                    aria-current={index === page ? "page" : undefined}
+                    className="rd-pager-btn"
+                    key={index}
+                    onClick={() => go(index)}
+                    type="button"
+                  >
+                    {index + 1}
+                  </button>
+                );
+              }
+              if (index === page - 2 || index === page + 2) {
+                return (
+                  <span aria-hidden="true" className="rd-pager-sep" key={`sep-${index}`}>
+                    …
+                  </span>
+                );
+              }
+              return null;
+            })}
+            <button
+              className="rd-pager-btn"
+              disabled={page === pages - 1}
+              onClick={() => go(page + 1)}
+              type="button"
+            >
+              Next
+            </button>
+          </div>
+        ) : (
+          <span />
+        )}
+        <span className="rd-meta" data-rd-pager-range={`${from}-${to}`}>
+          {total === 0 ? "No entries" : `${from}–${to} of ${total} available`}
+        </span>
+      </div>
+    );
+  }
+
+  /**
+   * An optional scoped plan — a workstream's strategy or a task's own implementation plan. Optional by
+   * construction: no plan renders **nothing** (the pivot's "plans are optional"; no inheritance and no
+   * rollup). The label is bold on a rule; the steps are the plan's own list, and a step's number is rendered
+   * only where the step claims a `position` — stored positions are shown as stored, never rebased.
+   */
+  function ScopedPlan({ label, plan }: { label: string; plan: StoredPlan | null }) {
+    if (!plan || plan.steps.length === 0) {
+      return null;
+    }
+    return (
+      <details className="rd-scoped-plan" open>
+        <summary>{label}</summary>
+        {plan.plan.summary ? <p className="rd-meta">{plan.plan.summary}</p> : null}
+        <ol className="rd-plan-steps" data-rd-scoped-plan-steps={plan.steps.length}>
+          {plan.steps.map((step) => (
+            <li
+              className="rd-plan-step"
+              data-rd-scoped-plan-step={step.id}
+              data-rd-scoped-plan-position={
+                step.position === null ? "" : String(step.position)
+              }
+              key={step.id}
+            >
+              <span className="rd-row">
+                <span className="rd-cluster">
+                  {step.position === null ? null : (
+                    <span className="rd-meta">{`${step.position}.`}</span>
+                  )}
+                  <span className="rd-strong">{step.title}</span>
+                </span>
+                <StateBadge kind="stored" state={step.state} />
+              </span>
+            </li>
+          ))}
+        </ol>
+      </details>
+    );
+  }
+
+  /**
+   * One supporting-repository reference, with the repository link **split** the pivot asks for: the name
+   * opens the exact dashboard entry (an EntityTag — it navigates and selects, and writes nothing), then a
+   * thin vertical separator, then a separate external **GitHub ↗** anchor to the repository's *actual
+   * external URL*, opened in a new tab. The internal identity and the external destination are two different
+   * facts and never collapse into one link; a repository whose stored `url` is blank gets no external half
+   * rather than a guessed destination.
+   */
+  function RepoLinkPair({
+    repository,
+    onOpen,
+  }: {
+    repository: { fullName: string; id: string; url?: string };
+    onOpen: (type: EntityType, id: string) => void;
+  }) {
+    return (
+      <span className="rd-repo-pair" data-rd-repo-pair={repository.id}>
+        <EntityTag
+          id={repository.id}
+          label={repository.fullName}
+          onOpen={onOpen}
+          type="repository"
+        />
+        {repository.url ? (
+          <a
+            aria-label={`Open ${repository.fullName} on GitHub`}
+            className="rd-repo-ext"
+            data-rd-repo-ext={repository.id}
+            href={repository.url}
+            rel="noopener noreferrer"
+            target="_blank"
+            title={`Open ${repository.fullName} on GitHub`}
+          >
+            GitHub ↗
+          </a>
+        ) : null}
+      </span>
+    );
+  }
+
+  /** Participants: a quiet inline label beneath a divider, exactly as the pivot asks. */
+  function Participants({
+    onOpen,
+    people,
+  }: {
+    onOpen: (type: EntityType, id: string) => void;
+    people: Array<{ displayName: string; id: string }>;
+  }) {
+    if (people.length === 0) {
+      return null;
+    }
+    return (
+      <div className="rd-participants" data-rd-participants={people.length}>
+        <span className="rd-meta">Participants ·</span>
+        {people.map((person) => (
+          <EntityTag
+            id={person.id}
+            key={person.id}
+            label={person.displayName}
+            onOpen={onOpen}
+            type="person"
+          />
+        ))}
+      </div>
+    );
+  }
+
+  /**
+   * The shared workstream card, built once and reused by Projects, People and Repositories. Its title is the
+   * navigation: it opens the exact Progress entry (no duplicate "Open workstream" or "Review blocker"
+   * buttons). Status, the unknown-blocked-task count (where the caller carries it) and the supporting
+   * repositories render beneath; a workstream with no summary states what it does carry rather than an
+   * invented sentence.
+   */
+  type WorkstreamCardData = {
+    /** The workstream's own task counts, where the caller's read carries them (Topics). */
+    blockedTasks?: number;
+    currentState?: string;
+    description?: string;
+    id: string;
+    /**
+     * The latest **recorded** event on this workstream, where the caller holds the workstream's own
+     * history (the topic-wide read). Absent means the caller has no event list for this workstream, so
+     * nothing is invented and no line is drawn — the pivot's "one latest recorded event", never a
+     * synthesised recency.
+     */
+    latestEvent?: { at: string; summary: string } | null;
+    openTasks?: number;
+    repositories: Array<{ fullName: string; id: string; url?: string }>;
+    state: AxisState;
+    stateConfidence: Confidence;
+    title: string;
+  };
+
+  function WorkstreamCard({
+    axis,
+    onOpenEntity,
+    onOpenWorkstream,
+  }: {
+    axis: WorkstreamCardData;
+    onOpenEntity: (type: EntityType, id: string) => void;
+    onOpenWorkstream: (axisId: string) => void;
+  }) {
+    const summary = axis.description || axis.currentState || "";
+    // Per the accepted pivot the compact card carries title → Progress, the workstream's status and its
+    // task counts, and one latest recorded event. It does **not** restate the blocker: the blocker's full
+    // prose belongs to the Progress context, and the old in-card blocker line (with its status-coloured
+    // contour) is removed here.
+    return (
+      <article
+        className="rd-work-card"
+        data-rd-state={axis.state}
+        data-rd-work-card={axis.id}
+      >
+        <div className="rd-work-head">
+          <h3 className="rd-work-title">
+            <a
+              className="rd-work-link"
+              data-rd-work-link={axis.id}
+              href={`#/progress/${axis.id}`}
+              onClick={(event) => {
+                event.preventDefault();
+                onOpenWorkstream(axis.id);
+              }}
+            >
+              {axis.title}
+            </a>
+          </h3>
+          <StateBadge confidence={axis.stateConfidence} state={axis.state} />
+        </div>
+        {summary ? (
+          <p className="rd-meta" data-rd-work-summary="true">
+            {summary}
+          </p>
+        ) : null}
+        {axis.latestEvent ? (
+          <p className="rd-meta" data-rd-work-event="true">
+            <EventDate at={axis.latestEvent.at} /> | {axis.latestEvent.summary}
+          </p>
+        ) : null}
+        <div className="rd-cluster rd-tags">
+          {typeof axis.openTasks === "number" ? (
+            <span className="rd-count">
+              {countLabel(axis.openTasks, "open task", "open tasks")}
+            </span>
+          ) : null}
+          {typeof axis.blockedTasks === "number" && axis.blockedTasks > 0 ? (
+            <span className="rd-count rd-blocked-pill" data-rd-state="blocked">
+              {countLabel(axis.blockedTasks, "blocked", "blocked")}
+            </span>
+          ) : null}
+          {axis.repositories.map((repository) => (
+            <RepoLinkPair
+              key={repository.id}
+              onOpen={onOpenEntity}
+              repository={repository}
+            />
+          ))}
+        </div>
+      </article>
     );
   }
 
@@ -2519,207 +3143,36 @@ export function apply(ctx: Context) {
   }
 
   /**
-   * One axis's own history, and its notes as a separate list. Deliberately not merged into the
-   * topic's log: a correction is not an event, and the reviewer asked for them kept apart.
+   * The correction form for one workstream — the claim, its confidence and optionally why. It lives in one
+   * place so the Progress detail's **Correct** control is the single home of the write (Progress is the
+   * correction's detail destination), and the note lands in the same `reconcile_topic` call as the claim:
+   * that co-write is what makes `confirmed` reachable on an axis nothing else backs — the note *is* the
+   * evidence (D8). Nothing here deletes: the toolset has no delete action.
    */
-  function AxisHistory({ axis }: { axis: AxisDetail }) {
-    return (
-      <div className="rd-stack">
-        <span className="rd-section">History · {axis.history.length}</span>
-        <ul className="rd-history" data-rd-history={axis.id}>
-          {axis.history.map((item) => (
-            <li key={item.id}>
-              <div>{item.summary}</div>
-              <span className="rd-meta">
-                {describeSource(item.sourceType, item.sourceRef)} ·{" "}
-                {item.occurredAt.slice(0, 10)}
-                {item.actorType ? ` · ${item.actorType}` : ""}
-              </span>
-            </li>
-          ))}
-          {axis.history.length === 0 ? (
-            <li className="rd-muted">No activity on this axis yet.</li>
-          ) : null}
-        </ul>
-        <span className="rd-section">Notes · {axis.notes.length}</span>
-        <ul className="rd-notes" data-rd-axis-notes={axis.id}>
-          {axis.notes.map((note) => (
-            <li key={note.id}>
-              <div>{note.text}</div>
-              <span className="rd-meta">
-                {note.authorType} · {note.createdAt.slice(0, 10)}
-              </span>
-            </li>
-          ))}
-          {axis.notes.length === 0 ? (
-            <li className="rd-muted">No notes on this axis.</li>
-          ) : null}
-        </ul>
-      </div>
-    );
-  }
-
-  /** One axis in full, with its history and — on demand — the correction form. */
-  function AxisDetailCard({
+  function WorkstreamCorrection({
     axis,
     busy,
     conflict,
     correction,
-    historyOpen,
     onCorrection,
-    onOpenEntity,
     onReload,
     onSave,
-    onToggleHistory,
   }: {
     axis: AxisDetail;
     busy: boolean;
     conflict: ConflictState;
-    correction: AxisCorrection | null;
-    historyOpen: boolean;
+    correction: AxisCorrection;
     onCorrection: (next: AxisCorrection | null) => void;
-    onOpenEntity: (type: EntityType, id: string) => void;
     onReload: () => void;
     onSave: () => void;
-    onToggleHistory: () => void;
   }) {
-    const line = [
-      axis.branch,
-      axis.prNumber ? `PR #${axis.prNumber}` : "",
-    ]
-      .filter(Boolean)
-      .join(" · ");
-    const correcting = correction?.axisId === axis.id;
     return (
-      <li
-        className="rd-axis-detail"
-        data-rd-axis-state={axis.state}
-        data-rd-axis-title={axis.title}
-        data-rd-axis-version={axis.version}
-      >
-        {/* V1: the head is the shared one now — the same claim · name · kind the three rows read, so the
-            detail card and the scan rows can no longer disagree about what an axis looks like. */}
-        <AxisHead
-          axisId={axis.id}
-          kindNote={`${axis.kind} · v${axis.version}`}
-          onOpenEntity={onOpenEntity}
-          state={axis.state}
-          stateConfidence={axis.stateConfidence}
-          title={axis.title}
-        />
-        {/* The reading: what this axis says about itself right now, clamped so one verbose axis cannot
-            push the rest of the lane off the screen. Its own confidence travels with it (C8), and a claim
-            nobody stated renders no confidence at all. */}
-        <p className="rd-axis-reading" data-rd-axis-reading={axis.id}>
-          <span className="rd-claim-value" data-rd-claim="current_state">
-            {axis.currentState ? (
-              axis.currentState
-            ) : (
-              <span className="rd-muted">no progress note</span>
-            )}
-          </span>
-          <span className="rd-cluster">
-            <span className="rd-muted">current state</span>
-            <ConfidenceBadge value={axis.currentStateConfidence} />
-          </span>
-        </p>
-
-        {axis.blocker ? (
-          <div className="rd-cluster">
-            <span
-              className="rd-blocker"
-              data-rd-strong={axis.state === "blocked"}
-            >
-              Blocker: {axis.blocker}
-            </span>
-            <ConfidenceBadge value={axis.blockerConfidence} />
-          </div>
-        ) : null}
-
-        {/* Keep the scan row factual but quiet; provenance belongs behind the disclosure. */}
-        <div className="rd-axis-secondary rd-axis-refs">
-          {line || axis.people.length > 0 || axis.repositories.length > 0 ? (
-            <span className="rd-cluster rd-tags">
-              {axis.repositories.map((repository) => (
-                <EntityTag
-                  compact
-                  id={repository.id}
-                  key={repository.id}
-                  label={repository.fullName}
-                  onOpen={onOpenEntity}
-                  type="repository"
-                />
-              ))}
-              {axis.people.map((person) => (
-                <EntityTag
-                  compact
-                  id={person.id}
-                  key={person.id}
-                  label={person.displayName}
-                  onOpen={onOpenEntity}
-                  type="person"
-                />
-              ))}
-              {line ? <span className="rd-meta">{line}</span> : null}
-            </span>
-          ) : null}
-        </div>
-
-        {/* Supporting evidence and record controls are available without crowding the work reading. */}
-        <details className="rd-axis-more" data-rd-axis-more={axis.id}>
-          <summary>More on this axis</summary>
-          <EvidenceLine evidence={axis.evidence} />
-          {axis.description ? (
-            <p className="rd-axis-secondary" data-rd-axis-description="true">
-              {axis.description}
-            </p>
-          ) : null}
-          <div className="rd-cluster">
-            <span className="rd-muted">state</span>
-            <ConfidenceBadge value={axis.stateConfidence} />
-            {axis.lastReviewedAt ? (
-              <span className="rd-muted">
-                last reviewed {axis.lastReviewedAt.slice(0, 10)}
-              </span>
-            ) : null}
-          </div>
-          <div className="rd-cluster rd-axis-controls">
-          <Button
-            data-rd-history-toggle={axis.id}
-            disabled={busy}
-            onClick={onToggleHistory}
-            size="sm"
-            variant="ghost"
-          >
-            {historyOpen ? "Hide history" : `History (${axis.history.length})`}
-          </Button>
-          <Button
-            data-rd-correct-toggle={axis.id}
-            disabled={busy}
-            onClick={() => {
-              if (correcting) {
-                onCorrection(null);
-                return;
-              }
-              onCorrection(draftFrom(axis));
-            }}
-            size="sm"
-            variant={correcting ? "default" : "ghost"}
-          >
-            {correcting ? "Cancel" : "Correct"}
-          </Button>
-        </div>
-        </details>
-
-        {historyOpen ? <AxisHistory axis={axis} /> : null}
-
-        {correcting && correction ? (
-          <div className="rd-correction" data-rd-correction={axis.id}>
-            <span className="rd-section">Correct this axis</span>
+      <div className="rd-correction" data-rd-correction={axis.id}>
+        <span className="rd-section">Correct this axis</span>
             {conflict?.axisId === axis.id ? (
               <div className="rd-conflict" data-rd-conflict="true" role="alert">
                 <span className="rd-strong">
-                  This development axis changed since you opened it.
+                  This workstream changed since you opened it.
                 </span>
                 <span className="rd-meta">{conflict.message}</span>
                 <div className="rd-cluster">
@@ -2841,9 +3294,7 @@ export function apply(ctx: Context) {
                 back as a conflict instead of overwriting it.
               </span>
             </div>
-          </div>
-        ) : null}
-      </li>
+      </div>
     );
   }
 
@@ -2863,8 +3314,8 @@ export function apply(ctx: Context) {
     if (entry.axisCounts.blocked > 0) {
       parts.push(`${entry.axisCounts.blocked} blocked`);
     }
-    parts.push(countLabel(entry.axes.length, "axis", "axes"));
-    parts.push(countLabel(entry.topics.length, "topic", "topics"));
+    parts.push(countLabel(entry.axes.length, "workstream", "workstreams"));
+    parts.push(countLabel(entry.topics.length, "project", "projects"));
     return parts.join(" · ");
   }
 
@@ -2878,76 +3329,13 @@ export function apply(ctx: Context) {
     const current = entry.axes.filter((axis) => !isTerminalAxis(axis.state)).length;
     const topics =
       entry.topics.length === 0
-        ? "no topic names it"
-        : `supports ${countLabel(entry.topics.length, "topic", "topics")}`;
+        ? "no project names it"
+        : `supports ${countLabel(entry.topics.length, "project", "projects")}`;
     return `${topics} · ${
-      current === 0 ? "no current axis" : countLabel(current, "current axis", "current axes")
+      current === 0
+        ? "no current workstream"
+        : countLabel(current, "current workstream", "current workstreams")
     }`;
-  }
-
-  /** One axis in a C6 rollup: state, title, repo/branch/PR, and the blocker where there is one. */
-  function AxisScanItem({
-    axis,
-    onOpenEntity,
-  }: {
-    axis: AxisScan;
-    onOpenEntity: (type: EntityType, id: string) => void;
-  }) {
-    const where = [
-      axis.branch,
-      axis.prNumber === null ? "" : `PR #${axis.prNumber}`,
-    ]
-      .filter((value) => value !== "")
-      .join(" · ");
-    return (
-      <AxisRow
-        attrs={{
-          "data-rd-axis-state": axis.state,
-          "data-rd-scan-axis": axis.title,
-        }}
-        axisId={axis.id}
-        kindNote={axis.kind}
-        onOpenEntity={onOpenEntity}
-        /* V1: the reading is the one narrative fact a scan row has — its blocker — in the same
-           "value + label + confidence" shape the person rollup uses, and where there is none the row says
-           so. The old `· confirmed` text suffix is gone: the badge already carries that confidence, and one
-           fact rendered twice is what the shared grammar exists to stop. */
-        reading={
-          axis.blocker ? (
-            <>
-              <span className="rd-claim-value">{axis.blocker}</span>
-              <span className="rd-cluster">
-                <span className="rd-muted">blocker</span>
-                <ConfidenceBadge value={axis.blockerConfidence} />
-              </span>
-            </>
-          ) : (
-            <span className="rd-muted">no blocker recorded</span>
-          )
-        }
-        references={
-          <span className="rd-cluster rd-tags" data-rd-scan-where="true">
-            {axis.repositories.length === 0 ? (
-              <span className="rd-meta">no repository or branch recorded</span>
-            ) : (
-              axis.repositories.map((repository) => (
-                <EntityTag
-                  id={repository.id}
-                  key={repository.id}
-                  label={repository.fullName}
-                  onOpen={onOpenEntity}
-                  type="repository"
-                />
-              ))
-            )}
-            {where ? <span className="rd-meta">{where}</span> : null}
-          </span>
-        }
-        state={axis.state}
-        stateConfidence={axis.stateConfidence}
-        title={axis.title}
-      />
-    );
   }
 
   /**
@@ -3005,100 +3393,6 @@ export function apply(ctx: Context) {
   }
 
   /**
-   * C2 (increment 2): the C1 axis-row grammar, as far as the person rollup can carry it.
-   *
-   * A C1 row's dominant element is its current-state *reading*, and `AxisScan` does not hold one: it is a scan
-   * of the links (title, kind, state and its confidence, blocker, branch/PR, version, when it was last touched,
-   * repositories), not the axis detail. So the reading here is the one narrative fact the rollup does have
-   * about the axis's condition — its blocker — and where there is none the row says so, because "no blocker
-   * recorded" is a claim and inventing a sentence to fill the space would be worse than the gap. Everything
-   * else is one quiet reference line plus a disclosure, and there are no controls: this panel has no write
-   * path, and the row stays short on purpose (a person's involvement is a pointer to the axis, not a copy of
-   * the axis's own lane).
-   */
-  function PersonAxisRow({
-    axis,
-    onOpenEntity,
-  }: {
-    axis: AxisScan;
-    onOpenEntity: (type: EntityType, id: string) => void;
-  }) {
-    const where = [
-      axis.branch,
-      axis.prNumber === null ? "" : `PR #${axis.prNumber}`,
-    ]
-      .filter((value) => value !== "")
-      .join(" · ");
-    return (
-      <AxisRow
-        attrs={{
-          "data-rd-axis-state": axis.state,
-          "data-rd-scan-axis": axis.title,
-        }}
-        axisId={axis.id}
-        disclosure={
-          <details className="rd-axis-more" data-rd-person-axis-more={axis.id}>
-            <summary>More on this axis</summary>
-            <div className="rd-cluster">
-              <span className="rd-muted">state</span>
-              <ConfidenceBadge value={axis.stateConfidence} />
-              <span className="rd-muted">
-                last recorded {axis.updatedAt.slice(0, 10)}
-              </span>
-              {axis.lastReviewedAt ? (
-                <span className="rd-muted">
-                  · last reviewed {axis.lastReviewedAt.slice(0, 10)}
-                </span>
-              ) : null}
-            </div>
-          </details>
-        }
-        kindNote={`${axis.kind} · v${axis.version}`}
-        onOpenEntity={onOpenEntity}
-        /* The reading. A C1 row leads with its current-state claim and its own confidence; this rollup has
-           no current state, so the claim here is the axis's blocker where it has one, in C1's own
-           "value + label + confidence" shape. Where it has none the row reads one muted sentence and stops:
-           an orphan `blocker` label under "no blocker recorded" is noise that reads like the blocker text. */
-        reading={
-          axis.blocker ? (
-            <>
-              <span className="rd-claim-value">{axis.blocker}</span>
-              <span className="rd-cluster">
-                <span className="rd-muted">blocker</span>
-                <ConfidenceBadge value={axis.blockerConfidence} />
-              </span>
-            </>
-          ) : (
-            <span className="rd-muted">no blocker recorded</span>
-          )
-        }
-        readingAttrs={{ "data-rd-person-axis-reading": axis.id }}
-        references={
-          <span className="rd-cluster rd-tags" data-rd-scan-where="true">
-            {axis.repositories.length === 0 ? (
-              <span className="rd-meta">no repository or branch recorded</span>
-            ) : (
-              axis.repositories.map((repository) => (
-                <EntityTag
-                  id={repository.id}
-                  key={repository.id}
-                  label={repository.fullName}
-                  onOpen={onOpenEntity}
-                  type="repository"
-                />
-              ))
-            )}
-            {where ? <span className="rd-meta">{where}</span> : null}
-          </span>
-        }
-        state={axis.state}
-        stateConfidence={axis.stateConfidence}
-        title={axis.title}
-      />
-    );
-  }
-
-  /**
    * Person-first (C6): the index answers "who", the panel answers "what are they on" — the topics they
    * are linked to, their own axes inside each, and only the events the store can attribute to their own
    * account. Where attribution is impossible the panel says so, because "cannot be attributed" is a
@@ -3121,18 +3415,6 @@ export function apply(ctx: Context) {
      * whatever the activity volume. The state is per panel and resets with the selection, which is what a
      * reader expects of a rail.
      */
-    const [railAll, setRailAll] = React.useState(false);
-    const railActivity = entry.recentActivity;
-    const railShown = railAll
-      ? railActivity
-      : railActivity.slice(0, RAIL_ACTIVITY_LEAD);
-    const railHidden = railActivity.length - railShown.length;
-    /**
-     * C2: the repositories their own axes name — derived from the involvement the payload already carries,
-     * never fetched again and never guessed. De-duplicated by id in first-mention order, so the card is stable
-     * across renders. `AxisScan.repositories` is built from every `axis_people` link the store holds, with no
-     * cap, so this list is complete for the axes shown rather than a window of them.
-     */
     const relatedRepositories = React.useMemo(() => {
       const seen = new Map<string, LinkedRepository>();
       for (const axis of entry.axes) {
@@ -3145,11 +3427,14 @@ export function apply(ctx: Context) {
       return [...seen.values()];
     }, [entry]);
     return (
-      <Card
-        className="rd-panel"
+      <details
+        className="rd-panel rd-topic-detail"
+        data-rd-detail-header="true"
+        data-rd-detail-mode="disclosure"
         data-rd-person-panel={entry.person.displayName}
+        open
       >
-        <CardHeader>
+        <summary className="rd-topic-summary">
           <DetailHeader
             badge={
               entry.person.githubLogin ? (
@@ -3194,8 +3479,8 @@ export function apply(ctx: Context) {
               {involvementLine(entry)}
             </span>
           </DetailHeader>
-        </CardHeader>
-        <CardContent>
+        </summary>
+        <div className="rd-topic-body">
           {/* C2 increment 2: the inner split, on C1's own grid. `rd-detail-grid` is the composition unit the
               Topics detail already uses — a 1fr lane against a `minmax(250px, 0.6fr)` rail, which is exactly
               what makes the lane measurably dominant (≥1.25×) at both reference viewports rather than merely
@@ -3209,95 +3494,92 @@ export function apply(ctx: Context) {
                   terminal ones read last while the projection's own order survives inside each group. One
                   section, no sub-navigation: a fold can come later if historical axes ever outnumber these. */}
               <span className="rd-section">Involvement</span>
-              <ul className="rd-view" data-rd-person-topics={entry.topics.length}>
+              <div className="rd-work-groups" data-rd-person-topics={entry.topics.length}>
                 {entry.topics.map((involvement) => (
-                  <li
-                    className="rd-involvement"
+                  <section
+                    className="rd-project-group"
                     data-rd-involvement={involvement.topic.name}
                     key={involvement.topic.id}
                   >
-                    <div className="rd-row">
-                      <EntityTag
-                        compact
-                        id={involvement.topic.id}
-                        label={involvement.topic.name}
-                        onOpen={onOpenEntity}
-                        type="topic"
-                      />
-                      <span className="rd-muted">
+                    {/* The shared project group: a muted heading, then a short project intro with the
+                        right-aligned Open project action — the same grammar Repositories uses. */}
+                    <div className="rd-project-heading">{involvement.topic.name}</div>
+                    <div className="rd-project-intro">
+                      <p className="rd-meta">
                         {involvement.role
                           ? `${involvement.topic.status} · ${involvement.role}`
                           : involvement.topic.status}
-                      </span>
+                      </p>
+                      <Button
+                        onClick={() =>
+                          onOpenEntity("topic", involvement.topic.id)
+                        }
+                        size="sm"
+                        variant="outline"
+                      >
+                        Open project →
+                      </Button>
                     </div>
                     {involvement.axes.length === 0 ? (
-                      <Notice kind="empty">no axis of theirs here</Notice>
+                      <Notice kind="empty">no workstream of theirs here</Notice>
                     ) : (
-                      <ul className="rd-axes">
-                        {[
-                          ...involvement.axes.filter(
-                            (axis) => !isTerminalAxis(axis.state),
-                          ),
-                          ...involvement.axes.filter((axis) =>
-                            isTerminalAxis(axis.state),
-                          ),
-                        ].map((axis) => (
-                          <PersonAxisRow
-                            axis={axis}
-                            key={axis.id}
-                            onOpenEntity={onOpenEntity}
-                          />
-                        ))}
-                      </ul>
+                      [
+                        ...involvement.axes.filter(
+                          (axis) => !isTerminalAxis(axis.state),
+                        ),
+                        ...involvement.axes.filter((axis) =>
+                          isTerminalAxis(axis.state),
+                        ),
+                      ].map((axis) => (
+                        <WorkstreamCard
+                          axis={{
+                            id: axis.id,
+                            repositories: axis.repositories,
+                            state: axis.state,
+                            stateConfidence: axis.stateConfidence,
+                            title: axis.title,
+                          }}
+                          key={axis.id}
+                          onOpenEntity={onOpenEntity}
+                          onOpenWorkstream={(axisId) =>
+                            onOpenEntity("axis", axisId)
+                          }
+                        />
+                      ))
                     )}
-                  </li>
+                  </section>
                 ))}
                 {entry.topics.length === 0 ? (
-                  <li>
-                    <Notice kind="empty">
-                      Not linked to a topic yet — the link is what puts work on this
-                      page.
-                    </Notice>
-                  </li>
+                  <Notice kind="empty">
+                    Not linked to a topic yet — the link is what puts work on this
+                    page.
+                  </Notice>
                 ) : null}
-              </ul>
+              </div>
             </div>
 
             <aside className="rd-side-stack" data-rd-person-rail="true">
               <section className="rd-side-card">
                 <h3 className="rd-side-title">Recent activity</h3>
                 {entry.attributable ? (
-                  <>
-                    <div
-                      data-rd-person-activity-shown={railShown.length}
-                      data-rd-person-activity-total={railActivity.length}
-                    >
-                      <ActivityList
-                        dataAttr="data-rd-person-activity"
-                        items={railShown}
-                        labelFor={(item) => ({
-                          topic:
-                            entry.topics.find(
-                              (involvement) => involvement.topic.id === item.topicId
-                            )?.topic.name ?? null,
-                        })}
-                        onOpenEntity={onOpenEntity}
-                        windowDays={windowDays}
-                      />
-                    </div>
-                    {/* The remainder, stated — the same treatment the Topics rail gives it, because the same
-                        rule applies: a bounded window is only honest if the reader is told what it holds and
-                        can have the rest in one click. */}
-                    <ActivityFooter
-                      all={railAll}
-                      hidden={railHidden}
-                      moreAttr="data-rd-person-activity-more"
-                      noteAttr="data-rd-person-activity-note"
-                      onToggle={() => setRailAll(!railAll)}
-                      shown={railShown.length}
-                      total={railActivity.length}
-                    />
-                  </>
+                  <PagedActivityFeed
+                    countAttr="data-rd-person-activity-total"
+                    dataAttr="data-rd-person-activity"
+                    emptyText="No attributable activity recorded yet."
+                    key={entry.person.id}
+                    labelFor={(item) => ({
+                      topic:
+                        entry.topics.find(
+                          (involvement) => involvement.topic.id === item.topicId
+                        )?.topic.name ?? null,
+                    })}
+                    onOpenEntity={onOpenEntity}
+                    person={{
+                      displayName: entry.person.displayName,
+                      id: entry.person.id,
+                    }}
+                    scope={{ personActorId: entry.person.nakamaUserId ?? undefined }}
+                  />
                 ) : (
                   <p className="rd-muted" data-rd-attributable="false">
                     No account is mapped to this person, so no recorded event can be
@@ -3360,8 +3642,8 @@ export function apply(ctx: Context) {
               </section>
             </aside>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </details>
     );
   }
 
@@ -3481,289 +3763,39 @@ export function apply(ctx: Context) {
   }
 
   /**
-   * Overview — the default tab, and the prototype's aggregation as a peer of the other four tabs.
-   *
-   * Both columns read the SAME `get_overview` payload the other tabs read — topics from `Overview.topics`,
-   * repositories from `Overview.repositories`, the very collections the Topics and Repositories tabs render —
-   * so Overview cannot drift from them and cannot become a second reading surface. Each column keeps the
-   * payload's order and says which order it is: topics arrive in attention order (status, then a blocked axis,
-   * then recency), repositories by name. Nothing here re-ranks or re-aggregates.
-   *
-   * Its heading carries the window selector — the one query-level control, scoped to this tab. Every other
-   * tab reads all time, so the same work is never hidden by a window the reader set somewhere else.
-   *
-   * Two prototype fields are absent by decision, each **marked rather than faked**. The repository card's
-   * window event count is omitted under D4: `RepositoryRollup` carries no authoritative total, and printing
-   * the length of its capped `recentActivity` list would restate rows — the defect this phase exists to
-   * remove. The topic card carries no latest-event title: `TopicOverview` states an activity count and a
-   * last-activity time but no event, and the only route to one is the window-wide activity read F2 retired.
-   * The repository card *does* carry a last-event row, from the rollup's own newest event, used as *an event*
-   * and never counted.
+   * The collapsed **Dashboard summary** the accepted pivot puts above the Projects landing, replacing the
+   * retired Overview's always-on count row and its duplicate fast-access. Six aggregates, each the payload's
+   * own: Projects = `counts.topics` · Workstreams = `counts.axes` · Repositories · People · Open tasks and
+   * Blocked tasks = `problemsByState`. Open/Blocked are the **stored** task states (one grouped query over
+   * `problems`), never inferred from a workstream blocker. Before the payload loads every figure reads "—"
+   * rather than a guessed 0 — an honest empty state, not a synthetic fact.
    */
-  function LandingView({
-    blocked,
-    busy,
-    onOpenEntity,
-    onWindowChange,
-    repositories,
-    topics,
-    windowDays,
-  }: {
-    blocked: BlockedAxis[];
-    busy: boolean;
-    onOpenEntity: (type: EntityType, id: string) => void;
-    onWindowChange: (next: number) => void;
-    repositories: RepositoryRollup[];
-    topics: TopicOverview[];
-    windowDays: number;
-  }) {
-    /**
-     * The current-work line, composed from facts the payload already states and nothing else: the axis-state
-     * counts the front page and both C6 rollups share, plus the blocked axis's own blocker sentence when the
-     * topic carries one. No generated prose — the prototype's line is hand-written decoration, and C2's role
-     * line was ruled on exactly this principle. It names the blocked axis rather than pasting its whole
-     * blocker sentence: the landing is a ten-second surface, and the sentence is one click away in the topic
-     * detail where it belongs.
-     */
-    const stateWords: AxisState[] = ["blocked", "active", "draft", "parked", "usable"];
-    /**
-     * The card's state line and its blocker, kept apart. V1-B/B4 (2026-10-03): the two used to be
-     * concatenated into one run of text ("1 blocked · 1 active · 1 draft · 1 parked · blocked on <axis>"),
-     * which the review read as "serialized state" — a compact count and a different kind of fact (an
-     * exceptional blocker) forced into one sentence. The counts stay the compact metadata line; the
-     * blocked Axis gets its own line. Nothing is invented: the counts are the payload's own state counts,
-     * and the blocker line names the blocked axis from the blocked-axes read (the landing stays a
-     * ten-second surface, so it names the axis rather than pasting its whole blocker sentence).
-     */
-    function currentWorkLine(entry: TopicOverview): { blocked: string | null; counts: string } | null {
-      const counts = stateWords
-        .filter((state) => (entry.axisCounts[state] ?? 0) > 0)
-        .map((state) => `${entry.axisCounts[state]} ${state}`)
-        .join(" · ");
-      const blockedAxis = blocked.find((row) => row.topicId === entry.topic.id) ?? null;
-      if (counts === "" && blockedAxis === null) {
-        return null;
-      }
-      return {
-        blocked: blockedAxis ? `blocked on ${blockedAxis.title}` : null,
-        counts,
-      };
-    }
-
+  function DashboardSummary({ overview }: { overview: Overview | null }) {
+    const figure = (n: number | undefined): string =>
+      overview && typeof n === "number" ? String(n) : "—";
+    const stats: Array<{ label: string; value: string }> = [
+      { label: "Projects", value: figure(overview?.counts.topics) },
+      { label: "Workstreams", value: figure(overview?.counts.axes) },
+      { label: "Open tasks", value: figure(overview?.problemsByState.open) },
+      { label: "Blocked tasks", value: figure(overview?.problemsByState.blocked) },
+      { label: "Repositories", value: figure(overview?.counts.repositories) },
+      { label: "People", value: figure(overview?.counts.people) },
+    ];
     return (
-      <div className="rd-landing" data-rd-landing={topics.length + repositories.length}>
-        <div className="rd-view-heading rd-overview-head" data-rd-view-heading="overview">
-          <div className="rd-view-titles">
-            <h3 className="rd-view-title" data-rd-view-title="overview">
-              Overview
-            </h3>
-            <span className="rd-meta">{VIEW_HEADINGS.overview}</span>
-          </div>
-          {/* The window selector lives here and only here: it scopes this tab's data, and it sits with the
-              heading that names the data it scopes rather than in the global toolbar. */}
-          <WindowControl
-            disabled={busy}
-            onChange={onWindowChange}
-            value={windowDays}
-          />
-        </div>
-
-        <div className="rd-landing-grid">
-          <section
-            aria-label="Topic activity"
-            className="rd-landing-column"
-            data-rd-landing-column="topics"
-            data-rd-landing-topics={topics.length}
-          >
-            <div className="rd-landing-head">
-              <h4 className="rd-side-title">Topic activity</h4>
-              <span className="rd-meta">Attention order, as the payload sends it</span>
-            </div>
-            {topics.length === 0 ? (
-              <p className="rd-muted" data-rd-landing-empty="topics">
-                No topics recorded yet.
-              </p>
-            ) : null}
-            {topics.map((entry) => {
-              const current = currentWorkLine(entry);
-              return (
-                <article
-                  className="rd-topic-card rd-landing-card"
-                  data-rd-landing-topic={entry.topic.id}
-                  key={entry.topic.id}
-                >
-                  <div className="rd-landing-top">
-                    <div className="rd-landing-title">
-                      <h5 className="rd-strong" data-rd-landing-name={entry.topic.id}>
-                        {entry.topic.name}
-                      </h5>
-                      {entry.topic.description ? (
-                        <p className="rd-meta" data-rd-landing-description={entry.topic.id}>
-                          {entry.topic.description}
-                        </p>
-                      ) : null}
-                    </div>
-                    <span className="rd-age-box" data-rd-landing-recency={entry.topic.id}>
-                      <span className="rd-strong">{describeAge(entry.lastActivityAt)}</span>
-                      <span className="rd-muted">last recorded activity</span>
-                    </span>
-                  </div>
-                  {current ? (
-                    <p
-                      className="rd-current-work rd-landing-current"
-                      data-rd-landing-current-work={entry.topic.id}
-                    >
-                      {current.counts === "" ? null : <span className="rd-meta">{current.counts}</span>}
-                      {current.blocked === null ? null : <span>{current.blocked}</span>}
-                    </p>
-                  ) : null}
-                  {entry.axes.length > 0 ? (
-                    <div className="rd-landing-pills" data-rd-landing-pills={entry.axes.length}>
-                      {entry.axes.slice(0, 3).map((axis) => (
-                        <span className="rd-tag" data-rd-landing-pill={axis.state} key={axis.id}>
-                          {axis.title} · {axis.state}
-                          {axis.stateConfidence === "confirmed" ? "" : ` (${axis.stateConfidence})`}
-                        </span>
-                      ))}
-                      {entry.axes.length > 3 ? (
-                        <span className="rd-meta">+{entry.axes.length - 3} more</span>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  {/* The payload's own window count — the authoritative fact. The prototype names a single
-                      event here; `TopicOverview` carries none, and the only route to one is the window-wide
-                      read F2 retired, so the band states the count and no event title is shown. The age
-                      lives once, in the card's head, so it is not restated here. */}
-                  <p className="rd-meta" data-rd-landing-activity={entry.topic.id}>
-                    {countLabel(entry.activityCount, "event", "events")} in the selected window
-                    {entry.lastActivityAt ? "" : " · no activity recorded yet"}
-                  </p>
-                  {entry.people.length > 0 || entry.repositories.length > 0 ? (
-                    <div className="rd-tags" data-rd-landing-chips={entry.topic.id}>
-                      {entry.people.map((person) => (
-                        <EntityTag
-                          compact
-                          id={person.id}
-                          key={person.id}
-                          label={person.displayName}
-                          onOpen={onOpenEntity}
-                          type="person"
-                        />
-                      ))}
-                      {entry.repositories.map((repository) => (
-                        <EntityTag
-                          compact
-                          id={repository.id}
-                          key={repository.id}
-                          label={repository.fullName}
-                          onOpen={onOpenEntity}
-                          type="repository"
-                        />
-                      ))}
-                    </div>
-                  ) : null}
-                  <div className="rd-row rd-landing-action">
-                    <Button
-                      data-rd-landing-open="topic"
-                      onClick={() => onOpenEntity("topic", entry.topic.id)}
-                      size="sm"
-                      variant="outline"
-                    >
-                      Open topic →
-                    </Button>
-                  </div>
-                </article>
-              );
-            })}
-          </section>
-
-          <section
-            aria-label="Repository activity"
-            className="rd-landing-column"
-            data-rd-landing-column="repositories"
-            data-rd-landing-repositories={repositories.length}
-          >
-            <div className="rd-landing-head">
-              <h4 className="rd-side-title">Repository activity</h4>
-              <span className="rd-meta">By name, as the payload sends it</span>
-            </div>
-            {repositories.length === 0 ? (
-              <p className="rd-muted" data-rd-landing-empty="repositories">
-                No repositories recorded yet.
-              </p>
-            ) : null}
-            {repositories.map((entry) => {
-              const latest = entry.recentActivity[0] ?? null;
-              return (
-                <article
-                  className="rd-topic-card rd-landing-card"
-                  data-rd-landing-repository={entry.repository.id}
-                  key={entry.repository.id}
-                >
-                  <div className="rd-landing-top">
-                    <div className="rd-landing-title">
-                      <h5 className="rd-strong" data-rd-landing-name={entry.repository.id}>
-                        {entry.repository.fullName}
-                      </h5>
-                      {entry.repository.description ? (
-                        <p className="rd-meta" data-rd-landing-description={entry.repository.id}>
-                          {entry.repository.description}
-                        </p>
-                      ) : null}
-                    </div>
-                    <span className="rd-age-box" data-rd-landing-recency={entry.repository.id}>
-                      <span className="rd-strong">{describeAge(entry.lastActivityAt)}</span>
-                      <span className="rd-muted">last recorded activity</span>
-                    </span>
-                  </div>
-                  {latest ? (
-                    <div className="rd-event-band" data-rd-landing-last-event={entry.repository.id}>
-                      <span className="rd-section">Last event</span>
-                      <span className="rd-strong">{latest.summary}</span>
-                      <span className="rd-meta">
-                        {latest.sourceRef || latest.sourceType} · {describeAge(latest.occurredAt)}
-                      </span>
-                    </div>
-                  ) : null}
-                  {entry.topics.length > 0 || entry.axes.length > 0 ? (
-                    <div className="rd-tags" data-rd-landing-chips={entry.repository.id}>
-                      {entry.topics.map((link) => (
-                        <EntityTag
-                          compact
-                          id={link.topic.id}
-                          key={link.topic.id}
-                          label={link.topic.name}
-                          onOpen={onOpenEntity}
-                          type="topic"
-                        />
-                      ))}
-                      {entry.axes.length > 0 ? (
-                        <span className="rd-meta" data-rd-landing-axes={entry.repository.id}>
-                          {countLabel(entry.axes.length, "development axis", "development axes")}
-                        </span>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  {/* D4: the prototype's "607 recorded events in the selected window" is **omitted**. The
-                      authoritative window total is not in `RepositoryRollup`, and the length of the capped,
-                      newest-first `recentActivity` list is not that total — the marker records the decision
-                      so the absence is a check rather than an oversight. */}
-                  <div className="rd-row rd-landing-action" data-rd-landing-count-omitted="d4">
-                    <Button
-                      data-rd-landing-open="repository"
-                      onClick={() => onOpenEntity("repository", entry.repository.id)}
-                      size="sm"
-                      variant="outline"
-                    >
-                      Expand activity →
-                    </Button>
-                  </div>
-                </article>
-              );
-            })}
-          </section>
-        </div>
-      </div>
+      <details
+        className="rd-panel rd-dashboard-summary"
+        data-rd-dashboard-summary={overview ? "ready" : "loading"}
+      >
+        <summary>Dashboard summary</summary>
+        <ul className="rd-stat-grid">
+          {stats.map((stat) => (
+            <li className="rd-stat" key={stat.label}>
+              <span className="rd-stat-value">{stat.value}</span>
+              <span className="rd-meta">{stat.label}</span>
+            </li>
+          ))}
+        </ul>
+      </details>
     );
   }
 
@@ -3799,8 +3831,6 @@ export function apply(ctx: Context) {
     windowDays: number;
   }) {
     const [selectedId, setSelectedId] = React.useState<string | null>(null);
-    /** The rail's window is the reader's, keyed on the subject so switching repository returns to the lead. */
-    const [railAllFor, setRailAllFor] = React.useState<string | null>(null);
     /**
      * The EntityTag contract's other half: a tag elsewhere in the app navigates here and *selects*, so the
      * view has to honour the request rather than only opening. Keyed on `seq` so the same repository asked for
@@ -3816,15 +3846,34 @@ export function apply(ctx: Context) {
       repositories[0] ??
       null;
 
-    // The rail is a window, not a feed (RAIL_ACTIVITY_LEAD) — the rule the Topics and People rails already use.
-    const railAll = railAllFor !== null && railAllFor === selected?.repository.id;
-    const railActivity = selected?.recentActivity ?? [];
-    const railShown = railAll ? railActivity : railActivity.slice(0, RAIL_ACTIVITY_LEAD);
-    const railHidden = railActivity.length - railShown.length;
-    // The lane's current/completed split, through the one predicate both lanes use, so "current work" means the
-    // same thing here as it does on a topic.
-    const currentAxes = (selected?.axes ?? []).filter((axis) => !isTerminalAxis(axis.state));
-    const foldedAxes = (selected?.axes ?? []).filter((axis) => isTerminalAxis(axis.state));
+    // The repository's work grouped by project: a muted project heading, a short project intro with the
+    // right-aligned Open project action, then the shared work cards. Current work reads first inside each
+    // group (the one terminal predicate), and the projection's own order survives within each partition.
+    const repositoryGroups: Array<{
+      topic: { id: string; name: string };
+      axes: AxisScan[];
+    }> = [];
+    {
+      const byTopic = new Map<string, number>();
+      for (const axis of selected?.axes ?? []) {
+        const name =
+          selected?.topics.find((link) => link.topic.id === axis.topicId)?.topic
+            .name ?? "Unrecorded project";
+        let at = byTopic.get(axis.topicId);
+        if (at === undefined) {
+          at = repositoryGroups.length;
+          byTopic.set(axis.topicId, at);
+          repositoryGroups.push({ topic: { id: axis.topicId, name }, axes: [] });
+        }
+        repositoryGroups[at].axes.push(axis);
+      }
+      for (const group of repositoryGroups) {
+        group.axes = [
+          ...group.axes.filter((axis) => !isTerminalAxis(axis.state)),
+          ...group.axes.filter((axis) => isTerminalAxis(axis.state)),
+        ];
+      }
+    }
     // D5: the people on this repository, derived from the people rollup's own axes (an axis carries the
     // repositories it names). When that rollup is truncated the card says so rather than presenting a bounded
     // subset as the whole list.
@@ -3878,11 +3927,14 @@ export function apply(ctx: Context) {
           ))}
         </ul>
         {selected ? (
-          <Card
-            className="rd-panel"
+          <details
+            className="rd-panel rd-topic-detail"
+            data-rd-detail-header="true"
+            data-rd-detail-mode="disclosure"
             data-rd-repository-panel={selected.repository.fullName}
+            open
           >
-            <CardHeader>
+            <summary className="rd-topic-summary">
               <DetailHeader
                 badge={
                   /* The prototype's age box: how stale this is, before any of the detail, in the title row
@@ -3917,7 +3969,7 @@ export function apply(ctx: Context) {
                       ))}
                       {selected.axes.length > 0 ? (
                         <span className="rd-meta">
-                          {countLabel(selected.axes.length, "development axis", "development axes")}
+                          {countLabel(selected.axes.length, "workstream", "workstreams")}
                         </span>
                       ) : null}
                     </>
@@ -3925,101 +3977,110 @@ export function apply(ctx: Context) {
                 }
                 title={<CardTitle>{selected.repository.fullName}</CardTitle>}
               >
-                <span className="rd-meta">
+                <span className="rd-meta" data-rd-repository-description="true">
                   {selected.repository.description || "no description recorded"}
-                  {selected.repository.defaultBranch
-                    ? ` · default branch ${selected.repository.defaultBranch}`
-                    : ""}
                 </span>
+                {/* The description footer: the default branch as separate metadata on the left, and the
+                    repository's **actual external URL** as the GitHub ↗ destination on the lower right —
+                    distinct from the internal dashboard entry the WorkstreamCard repository names open. */}
+                <div className="rd-context-footer">
+                  <span className="rd-meta" data-rd-repository-branch="true">
+                    {selected.repository.defaultBranch
+                      ? `Default branch · ${selected.repository.defaultBranch}`
+                      : "Default branch · not recorded"}
+                  </span>
+                  {selected.repository.url ? (
+                    <a
+                      aria-label={`Open ${selected.repository.fullName} on GitHub`}
+                      className="rd-repo-ext"
+                      data-rd-repository-url="true"
+                      href={selected.repository.url}
+                      rel="noopener noreferrer"
+                      target="_blank"
+                      title={`Open ${selected.repository.fullName} on GitHub`}
+                    >
+                      GitHub ↗
+                    </a>
+                  ) : null}
+                </div>
               </DetailHeader>
-            </CardHeader>
-            <CardContent>
+            </summary>
+            <div className="rd-topic-body">
               {/* C5 convergence: the shared detail grid. The repository's current supported work is the dominant
                   lane; everything else is a rail beside it — the composition the Topics and People panels
                   already use, and the reason the panel no longer reads as four equal stacked sections. */}
               <div className="rd-detail-grid" data-rd-repository-split="true">
                 <section
                   className="rd-current-work"
-                  data-rd-repository-current={currentAxes.length}
+                  data-rd-repository-current={selected.axes.length}
                   data-rd-repository-lane="current"
                 >
                   <span className="rd-section">Current work</span>
-                  {currentAxes.length === 0 ? (
-                    <p className="rd-muted">No current work in this repository.</p>
-                  ) : (
-                    <ul className="rd-axes" data-rd-repository-axes={selected.axes.length}>
-                      {currentAxes.map((axis) => (
-                        <AxisScanItem
-                          axis={axis}
-                          key={axis.id}
-                          onOpenEntity={onOpenEntity}
-                        />
-                      ))}
-                    </ul>
-                  )}
-                  {/* The topic lane's fold, applied to the same partition: stopped work is stated with its own
-                      count and is one control away, never filed under "Current work". */}
-                  {foldedAxes.length > 0 ? (
-                    <details className="rd-completed-fold" data-rd-repository-folded={foldedAxes.length}>
-                      <summary>Completed and abandoned work ({foldedAxes.length})</summary>
-                      <ul className="rd-axes" data-rd-repository-axes={selected.axes.length}>
-                        {foldedAxes.map((axis) => (
-                          <AxisScanItem
-                            axis={axis}
-                            key={axis.id}
-                            onOpenEntity={onOpenEntity}
-                          />
-                        ))}
-                      </ul>
-                    </details>
-                  ) : null}
-                  {/* Nothing to split at all: said once, in the lane, instead of as two empty lists. */}
                   {selected.axes.length === 0 ? (
-                    <p className="rd-muted">No axis names this repository yet.</p>
-                  ) : null}
+                    <p className="rd-muted">No workstream names this repository yet.</p>
+                  ) : (
+                    <div data-rd-repository-axes={selected.axes.length}>
+                      {repositoryGroups.map((group) => (
+                        <section
+                          className="rd-project-group"
+                          key={group.topic.id}
+                        >
+                          <div className="rd-project-heading">
+                            {group.topic.name}
+                          </div>
+                          <div className="rd-project-intro">
+                            <p className="rd-meta">
+                              Workstreams this repository supports.
+                            </p>
+                            <Button
+                              onClick={() =>
+                                onOpenEntity("topic", group.topic.id)
+                              }
+                              size="sm"
+                              variant="outline"
+                            >
+                              Open project →
+                            </Button>
+                          </div>
+                          {group.axes.map((axis) => (
+                            <WorkstreamCard
+                              axis={{
+                                id: axis.id,
+                                repositories: axis.repositories,
+                                state: axis.state,
+                                stateConfidence: axis.stateConfidence,
+                                title: axis.title,
+                              }}
+                              key={axis.id}
+                              onOpenEntity={onOpenEntity}
+                              onOpenWorkstream={(axisId) =>
+                                onOpenEntity("axis", axisId)
+                              }
+                            />
+                          ))}
+                        </section>
+                      ))}
+                    </div>
+                  )}
                 </section>
 
                 <aside className="rd-side-stack">
                   <section className="rd-side-card">
                     <h3 className="rd-side-title">Recent activity</h3>
-                    <ul
-                      className="rd-activity"
-                      data-rd-repository-activity={railActivity.length}
-                      data-rd-repository-activity-shown={railShown.length}
-                    >
-                      {railShown.map((item) => (
-                        <ActivityLine
-                          axisLabel={
-                            selected.axes.find((axis) => axis.id === item.axisId)?.title ?? null
-                          }
-                          item={item}
-                          key={item.id}
-                          onOpenEntity={onOpenEntity}
-                          topicLabel={
-                            selected.topics.find((link) => link.topic.id === item.topicId)?.topic
-                              .name ?? null
-                          }
-                        />
-                      ))}
-                      {railActivity.length === 0 ? (
-                        <li className="rd-muted">No activity recorded yet.</li>
-                      ) : null}
-                    </ul>
-                    {/* The rail's remainder, stated — the identical treatment the topic and person rails use:
-                        the reader is told how many there are and can have them in one click. It governs the
-                        rail's window, not the repository. */}
-                    <ActivityFooter
-                      all={railAll}
-                      hidden={railHidden}
-                      moreAttr="data-rd-repository-activity-more"
-                      noteAttr="data-rd-repository-activity-note"
-                      onToggle={() => {
-                        setRailAllFor(
-                          railAll ? null : (selected?.repository.id ?? null)
-                        );
-                      }}
-                      shown={railShown.length}
-                      total={railActivity.length}
+                    <PagedActivityFeed
+                      countAttr="data-rd-repository-activity"
+                      dataAttr="data-rd-repository-activity-list"
+                      emptyText="No repository-scoped events in this snapshot."
+                      key={selected.repository.id}
+                      labelFor={(item) => ({
+                        axis:
+                          selected.axes.find((axis) => axis.id === item.axisId)?.title ?? null,
+                        topic:
+                          selected.topics.find((link) => link.topic.id === item.topicId)?.topic
+                            .name ?? null,
+                      })}
+                      onOpenEntity={onOpenEntity}
+                      scope={{ repositoryId: selected.repository.id }}
                     />
                   </section>
 
@@ -4078,851 +4139,444 @@ export function apply(ctx: Context) {
                   <div className="rd-row" data-rd-repository-notes-omitted="true" />
                 </aside>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </details>
         ) : null}
       </div>
     );
   }
 
   /**
-   * The progress view: the axis/problem index on the left, the selected subject's own reading on the right —
-   * Problem beside Activity on top, Plan beside Open problems beneath, then the support band. One dominant
-   * interpretation of the selected subject, and the window's totals stated rather than listed beneath it.
+   * The Progress view, ported to the accepted prototype: a shared-width workstream selector rail grouped
+   * under muted project headings, and the selected workstream's **full** context in the main column — its
+   * enduring purpose and its current reading, its blocker, its scoped plan, and its tasks as always-visible
+   * cards (concise title, full statement, status, the task's own plan and its supporting repositories).
+   * Tasks and activity are each paged five at a time by the shared numbered pager; a list that fits one page
+   * shows no control at all. Nothing here writes — selection is view state.
    */
-  /**
-   * The two counts the projection carries, phrased. Not a computation: `problems` and `openProblems` are the
-   * projection's own numbers — this only decides how to say them.
-   */
-  function problemCountLine(row: ProgressAxisRow): string {
-    if (row.problems === 0) {
-      return "no problems";
-    }
-    return row.openProblems === row.problems
-      ? `${row.problems} problem${row.problems === 1 ? "" : "s"}`
-      : `${row.openProblems} open of ${row.problems}`;
-  }
-
   function ProgressView({
+    activityOffset,
+    activityPage,
+    busy,
+    conflict,
+    correction,
+    loading,
+    onActivityOffset,
+    onCorrection,
     onOpenEntity,
-    people,
-    preselect,
+    onReloadCorrection,
+    onSaveCorrection,
+    onSelectWorkstream,
+    onTaskOffset,
     progress,
-    repositories,
+    selection,
+    taskOffset,
+    taskPage,
+    workstream,
   }: {
+    activityOffset: number;
+    /** The backend page of this workstream's activity (`activityPage`), or null when not offered. */
+    activityPage: Page<Activity> | null;
+    busy: boolean;
+    conflict: ConflictState;
+    /** The correction draft in flight for the selected workstream, or null. */
+    correction: AxisCorrection | null;
+    loading: boolean;
+    onActivityOffset: (next: number) => void;
+    onCorrection: (next: AxisCorrection | null) => void;
     onOpenEntity: (type: EntityType, id: string) => void;
-    people: PersonRollup[];
-    /**
-     * The EntityTag contract's other half for the two entities whose home is Progress: an axis tag lands in
-     * `Axes` with that axis selected, a problem tag lands in `Problems` with that problem selected — and the
-     * axis follows the problem, exactly as it does for a hand-made pick, because that rule is already the
-     * view's. A tag naming anything else never arrives here.
-     */
-    preselect: { id: string; seq: number; type: EntityType } | null;
+    onReloadCorrection: () => void;
+    onSaveCorrection: () => void;
+    onSelectWorkstream: (topicId: string, axisId: string) => void;
+    onTaskOffset: (next: number) => void;
     progress: ProgressIndex | null;
-    repositories: RepositoryRollup[];
+    selection: { axisId: string; topicId: string } | null;
+    taskOffset: number;
+    /** The backend page of this workstream's tasks, enriched (`taskPage`), or null when not offered. */
+    taskPage: Page<WorkstreamTask> | null;
+    workstream: AxisWorkstream | null;
   }) {
-    const [selectedAxisId, setSelectedAxisId] = React.useState<string | null>(null);
-    /**
-     * Which problem the Problem column shows. Set only by picking one from the list beside it — the default is
-     * the projection's first open problem for the selected axis, so this holds "the reader chose otherwise".
-     */
-    const [selectedProblemId, setSelectedProblemId] = React.useState<string | null>(null);
-    /**
-     * Which index the left column renders. `Axes` is the Progress slice's own index; `Problems` inverts the
-     * projection so the reader navigates the concrete problems. One payload serves both, so this is a switch
-     * over one model — never a second view with its own query.
-     */
-    const [indexMode, setIndexMode] = React.useState<ProgressIndexMode>("axes");
-    /**
-     * Which axis's feed the reader asked to see in full. Keyed by the axis rather than a boolean, so
-     * switching axes resets the cap by construction: the reader never has to wonder whether "show all"
-     * from the axis they just left is still in force on this one.
-     */
-    const [feedAllFor, setFeedAllFor] = React.useState<string | null>(null);
-    /**
-     * Apply an arriving tag once, keyed on `seq` so the same tag asked for twice lands twice. It sets the
-     * subview and the selection — nothing else; a tag is navigation, so a reader's own click is never
-     * overridden and no request follows from it.
-     */
-    React.useEffect(() => {
-      if (!preselect) {
-        return;
-      }
-      if (preselect.type === "axis") {
-        setIndexMode("axes");
-        setSelectedAxisId(preselect.id);
-      } else if (preselect.type === "problem") {
-        setIndexMode("problems");
-        setSelectedProblemId(preselect.id);
-      }
-    }, [preselect?.id, preselect?.seq, preselect?.type]);
-    // ---- the index's subject, and the two columns that follow it ---------------------------------------
-    // One payload, two indexes. Row sets, order, states, counts and staleness all come from the server in
-    // both, and switching between them changes selection and nothing else — no call, no write, and no
-    // re-derivation of anything the projection already decided.
-    //
-    // Defaulting to the projection's own first row is not a ranking: the axis index arrives ordered by
-    // attention, so the axis most in need of a reader is already first. Selection changes which row is
-    // active; it does not change the order, and nothing here re-sorts anything.
+    // The rail: every workstream, grouped under its project's name (a muted heading, no tree indentation).
+    // Grouping preserves the projection's own first-appearance order and re-sorts nothing.
     const axisRows = progress?.axes.axes ?? [];
-    const problemRows = progress?.problems.problems ?? [];
-    const problemsMode = indexMode === "problems";
-    const selectedAxisRow = axisRows.find((row) => row.id === selectedAxisId) ?? null;
-    /** The reader's own problem pick, or the problem they picked on the axis it belongs to. */
-    const chosenProblem: ProgressProblemRow | null = selectedProblemId
-      ? (problemRows.find((row) => row.id === selectedProblemId) ?? null)
-      : null;
-    const axesModeAxis: ProgressAxisRow | null = selectedAxisRow ?? axisRows[0] ?? null;
-    const axesModeProblems = problemRows.filter((row) => row.axisId === axesModeAxis?.id);
-    // `Problems` mode shows the reader's own pick if they made one and otherwise the projection's first
-    // problem row — the same "the page never opens on a choice it invented" rule the axis index uses.
-    // `Axes` mode keeps steps 1–5's rule exactly: the pick when it belongs to this axis, else the first
-    // *open* problem in the projection's order, else the axis's first problem whatever its state.
-    const shownProblem: ProgressProblemRow | null = problemsMode
-      ? (chosenProblem ?? problemRows[0] ?? null)
-      : chosenProblem && chosenProblem.axisId === axesModeAxis?.id
-        ? chosenProblem
-        : // Axes mode emphasizes CURRENT work: the card is the axis's first open Problem in projection
-          // order, or the one explicitly selected. A resolved Problem is never shown here — with none open
-          // there is no card, and the axis still stands (the Activity column still follows it). Resolved
-          // Problems stay inspectable in the Problems subview, which is the view that shows the full
-          // inventory. The fallback to `axesModeProblems[0]` contradicted the heading's own count.
-          (axesModeProblems.filter((row) => row.state === "open")[0] ?? null);
-    // In `Axes` the columns follow the selected axis. In `Problems` the axis follows the problem on screen,
-    // so the card, the plan, the sections and the Activity feed all describe that problem's own parent
-    // context — read off the projection's relations, never re-derived in the markup. With no problem on
-    // screen (a dataset that has none) there is nothing to follow and the axis selection stands.
-    const parentAxisOfShownProblem: ProgressAxisRow | null =
-      shownProblem === null
-        ? null
-        : (axisRows.find((row) => row.id === shownProblem.axisId) ?? null);
-    const activeAxis: ProgressAxisRow | null = problemsMode
-      ? (parentAxisOfShownProblem ?? axesModeAxis)
-      : axesModeAxis;
-    // The axis's own problems, taken from the projection's list in the projection's order. The *count* in the
-    // heading is the server's (`activeAxis.openProblems`), and the rows are the server's rows: a test asserts
-    // the two agree, so a heading can never overstate what it lists.
-    const axisProblems = problemRows.filter((row) => row.axisId === activeAxis?.id);
-    const openAxisProblems = axisProblems.filter((row) => row.state === "open");
-    // The server already grouped the window by axis and put the groups in the index's order, so the page
-    // looks a bucket up rather than filtering a flat list to decide what belongs to this axis.
-    const feed =
-      (progress?.activity.byAxis ?? []).find(
-        (bucket) => bucket.axisId === activeAxis?.id
-      ) ?? null;
-    const feedAll = feedAllFor !== null && feedAllFor === (activeAxis?.id ?? "");
-    const feedShown = feed === null || feedAll ? (feed?.events ?? []) : feed.events.slice(0, FEED_LEAD);
-    const feedHidden = (feed?.events.length ?? 0) - feedShown.length;
-    const axisPlan = activeAxis?.plan ?? null;
-    // Whether the plan claims an order is read off the projection's own `position` values and nothing else:
-    // a step that claims no position is never given one, and a plan whose steps claim none says so rather
-    // than letting the list's order read as a sequence the model never asserted.
-    const planClaimsOrder =
-      axisPlan?.steps.some((step) => step.position !== null) ?? false;
-
-    /**
-     * The steering the sections show: the problem's own claims and the axis's, kept as two lists because they
-     * answer different questions and are rendered under separate labels. The store has already excluded
-     * ordinary notes and agent-authored readings, so nothing is filtered here.
-     */
-    const problemSteering = shownProblem?.steering ?? [];
-    const axisSteering = activeAxis?.steering ?? [];
-
-    /** The inventory's compact context for one problem: its repositories, its step, and how alive it is. */
-    function problemContext(problem: ProgressProblemRow): string {
-      const parts: string[] = [
-        problem.repositories.length === 0
-          ? "no repository"
-          : problem.repositories.map((repo) => repo.fullName).join(", "),
-      ];
-      if (problem.planStepTitle) {
-        parts.push(`step: ${problem.planStepTitle}`);
+    const groups: Array<{ name: string; rows: ProgressAxisRow[] }> = [];
+    const groupAt = new Map<string, number>();
+    for (const row of axisRows) {
+      const at = groupAt.get(row.topicId);
+      if (at === undefined) {
+        groupAt.set(row.topicId, groups.length);
+        groups.push({ name: row.topicName, rows: [row] });
+      } else {
+        groups[at].rows.push(row);
       }
-      parts.push(countLabel(problem.activityCount, "event", "events"));
-      parts.push(`last activity ${describeAge(problem.recencyAt)}`);
-      return parts.join(" · ");
     }
 
-    /** The problem's own fields, phrased — nothing here is computed that the projection did not carry. */
-    function problemFacts(problem: ProgressProblemRow): string {
-      const parts = [
-        problem.authorType === "human" ? "owner-authored" : "librarian-inferred",
-      ];
-      if (problem.planStepTitle) {
-        parts.push(`step: ${problem.planStepTitle}`);
-      }
-      if (problem.repositories.length > 0) {
-        parts.push(problem.repositories.map((repo) => repo.fullName).join(", "));
-      }
-      parts.push(countLabel(problem.activityCount, "event", "events"));
-      parts.push(`last activity ${describeAge(problem.recencyAt)}`);
-      return parts.join(" · ");
-    }
-
-    /**
-     * The repository an event names, resolved from the rollups already in this payload — a tag must never cost a
-     * call, and the repository's own name is the label the contract asks for. `null` when the id is absent or the
-     * rollup does not carry it: then no tag renders, rather than a tag that names nothing.
-     */
-    function repositoryOf(id: string | null): { fullName: string; id: string } | null {
-      if (id === null) {
-        return null;
-      }
-      return (
-        repositories.find((entry) => entry.repository.id === id)?.repository ?? null
-      );
-    }
-
-    /**
-     * The problem an event is evidence for, when the projection carries it — the tag's label is the problem's
-     * own statement, so the same problem reads the same here and in the index.
-     */
-    function problemOf(id: string | null): ProgressProblemRow | null {
-      return id === null ? null : (problemRows.find((row) => row.id === id) ?? null);
-    }
-
-    /**
-     * The problem index's context line: where the problem sits first (parent axis, topic), then the same
-     * compact context the axis inventory's rows already carry. Reusing `problemContext` is deliberate — one
-     * phrasing of one set of facts, so the two lists cannot describe the same problem differently.
-     */
-    function indexProblemContext(problem: ProgressProblemRow): string {
-      return `${problem.axisTitle} · ${problem.topicName} · ${problemContext(problem)}`;
-    }
-
-    /**
-     * Switching the index's subject. Two explicit rules, neither of which invents a selection:
-     *
-     *  - `Axes → Problems` keeps the reader where they were: their own problem pick if they made one, else
-     *    the first **open** problem of the axis on screen in the projection's order (the rule the axis
-     *    index's own default already uses), else that axis's first problem whatever its state, else nothing —
-     *    a dataset with no problem has no bridge to preserve.
-     *  - `Problems → Axes` selects the problem's parent axis, so the axis index marks the row the page is
-     *    actually showing.
-     *
-     * Nothing else happens: no action is called, no state is written server-side, and the payload is not
-     * re-read. The switch is the whole of it.
-     */
-    function switchIndex(next: ProgressIndexMode) {
-      if (next === indexMode) {
-        return;
-      }
-      if (next === "problems") {
-        setSelectedProblemId(
-          chosenProblem?.id ?? openAxisProblems[0]?.id ?? axisProblems[0]?.id ?? null
-        );
-      } else if (shownProblem) {
-        setSelectedAxisId(shownProblem.axisId);
-      }
-      setIndexMode(next);
-    }
+    const axis = workstream?.axis ?? null;
+    // The visible task cards read the **backend page** (`problemPage`, enriched), scoped to this axis; the
+    // read's own `axis.problems` array stays beside it for compatibility and for the direct-navigation
+    // index, but it never draws the page. A responder that carries no page (a legacy read) falls back to a
+    // client slice of the same array — same rows, same order, one code path.
+    const tasks = axis?.problems ?? [];
+    const taskTotal = taskPage ? taskPage.total : tasks.length;
+    const taskShown = taskPage
+      ? taskPage.items
+      : tasks.slice(taskOffset, taskOffset + PROGRESS_PAGE_SIZE);
+    // One activity list, two sources: the backend page when the read offers it, else the read's own
+    // activity list (the store builds `axis.history`) paged client-side. Totals and rows come from the
+    // same scoped dataset either way.
+    const activityAll = axis?.history ?? [];
+    const activityItems = activityPage
+      ? activityPage.items
+      : activityAll.slice(activityOffset, activityOffset + PROGRESS_PAGE_SIZE);
+    const activityTotal = activityPage ? activityPage.total : activityAll.length;
+    const axisRepositories = axis?.repositories ?? [];
+    // The projection's own recorded evidence for the selected workstream (`axisEvidence`, capped per
+    // source). Declared here so the panel renders the fact rather than a raw `?? []` inline twice.
+    const evidence = axis?.evidence ?? [];
+    // The evidence line's exact displayed words, derived ONCE: the span's text and its native `title`
+    // are the same complete string, so hovering the clamped (one-line, ellipsised) reading reveals
+    // precisely what is shown — including " + more recorded evidence" and the no-evidence claim — and
+    // never a fabricated total the read was not given. One formatter, read twice (D1/#17/#18).
+    const evidenceText =
+      evidence.length > 0
+        ? `Evidence: ${evidence
+            .slice(0, 3)
+            .map((item) => (item.by ? `${item.label} (${item.by})` : item.label))
+            .join(" · ")}${evidence.length > 3 ? " + more recorded evidence" : ""}`
+        : "No evidence on record — a 'confirmed' reading needs evidence";
+    const correcting = correction != null && correction.axisId === axis?.id;
+    const projectName =
+      workstream?.topic.name ??
+      groups.find((group) =>
+        group.rows.some((row) => row.id === selection?.axisId)
+      )?.name ??
+      "Not recorded";
 
     return (
       <div className="rd-stack" data-rd-view="progress">
         <ViewHeading view="progress" />
-        {/*
-         * The desktop composition the contract asks for: the index on the left, the selected axis's Problem in
-         * the central column, and its Activity feed beside it — all three visible at once. They are siblings
-         * in one wrapping row, so below a reading width they stack in semantic order (Problem, then Activity,
-         * per interaction-spec §13) rather than squeezing into columns that no longer fit.
-         */}
-        {/*
-         * The index's subject — `Axes | Problems`. This is a **switch**, not a view: both positions render
-         * the same `get_progress` payload, so it issues no call, writes nothing, and preserves selection
-         * across the two wherever the problem↔axis relation makes the bridge explicit (`switchIndex`).
-         * It sits with the column it governs rather than in the toolbar, because the page below it is the
-         * same page in both positions.
-         */}
-        <div
-          aria-label="Progress index"
-          className="rd-cluster rd-progress-switch"
-          data-rd-progress-switch="true"
-          data-rd-progress-subview={indexMode}
-          role="group"
-        >
-          {PROGRESS_INDEX_OPTIONS.map((option) => (
-            <Button
-              aria-pressed={option.value === indexMode}
-              data-rd-progress-subview-option={option.value}
-              key={option.value}
-              onClick={() => switchIndex(option.value)}
-              size="sm"
-              variant="outline"
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
-
         <div className="rd-split rd-progress-top" data-rd-progress-top="true">
-        {/*
-         * The index — rendered straight from `get_progress`, in one of its two subjects.
-         *
-         * `Axes` (the default): server order is the presentation order — no re-sorting, no re-grouping, no
-         * client-side recomputation of `stale` or of either problem count. The row's two numbers and its
-         * stale flag are read off the projection; only their phrasing is decided here.
-         *
-         * `Problems`: the projection inverted — the concrete problem becomes the navigation object, and the
-         * rows are the server's problem list in the server's order, each carrying its own state, parent
-         * axis, topic and recency. Picking one drives the *same* reading surface, sections and feed the axis
-         * index drives. Nothing is recomputed, and nothing is written.
-         *
-         * Selection marks a row active and does nothing else — it filters nothing. The index is a projection
-         * renderer, not a second model.
-         */}
-        <div
-          className="rd-progress-index"
-          data-rd-progress-index="true"
-          data-rd-progress-index-mode={indexMode}
-          data-rd-progress-index-rows={(problemsMode ? problemRows : axisRows).length}
-          data-rd-progress-index-stale-after={progress?.axes.staleAfterDays ?? 0}
-          data-rd-progress-index-window={progress?.axes.activitySinceDays ?? 0}
-        >
-          {problemsMode ? (
-            <ul className="rd-index" data-rd-problem-index-list={problemRows.length}>
-              {problemRows.map((problem) => (
-                <li key={problem.id}>
-                  <button
-                    /* The problem the reading surface is showing, by the same active-row rule the axis index uses. */
-                    aria-pressed={shownProblem?.id === problem.id}
-                    className="rd-index-item"
-                    data-rd-problem-index={problem.id}
-                    data-rd-problem-index-axis={problem.axisId}
-                    data-rd-problem-index-state={problem.state}
-                    data-rd-problem-index-topic={problem.topicName}
-                    /* The raw value the context line phrases — carried so the pass can compare the phrase's
-                       source against `get_progress` instead of trusting the phrase (the C2 technique). */
-                    data-rd-problem-index-recency={problem.recencyAt ?? ""}
-                    onClick={() => {
-                      setSelectedProblemId(problem.id);
-                      setSelectedAxisId(problem.axisId);
-                    }}
-                    type="button"
-                  >
-                    <div className="rd-cluster">
-                      <StateBadge
-                        confidence={problem.stateConfidence}
-                        state={problem.state as ProblemState}
-                      />
-                      <span className="rd-strong">{problem.statement}</span>
-                    </div>
-                    <span className="rd-meta" data-rd-problem-index-context="true">
-                      {indexProblemContext(problem)}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-          <ul className="rd-index">
-            {(progress?.axes.axes ?? []).map((row) => (
-              <li key={row.id}>
-                <button
-                  /*
-                   * The row the detail columns are actually showing — the derived default included. Marking
-                   * only the *clicked* row would leave the page displaying an axis's detail with nothing
-                   * selected, which is a hidden state the reader cannot see through.
-                   */
-                  aria-pressed={activeAxis?.id === row.id}
-                  className="rd-index-item"
-                  data-rd-index-activity={row.activityInWindow}
-                  data-rd-index-axis={row.id}
-                  data-rd-index-open-problems={row.openProblems}
-                  data-rd-index-problems={row.problems}
-                  data-rd-index-stale={row.stale}
-                  data-rd-index-state={row.state}
-                  data-rd-index-topic={row.topicName}
-                  /* As on the problem index: the raw `recencyAt` behind `last activity …`, for the pass. */
-                  data-rd-index-recency={row.recencyAt ?? ""}
-                  onClick={() => setSelectedAxisId(row.id)}
-                  type="button"
-                >
-                  {/* V1/A4 — the shared index-row grammar: the title takes the row's full width, and the age
-                      (V1/A3: the bare age, not the label) joins the pill line beneath it. */}
-                  <span className="rd-strong">{row.title}</span>
-                  {/* V1 Task 2.5 rehearsed moving this pill up beside the title, and the render rejected it:
-                      at 240px a full-size axis title cannot share the line with a pill ("PARKED · INFERRED" is
-                      ~90px), so the title would lose the line it now owns outright and the row would grow back
-                      to three lines — in the one rail the review's own table already flags as "rows much
-                      taller" (§1). The other three index rails carry no pill in the index at all, so this is
-                      not drift from a pattern the rest of the page already sets; it is a Progress-local
-                      choice, and it belongs to the row-by-row pass that has the montage in hand. */}
-                  <span className="rd-meta">
-                    <StateBadge confidence={row.stateConfidence} state={row.state} />
-                    {` · ${row.topicName} · ${problemCountLine(row)}${
-                      row.stale ? " · stale" : ""
-                    }`}
-                    {` · ${describeAge(row.recencyAt)}`}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-          )}
-          {problemsMode && problemRows.length === 0 ? (
-            <p className="rd-muted" data-rd-problem-index-empty="true">
-              No problems yet.
-            </p>
-          ) : null}
-          {!problemsMode && progress && progress.axes.axes.length === 0 ? (
-            <p className="rd-muted" data-rd-progress-index-empty="true">
-              No axes yet.
-            </p>
-          ) : null}
-        </div>
-        {/* ONE pane holds everything right of the index: the selected subject's own header, then the three
-            grouped rows the prototype nests inside it. Before this the Problem and Activity columns were the
-            index's own siblings in one wrapping row and every lower section was an independent full-width
-            band, so the selected axis was never the subject of the pane — its identity sat in the index row
-            and was repeated as tags inside the Problem column. */}
-        {/* V1/A5 — a Card, like the other three views' detail panes, so this pane takes the host's surface
-            grammar instead of the 1px left rule it used to carry. Everything below is unchanged: the pane
-            holds one axis's own header, then the three grouped rows the prototype nests inside it. */}
-        <Card
-          className="rd-progress-detail"
-          data-rd-progress-detail="true"
-          data-rd-progress-detail-axis={activeAxis?.id ?? ""}
-        >
-          {/* The axis as this pane's subject: its state, its title, the context its projection row carries
-              (the topic and the axis itself, both navigable — the payload carries no repository or person
-              relation at axis scope, and none is invented here), and when it last moved. */}
-          <DetailHeader
-            badge={
-              activeAxis ? (
-                <StateBadge confidence={activeAxis.stateConfidence} state={activeAxis.state} />
-              ) : null
-            }
-            context={
-              activeAxis ? (
-                <>
-                  <EntityTag
-                    id={activeAxis.topicId}
-                    label={activeAxis.topicName}
-                    onOpen={onOpenEntity}
-                    type="topic"
-                  />
-                  <EntityTag
-                    id={activeAxis.id}
-                    label={activeAxis.title}
-                    onOpen={onOpenEntity}
-                    type="axis"
-                  />
-                </>
-              ) : null
-            }
-            title={
-              /* V1/A1 — one title element, as on the other three panes, so the view has one title size and the
-                 state badge takes the shared badge slot instead of living inside the title. That placement was
-                 not only a style divergence: it put the badge's word into this element's textContent —
-                 "active" glued to the title with no separator — and the pass compares that text to the selected
-                 index row's title with === (verify-page.mjs:4818), so the check was red. Measured before this
-                 change: detailTitle "activeSignal analysis — …" against selectedRowTitle "Signal analysis — …". */
-              <CardTitle>
-                <span data-rd-progress-detail-title="true">
-                  {activeAxis?.title ?? "Nothing is selected"}
-                </span>
-              </CardTitle>
-            }
+          <ul
+            className="rd-index rd-progress-index"
+            data-rd-progress-index="true"
+            data-rd-progress-index-rows={axisRows.length}
+            data-rd-progress-index-window={progress?.axes.activitySinceDays ?? 0}
           >
-            {activeAxis ? (
-              <span className="rd-cluster" data-rd-progress-recency="true">
-                <RecencyLabel at={activeAxis.recencyAt} prefix="last activity " />
-                {activeAxis.stale ? <span className="rd-muted">· stale</span> : null}
-              </span>
-            ) : null}
-          </DetailHeader>
-
-          {/* Row 1 — the glimpse: the Problem beside its Activity, on C1's own dominance grid (the Problem the
-              main lane, the Activity its subordinate rail). */}
-          <div className="rd-detail-grid rd-progress-pair" data-rd-progress-pair="true">
-            {/*
-             * The central Problem column — the reading surface, in both index modes, from one set of components.
-             *
-             * `Axes`: the heading's number is the projection's own `openProblems` for this axis, and the card is
-             * the first open problem *in the projection's order* — no recency ranking, no activity-count ranking,
-             * no repository-count ranking — with the remaining ones listed and selectable.
-             *
-             * `Problems`: the card is the problem the index selected, which may be closed out, so a count of open
-             * problems would describe something the card is not showing. The heading names what the card is, and
-             * a context line says where the problem sits.
-             */}
-            <div
-              className="rd-progress-problem"
-              data-rd-progress-problem-axis={activeAxis?.id ?? ""}
-              data-rd-progress-problem-mode={indexMode}
-              data-rd-progress-problem-open={activeAxis?.openProblems ?? 0}
-              data-rd-progress-problem-shown={shownProblem?.id ?? ""}
-            >
-              <h3 className="rd-section" data-rd-progress-problem-heading="true">
-                Current problem
-              </h3>
-              {problemsMode && shownProblem ? (
-                <span className="rd-meta" data-rd-progress-problem-context="true">
-                  {problemContext(shownProblem)}
-                </span>
-              ) : null}
-              {activeAxis === null && !problemsMode ? (
-                <p className="rd-muted" data-rd-progress-problem-empty="true">
-                  No axis is selected.
-                </p>
-              ) : shownProblem === null ? (
-                <p className="rd-muted" data-rd-progress-problem-empty="true">
-                  {problemsMode
-                    ? "No problem is recorded yet."
-                    : axesModeProblems.length > 0
-                      ? "No open problems on this axis."
-                      : "Nothing is recorded against this axis."}
-                </p>
-              ) : (
-                <div className="rd-problem-card" data-rd-problem={shownProblem.id}>
-                  <div className="rd-cluster">
-                    <StateBadge
-                      confidence={shownProblem.stateConfidence}
-                      state={shownProblem.state as ProblemState}
-                    />
-                    <span className="rd-meta">{describeAge(shownProblem.recencyAt)}</span>
-                  </div>
-                  <p className="rd-strong">{shownProblem.statement}</p>
-                  <p className="rd-meta" data-rd-problem-facts="true">
-                    {problemFacts(shownProblem)}
-                  </p>
-                  {shownProblem.people.length > 0 ? (
-                    <p className="rd-meta">
-                      {shownProblem.people
-                        .map((person) => person.displayName)
-                        .join(", ")}
-                    </p>
-                  ) : null}
-                </div>
-              )}
-            </div>
-            {/*
-             * The Activity column: the server's bucket for this axis, newest first, rendered with the same line
-             * the grouped view below uses. The count in the heading is the axis row's `activityInWindow`, which
-             * the projection computes from the same predicate as the bucket's `eventCount`.
-             *
-             * In `Problems` the bucket is the problem's **parent axis**, so the column says which axis it is
-             * showing rather than letting the reader assume the feed is the problem's own events. It is the
-             * projection's bucket either way — the markup does not reconstruct what belongs to what.
-             */}
-            <div
-              className="rd-progress-activity"
-              data-rd-progress-feed-axis={activeAxis?.id ?? ""}
-              data-rd-progress-feed-count={feed?.eventCount ?? 0}
-              data-rd-progress-feed-mode={indexMode}
-            >
-              <h3 className="rd-side-title">Recent activity</h3>
-              <span className="rd-meta" data-rd-progress-activity-total="true">
-                {countLabel(activeAxis?.activityInWindow ?? 0, "recorded event", "recorded events")} total
-              </span>
-              {problemsMode && activeAxis ? (
-                <span className="rd-meta" data-rd-progress-feed-parent="true">
-                  {`on ${activeAxis.title}`}
-                </span>
-              ) : null}
-              {feed === null || feed.events.length === 0 ? (
-                <p className="rd-muted" data-rd-progress-feed-empty="true">
-                  Nothing recorded against this axis.
-                </p>
-              ) : (
-                <ul
-                  className="rd-feed"
-                  data-rd-progress-feed={feed.events.length}
-                  data-rd-progress-feed-shown={feedShown.length}
-                >
-                  {/*
-                   * The ActivityFeed's half of the contract, rendered through the one shared event line
-                   * (component-contract.md § ActivityFeed): the date, the summary, provenance, and a tag for
-                   * every entity the event names. The repository and problem are resolved from the rollups and
-                   * the problem list already in this payload, so a tag costs no call; an event with no mapped
-                   * account says so in words, and an event naming a problem the projection does not carry gets no
-                   * tag rather than an unnamed one.
-                   */}
-                  {feedShown.map((event) => (
-                    <ActivityLine
-                      attrs={{ "data-rd-feed-event": "true" }}
-                      axisLabel={
-                        event.axisId !== null && event.axisId === activeAxis?.id
-                          ? activeAxis?.title ?? null
-                          : null
-                      }
-                      item={event}
-                      key={event.id}
-                      onOpenEntity={onOpenEntity}
-                      person={event.person}
-                      problemLabel={problemOf(event.problemId)?.statement ?? null}
-                      repositoryLabel={repositoryOf(event.repositoryId)?.fullName ?? null}
-                      topicLabel={
-                        event.topicId !== null && event.topicId === activeAxis?.topicId
-                          ? activeAxis?.topicName ?? null
-                          : null
-                      }
-                      unattributedNote="no account attributed"
-                    />
-                  ))}
-                </ul>
-              )}
-              {/*
-               * The feed is capped, and says so. This is not a second disclosure for the *axis* — that is
-               * `Read topic`'s job and stays one control — it governs the feed's own window, which is a
-               * different piece of state. The count is the projection's own, so capping what is shown loses
-               * nothing silently: the reader is told how many there are and can have them in one click.
-               * The remainder block itself is the shared `ActivityFooter` (one implementation for all four).
-               */}
-              <ActivityFooter
-                all={feedAll}
-                hidden={feedHidden}
-                moreAttr="data-rd-progress-feed-more"
-                noteAttr="data-rd-progress-feed-note"
-                onToggle={() => {
-                  setFeedAllFor(feedAll ? null : (activeAxis?.id ?? ""));
-                }}
-                shown={feedShown.length}
-                total={feed?.events.length ?? 0}
-              />
-            </div>
-          </div>
-
-          {/*
-           * Row 2 — the plan beside the axis's problem inventory. Both are optional and each renders only where
-           * the projection carries one, so the row collapses honestly rather than reserving a column for a
-           * section this axis does not have.
-           */}
-          {axisPlan !== null || openAxisProblems.length > 0 ? (
-            <div className="rd-progress-row" data-rd-progress-row="true">
-            {/*
-             * The axis's plan, below the top row rather than a fourth column: the composition's glance — which
-             * axis, which problem, what has been happening — is the strongest part of the layout, and a plan
-             * squeezed in beside it would cost that. Optional by construction: an axis with no plan renders
-             * **nothing** here, not an empty shell and not a warning that one is missing.
-             *
-             * The steps are the projection's own list in the projection's own order. A step's number is rendered
-             * only where the step claims a `position`; where the plan claims none, the page says so instead of
-             * letting the list order imply a sequence.
-             */}
-            {axisPlan ? (
-              <section
-                className="rd-progress-plan"
-                data-rd-progress-plan={axisPlan.id}
-                data-rd-progress-plan-claims-order={planClaimsOrder}
-                data-rd-progress-plan-steps={axisPlan.steps.length}
-              >
-                {/* A7: the label and the count were two spans in a 4px cluster, which rendered as
-                    "PLAN · 2 STEPS1 of 2 done" — the count collided with the label it was reporting on. One
-                    header row, the label left and the progress right, on a shared baseline. */}
-                <div className="rd-row">
-                  <span className="rd-section">
-                    {`Plan · ${countLabel(axisPlan.steps.length, "step", "steps")}`}
-                  </span>
-                  <span className="rd-meta">
-                    {`${axisPlan.stepsDone} of ${axisPlan.steps.length} done`}
-                  </span>
-                </div>
-                {planClaimsOrder ? null : (
-                  <span className="rd-meta" data-rd-progress-plan-unordered="true">
-                    unordered — no step claims a position
-                  </span>
-                )}
-                <p className="rd-meta">{axisPlan.summary}</p>
-                <ul className="rd-plan-steps" data-rd-plan-steps={axisPlan.steps.length}>
-                  {axisPlan.steps.map((step) => (
-                    <li
-                      className="rd-plan-step"
-                      data-rd-plan-step={step.id}
-                      data-rd-plan-step-position={step.position === null ? "" : String(step.position)}
-                      key={step.id}
-                    >
-                      {/* A7: the state took the row's right edge rather than its middle — as a cluster member
-                          it sat between the number and the title, so the one word a reader scans a step list
-                          for came last in the line. The shown-step marker stays a line of its own: it is a
-                          sentence, not a status, and inline it would crowd the title. */}
-                      <span className="rd-row">
-                        <span className="rd-cluster">
-                          {step.position === null ? null : (
-                            <span className="rd-meta">{`${step.position + 1}.`}</span>
-                          )}
-                          <span className="rd-strong">{step.title}</span>
-                        </span>
-                        <StateBadge kind="stored" state={step.state} />
-                      </span>
-                      {step.id === shownProblem?.planStepId ? (
-                        <span className="rd-meta" data-rd-plan-step-shown="true">
-                          the step the problem on screen sits on
-                        </span>
-                      ) : null}
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
-
-            {/*
-             * The axis's problem inventory: navigation plus compact context, while the card in the middle column
-             * stays the detailed reading surface. Open problems only — resolved ones are not folded in yet — in
-             * the projection's own order and set, with no ranking, severity or importance of any kind. The list
-             * is *not* "the others": every open problem appears, including the one on screen, which is marked
-             * active so the reader can see which card the list is driving.
-             *
-             * The heading carries no count on purpose: the count is already on the card column's heading, and two
-             * headings asserting the same number would be two sources for one fact. An axis with no open problem
-             * renders nothing here — the axis is meaningful on its own, and a warning about a missing problem
-             * would say otherwise.
-             */}
-            {openAxisProblems.length > 0 ? (
-              <section
-                className="rd-progress-problems"
-                data-rd-progress-problems={openAxisProblems.length}
-                data-rd-progress-problems-axis={activeAxis?.id ?? ""}
-              >
-                <span className="rd-section">Open problems on this axis</span>
-                <ul className="rd-problems" data-rd-problem-list={openAxisProblems.length}>
-                  {openAxisProblems.map((problem) => (
-                    <li key={problem.id}>
+            {groups.map((group) => (
+              <li className="rd-project-group" key={group.rows[0]?.topicId ?? group.name}>
+                <div className="rd-project-heading">{group.name}</div>
+                <ul className="rd-index-list">
+                  {group.rows.map((row) => (
+                    <li key={row.id}>
                       <button
-                        aria-pressed={problem.id === shownProblem?.id}
+                        aria-pressed={selection?.axisId === row.id}
                         className="rd-index-item"
-                        data-rd-problem-choice={problem.id}
-                        onClick={() => setSelectedProblemId(problem.id)}
+                        data-rd-index-axis={row.id}
+                        data-rd-index-open-problems={row.openProblems}
+                        data-rd-index-problems={row.problems}
+                        data-rd-index-recency={row.recencyAt ?? ""}
+                        data-rd-index-state={row.state}
+                        data-rd-index-topic={row.topicName}
+                        onClick={() => onSelectWorkstream(row.topicId, row.id)}
                         type="button"
                       >
-                        <div className="rd-cluster">
-                          <StateBadge
-                            confidence={problem.stateConfidence}
-                            state={problem.state as ProblemState}
+                        <span className="rd-cluster">
+                          <span
+                            aria-hidden="true"
+                            className="rd-status-dot"
+                            data-rd-state={row.state}
                           />
-                          <span className="rd-strong">{problem.statement}</span>
-                        </div>
-                        <span className="rd-meta" data-rd-problem-context="true">
-                          {problemContext(problem)}
+                          <span className="rd-strong">{row.title}</span>
+                        </span>
+                        <span className="rd-meta">
+                          <StateBadge
+                            confidence={row.stateConfidence}
+                            state={row.state}
+                          />
+                          {` · ${countLabel(row.openProblems, "open task", "open tasks")}`}
+                          {row.plan ? "" : " · No plan"}
+                          {row.recencyAt ? ` · ${describeAge(row.recencyAt)}` : ""}
                         </span>
                       </button>
                     </li>
                   ))}
                 </ul>
-              </section>
+              </li>
+            ))}
+            {axisRows.length === 0 ? (
+              <li className="rd-muted" data-rd-progress-index-empty="true">
+                No workstreams yet.
+              </li>
             ) : null}
-            </div>
-          ) : null}
+          </ul>
 
-          {/*
-           * The support band — repository threads, evidence and human steering, side by side because they
-           * answer three different questions about the same problem. Conditional as a group: a subject with
-           * none of the three renders no band at all.
-           */}
-          {(shownProblem?.repositories.length ?? 0) > 0 ||
-          (shownProblem?.evidence.length ?? 0) > 0 ||
-          problemSteering.length > 0 ||
-          axisSteering.length > 0 ? (
-            <div className="rd-progress-band" data-rd-progress-band="true">
-            {/*
-             * Repository threads — where this problem's implementation is happening. The durable relations the
-             * projection carries, in the projection's order, each an `EntityTag`: it navigates to the canonical
-             * Repository view and selects that repository, and it never filters or mutates anything. Nothing here
-             * picks a "primary" repository, because the model does not have one — an implementation link is not a
-             * parentage.
-             */}
-            {shownProblem && shownProblem.repositories.length > 0 ? (
-              <section
-                className="rd-progress-repositories"
-                data-rd-progress-repositories={shownProblem.repositories.length}
-              >
-                <span className="rd-section">Repository threads</span>
-                <div className="rd-cluster rd-tags">
-                  {shownProblem.repositories.map((repository) => (
-                    <EntityTag
-                      id={repository.id}
-                      key={repository.id}
-                      label={repository.fullName}
-                      onOpen={onOpenEntity}
-                      type="repository"
+          <div
+            className="rd-progress-detail"
+            data-rd-progress-detail="true"
+            data-rd-progress-detail-axis={selection?.axisId ?? ""}
+          >
+            {!selection ? (
+              <p className="rd-muted" data-rd-progress-empty="true">
+                Select a workstream to read its context, scoped plan and tasks.
+              </p>
+            ) : null}
+            {selection && !axis && loading ? (
+              <p className="rd-muted" data-rd-progress-loading="true">
+                Loading this workstream…
+              </p>
+            ) : null}
+            {selection && axis ? (
+              <>
+                {/* The workstream's full context: purpose (the enduring author description) and current
+                    reading (the mutable current state) shown as two separate claims, the blocker where there
+                    is one, then the workstream's own plan — no duplicate banner, no separate "Current
+                    problem" box. */}
+                <section
+                  className="rd-context-panel"
+                  data-rd-context-panel={axis.id}
+                >
+                  <div className="rd-work-head">
+                    <h3
+                      className="rd-work-title"
+                      data-rd-progress-detail-title="true"
+                    >
+                      {axis.title}
+                    </h3>
+                    <StateBadge
+                      confidence={axis.stateConfidence}
+                      state={axis.state}
                     />
-                  ))}
-                </div>
-              </section>
-            ) : null}
-
-            {/*
-             * Evidence — what substantiates the reading, kept with its source. These are the same rows the
-             * Activity column shows when they fall in the window, and they are here for a different reason: the
-             * feed is chronological movement, this is support for the problem on screen. The source type is
-             * rendered, never flattened into a generic link.
-             */}
-            {shownProblem && shownProblem.evidence.length > 0 ? (
-              <section
-                className="rd-progress-evidence"
-                data-rd-progress-evidence={shownProblem.evidence.length}
-              >
-                <span className="rd-section">Evidence</span>
-                <ul className="rd-evidence">
-                  {shownProblem.evidence.map((item) => (
-                    <li data-rd-evidence={item.id} key={item.id}>
-                      <div className="rd-cluster">
-                        <span className="rd-source" data-rd-evidence-source={item.sourceType}>
-                          {describeSource(item.sourceType, item.sourceRef)}
+                  </div>
+                  <div className="rd-context-body">
+                    <span className="rd-context-label">Purpose</span>
+                    <p className="rd-claim-value" data-rd-axis-description="true">
+                      {axis.description ? (
+                        axis.description
+                      ) : (
+                        <span className="rd-muted">
+                          No workstream purpose recorded.
                         </span>
-                        <span className="rd-strong">{item.summary}</span>
-                        <span className="rd-muted">{item.label}</span>
-                      </div>
-                      <span className="rd-meta">
-                        {`${item.occurredAt.slice(0, 10)}${
-                          item.sourceUrl ? ` · ${item.sourceUrl}` : ""
-                        }`}
+                      )}
+                    </p>
+                    <span className="rd-context-label">Current reading</span>
+                    <p className="rd-claim-value" data-rd-axis-reading="true">
+                      {axis.currentState ? (
+                        <>
+                          {axis.currentState}
+                          <ConfidenceBadge value={axis.currentStateConfidence} />
+                        </>
+                      ) : (
+                        <span className="rd-muted">
+                          No current reading recorded.
+                        </span>
+                      )}
+                      {/* The evidence line (D1/#17): what is actually recorded behind this workstream, read
+                          straight off the projection's own `evidence` set — the same set the store's write
+                          rule accepts for a `confirmed` claim. It is stated whether or not there is anything
+                          to name: "no evidence on record" is itself the claim (#18), and it is never inferred
+                          from activity counts, progress or the state confidence. The three shown make the
+                          line a reading. The projection's array is capped per source (5 activities, 5 notes),
+                          so when it holds more than three the line says more evidence is recorded WITHOUT a
+                          number: the true total is not in this read's normalized shape, and printing
+                          `evidence.length - 3` would fabricate an exact remainder the reading was not given.
+                          It rides inside the reading's own cell and line box (a block span), so it costs a
+                          line but not a grid row plus gap — the detail pane's height is measured against the
+                          first screen (the density contract). */}
+                      <span
+                        className="rd-evidence"
+                        data-rd-axis-evidence={evidence.length}
+                        data-rd-has-evidence={evidence.length > 0}
+                        title={evidenceText}
+                      >
+                        {evidenceText}
                       </span>
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
+                    </p>
+                    {axis.blocker ? (
+                      <>
+                        <span className="rd-context-label">Blocker</span>
+                        <p className="rd-claim-value" data-rd-axis-blocker="true">
+                          {axis.blocker}
+                          <ConfidenceBadge value={axis.blockerConfidence} />
+                        </p>
+                      </>
+                    ) : null}
+                  </div>
+                  <ScopedPlan label="Workstream plan" plan={axis.plan ?? null} />
+                  {axisRepositories.length > 0 ? (
+                    <div
+                      className="rd-cluster rd-tags"
+                      data-rd-context-repositories={axisRepositories.length}
+                    >
+                      <span className="rd-meta">Supporting repositories ·</span>
+                      {axisRepositories.map((repository) => (
+                        <RepoLinkPair
+                          key={repository.id}
+                          onOpen={onOpenEntity}
+                          repository={repository}
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="rd-context-footer">
+                    <span className="rd-meta">{`Project · ${projectName}`}</span>
+                    <div className="rd-cluster">
+                      {/* Correction is the primary control here (P1) — Progress is its detail destination,
+                          so the write lives beside the full workstream reading rather than on the compact
+                          Projects card. Nothing here deletes. */}
+                      <Button
+                        data-rd-correct-toggle={axis.id}
+                        disabled={busy}
+                        onClick={() => {
+                          if (correcting) {
+                            onCorrection(null);
+                            return;
+                          }
+                          onCorrection(draftFrom(axis));
+                        }}
+                        size="sm"
+                        variant={correcting ? "default" : "outline"}
+                      >
+                        {correcting ? "Cancel" : "Correct"}
+                      </Button>
+                      <Button
+                        data-rd-return-project={workstream?.topic.id ?? selection.topicId}
+                        onClick={() =>
+                          onOpenEntity(
+                            "topic",
+                            workstream?.topic.id ?? selection.topicId
+                          )
+                        }
+                        size="sm"
+                        variant="outline"
+                      >
+                        Return to project →
+                      </Button>
+                    </div>
+                  </div>
+                </section>
 
-            {/*
-             * Human steering — the constraint a person put on the librarian's reading, and nothing else: not an
-             * ordinary note, not an agent's interpretation (the store excludes both before the page sees them).
-             * The two scopes stay apart and each is labelled: a claim aimed at the axis is the axis context, not a
-             * claim about every problem beneath it.
-             */}
-            {problemSteering.length > 0 || axisSteering.length > 0 ? (
-              <section className="rd-progress-steering" data-rd-progress-steering="true">
-                <span className="rd-section">Human steering</span>
-                {problemSteering.length > 0 ? (
-                  <ul className="rd-steering" data-rd-steering-scope="problem">
-                    {problemSteering.map((claim) => (
-                      <li data-rd-steering={claim.id} key={claim.id}>
-                        <div className="rd-cluster">
-                          <span className="rd-source">{claim.kind}</span>
-                          <span className="rd-meta">
-                            {`${claim.authorType} · ${claim.recordedAt.slice(0, 10)}${
-                              claim.confidence ? ` · ${claim.confidence}` : ""
-                            }`}
-                          </span>
-                        </div>
-                        <p className="rd-steering-text">{claim.text}</p>
-                      </li>
-                    ))}
-                  </ul>
+                {correcting && correction ? (
+                  <WorkstreamCorrection
+                    axis={axis}
+                    busy={busy}
+                    conflict={conflict}
+                    correction={correction}
+                    onCorrection={onCorrection}
+                    onReload={onReloadCorrection}
+                    onSave={onSaveCorrection}
+                  />
                 ) : null}
-                {axisSteering.length > 0 ? (
-                  <ul className="rd-steering" data-rd-steering-scope="axis">
-                    {axisSteering.map((claim) => (
-                      <li data-rd-steering={claim.id} key={claim.id}>
-                        <div className="rd-cluster">
-                          <span className="rd-source">{claim.kind}</span>
-                          <span className="rd-meta">
-                            {`on the axis · ${claim.authorType} · ${claim.recordedAt.slice(0, 10)}${
-                              claim.confidence ? ` · ${claim.confidence}` : ""
-                            }`}
-                          </span>
-                        </div>
-                        <p className="rd-steering-text">{claim.text}</p>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-              </section>
+
+                <section
+                  className="rd-progress-tasks"
+                  data-rd-progress-tasks={taskTotal}
+                >
+                  <div className="rd-row">
+                    <span className="rd-section">{`Tasks (${taskTotal})`}</span>
+                  </div>
+                  {taskTotal === 0 ? (
+                    <p className="rd-muted" data-rd-progress-tasks-empty="true">
+                      No tasks recorded for this workstream.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="rd-task-list">
+                        {taskShown.map((task) => (
+                          <article
+                            className="rd-task-card"
+                            data-rd-task-card={task.id}
+                            data-rd-task-state={task.state}
+                            key={task.id}
+                          >
+                            <div className="rd-work-head">
+                              <h4 className="rd-task-title">
+                                {task.title || task.statement}
+                              </h4>
+                              <StateBadge
+                                confidence={task.stateConfidence}
+                                state={task.state as ProblemState}
+                              />
+                            </div>
+                            {task.title && task.title !== task.statement ? (
+                              <p className="rd-task-statement">{task.statement}</p>
+                            ) : null}
+                            <span className="rd-meta" data-rd-task-facts="true">
+                              {task.authorType === "human"
+                                ? "owner-authored"
+                                : "librarian-inferred"}
+                              {task.planStepTitle
+                                ? ` · step: ${task.planStepTitle}`
+                                : ""}
+                            </span>
+                            <ScopedPlan label="Task plan" plan={task.plan} />
+                            {task.repositories.length > 0 ? (
+                              <div className="rd-cluster rd-tags">
+                                <span className="rd-meta">
+                                  Supporting repositories ·
+                                </span>
+                                {task.repositories.map((repository) => (
+                                  <RepoLinkPair
+                                    key={repository.id}
+                                    onOpen={onOpenEntity}
+                                    repository={repository}
+                                  />
+                                ))}
+                              </div>
+                            ) : null}
+                            <Participants
+                              onOpen={onOpenEntity}
+                              people={task.people}
+                            />
+                          </article>
+                        ))}
+                      </div>
+                      <Pager
+                        label="Tasks"
+                        offset={taskOffset}
+                        onOffset={onTaskOffset}
+                        pageSize={PROGRESS_PAGE_SIZE}
+                        total={taskTotal}
+                      />
+                    </>
+                  )}
+                </section>
+
+                <section
+                  className="rd-progress-activity"
+                  data-rd-progress-activity-total={activityTotal}
+                >
+                  <h3 className="rd-side-title">Recent activity</h3>
+                  {activityItems.length === 0 ? (
+                    <p className="rd-muted" data-rd-progress-feed-empty="true">
+                      Nothing recorded against this workstream.
+                    </p>
+                  ) : (
+                    <ul className="rd-feed" data-rd-progress-feed={activityTotal}>
+                      {activityItems.map((item) => (
+                        <ActivityLine
+                          attrs={{ "data-rd-feed-event": item.id }}
+                          item={item}
+                          key={item.id}
+                          onOpenEntity={onOpenEntity}
+                          topicLabel={workstream?.topic.name ?? null}
+                          unattributedNote="no account attributed"
+                        />
+                      ))}
+                    </ul>
+                  )}
+                  {activityTotal > 0 ? (
+                    <Pager
+                      label="Activity"
+                      offset={activityOffset}
+                      onOffset={onActivityOffset}
+                      pageSize={PROGRESS_PAGE_SIZE}
+                      total={activityTotal}
+                    />
+                  ) : null}
+                </section>
+              </>
             ) : null}
-            </div>
-          ) : null}
-        </Card>
+          </div>
         </div>
       </div>
     );
@@ -4932,12 +4586,10 @@ export function apply(ctx: Context) {
     const [loadedOverview, setOverview] = React.useState<Overview | null>(null);
     const [loadedScope, setLoadedScope] = React.useState<number | null>(null);
     /**
-     * The selected tab. Overview is the default landing and one of the five peers — no unselected state
-     * (the earlier `null` "shell landing, not a tab" is superseded). Choosing a tab or following a tag
-     * sets it; the shell title no longer doubles as a home control because Overview is addressable
-     * directly.
+     * The selected tab. **Projects** (`"topics"`) is the default landing and one of the four peers —
+     * Overview is retired, so there is no unselected state. Choosing a tab or following a tag sets it.
      */
-    const [view, setView] = React.useState<ViewName>("overview");
+    const [view, setView] = React.useState<ViewName>("topics");
     /**
      * The entity a cross-view tag asked for, and how many times it has asked. `seq` is what makes a second
      * click on the same tag land again after the reader selected something else by hand — without it the
@@ -4960,10 +4612,9 @@ export function apply(ctx: Context) {
     }
 
     /**
-     * The Overview tab's window — the page's only query-level control, and it now belongs to Overview
-     * alone (the top-bar window selector is superseded). Every other tab reads all time.
+     * Overview is retired, so the window control went with it: every tab reads **all time**
+     * (`activitySinceDays: 0`). The store treats `activitySinceDays` as a parameter, not stored state.
      */
-    const [windowDays, setWindowDays] = React.useState(14);
     const [expandedId, setExpandedId] = React.useState<string | null>(null);
     /**
      * A topic tag's destination is the topic index, where "selected" means the card is expanded — the detail is
@@ -4977,22 +4628,45 @@ export function apply(ctx: Context) {
     }, [entityTarget?.id, entityTarget?.seq, entityTarget?.type]);
     const [detail, setDetail] = React.useState<TopicDetail | null>(null);
     /**
+     * The selected project's activity **page**, straight from the backend (`get_topic` with an
+     * `offset`/`pageSize`). The topic-wide `activity` array still arrives beside it for compatibility,
+     * but the pager reads this page — the offset the reader asked for, one `LIMIT ? OFFSET ?` at the
+     * backend — never a client slice of the array. Null until the first paged read lands.
+     */
+    const [topicActivityPage, setTopicActivityPage] = React.useState<
+      Page<Activity> | null
+    >(null);
+    const [topicActivityOffset, setTopicActivityOffset] = React.useState(0);
+    /**
      * The Progress index, straight from `get_progress`. Held here rather than inside the view for the same
      * reason the window is: it is scoped by the window, and it is replaced whole on every window change.
      */
     const [progress, setProgress] = React.useState<ProgressIndex | null>(null);
+    /**
+     * The Progress view's selected workstream and its scoped read. The selection is `{topicId, axisId}` view
+     * state (it writes nothing); `get_progress` supplies the rail, and the scoped `get_topic({topicId,
+     * axisId})` supplies the workstream's full context (purpose, current reading, blocker, plan) and its
+     * tasks, plus the backend `activityPage` for the workstream's own activity.
+     */
+    const [progressSelection, setProgressSelection] = React.useState<{
+      axisId: string;
+      topicId: string;
+    } | null>(null);
+    const [workstream, setWorkstream] = React.useState<AxisWorkstream | null>(null);
+    const [workstreamActivity, setWorkstreamActivity] = React.useState<
+      Page<Activity> | null
+    >(null);
+    /** The workstream's task page, enriched (`problemPage`) — what the visible task cards read. */
+    const [workstreamTask, setWorkstreamTask] = React.useState<
+      Page<WorkstreamTask> | null
+    >(null);
+    const [workstreamLoading, setWorkstreamLoading] = React.useState(false);
+    /** Independent page offsets: tasks and activity page separately, each five at a time. */
+    const [taskOffset, setTaskOffset] = React.useState(0);
+    const [activityOffset, setActivityOffset] = React.useState(0);
     const [correction, setCorrection] = React.useState<AxisCorrection | null>(
       null
     );
-    const [historyAxisId, setHistoryAxisId] = React.useState<string | null>(
-      null
-    );
-    /**
-     * Which topic's rail activity the reader asked to see in full, by topic id — the same shape the
-     * Progress feed uses (`feedAllFor`). Keyed on the id rather than a boolean, so the rail collapses
-     * again when the reader moves to another topic instead of carrying an expansion across.
-     */
-    const [railAllFor, setRailAllFor] = React.useState<string | null>(null);
     const [topicNote, setTopicNote] = React.useState("");
     const [conflict, setConflict] = React.useState<ConflictState>(null);
     const [activitySummary, setActivitySummary] = React.useState("");
@@ -5005,7 +4679,7 @@ export function apply(ctx: Context) {
     async function call<T extends { ok?: boolean; error?: string }>(
       action: string,
       input?: unknown,
-      options?: { conflictAxisId?: string }
+      options?: { conflictAxisId?: string; isStale?: () => boolean }
     ): Promise<T | null> {
       setBusy(true);
       setError("");
@@ -5015,6 +4689,11 @@ export function apply(ctx: Context) {
           return null;
         }
         if (result && result.ok === false) {
+          // A response superseded by a newer selection/offset is not news about what the reader is
+          // looking at: it must not raise an error over the state the newer request is establishing.
+          if (options?.isStale?.()) {
+            return null;
+          }
           const message = result.error ?? "The request was rejected.";
           // A stale write is its own case: it is reported where the person was working, with a
           // re-read, and it is never papered over by a retry. Anything else is an ordinary error.
@@ -5029,7 +4708,7 @@ export function apply(ctx: Context) {
         }
         return result;
       } catch (cause) {
-        if (!ctx.signal.aborted) {
+        if (!ctx.signal.aborted && !options?.isStale?.()) {
           setError(String((cause as Error)?.message ?? cause));
         }
         return null;
@@ -5052,10 +4731,21 @@ export function apply(ctx: Context) {
      */
     const loadSeq = React.useRef(0);
     /**
-     * The scope the current tab reads at: the Overview window on Overview, all time everywhere else.
-     * A derived value, so switching between two all-time tabs does not re-query (the dep is unchanged).
+     * Generation counters for the scoped reads, the same guard shape `loadSeq` uses for the tab
+     * projections. Every `loadWorkstream` invocation bumps `workstreamSeq` and only the newest may commit
+     * its axis, its task page and its activity page; every `loadDetail` invocation bumps `detailSeq` and
+     * only the newest may commit the project detail and its activity page. So a slower response from a
+     * previous selection or a previous pager offset can never overwrite a newer one — the A-slow/B-fast
+     * selection race and the rapid task/activity pager races both commit the response the reader last
+     * asked for, and nothing else. Each call carries both current offsets, so both pages stay correct.
      */
-    const scopeWindow = view === "overview" ? windowDays : 0;
+    const workstreamSeq = React.useRef(0);
+    const detailSeq = React.useRef(0);
+    /**
+     * Every tab reads **all time** (`activitySinceDays: 0`) now that Overview — the only window-scoped tab
+     * — is retired. A constant, so switching tabs never re-queries.
+     */
+    const scopeWindow = 0;
     // Never render a previous window's projection under a newly selected tab/window.
     const overview = loadedScope === scopeWindow ? loadedOverview : null;
     const visibleProgress = loadedScope === scopeWindow ? progress : null;
@@ -5084,8 +4774,171 @@ export function apply(ctx: Context) {
      * recorded activity all use, so a write never re-reads a scope the reader is not looking at.
      */
     function reloadCurrent(): Promise<void> {
+      // A refresh (or a write) re-reads the workstream the reader is looking at, at both page offsets they
+      // are on, so the selected context does not go stale behind a global reload.
+      if (progressSelection) {
+        void loadWorkstream(progressSelection, taskOffset, activityOffset);
+      }
       return load(scopeWindow);
     }
+
+    /**
+     * Read one workstream's task page and activity page. The scoped
+     * `get_topic({topicId, axisId, offset, pageSize})` returns the axis in full (its plan and its tasks)
+     * plus the backend `activityPage` **and** the enriched `problemPage` — both for the one `offset` sent.
+     * The two pagers are independent, so each page state issues **its own** request at **its own** offset:
+     * the task pager asks with `taskOffset`, the activity pager with `activityOffset`, and each response's
+     * page is committed only under the pager that asked for it. `items` and `total` come from one
+     * axis-scoped snapshot, so the page and its count agree.
+     *
+     * Returns the axis it landed on so a caller can rebuild a draft from the refreshed facts.
+     */
+    async function loadWorkstream(
+      selection: { axisId: string; topicId: string },
+      nextTaskOffset: number,
+      nextActivityOffset: number
+    ): Promise<AxisDetail | null> {
+      const seq = ++workstreamSeq.current;
+      const stale = () => workstreamSeq.current !== seq;
+      setWorkstreamLoading(true);
+      type WorkstreamRead = {
+        activityPage?: Page<Activity>;
+        axes?: AxisDetail[];
+        axis?: AxisDetail;
+        ok?: boolean;
+        problemPage?: Page<WorkstreamTask>;
+        topic?: { id: string; name: string; status: string };
+      };
+      const scope = {
+        axisId: selection.axisId,
+        pageSize: PROGRESS_PAGE_SIZE,
+        topicId: selection.topicId,
+      };
+      const [taskResult, activityResult] = await Promise.all([
+        call<WorkstreamRead>(
+          "get_topic",
+          { ...scope, offset: nextTaskOffset },
+          { isStale: stale }
+        ),
+        call<WorkstreamRead>(
+          "get_topic",
+          { ...scope, offset: nextActivityOffset },
+          { isStale: stale }
+        ),
+      ]);
+      if (ctx.signal.aborted) {
+        return null;
+      }
+      // A newer selection/offset read has superseded this one: commit nothing — neither the axis nor a
+      // page — so a slow earlier selection (or a slow earlier page) cannot overwrite the newer one. The
+      // superseding read owns the loading flag from here.
+      if (stale()) {
+        return null;
+      }
+      setWorkstreamLoading(false);
+      const result = taskResult ?? activityResult;
+      if (!result) {
+        return null;
+      }
+      // Two responder shapes, one view: the backend's axis-scoped read answers `axis` (plus the optional
+      // pages); a topic-wide detail answers `axes[]`, from which the workstream is the one axis.
+      const axis =
+        result.axis ??
+        (result.axes ?? []).find(
+          (candidate) => candidate.id === selection.axisId
+        ) ??
+        null;
+      setWorkstream(
+        axis
+          ? {
+              axis,
+              axisId: selection.axisId,
+              topic: result.topic ?? {
+                id: selection.topicId,
+                name: "",
+                status: "",
+              },
+            }
+          : null
+      );
+      // Each page is committed only from the newest request, so the two offsets stay independent and a
+      // slower page response cannot overwrite the page the reader last asked for.
+      setWorkstreamTask(taskResult?.problemPage ?? null);
+      setWorkstreamActivity(activityResult?.activityPage ?? null);
+      return axis;
+    }
+
+    /**
+     * Selecting a workstream is view state: it sets the Progress selection and re-reads that workstream's
+     * scoped pages with both offsets back at their first page — a reader arriving at a new workstream starts
+     * at its start, not at the page they left the last one on. Selection writes nothing, and a correction
+     * draft for the previous workstream does not follow the reader here.
+     */
+    function selectWorkstream(topicId: string, axisId: string): void {
+      const next = { axisId, topicId };
+      setProgressSelection(next);
+      setTaskOffset(0);
+      setActivityOffset(0);
+      setCorrection(null);
+      setConflict(null);
+      // Identity-safe: a new workstream must not render the previous one's context or pages while its own
+      // read is in flight — clear them so no stale scoped page shows under the new selection.
+      setWorkstream(null);
+      setWorkstreamTask(null);
+      setWorkstreamActivity(null);
+      void loadWorkstream(next, 0, 0);
+    }
+
+    /** The problem a direct task navigation asked for; applied once its workstream lands. */
+    const problemFocusRef = React.useRef<string | null>(null);
+
+    /**
+     * Apply an arriving axis/problem tag (the EntityTag contract's other half for the two entities whose home
+     * is Progress). An axis tag selects that workstream; a problem tag selects the workstream the problem
+     * belongs to and remembers the problem so its containing task page opens. A reader's own click is never
+     * overridden — this runs only when a tag asked, keyed on `seq`.
+     */
+    React.useEffect(() => {
+      if (
+        !entityTarget ||
+        (entityTarget.type !== "axis" && entityTarget.type !== "problem")
+      ) {
+        return;
+      }
+      const rows = visibleProgress?.axes.axes ?? [];
+      const problems = visibleProgress?.problems.problems ?? [];
+      if (entityTarget.type === "axis") {
+        const row = rows.find((candidate) => candidate.id === entityTarget.id);
+        const topicId = row?.topicId ?? rows[0]?.topicId;
+        if (topicId) {
+          problemFocusRef.current = null;
+          selectWorkstream(topicId, entityTarget.id);
+        }
+        return;
+      }
+      const problem = problems.find((candidate) => candidate.id === entityTarget.id);
+      if (problem) {
+        problemFocusRef.current = entityTarget.id;
+        selectWorkstream(problem.topicId, problem.axisId);
+      }
+    }, [entityTarget?.id, entityTarget?.seq, visibleProgress]);
+
+    /** Open the containing task page of a directly-navigated problem once its workstream has loaded. */
+    React.useEffect(() => {
+      const focus = problemFocusRef.current;
+      if (!focus || !workstream || !progressSelection) {
+        return;
+      }
+      const tasks = workstream.axis.problems ?? [];
+      const at = tasks.findIndex((task) => task.id === focus);
+      problemFocusRef.current = null;
+      if (at >= 0) {
+        const next = Math.floor(at / PROGRESS_PAGE_SIZE) * PROGRESS_PAGE_SIZE;
+        setTaskOffset(next);
+        // The containing page is a backend request at that offset, not a client slice.
+        void loadWorkstream(progressSelection, next, activityOffset);
+      }
+    }, [workstream]);
 
     React.useEffect(() => {
       void load(scopeWindow);
@@ -5093,41 +4946,59 @@ export function apply(ctx: Context) {
       // Overview scope and the all-time one. Two all-time tabs share a scope and do not re-query.
     }, [scopeWindow]);
 
-    /** The expanded card *is* the detail view: one `get_topic` call, per-axis history included. */
-    async function loadDetail(topicId: string): Promise<void> {
-      const result = await call<{ ok?: boolean } & TopicDetail>("get_topic", {
-        topicId,
-      });
-      if (!ctx.signal.aborted && result) {
+    /**
+     * The expanded card *is* the detail view: one `get_topic` call, per-axis history included. The same
+     * call also asks for the project's activity **page** at `offset` (five rows, backend-paged), so the
+     * activity section below the workstreams reads a real page the reader can page through rather than a
+     * slice of the array. A plain `get_topic` (no `offset`) keeps the array exactly as before.
+     */
+    async function loadDetail(topicId: string, offset = 0): Promise<void> {
+      const seq = ++detailSeq.current;
+      const stale = () => detailSeq.current !== seq;
+      const result = await call<
+        { ok?: boolean } & TopicDetail & { activityPage?: Page<Activity> }
+      >(
+        "get_topic",
+        { offset, pageSize: PROGRESS_PAGE_SIZE, topicId },
+        { isStale: stale }
+      );
+      // A newer subject's read (or a newer page of this one) owns the detail: a superseded response must
+      // not overwrite it — neither the detail card nor its activity page.
+      if (ctx.signal.aborted || stale()) {
+        return;
+      }
+      if (result) {
         setDetail(result as TopicDetail);
+        setTopicActivityPage(result.activityPage ?? null);
       }
     }
 
     React.useEffect(() => {
       setCorrection(null);
-      setHistoryAxisId(null);
       setTopicNote("");
       // Changing the subject clears the news about the old one: a conflict from this topic must not
       // follow the reader to the next.
       setConflict(null);
       if (!expandedId) {
         setDetail(null);
+        setTopicActivityPage(null);
+        setTopicActivityOffset(0);
         return;
       }
-      let active = true;
-      (async () => {
-        const result = await call<{ ok?: boolean } & TopicDetail>("get_topic", {
-          topicId: expandedId,
-        });
-        if (active && result) {
-          setDetail(result as TopicDetail);
-        }
-      })();
-      return () => {
-        active = false;
-      };
+      setTopicActivityOffset(0);
+      // The scoped read (axis-scoped project detail + the project's activity page at offset 0). The
+      // generation guard lives inside `loadDetail`, so a superseded subject's response cannot commit here.
+      void loadDetail(expandedId, 0);
       // One call per topic opened, not per axis: the detail arrives complete.
     }, [expandedId]);
+
+    /** Paging the project's activity is a backend request at that offset, not a client re-slice. */
+    function selectTopicActivityOffset(next: number): void {
+      setTopicActivityOffset(next);
+      if (expandedId) {
+        void loadDetail(expandedId, next);
+      }
+    }
 
     /** Selecting in the rail is the whole interaction — there is no disclosure control to close. */
     function selectTopic(topicId: string) {
@@ -5151,18 +5022,17 @@ export function apply(ctx: Context) {
 
 
     /**
-     * A manager's correction to an axis: the claim, its confidence, and optionally why. The note lands
-     * in the same call as the claim, which is what makes `confirmed` reachable on an axis that nothing
-     * else backs — the note *is* the evidence (D8, and the store's evidence rule).
+     * The Progress correction: the claim, its confidence and optionally why, written through
+     * `reconcile_topic` against the **selected workstream's own** axis version and topic. The note lands in
+     * the same call as the claim, which is what makes `confirmed` reachable on an axis nothing else backs —
+     * the note *is* the evidence (D8). Nothing here deletes: the toolset has no delete action.
      */
-    async function saveCorrection() {
-      if (!(detail && correction)) {
+    async function saveWorkstreamCorrection() {
+      if (!(workstream && correction)) {
         return;
       }
-      const axis = detail.axes.find(
-        (candidate) => candidate.id === correction.axisId
-      );
-      if (!axis) {
+      const axis = workstream.axis;
+      if (axis.id !== correction.axisId) {
         return;
       }
       const note = correction.note.trim();
@@ -5181,8 +5051,7 @@ export function apply(ctx: Context) {
               stateConfidence: correction.stateConfidence,
             },
           ],
-          expectedVersion: detail.topic.version,
-          topicId: detail.topic.id,
+          topicId: workstream.topic.id,
           ...(note ? { annotations: [{ axisId: axis.id, text: note }] } : {}),
         },
         { conflictAxisId: correction.axisId }
@@ -5190,31 +5059,32 @@ export function apply(ctx: Context) {
       if (result) {
         setCorrection(null);
         setConflict(null);
-        await loadDetail(detail.topic.id);
         await reloadCurrent();
       }
     }
 
     /**
-     * Re-read one axis after a refused write, and rebuild the draft on the refreshed facts. The
-     * rationale is carried across because it belongs to the person, not to the version they read; the
+     * Re-read the selected workstream after a refused write, and rebuild the draft on the refreshed facts.
+     * The rationale is carried across because it belongs to the person, not to the version they read; the
      * claims are not, because those have to be judged again against what actually changed.
      */
-    async function reloadAxis(topicId: string, axisId: string) {
-      const result = await call<{ ok?: boolean } & TopicDetail>("get_topic", {
-        topicId,
-      });
-      if (ctx.signal.aborted || !result) {
+    async function reloadWorkstreamCorrection() {
+      if (!progressSelection) {
         return;
       }
-      const fresh = result as TopicDetail;
-      setDetail(fresh);
+      const fresh = await loadWorkstream(
+        progressSelection,
+        taskOffset,
+        activityOffset
+      );
+      if (ctx.signal.aborted) {
+        return;
+      }
       setConflict(null);
-      const axis = fresh.axes.find((candidate) => candidate.id === axisId);
-      if (axis) {
+      if (fresh) {
         setCorrection((current: AxisCorrection | null) =>
-          current && current.axisId === axisId
-            ? draftFrom(axis, current.note)
+          current && current.axisId === fresh.id
+            ? draftFrom(fresh, current.note)
             : current
         );
       }
@@ -5260,7 +5130,6 @@ export function apply(ctx: Context) {
     }
 
     const topics = overview?.topics ?? [];
-    const counts = overview?.counts;
     /**
      * The detail is persistent, so something is always selected: on first load — and after a window or
      * archived change that dropped the selected topic — the server's first topic is the selection. The
@@ -5284,10 +5153,12 @@ export function apply(ctx: Context) {
     // topic id, so switching topics resets the rail rather than carrying one topic's expansion onto the
     // next; `data-rd-topic-activity` keeps reporting the payload's own count, so capping what is shown
     // never changes what the page says there is.
-    const railActivity = selectedDetails?.activity ?? [];
-    const railAll = railAllFor !== null && railAllFor === selectedEntry?.topic.id;
-    const railShown = railAll ? railActivity : railActivity.slice(0, RAIL_ACTIVITY_LEAD);
-    const railHidden = railActivity.length - railShown.length;
+    // The project's activity is a **backend page**: the items and the total are the page's own
+    // (`offset`/`limit`/`total`), never a length re-derived here, so the range shown is the range the
+    // backend returned for the requested offset. The legacy `activity` array stays on the payload for
+    // compatibility; this section reads the page, not the array.
+    const topicActivityItems = topicActivityPage?.items ?? [];
+    const topicActivityTotal = topicActivityPage?.total ?? 0;
     // Before the detail lands, the overview's own axes stand in: the pane is never empty, and the
     // current/completed split appears as soon as the detail that can answer it arrives.
     const currentAxes: Array<AxisDetail | AxisOverview> = (
@@ -5332,43 +5203,26 @@ export function apply(ctx: Context) {
           </p>
         ) : null}
 
-        <div className="rd-row">
-          <span className="rd-muted">
-            {counts
-              ? [
-                  countLabel(counts.topics, "topic", "topics"),
-                  countLabel(counts.axes, "axis", "axes"),
-                  countLabel(counts.people, "person", "people"),
-                  countLabel(counts.repositories, "repository", "repositories"),
-                ].join(" · ")
-              : "loading…"}
-          </span>
-        </div>
-
-        {view === "overview" ? (
-          /* Overview — the default tab. Rendered from the same `overview` payload the other views read,
-             but at its own window; its heading carries the window selector. */
-          <LandingView
-            blocked={overview?.blocked ?? []}
-            busy={busy}
-            onOpenEntity={openEntity}
-            onWindowChange={setWindowDays}
-            repositories={overview?.repositories ?? []}
-            topics={topics}
-            windowDays={windowDays}
-          />
-        ) : null}
-
         {view === "topics" ? (
-          <div className="rd-split" data-rd-view="topics">
+          <div className="rd-view-topics" data-rd-view="topics">
             {/* The brand stays in the top bar while this view names itself; readers arriving from a
                 tag need not infer the destination from the selected navigation button. */}
             <ViewHeading view="topics" />
+            {/* The accepted pivot retires Overview: its aggregate counts live in a **collapsed**
+                Dashboard summary directly above the Projects landing, not in duplicate fast-access rows.
+                Every number is the payload's own (`getOverview.counts` and `problemsByState`); Open and
+                Blocked are the stored task states, never inferred from a workstream blocker. It spans the
+                full width above the split. */}
+            <DashboardSummary overview={overview} />
+            {/* The accepted prototype's composition: a **380px selector rail on the left** and the
+                selected project's detail beside it, in the one shared `rd-split` all four views use. The
+                heading and the summary are above it, so the rail is never pushed to a row of its own. */}
+            <div className="rd-split">
             {/* C1 — the prototype's composition: a compact index rail, and ONE persistent detail. The
                 index carries the server's order unreranked; the only client state is which topic is
                 selected. There is no disclosure control, so the detail is never "closed". */}
             <ul
-              aria-label="Topics"
+              aria-label="Projects"
               className="rd-index rd-topic-index"
               data-rd-topic-index={topics.length}
             >
@@ -5400,7 +5254,7 @@ export function apply(ctx: Context) {
                       <span className="rd-strong">{entry.topic.name}</span>
                       <span className="rd-cluster">
                         <span className="rd-meta" data-rd-index-current={currentCount}>
-                          {countLabel(currentCount, "current axis", "current axes")}
+                          {countLabel(currentCount, "workstream", "workstreams")}
                         </span>
                         {entry.lastActivityAt ? (
                           <RecencyLabel at={entry.lastActivityAt} />
@@ -5418,77 +5272,112 @@ export function apply(ctx: Context) {
             </ul>
 
             {selectedEntry ? (
-              <div
+              <details
                 className="rd-panel rd-topic-detail"
                 data-rd-detail={selectedEntry.topic.name}
-                data-rd-detail-mode="persistent"
+                data-rd-detail-header="true"
+                data-rd-detail-mode="disclosure"
+                open
               >
-                {/* V1/A1 — the shared DetailHeader, as the other three panes use it. The component
-                    supplies the geometry and the title/badge structure only; the description →
-                    approved-summary block stays this pane's own `children`, in the order Topics has
-                    always read them, and both load-bearing hooks survive (`data-rd-detail-header`
-                    on the shared head, `data-rd-detail-context` on the tag line). */}
-                <DetailHeader
-                  badge={<span className="rd-muted">{selectedEntry.topic.status}</span>}
-                  context={
-                    <>
-                      {(selectedDetails?.repositories ?? selectedEntry.repositories).map(
-                        (repository) => (
-                          <EntityTag
-                            id={repository.id}
-                            key={repository.id}
-                            label={repository.fullName}
-                            onOpen={openEntity}
-                            type="repository"
-                          />
-                        )
-                      )}
-                      {(selectedDetails?.people ?? selectedEntry.people).map((person) => (
-                        <EntityTag
-                          id={person.id}
-                          key={person.id}
-                          label={person.displayName}
-                          onOpen={openEntity}
-                          type="person"
-                        />
-                      ))}
-                      {(selectedDetails?.repositories ?? selectedEntry.repositories).length === 0 &&
-                      (selectedDetails?.people ?? selectedEntry.people).length === 0 ? (
-                        <span className="rd-meta">nobody tagged yet</span>
-                      ) : null}
-                    </>
-                  }
-                  title={<CardTitle>{selectedEntry.topic.name}</CardTitle>}
-                >
-                  {selectedDetails ? (
-                    <div className="rd-detail-claims">
-                      <div className="rd-claim" data-rd-description-field="true">
-                        {selectedDetails.topic.description ? (
-                          <>
-                            <span className="rd-claim-value" data-rd-claim="description">
-                              {selectedDetails.topic.description}
-                            </span>
-                            <span className="rd-muted">description</span>
-                          </>
-                        ) : (
-                          <span className="rd-muted" data-rd-claim="description">
-                            No description recorded.
-                          </span>
+                {/* The shared **native disclosure**: the `<summary>` carries the project's title and
+                    status; the body carries the concise summary, the full description, the participants
+                    and supporting repositories, the optional project plan, the workstream cards and the
+                    paged activity below. Projects orients — the full workstream reading stays in
+                    Progress, and the blocker's prose lives there too. */}
+                <summary className="rd-topic-summary">
+                  <span className="rd-row rd-detail-title-row">
+                    <CardTitle>{selectedEntry.topic.name}</CardTitle>
+                  </span>
+                  <span className="rd-cluster rd-topic-summary-meta">
+                    <span className="rd-muted">{selectedEntry.topic.status}</span>
+                    {selectedEntry.lastActivityAt ? (
+                      <RecencyLabel
+                        at={selectedEntry.lastActivityAt}
+                        prefix="last activity "
+                      />
+                    ) : null}
+                  </span>
+                </summary>
+                <div className="rd-topic-body">
+                {selectedDetails ? (
+                  <div className="rd-detail-claims">
+                    {/* Concise orientation first (the pivot: `summary` = concise orientation), then the
+                        full purpose (`description`). Both are stored fields; each empty state is honest.
+                        The old "approved summary — a human interpretation, not an agent one" label is
+                        removed: it asserted a human-only rule the data contract no longer holds, so the
+                        field is rendered plainly and an agent may maintain it. */}
+                    <div className="rd-claim rd-claim-summary">
+                      <span className="rd-context-label">Summary</span>
+                      <span className="rd-claim-value" data-rd-claim="summary">
+                        {selectedDetails.topic.summary || (
+                          <span className="rd-muted">No summary recorded.</span>
                         )}
-                      </div>
-                      <div className="rd-claim">
-                        <span className="rd-claim-value" data-rd-claim="summary">
-                          {selectedDetails.topic.summary || (
-                            <span className="rd-muted">no approved summary</span>
-                          )}
-                        </span>
-                        <span className="rd-muted">
-                          approved summary — a human interpretation, not an agent one
-                        </span>
-                      </div>
+                      </span>
                     </div>
-                  ) : null}
-                </DetailHeader>
+                    <div className="rd-claim" data-rd-description-field="true">
+                      <span className="rd-context-label">Description</span>
+                      <span className="rd-claim-value" data-rd-claim="description">
+                        {selectedDetails.topic.description || (
+                          <span className="rd-muted">No description recorded.</span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
+                {/* Participants — an explicit quiet inline label beneath a divider. The hook the
+                    harness reads is unchanged (`data-rd-detail-context`). */}
+                <div className="rd-context-tags" data-rd-detail-context="true">
+                  <span className="rd-context-label">Participants</span>
+                  {(selectedDetails?.people ?? selectedEntry.people).length > 0 ? (
+                    (selectedDetails?.people ?? selectedEntry.people).map((person) => (
+                      <EntityTag
+                        id={person.id}
+                        key={person.id}
+                        label={person.displayName}
+                        onOpen={openEntity}
+                        type="person"
+                      />
+                    ))
+                  ) : (
+                    <span className="rd-muted">No participant linked yet.</span>
+                  )}
+                </div>
+                {/* Supporting repositories — explicit label; each name opens the exact Repositories
+                    entry, with the separate external GitHub ↗ beside it. */}
+                <div className="rd-references">
+                  <span className="rd-context-label">Supporting repositories</span>
+                  {(selectedDetails?.repositories ?? selectedEntry.repositories).length > 0 ? (
+                    (selectedDetails?.repositories ?? selectedEntry.repositories).map(
+                      (repository) => (
+                        <RepoLinkPair
+                          key={repository.id}
+                          onOpen={openEntity}
+                          repository={repository}
+                        />
+                      )
+                    )
+                  ) : (
+                    <span className="rd-muted">No repository linked yet.</span>
+                  )}
+                </div>
+                {/* The optional **project** plan, owned by the topic (`get_topic.plan`). Optional by
+                    construction: no plan renders nothing, and the project's tasks do not inherit it. */}
+                {selectedDetails?.plan ? (
+                  <ScopedPlan
+                    label="Project plan"
+                    plan={{
+                      plan: {
+                        authorId: "",
+                        authorType: "",
+                        id: selectedDetails.plan.id,
+                        summary: selectedDetails.plan.summary,
+                        updatedAt: "",
+                        version: 0,
+                      },
+                      steps: selectedDetails.plan.steps,
+                    }}
+                  />
+                ) : null}
 
                 {selectedDetails && conflict && !conflict.axisId ? (
                   <div className="rd-conflict" data-rd-conflict="true" role="alert">
@@ -5514,192 +5403,162 @@ export function apply(ctx: Context) {
                   </div>
                 ) : null}
 
-                <div className="rd-detail-grid">
-                  <section className="rd-current-work" data-rd-current-work={currentAxes.length}>
-                    <span className="rd-section">Current work</span>
-                    {currentAxes.length === 0 ? (
-                      <p className="rd-muted">No current axes on this topic.</p>
-                    ) : (
-                      <ul className="rd-axes">
-                        {currentAxes.map((axis) =>
-                          selectedDetails ? (
-                            <AxisDetailCard
-                              axis={axis as AxisDetail}
-                              busy={busy}
-                              conflict={conflict}
-                              correction={correction}
-                              historyOpen={historyAxisId === axis.id}
-                              key={axis.id}
-                              onCorrection={setCorrection}
+                {/* The workstreams are **full width** inside the detail — the accepted composition
+                    puts the compact shared workstream cards across the detail, with the project's
+                    activity in its own independent collapsible section below. There is no side rail. */}
+                <section className="rd-current-work" data-rd-current-work={currentAxes.length}>
+                  <span className="rd-context-label">
+                    Workstreams ({currentAxes.length})
+                  </span>
+                  {currentAxes.length === 0 ? (
+                    <p className="rd-muted">No workstreams on this project.</p>
+                  ) : (
+                    <ul className="rd-axes">
+                      {currentAxes.map((axis) =>
+                        selectedDetails ? (
+                          /* The compact shared workstream card (S4): title → the exact Progress entry,
+                             status, the workstream's own task counts and one latest recorded event.
+                             The blocker's full prose is Progress's, not repeated here. */
+                          <li key={axis.id}>
+                            <WorkstreamCard
+                              axis={{
+                                blockedTasks: ((axis as AxisDetail).problems ?? []).filter(
+                                  (task) => task.state === "blocked"
+                                ).length,
+                                currentState: axis.currentState,
+                                description: axis.description,
+                                id: axis.id,
+                                latestEvent: (axis as AxisDetail).history.length > 0 ? {
+                                  at: (axis as AxisDetail).history[0].occurredAt,
+                                  summary: (axis as AxisDetail).history[0].summary,
+                                } : null,
+                                openTasks: ((axis as AxisDetail).problems ?? []).filter(
+                                  (task) => task.state === "open"
+                                ).length,
+                                repositories: axis.repositories,
+                                state: axis.state,
+                                stateConfidence: axis.stateConfidence,
+                                title: axis.title,
+                              }}
                               onOpenEntity={openEntity}
-                              onReload={() => {
-                                void reloadAxis(selectedEntry.topic.id, axis.id);
-                              }}
-                              onSave={() => {
-                                void saveCorrection();
-                              }}
-                              onToggleHistory={() => {
-                                setHistoryAxisId((current) =>
-                                  current === axis.id ? null : axis.id
-                                );
-                              }}
+                              onOpenWorkstream={(axisId) => openEntity("axis", axisId)}
                             />
-                          ) : (
-                            <AxisItem
-                              axis={axis as AxisOverview}
-                              key={axis.id}
-                              onOpenEntity={openEntity}
-                            />
-                          )
-                        )}
-                      </ul>
-                    )}
-
-                    {foldedAxes.length > 0 ? (
-                      <details
-                        className="rd-completed-fold"
-                        data-rd-folded-axes={foldedAxes.length}
-                      >
-                        <summary>Completed and abandoned work ({foldedAxes.length})</summary>
-                        <ul className="rd-axes">
-                          {foldedAxes.map((axis) => (
-                            <AxisDetailCard
-                              axis={axis as AxisDetail}
-                              busy={busy}
-                              conflict={conflict}
-                              correction={correction}
-                              historyOpen={historyAxisId === axis.id}
-                              key={axis.id}
-                              onCorrection={setCorrection}
-                              onOpenEntity={openEntity}
-                              onReload={() => {
-                                void reloadAxis(selectedEntry.topic.id, axis.id);
-                              }}
-                              onSave={() => {
-                                void saveCorrection();
-                              }}
-                              onToggleHistory={() => {
-                                setHistoryAxisId((current) =>
-                                  current === axis.id ? null : axis.id
-                                );
-                              }}
-                            />
-                          ))}
-                        </ul>
-                      </details>
-                    ) : null}
-                  </section>
-
-                  <aside className="rd-side-stack">
-                    <section className="rd-side-card">
-                      <h3 className="rd-side-title">Recent activity</h3>
-                      <ul
-                        className="rd-activity"
-                        data-rd-topic-activity={
-                          selectedDetails?.activity.length ?? selectedEntry.activityCount
-                        }
-                        data-rd-topic-activity-shown={railShown.length}
-                      >
-                        {railShown.map((item) => (
-                          <ActivityLine
-                            axisLabel={
-                              selectedDetails?.axes.find(
-                                (axis) => axis.id === item.axisId
-                              )?.title ?? null
-                            }
-                            item={item}
-                            key={item.id}
+                          </li>
+                        ) : (
+                          <AxisItem
+                            axis={axis as AxisOverview}
+                            key={axis.id}
                             onOpenEntity={openEntity}
-                            repositoryLabel={
-                              selectedDetails?.repositories.find(
-                                (repository) => repository.id === item.repositoryId
-                              )?.fullName ?? null
-                            }
-                            topicLabel={selectedEntry.topic.name}
                           />
-                        ))}
-                        {selectedDetails && selectedDetails.activity.length === 0 ? (
-                          <li className="rd-muted">No activity recorded yet.</li>
-                        ) : null}
-                        {!selectedDetails ? (
-                          <li className="rd-muted">Loading this topic…</li>
-                        ) : null}
-                      </ul>
-                      {/* The rail's remainder, stated — the same treatment the Progress feed uses, so the
-                          reader is told how many there are and can have them in one click. It governs the
-                          rail's own window, not the topic: the topic is already open. */}
-                      <ActivityFooter
-                        all={railAll}
-                        hidden={railHidden}
-                        moreAttr="data-rd-topic-activity-more"
-                        noteAttr="data-rd-topic-activity-note"
-                        onToggle={() => {
-                          setRailAllFor(
-                            railAll ? null : (selectedEntry?.topic.id ?? null)
-                          );
-                        }}
-                        shown={railShown.length}
-                        total={railActivity.length}
-                      />
-                      {selectedDetails ? (
-                        // The write path stays (this is a composition-only unit), but it is not the
-                        // rail's lede: it sits behind a compact disclosure so the rail reads as
-                        // activity, not as a form.
-                        <details className="rd-narrow-write" data-rd-write="activity">
-                          <summary>Record activity</summary>
-                            <form
-                              className="rd-narrow-write"
-                              onSubmit={(event) => {
-                                void addActivity(event);
-                              }}
-                            >
-                              <Textarea
-                                aria-label="Activity"
-                                disabled={busy}
-                                onChange={(event) =>
-                                  setActivitySummary((event.target as { value: string }).value)
-                                }
-                                placeholder="One objective event, e.g. PR #72 merged"
-                                value={activitySummary}
-                              />
-                              <div className="rd-row">
-                                <SourceSelect
-                                  disabled={busy}
-                                  onChange={setActivitySourceType}
-                                  value={activitySourceType}
-                                />
-                                <Input
-                                  aria-label="Source reference"
-                                  disabled={busy}
-                                  maxLength={200}
-                                  onChange={(event) =>
-                                    setActivitySourceRef(
-                                      (event.target as { value: string }).value
-                                    )
-                                  }
-                                  placeholder="Reference (PR #, commit, run id)"
-                                  value={activitySourceRef}
-                                />
-                              </div>
-                              <Button
-                                disabled={busy || !activitySummary.trim()}
-                                size="sm"
-                                type="submit"
-                              >
-                                Record activity
-                              </Button>
-                            </form>
-                        </details>
-                      ) : null}
-                    </section>
+                        )
+                      )}
+                    </ul>
+                  )}
 
+                  {foldedAxes.length > 0 ? (
+                    <details
+                      className="rd-completed-fold"
+                      data-rd-folded-axes={foldedAxes.length}
+                    >
+                      <summary>Completed and abandoned work ({foldedAxes.length})</summary>
+                      <ul className="rd-axes">
+                        {foldedAxes.map((axis) => (
+                          <li key={axis.id}>
+                            <WorkstreamCard
+                              axis={{
+                                blockedTasks: ((axis as AxisDetail).problems ?? []).filter(
+                                  (task) => task.state === "blocked"
+                                ).length,
+                                currentState: axis.currentState,
+                                description: axis.description,
+                                id: axis.id,
+                                latestEvent: (axis as AxisDetail).history.length > 0 ? {
+                                  at: (axis as AxisDetail).history[0].occurredAt,
+                                  summary: (axis as AxisDetail).history[0].summary,
+                                } : null,
+                                openTasks: ((axis as AxisDetail).problems ?? []).filter(
+                                  (task) => task.state === "open"
+                                ).length,
+                                repositories: axis.repositories,
+                                state: axis.state,
+                                stateConfidence: axis.stateConfidence,
+                                title: axis.title,
+                              }}
+                              onOpenEntity={openEntity}
+                              onOpenWorkstream={(axisId) => openEntity("axis", axisId)}
+                            />
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  ) : null}
+                </section>
+
+                {/* The project's activity — an **independent, collapsible** section below the
+                    workstreams, paged five backend rows at a time and scoped to this project. The items
+                    and the total are the page's own (`get_topic` offset/pageSize → `activityPage`); the
+                    legacy `activity` array is never re-sliced here. */}
+                <details
+                  className="rd-scoped-plan rd-topic-activity-fold"
+                  data-rd-topic-activity-fold="true"
+                  open
+                >
+                  <summary>Activity ({topicActivityTotal})</summary>
+                  <ul
+                    className="rd-activity"
+                    data-rd-topic-activity={topicActivityTotal}
+                    data-rd-topic-activity-shown={topicActivityItems.length}
+                  >
+                    {topicActivityItems.map((item) => (
+                      <ActivityLine
+                        axisLabel={
+                          selectedDetails?.axes.find(
+                            (axis) => axis.id === item.axisId
+                          )?.title ?? null
+                        }
+                        item={item}
+                        key={item.id}
+                        onOpenEntity={openEntity}
+                        repositoryLabel={
+                          selectedDetails?.repositories.find(
+                            (repository) => repository.id === item.repositoryId
+                          )?.fullName ?? null
+                        }
+                        topicLabel={selectedEntry.topic.name}
+                      />
+                    ))}
+                    {selectedDetails && topicActivityTotal === 0 ? (
+                      <li className="rd-muted">No activity recorded yet.</li>
+                    ) : null}
+                    {!selectedDetails ? (
+                      <li className="rd-muted">Loading this project…</li>
+                    ) : null}
+                  </ul>
+                  <Pager
+                    label="Activity"
+                    offset={topicActivityOffset}
+                    onOffset={selectTopicActivityOffset}
+                    pageSize={PROGRESS_PAGE_SIZE}
+                    total={topicActivityTotal}
+                  />
+                </details>
+
+                {/* The existing write controls, **preserved but secondary**: Notes/corrections and
+                    Record activity sit behind one disclosure at the foot of the detail, so the project
+                    reads as a project rather than as a form. No control was removed. */}
+                {selectedDetails ? (
+                  <details
+                    className="rd-narrow-write rd-topic-controls"
+                    data-rd-topic-controls="true"
+                  >
+                    <summary>Notes &amp; corrections</summary>
                     <section className="rd-side-card">
                       <h3 className="rd-side-title">Notes</h3>
                       <ul
                         className="rd-notes"
-                        data-rd-topic-notes={selectedDetails?.notes.length ?? 0}
+                        data-rd-topic-notes={selectedDetails.notes.length}
                       >
-                        {(selectedDetails?.notes ?? []).map((note) => (
+                        {selectedDetails.notes.map((note) => (
                           <li key={note.id}>
                             <div>{note.text}</div>
                             <span className="rd-meta">
@@ -5707,66 +5566,90 @@ export function apply(ctx: Context) {
                             </span>
                           </li>
                         ))}
-                        {selectedDetails && selectedDetails.notes.length === 0 ? (
+                        {selectedDetails.notes.length === 0 ? (
                           <li className="rd-muted">
                             No notes yet. This is where a correction or a caveat goes —
                             deliberately not in the activity log.
                           </li>
                         ) : null}
                       </ul>
-                      {selectedDetails ? (
-                        <form
-                          className="rd-narrow-write"
-                          onSubmit={(event) => {
-                            void addTopicNote(event);
-                          }}
+                      <form
+                        className="rd-narrow-write"
+                        onSubmit={(event) => {
+                          void addTopicNote(event);
+                        }}
+                      >
+                        <Input
+                          aria-label="Topic note"
+                          disabled={busy}
+                          maxLength={1000}
+                          onChange={(event) =>
+                            setTopicNote((event.target as { value: string }).value)
+                          }
+                          placeholder="A correction or caveat about this project"
+                          value={topicNote}
+                        />
+                        <Button
+                          disabled={busy || !topicNote.trim()}
+                          size="sm"
+                          type="submit"
+                          variant="outline"
                         >
-                          <Input
-                            aria-label="Topic note"
+                          Add note / correction
+                        </Button>
+                      </form>
+                    </section>
+                    <details className="rd-narrow-write" data-rd-write="activity">
+                      <summary>Record activity</summary>
+                      <form
+                        className="rd-narrow-write"
+                        onSubmit={(event) => {
+                          void addActivity(event);
+                        }}
+                      >
+                        <Textarea
+                          aria-label="Activity"
+                          disabled={busy}
+                          onChange={(event) =>
+                            setActivitySummary((event.target as { value: string }).value)
+                          }
+                          placeholder="One objective event, e.g. PR #72 merged"
+                          value={activitySummary}
+                        />
+                        <div className="rd-row">
+                          <SourceSelect
                             disabled={busy}
-                            maxLength={1000}
-                            onChange={(event) =>
-                              setTopicNote((event.target as { value: string }).value)
-                            }
-                            placeholder="A correction or caveat about this topic"
-                            value={topicNote}
+                            onChange={setActivitySourceType}
+                            value={activitySourceType}
                           />
-                          <Button
-                            disabled={busy || !topicNote.trim()}
-                            size="sm"
-                            type="submit"
-                            variant="outline"
-                          >
-                            Add note / correction
-                          </Button>
-                        </form>
-                      ) : null}
-                    </section>
-
-                    <section className="rd-side-card">
-                      <h3 className="rd-side-title">Related repositories</h3>
-                      <div className="rd-cluster rd-tags">
-                        {(selectedDetails?.repositories ?? selectedEntry.repositories).map(
-                          (repository) => (
-                            <EntityTag
-                              id={repository.id}
-                              key={repository.id}
-                              label={repository.fullName}
-                              onOpen={openEntity}
-                              type="repository"
-                            />
-                          )
-                        )}
-                        {(selectedDetails?.repositories ?? selectedEntry.repositories)
-                          .length === 0 ? (
-                          <span className="rd-muted">No repository linked yet.</span>
-                        ) : null}
-                      </div>
-                    </section>
-                  </aside>
+                          <Input
+                            aria-label="Source reference"
+                            disabled={busy}
+                            maxLength={200}
+                            onChange={(event) =>
+                              setActivitySourceRef(
+                                (event.target as { value: string }).value
+                              )
+                            }
+                            placeholder="Reference (PR #, commit, run id)"
+                            value={activitySourceRef}
+                          />
+                        </div>
+                        <Button
+                          disabled={busy || !activitySummary.trim()}
+                          size="sm"
+                          type="submit"
+                        >
+                          Record activity
+                        </Button>
+                      </form>
+                    </details>
+                  </details>
+                ) : null}
                 </div>
-              </div>
+              </details>
             ) : null}
+            </div>
           </div>
         ) : null}
 
@@ -5794,16 +5677,40 @@ export function apply(ctx: Context) {
 
         {view === "progress" ? (
           <ProgressView
+            activityOffset={activityOffset}
+            activityPage={workstreamActivity}
+            busy={busy}
+            conflict={conflict}
+            correction={correction}
+            loading={workstreamLoading}
+            onActivityOffset={(next) => {
+              setActivityOffset(next);
+              // Each pager requests its **own** page at its own offset; the other page is re-committed from
+              // its own request, so the two offsets stay independent.
+              if (progressSelection) {
+                void loadWorkstream(progressSelection, taskOffset, next);
+              }
+            }}
+            onCorrection={setCorrection}
             onOpenEntity={openEntity}
-            people={overview?.people ?? []}
-            preselect={
-              entityTarget &&
-              (entityTarget.type === "axis" || entityTarget.type === "problem")
-                ? entityTarget
-                : null
-            }
+            onReloadCorrection={() => {
+              void reloadWorkstreamCorrection();
+            }}
+            onSaveCorrection={() => {
+              void saveWorkstreamCorrection();
+            }}
+            onSelectWorkstream={selectWorkstream}
+            onTaskOffset={(next) => {
+              setTaskOffset(next);
+              if (progressSelection) {
+                void loadWorkstream(progressSelection, next, activityOffset);
+              }
+            }}
             progress={visibleProgress}
-            repositories={overview?.repositories ?? []}
+            selection={progressSelection}
+            taskOffset={taskOffset}
+            taskPage={workstreamTask}
+            workstream={workstream}
           />
         ) : null}
 

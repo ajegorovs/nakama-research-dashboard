@@ -10,13 +10,14 @@ import { Database } from "bun:sqlite";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-/** Migration files the platform applies, in order. Includes 005 to match the shipped manifest. */
+/** Migration files the platform applies, in order. Includes 005/006 to match the shipped manifest. */
 export const MIGRATION_FILES = [
   "001-research.sql",
   "002-coordination-model.sql",
   "003-drop-legacy.sql",
   "004-ux-v2-model.sql",
   "005-external-evidence.sql",
+  "006-task-plan-text.sql",
 ] as const;
 
 export type FixtureDataset = {

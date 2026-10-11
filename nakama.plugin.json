@@ -84,6 +84,16 @@
           },
           "includeAnnotations": {
             "type": "boolean"
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
           }
         },
         "required": []
@@ -95,7 +105,7 @@
       "effect": "read",
       "entry": "actions/actions.js",
       "exposeAsTool": true,
-      "description": "Find the row a conversation is about: substring search over topic names, descriptions and summaries, axis titles, states, blockers and branches, activity summaries and references, and annotation text. Each hit reports which field matched. Search before you create anything, so you extend the existing topic instead of near-duplicating it.",
+      "description": "Find the row a conversation is about: substring search over topic names, descriptions and summaries, axis titles, states, blockers and branches, activity summaries and references, annotation text, and tasks — a task matches on its full `statement` and its concise `title` (the `problems` group). Each hit reports which field matched. Search before you create anything, so you extend the existing topic instead of near-duplicating it.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -488,6 +498,10 @@
                   "minLength": 1,
                   "maxLength": 2000
                 },
+                "title": {
+                  "type": "string",
+                  "maxLength": 300
+                },
                 "axisId": {
                   "type": "string",
                   "minLength": 1,
@@ -500,7 +514,7 @@
                 },
                 "state": {
                   "type": "string",
-                  "enum": ["open", "resolved"]
+                  "enum": ["open", "blocked", "resolved"]
                 },
                 "stateConfidence": {
                   "type": "string",
@@ -544,6 +558,11 @@
                   "minLength": 1,
                   "maxLength": 100
                 },
+                "topicId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
                 "axisId": {
                   "type": "string",
                   "minLength": 1,
@@ -553,6 +572,11 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 160
+                },
+                "problemId": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
                 },
                 "summary": {
                   "type": "string",
@@ -674,6 +698,11 @@
             "minLength": 1,
             "maxLength": 160
           },
+          "problemId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
           "summary": {
             "type": "string",
             "minLength": 1,
@@ -738,7 +767,7 @@
       "effect": "read",
       "entry": "actions/actions.js",
       "exposeAsTool": false,
-      "description": "The Progress view in one call: the axis index (each axis in attention order with its topic, state, stale flag, plan, problem counts, latest activity and append-only state history) and the problem index (open and resolved problems with their parent axis and topic, affected repositories, evidence, plan step and resolution/reopen history). Both come from one window — `activitySinceDays` — so the two halves cannot disagree. Powers the page's Progress view; not exposed as an agent tool.",
+      "description": "The Progress view in one call: the axis index (each axis in attention order with its topic, state, stale flag, plan, problem counts, latest activity and append-only state history) and the problem index (open and resolved problems with their parent axis and topic, affected repositories, evidence, plan step and resolution/reopen history). Both come from one window — `activitySinceDays` — so the two halves cannot disagree. Powers the page's Progress view; not exposed as an agent tool. Pass `offset`/`pageSize` to add `activityPage` and `problemPage` siblings beside the existing arrays (offset paging over `occurred_at DESC, id DESC` / `created_at ASC, id ASC`); send neither and the payload is exactly as before.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -755,6 +784,16 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 50
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
           }
         },
         "required": []
@@ -766,7 +805,7 @@
       "effect": "read",
       "entry": "actions/actions.js",
       "exposeAsTool": false,
-      "description": "List recorded activity, newest first, optionally filtered to one topic or axis and to a time window. Powers the page's activity panel.",
+      "description": "List recorded activity, newest first, optionally filtered to one topic, axis, person (`personActorId` — the person's recorded actor account; not `actorId`, which the host reserves and strips) or repository, and to a time window. Powers the page's activity panels. Pass `offset`/`pageSize` to add an `activityPage` sibling beside `activity`; send neither and the payload is unchanged.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -781,6 +820,16 @@
             "minLength": 1,
             "maxLength": 100
           },
+          "personActorId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "repositoryId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
           "limit": {
             "type": "integer",
             "minimum": 1,
@@ -790,6 +839,16 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 365
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000
+          },
+          "pageSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100
           }
         },
         "required": []
@@ -948,6 +1007,10 @@
       {
         "id": "005-external-evidence",
         "path": "migrations/005-external-evidence.sql"
+      },
+      {
+        "id": "006-task-plan-text",
+        "path": "migrations/006-task-plan-text.sql"
       }
     ]
   },
