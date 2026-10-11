@@ -160,53 +160,14 @@ function navButton(label, onclick, subtle = false) {
 }
 
 /* ---------- view: Overview ---------- */
-function renderOverview() {
+function dashboardSummary() {
   const d = STATE.data;
-  const c = d.provenance.counts;
-  const wrap = el("div", {});
-  wrap.appendChild(el("div", { class: "page-head" }, [
-    el("h1", { text: "Overview" }),
-    el("p", { text: "Baseline signal from the frozen export — counts, the research directions in play, and the most recent recorded work." }),
-  ]));
-
-  const stats = [["Topics", c.topics], ["Development axes", c.axes], ["Open problems", c.problems],
-    ["Repositories", c.repositories], ["People", c.people], ["Recorded events", c.events]];
-  wrap.appendChild(el("div", { class: "statgrid" }, stats.map(([l, n]) =>
-    el("div", { class: "stat" }, [el("div", { class: "n", text: String(n) }), el("div", { class: "l", text: l })]))));
-
-  const topicsPanel = el("section", { class: "panel" }, [el("h2", { text: "Research directions" })]);
-  const tl = el("ul", { class: "select-list" });
-  for (const t of d.topics) {
-    const copy = editorialFor(t.alias);
-    const act = activityCount(t);
-    tl.appendChild(el("li", {}, [el("button", {
-      class: "select-row topic-row", type: "button", "data-topic": t.alias,
-      onclick: () => go("topics", { topic: t.alias }),
-    }, [
-      el("span", { class: "sel-head" }, [
-        el("span", { class: "row-title", text: t.name }),
-        stateBadge(t.status),
-      ]),
-      copy ? el("span", { class: "row-description", text: copy.short }) : null,
-      el("span", { class: "row-meta", text: `${t.axes.length} ${t.axes.length === 1 ? "axis" : "axes"} · ${act.n} ${act.label}` }),
-
-    ])]));
-  }
-  topicsPanel.appendChild(tl);
-  wrap.appendChild(topicsPanel);
-
-  const act = el("section", { class: "panel" }, [el("h2", { text: "Recent activity" })]);
-  const al = el("ul", { class: "activity-list" });
-  for (const e of d.activity.slice(0, 8)) {
-    const t = topicsByAlias()[e.topicAlias];
-    al.appendChild(el("li", {}, [
-      el("div", { text: e.summary || "(no summary)" }),
-      el("div", { class: "small soft", text: `${t ? t.name : e.topicAlias || "—"} · ${e.sourceType || "event"} · ${(e.occurredAt || "").slice(0, 10)}` }),
-    ]));
-  }
-  act.appendChild(al);
-  wrap.appendChild(act);
-  $("#view-overview").replaceChildren(wrap);
+  const tasks = d.problems.filter(p => p.state !== "resolved");
+  return el("details", { class: "panel section-fold dashboard-summary" }, [el("summary", { text: "Dashboard summary" }),
+    el("div", { class: "statgrid" }, [["Projects", d.topics.length], ["Workstreams", d.topics.flatMap(t => t.axes).length],
+      ["Open tasks", tasks.length], ["Blocked tasks", tasks.filter(p => taskState(p) === "blocked").length],
+      ["Repositories", d.repositories.length], ["People", d.people.length]].map(([label,n]) => el("div", { class: "stat" }, [el("div", { class: "n", text: String(n) }), el("div", { class: "l", text: label })]))),
+  ]);
 }
 
 /* ---------- view: Topics ---------- */
@@ -257,7 +218,7 @@ function renderTopics() {
   }
   wrap.appendChild(detail);
 
-  $("#view-topics").replaceChildren(el("div", { class: "split" }, [left, detail]));
+  $("#view-topics").replaceChildren(dashboardSummary(), el("div", { class: "split" }, [left, detail]));
 }
 
 function axisBlock(a, { context }) {
@@ -313,7 +274,7 @@ function renderProgress() {
   const wrap = el("div", {});
   wrap.appendChild(el("div", { class: "page-head" }, [
     el("h1", { text: "Progress" }),
-    el("p", { text: "The axis frame. The selected axis shows its full purpose and reading; the problem index lists its open work; the selected problem shows its full statement and context." }),
+    el("p", { text: "Select a workstream to read its context, scoped plan and tasks. Task descriptions remain visible; longer lists are paged." }),
   ]));
 
   // left: axis index (grouped by topic) + selected axis context (non-summarised)
@@ -341,7 +302,7 @@ function renderProgress() {
     idxPanel.appendChild(group);
   }
   left.appendChild(idxPanel);
-  wrap.appendChild(el("div", { class: "split-wide" }, [
+  wrap.appendChild(el("div", { class: "split progress-split" }, [
     left,
     axis ? progressMain(axis) : el("section", { class: "panel" }, [el("p", { class: "muted", text: "No axis selected." })]),
   ]));
@@ -378,20 +339,14 @@ function progressMain(axis) {
 
   main.appendChild(axisContextPanel(axis));
 
+  const taskCards = problems.map(p => el("article", { class: "axis-block task-card", "data-problem": p.alias }, [
+    el("div", { class: "axis-head" }, [el("h3", { class: "axis-title", text: STATE.editorial?.tasks?.[p.alias]?.title || p.statement }), stateBadge(taskState(p))]),
+    taskDetail(p, axis),
+  ]));
+  const initialPage = selected ? Math.floor(problems.findIndex(p => p.alias === selected.alias) / 5) : 0;
   main.appendChild(el("details", { class: "panel section-fold", open: true }, [
     el("summary", { text: `Tasks (${problems.length})` }),
-    problems.length === 0
-      ? el("div", { class: "banner", text: "No problems are attached to this axis in the source." })
-      : el("ul", { class: "problist" }, problems.map((p) => el("li", {}, [el("button", {
-          class: "select-row" + (taskState(p) === "blocked" ? " task-blocked" : ""), type: "button", "data-problem": p.alias,
-          "data-selected": selected && p.alias === selected.alias ? "true" : "false",
-          "aria-expanded": selected?.alias === p.alias ? "true" : "false",
-          "aria-controls": `task-detail-${p.alias}`,
-          onclick: () => go("progress", { axis: axis.alias, problem: selected?.alias === p.alias ? null : p.alias }),
-        }, [
-          el("div", { class: "axis-head" }, [el("span", { class: "row-title clamp", "data-expanded": "false", text: STATE.editorial?.tasks?.[p.alias]?.title || p.statement }), stateBadge(taskState(p))]),
-          el("div", { class: "row-meta", text: `${p.planStepTitle ? "plan step: " + p.planStepTitle : "no plan step"} · ${(p.recencyAt || "").slice(0, 10)}` }),
-        ]), selected?.alias === p.alias ? taskDetail(p, axis) : null]))),
+    problems.length ? pagedEntries(taskCards, 5, Math.max(0, initialPage), "Tasks") : el("p", { class: "small soft", text: "No tasks recorded for this workstream." }),
   ]));
 
   return main;
@@ -404,19 +359,47 @@ function scopedPlan(steps, label = "Plan / approach") {
   ]) : null;
 }
 
+function pagedEntries(entries, size = 5, initialPage = 0, label = "Entries", scrolling = false) {
+  let page = initialPage;
+  const body = el(scrolling ? "ul" : "div", { class: scrolling ? "activity-scroll context-events" : "task-page", tabindex: scrolling ? "0" : null, "aria-label": label });
+  const controls = el("div", { class: "activity-controls" });
+  const update = () => {
+    const pages = Math.max(1, Math.ceil(entries.length / size));
+    page = Math.min(Math.max(0, page), pages - 1);
+    body.replaceChildren(...entries.slice(page * size, (page + 1) * size));
+    const switcher = el("div", { class: "activity-limit-switch", role: "group", "aria-label": `${label} pages` });
+    const button = (text, target, disabled = false) => el("button", { type: "button", class: "activity-limit", text, disabled,
+      "aria-current": typeof text === "number" && target === page ? "page" : null,
+      onclick: () => { page = target; update(); body.scrollTop = 0; },
+    });
+    switcher.appendChild(button("Previous", page - 1, page === 0));
+    for (let i = 0; i < pages; i++) {
+      if (i === 0 || i === pages - 1 || Math.abs(i - page) <= 1) switcher.appendChild(button(i + 1, i));
+      else if (i === page - 2 || i === page + 2) switcher.appendChild(el("span", { text: "…" }));
+    }
+    switcher.appendChild(button("Next", page + 1, page === pages - 1));
+    controls.replaceChildren(...(pages > 1 ? [switcher] : []), el("span", { class: "small soft", text: entries.length ? `${page * size + 1}–${Math.min((page + 1) * size, entries.length)} of ${entries.length} available` : "No entries" }));
+  };
+  update();
+  return el("div", {}, [controls, body]);
+}
+function activityEntries(entries) {
+  return pagedEntries(entries, 5, 0, "Activity", true);
+}
+
 function resourceContext(entity, kind) {
   const aliases = entity.repositoryAliases || [];
   const examples = STATE.editorial?.[kind]?.[entity.alias]?.activity || [];
   const recorded = kind === "axes" ? STATE.data.activity.filter(e => e.axisAlias === entity.alias).sort((a,b) => (b.occurredAt || "").localeCompare(a.occurredAt || "")) : [];
   return el("div", { class: "resource-context" }, [
     aliases.length ? el("div", { class: "repository-reference" }, [
-      el("span", { class: "context-label", text: "Supporting code · " }),
-      ...aliases.map((alias, i) => { const r = reposByAlias()[alias]; return el("span", {}, [i ? " · " : "", r?.url ? el("a", { href: r.url, target: "_blank", rel: "noopener noreferrer", text: r.fullName }) : el("span", { text: r?.fullName || alias })]); }),
+      el("span", { class: "context-label", text: "Supporting repositories · " }),
+      ...aliases.map((alias, i) => { const r = reposByAlias()[alias]; return el("span", { class: "repo-link-pair" }, [i ? el("span", { class: "repo-pair-separator", "aria-hidden": "true", text: "·" }) : null, el("a", { href: `#/repositories/${alias}`, title: "View repository in dashboard", text: r?.fullName || alias }), r?.url ? el("a", { class: "external-repo-link", href: r.url, target: "_blank", rel: "noopener noreferrer", title: `Open ${r.fullName} on GitHub`, "aria-label": `Open ${r.fullName} on GitHub`, text: "GitHub ↗" }) : null]); }),
     ]) : null,
     recorded.length || examples.length ? el("details", { class: "scoped-plan section-fold activity-context", open: true }, [
       el("summary", { text: "Recent activity" }),
-      el("ul", { class: "context-events" }, [
-        ...recorded.slice(0,3).map(e => el("li", {}, [el("span", { class: "small soft", text: formatActivityDate(e.occurredAt) + " · " }), e.sourceUrl ? el("a", { href: e.sourceUrl, target: "_blank", rel: "noopener noreferrer", text: e.summary }) : el("span", { text: e.summary })])),
+      activityEntries([
+        ...recorded.map(e => el("li", {}, [el("span", { class: "small soft", text: formatActivityDate(e.occurredAt) + " · " }), e.sourceUrl ? el("a", { href: e.sourceUrl, target: "_blank", rel: "noopener noreferrer", text: e.summary }) : el("span", { text: e.summary })])),
         ...examples.map(e => el("li", {}, [el("span", { class: "small soft", text: formatActivityDate(e.date) + " · Example report · " }), el("span", { text: e.summary })])),
       ]),
     ]) : null,
@@ -433,51 +416,111 @@ function taskDetail(task, axis) {
 
 /* ---------- view: People ---------- */
 function renderPeople() {
-  const d = STATE.data;
-  const wrap = el("div", {});
-  wrap.appendChild(el("div", { class: "page-head" }, [
-    el("h1", { text: "People" }),
-    el("p", { text: "People recorded against the research state, and the axes they are attached to." }),
-  ]));
-  const grid = el("div", { class: "cardgrid" });
-  for (const p of d.people) {
-    grid.appendChild(el("section", { class: "panel" }, [
-      el("h3", { text: p.displayName || p.alias }),
-      el("div", { class: "small soft", text: p.githubLogin ? `@${p.githubLogin}` : "no public handle" }),
-      el("div", { class: "links" }, [el("span", { class: "chip", text: `${p.axes.length} axes` }),
-        el("span", { class: "chip", text: p.attributable ? "activity attributable" : "no account mapped — attribution narrow" })]),
-      el("ul", { class: "small", style: "margin:10px 0 0; padding-left:18px" }, p.axes.map((a) =>
-        el("li", {}, [el("button", { class: "backlink", type: "button", onclick: () => go("progress", { axis: a.alias }), text: `${a.title} — ${a.state}` })]))),
+  const people = STATE.data.people;
+  const person = people.find(p => p.alias === STATE.person) || people[0];
+  const index = el("section", { class: "panel" }, [el("h2", { text: `People (${people.length})` }),
+    el("ul", { class: "select-list" }, people.map(p => el("li", {}, [el("button", {
+      class: "select-row", type: "button", "data-person": p.alias,
+      "data-selected": p.alias === person?.alias ? "true" : "false",
+      "aria-pressed": p.alias === person?.alias ? "true" : "false",
+      onclick: () => go("people", { person: p.alias }),
+    }, [el("span", { class: "row-title", text: p.displayName || p.alias }),
+      p.githubLogin ? el("div", { class: "row-meta", text: `@${p.githubLogin}` }) : null])]))),
+  ]);
+  const detail = el("div", {});
+  if (person) {
+    const axes = person.axes.map(a => axesByAlias()[a.alias]).filter(Boolean);
+    const topics = [...new Set(axes.map(a => a.topicAlias))].map(a => topicsByAlias()[a]).filter(Boolean);
+    const repositories = [...new Set(axes.flatMap(a => a.repositoryAliases || []))];
+    detail.appendChild(el("details", { class: "panel topic-detail", open: true, "data-selected-person": person.alias }, [
+      el("summary", {}, [el("span", { class: "axis-title", text: person.displayName || person.alias })]),
+      el("div", { class: "context-body" }, [el("span", { class: "context-label", text: "About this person" }),
+        el("p", { class: "lede small soft", text: person.description || "No biography recorded." })]),
+      person.githubLogin ? el("div", { class: "context-footer" }, [
+        el("span", { class: "small soft", text: `GitHub · @${person.githubLogin}` }),
+        el("a", { class: "navbtn subtle", href: `https://github.com/${person.githubLogin}`, target: "_blank", rel: "noopener noreferrer", text: "Open profile ↗" }),
+      ]) : null,
+    ]));
+    detail.appendChild(el("details", { class: "panel section-fold", open: true }, [
+      el("summary", { text: `Involvement (${topics.length} projects)` }),
+      ...topics.map(t => el("div", { class: "repository-work-group" }, [
+        el("div", { class: "repository-project-heading", text: t.name }),
+        el("div", { class: "project-group-intro" }, [
+          el("p", { class: "small soft", text: editorialFor(t.alias)?.short || t.description || "No project description recorded." }),
+          navButton("Open project →", () => go("topics", { topic: t.alias }), true),
+        ]),
+        ...axes.filter(a => a.topicAlias === t.alias).map(a => axisBlock(a, { context: "topics" })),
+      ])),
+    ]));
+    detail.appendChild(el("details", { class: "panel section-fold", open: true }, [
+      el("summary", { text: `Related repositories (${repositories.length})` }),
+      el("p", { class: "small soft", text: "Repositories supporting this person’s linked workstreams; this does not establish ownership or maintainership." }),
+      resourceContext({ alias: person.alias, repositoryAliases: repositories }, "people"),
+    ]));
+    detail.appendChild(el("details", { class: "panel section-fold", open: true }, [
+      el("summary", { text: "Personal activity" }),
+      el("p", { class: "small soft", text: person.attributable ? "No person-scoped activity supplied in this snapshot." : "Personal activity cannot be attributed from this snapshot. Workstream updates above describe the work, not this person’s actions." }),
     ]));
   }
-  wrap.appendChild(grid);
-  $("#view-people").replaceChildren(wrap);
+  $("#view-people").replaceChildren(el("div", { class: "split" }, [index, detail]));
 }
 
 /* ---------- view: Repositories ---------- */
 function renderRepositories() {
-  const d = STATE.data;
+  const repos = STATE.data.repositories;
+  const selected = repos.find(r => r.alias === STATE.repository) || repos[0];
   const wrap = el("div", {});
-  wrap.appendChild(el("div", { class: "page-head" }, [
-    el("h1", { text: "Repositories" }),
-    el("p", { text: "The codebases the research state names, with their factual description, default branch and linked axes." }),
-  ]));
-  const grid = el("div", { class: "cardgrid" });
-  for (const r of d.repositories) {
-    grid.appendChild(el("section", { class: "panel" }, [
-      el("h3", { text: r.fullName }),
-      el("div", { class: "small soft", text: `default branch: ${r.defaultBranch || "—"}` }),
-      el("p", { class: "small", text: r.description || "No description recorded." }),
-      el("div", { class: "links" }, r.url ? [el("a", { class: "chip link", href: r.url, target: "_blank", rel: "noopener noreferrer", text: "Open on GitHub ↗" })] : []),
-      el("div", { class: "links" }, r.axisAliases.map((a) => el("button", { class: "chip", type: "button", onclick: () => go("progress", { axis: a }), text: (axesByAlias()[a] || {}).title || a }))),
+  const index = el("section", { class: "panel" }, [el("h2", { text: `Repositories (${repos.length})` })]);
+  index.appendChild(el("ul", { class: "select-list" }, repos.map(r => el("li", {}, [el("button", {
+    class: "select-row", type: "button", "data-repository": r.alias,
+    "aria-pressed": r.alias === selected?.alias ? "true" : "false",
+    "data-selected": r.alias === selected?.alias ? "true" : "false",
+    onclick: () => go("repositories", { repository: r.alias }),
+  }, [el("div", { class: "axis-head" }, [el("span", { class: "row-title", text: r.fullName.split("/").slice(1).join("/") || r.fullName }), r.lastActivityAt ? selectorRecency([{ occurredAt: r.lastActivityAt }]) : selectorRecency([])]),
+    el("div", { class: "row-meta", text: r.fullName.split("/")[0] }),
+    el("div", { class: "chips selector-tags" }, [el("span", { class: "chip", text: `${r.axisAliases.length} workstreams` })]),
+  ])]))));
+  const detail = el("div", {});
+  if (selected) {
+    const axes = selected.axisAliases.map(a => axesByAlias()[a]).filter(Boolean);
+    const topics = [...new Set(axes.map(a => a.topicAlias))].map(a => topicsByAlias()[a]).filter(Boolean);
+    detail.appendChild(el("details", { class: "panel topic-detail", open: true, "data-selected-repository": selected.alias }, [
+      el("summary", {}, [el("span", { class: "axis-title", text: selected.fullName })]),
+      el("p", { class: "lede", text: selected.description || "No description recorded." }),
+      el("div", { class: "context-footer" }, [
+        el("span", { class: "small soft", text: `Default branch · ${selected.defaultBranch || "Not recorded"}` }),
+        selected.url ? el("a", { class: "navbtn subtle", href: selected.url, target: "_blank", rel: "noopener noreferrer", text: "Open on GitHub ↗" }) : null,
+      ]),
+    ]));
+    detail.appendChild(el("details", { class: "panel section-fold", open: true }, [
+      el("summary", { text: `Current work (${axes.length})` }),
+      ...topics.map(t => el("div", { class: "repository-work-group" }, [
+        el("div", { class: "repository-project-heading", text: t.name }),
+        el("div", { class: "project-group-intro" }, [
+          el("p", { class: "small soft", text: editorialFor(t.alias)?.short || t.description || "No project description recorded." }),
+          navButton("Open project →", () => go("topics", { topic: t.alias }), true),
+        ]),
+        ...axes.filter(a => a.topicAlias === t.alias).map(a => axisBlock(a, { context: "topics" })),
+      ])),
+    ]));
+    detail.appendChild(el("details", { class: "panel section-fold", open: true }, [
+      el("summary", { text: `Supporting projects (${topics.length})` }),
+      ...topics.map(t => el("p", {}, [el("a", { href: `#/topics/${t.alias}`, text: t.name })])),
+    ]));
+    const events = STATE.data.activity.filter(e => e.repositoryAlias === selected.alias);
+    detail.appendChild(el("details", { class: "panel section-fold", open: true }, [
+      el("summary", { text: "Repository activity" }),
+      el("p", { class: "small soft", text: events.length ? `${events.length} explicitly linked events` : "No repository-scoped events in this snapshot. Workstream updates remain under Current work; they are not assumed to be repository events." }),
     ]));
   }
-  wrap.appendChild(grid);
+  wrap.appendChild(el("div", { class: "split" }, [index, detail]));
   $("#view-repositories").replaceChildren(wrap);
 }
 
 /* ---------- navigation ---------- */
 function go(view, sel = {}) {
+  if (view === "people" && sel.person !== undefined) STATE.person = sel.person;
+  if (view === "repositories" && sel.repository !== undefined) STATE.repository = sel.repository;
   if (view === "topics" && sel.topic !== undefined) STATE.topic = sel.topic;
   if (view === "progress") {
     if (sel.axis !== undefined) STATE.axis = sel.axis;
@@ -485,7 +528,7 @@ function go(view, sel = {}) {
   }
   STATE.view = view;
   const hash = ["#/" + view, STATE.view === "topics" && STATE.topic, STATE.view === "progress" && STATE.axis,
-    STATE.view === "progress" && STATE.problem].filter(Boolean).join("/");
+    STATE.view === "progress" && STATE.problem, STATE.view === "repositories" && STATE.repository, STATE.view === "people" && STATE.person].filter(Boolean).join("/");
   if (location.hash !== hash) history.pushState(null, "", hash);
   render();
   const main = $("#main");
@@ -494,9 +537,11 @@ function go(view, sel = {}) {
 }
 
 function applyHash() {
-  const parts = (location.hash || "#/overview").replace(/^#\/?/, "").split("/").filter(Boolean);
-  STATE.view = ["overview", "topics", "people", "repositories", "progress"].includes(parts[0]) ? parts[0] : "overview";
-  STATE.topic = null; STATE.axis = null; STATE.problem = null;
+  const parts = (location.hash || "#/topics").replace(/^#\/?/, "").split("/").filter(Boolean);
+  STATE.view = ["topics", "people", "repositories", "progress"].includes(parts[0]) ? parts[0] : "topics";
+  STATE.topic = null; STATE.axis = null; STATE.problem = null; STATE.repository = null; STATE.person = null;
+  if (STATE.view === "people" && parts[1]) STATE.person = parts[1];
+  if (STATE.view === "repositories" && parts[1]) STATE.repository = parts[1];
   if (STATE.view === "topics" && parts[1]) STATE.topic = parts[1];
   if (STATE.view === "progress") { if (parts[1]) STATE.axis = parts[1]; if (parts[2]) STATE.problem = parts[2]; }
 }
@@ -507,16 +552,15 @@ const VIEW_PURPOSE = {
   topics: "Understand each project: its purpose, people, current workstreams and recent activity. Open a workstream in Progress for the full work details.",
   people: "See who each person is, the research and work they are involved in, their repositories and latest activity.",
   repositories: "Understand what each repository is for, the work underway, the topics it supports, its people and recent activity.",
-  progress: "Browse the full work: topics, axes and specific problems, with complete descriptions, status, blockers, plans and supporting detail. Selection changes what you view, not the research state.",
+  progress: "Read workstreams and tasks in full, with their status, scoped plans, supporting repositories and activity. Selection changes what you view, not the research state.",
 };
 function render() {
-  for (const v of ["overview", "topics", "people", "repositories", "progress"]) {
+  for (const v of ["topics", "people", "repositories", "progress"]) {
     const sec = $("#view-" + v);
     const active = v === STATE.view;
     sec.hidden = !active;
     if (active) {
-      if (v === "overview") renderOverview();
-      else if (v === "topics") renderTopics();
+      if (v === "topics") renderTopics();
       else if (v === "people") renderPeople();
       else if (v === "repositories") renderRepositories();
       else renderProgress();

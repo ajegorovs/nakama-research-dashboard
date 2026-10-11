@@ -18,6 +18,29 @@
 .scoped-plan { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; }
 .scoped-plan > summary { font-weight: 700; }
 .repository-reference { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; font-size: 13px; line-height: 1.6; }
+.repository-project-heading { display: flex; align-items: center; gap: 8px; color: var(--soft); font-size: 13px; font-weight: 700; margin: 14px 0 10px; }
+.repository-project-heading::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+.repository-work-group + .repository-work-group { margin-top: 24px; }
+.overview-projects .blocked-count { color: #a12626; background: #fdecec; }
+.overview-projects .axis-head { align-items: center; }
+.project-group-intro { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.project-group-intro p { margin: 0; }
+.repo-pair-separator { color: var(--soft); margin-right: 4px; }
+.repo-link-pair { display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-right: 8px; }
+.repo-link-pair .external-repo-link { border-left: 1px solid var(--line-strong); padding-left: 8px; white-space: nowrap; }
+.activity-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; font-size: 12px; }
+.activity-limit-label { display: flex; align-items: center; gap: 8px; }
+.activity-limit-switch { display: inline-flex; gap: 2px; padding: 3px; border-radius: 7px; background: #eceff3; }
+.activity-limit { font: inherit; color: var(--muted); background: transparent; border: 0; border-radius: 5px; padding: 4px 8px; cursor: pointer; }
+.activity-limit[aria-pressed="true"], .activity-limit[aria-current="page"] { background: white; color: var(--text); font-weight: 700; box-shadow: 0 1px 3px #00000018; }
+.activity-limit:disabled { opacity: .4; cursor: default; }
+.activity-limit-switch { flex-wrap: wrap; }
+.activity-scroll { max-height: 260px; overflow-y: auto; }
+.task-page .task-card { margin-top: 12px; }
+.task-card .task-detail { padding: 0; border: 0; }
+.progress-split .project-selector-group > .small::before, .progress-split .project-selector-group > .small::after { display: none; }
+.progress-split .project-selector-group > .small { font-weight: 650; margin-bottom: 8px; }
+.dashboard-summary { margin-bottom: 16px; }
 .context-events { list-style: none; padding: 0; margin: 12px 0 0; }
 .context-events li { padding: 8px 0; font-size: 13px; line-height: 1.6; }
 .context-events li + li { border-top: 1px solid var(--line); }

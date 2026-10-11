@@ -1,8 +1,15 @@
 # Acceptance Checklist
 
+> **Current status (2026-10-10):** the information-architecture pivot retires the **Overview** tab. The
+> canonical tab set is **Projects, Topics, People, Repositories** (plus **Progress**), and the default
+> screen is **Projects** with the collapsed **Dashboard summary** above it. The Overview-specific items
+> below are superseded by the pivot and are kept for lineage only; the rows that still have a subject are
+> asserted by `harness/verify-page.mjs` (adapted to the four-tab contract). Local disposable focus proof
+> is green; the canonical served pass is **prepared and pending** (`.hermes/scratch/canonical-validation-preparation.md`).
+
 ## Global
 
-- [ ] All five top-level views exist: Overview, Topics, People, Repositories, Progress.
+- [ ] All canonical top-level views exist: Projects, Topics, People, Repositories, Progress. *(Overview retired by the pivot.)*
 - [ ] Shared visual grammar is used across views.
 - [ ] Existing dashboard data is projected into the new UI without silent semantic loss.
 - [ ] No broad CRUD console reappears.
@@ -22,10 +29,15 @@
 - [ ] Status badges do not accidentally navigate.
 - [ ] Same entity has consistent label/behavior across views.
 
-## Overview
+## Projects (retired Overview — superseded by the pivot)
 
-- [ ] Two primary sections: topic/project activity and repository activity.
-- [ ] Cards are sorted by last activity.
+> The Overview tab and its two-column landing are **retired**. The default screen is **Projects** with the
+> collapsed **Dashboard summary** (the pivot's aggregate figures) above the Projects index rail. The items
+> below are kept for lineage; the surviving assertions are the Projects-tab default-screen check, the
+> Dashboard-summary counts, and the Projects-index landing order in `harness/verify-page.mjs`.
+
+- [ ] Two primary sections: topic/project activity and repository activity. *(retired — landing columns removed)*
+- [ ] Cards are sorted by last activity. *(retired)*
 - [ ] Relative age is prominent.
 - [ ] Latest event includes compact exact date.
 - [ ] Stale is visible but not described as blocked/stalled.

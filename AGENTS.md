@@ -53,10 +53,11 @@ procedures** that never ship.
 
 | Task | Command |
 | --- | --- |
-| Everything the merge gate runs | `bun run check` (typecheck + build + unit tests) |
+| Everything the merge gate runs | `bun run check` (typecheck + build + `bun test src` + the harness test suite) |
 | Types only | `bun run typecheck` · `bun run typecheck:host` |
 | Rebuild the committed output | `bun run build` |
 | Unit tests | `bun run test` |
+| Harness test suite (all 6 `harness/*.test.mjs`) | `bun run harness:suite:test` (run by `bun run check`) |
 | Acceptance pass (read) | `bun run harness:read` (corpus) · `bun run harness:fixture` (fixture) |
 | Acceptance pass (write) | `bun run harness:write` (fixture, mutates — reseed afterwards) |
 | Keyboard-focus pass | `bun run harness:focus` |

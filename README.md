@@ -68,7 +68,7 @@ here: `vendor/` holds the recipe that puts the plugin into a checkout, because N
 > open item (real topic names in a public repo) was resolved the same day: every example — docs, test
 > fixtures and the screenshots — stopped using real names. **Revised 2026-10-01 (D10):** the neutral
 > placeholders are themselves retired in favour of a real **public** corpus —
-> `ajegorovs/udv-echo-process` — so the layout is judged on states we did not choose while the repo
+> `<owner>/udv-echo-process` — so the layout is judged on states we did not choose while the repo
 > still carries nothing unpublished. See [`docs/corpus/README.md`](docs/corpus/README.md).
 >
 > **Answered again after C3** — the two questions the C3 handoff left open
@@ -80,7 +80,7 @@ here: `vendor/` holds the recipe that puts the plugin into a checkout, because N
 
 ## Current look
 
-The page as it renders today, on the repository's own history: `ajegorovs/udv-echo-process` is a real,
+The page as it renders today, on the repository's own history: `<owner>/udv-echo-process` is a real,
 **public** repository (625 commits, 69 PRs), seeded through the plugin's own action surface — no row
 hand-typed — so what you see below are states we did not choose. Nothing here is unpublished group
 work; the pack behind these images is [`docs/corpus/README.md`](docs/corpus/README.md).
@@ -240,7 +240,9 @@ bun harness/install-plugin.mjs --env-file /tmp/nakama-review.env
 ```
 
 The same file feeds every script here (`NAKAMA_EMAIL` / `NAKAMA_PASSWORD`, plus `NAKAMA_URL` for the API
-and `NAKAMA_DASHBOARD` for the web origin). Arguing a flag through an npm script works the usual way —
+and `NAKAMA_DASHBOARD` for the web origin — `served-build-guard.mjs` reads `NAKAMA_DASHBOARD` directly and
+has **no default**: it refuses, exit 2, when it is unset rather than pointing at the API origin. A unified
+origin serving both the web app and the API is accepted; only absence is refused). Arguing a flag through an npm script works the usual way —
 `bun run harness:read -- --env-file /tmp/nakama-review.env` — and if a script cannot find credentials it
 says which names it looked for and exits 2 rather than failing checks.
 
@@ -279,6 +281,16 @@ would otherwise silently measure the previous build. **Name the target organizat
 or `NAKAMA_ORG_ID` / `NAKAMA_ORG_NAME`): on a multi-org account the helper refuses rather than rebinding
 `orgs[0]` — which is how a fixture reinstall once rebound the wrong organization. A single-org account still
 falls back to its only organization. The same selector applies to `install-plugin.mjs` and `update-plugin.mjs`.
+
+**A reinstall replaces the plugin's tool rows, so the agent's assigned tools vanish and it silently calls
+nothing.** Put them back with `harness/assign-capabilities.mjs`, which reads the live registry (`GET /v1/tools`
+filtered to the plugin, `GET /v1/skills` for `research-coordinator`) rather than a fixed count, and reuses the
+tree's own `createHttpAuth` (which refuses an ambient org and merges the CSRF header every write needs). It is
+idempotent and additive — it never removes a row:
+
+```bash
+bun harness/assign-capabilities.mjs --env-file /tmp/nakama-review.env --org-id org_… --profile-id <profile>
+```
 
 **Corpus** (the real, public dataset) — seeded by replaying the committed transcript, which is the
 corpus's own record:
@@ -490,6 +502,32 @@ earlier by the host as `{"error":"invalid_input"}` (HTTP 400).
 Agent tool names replace the hyphen in the plugin id with an underscore —
 `plugin_research_dashboard__get_overview`, not `plugin_research-dashboard__…` as the upstream docs
 imply from `plugin_<id>__<key>`. Quote the underscore form in skills and prompts.
+
+## Upgrading: the `list_activity` person filter is now `personActorId`
+
+**This is a breaking public-API change on a served instance. There is no compatibility shim and no config
+toggle.** It applies to any caller of the plugin's `list_activity` action (not one of the five agent tools
+— a page/admin action), not to the agent tool set.
+
+The action filters recorded activity by a person's recorded actor account. That public input key was
+`actorId`; it is now **`personActorId`**.
+
+- **Old callers break *silently*, not loudly.** `actorId` is in the host's reserved, spoofable input set
+  (`SPOOFABLE_INPUT_KEYS`): the host **strips a top-level `actorId` before schema validation and before the
+  plugin runs**. An old caller is therefore indistinguishable from an unscoped one and receives the **whole
+  activity window**, not that person's events — with a `200`, never a `400`. There is deliberately no
+  fallback (reading `input.actorId` would only reproduce the drop and look unscoped anyway).
+- **Verify totals after upgrading.** Because the drop is silent, a successful response proves nothing about
+  scoping. Compare a known person's returned `activityPage.total` against the unscoped window, and check
+  that a bogus `personActorId` returns `0` — the served read-back the validation run recorded
+  (person A = 16, person B = 0, bogus = 0, old `actorId` = 16 unscoped).
+- **The filtered view is not access control.** `personActorId` narrows *which events are displayed*; it is
+  a read filter over data the caller is already authorised to see. It is never an authorisation boundary —
+  do not rely on it to hide activity from a member.
+- **Authentication and security are unchanged.** The acting identity still comes from the session
+  (`context.actor.id`), never from input; login, explicit `x-org-id` organization selection and the CSRF
+  cookie are untouched. Only the name of the read filter changed; the internal store scope field stays
+  `actorId` (it is below the host boundary and is not affected by the top-level stripper).
 
 ## Scope
 

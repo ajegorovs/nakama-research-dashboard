@@ -1,10 +1,177 @@
 # Dashboard information-architecture pivot — working spec
 
-## Current prototype agreement — supersedes earlier layout proposals
+## Current agreement and scope
 
-These are owner-agreed directions for the standalone prototype, not production implementation,
-live-data mutation, deployment or publication authorization. Historical/source-analysis sections
-below remain background; where they differ, this section defines the current prototype direction.
+This section is the single current specification for the standalone prototype. Owner-agreed
+presentation choices are distinguished from data/model questions below. They are not production
+implementation, fixture-write, deployment, restart or publication authorization.
+
+**Status:** prototype direction accepted through the visible-task/pagination iteration; data contracts
+are not yet settled. This consolidation is documentary only, not a new runtime acceptance result.
+Everything under **Historical design and source analysis** is retained background. Its old future-tense
+instructions, status labels and source observations do not override this section or establish current
+live behavior. Existing `docs/ux-v2/DECISIONS.md` and acceptance records remain unchanged.
+
+### Work sequence and constraints
+
+1. Ground the prototype and its semantics.
+2. Map the layout and interactions to required data and verified existing support.
+3. Decide how each datum is obtained, synthesized, stored and retrieved.
+4. Specify the smallest production changes and acceptance checks.
+5. Implement and deploy only under the corresponding authorizations.
+
+- Subagents may perform well-scoped work once given a quality brief grounded in this spec/plan.
+  The parent owns integrated decisions and verifies their findings; speculative excursions remain deferred.
+- Nakama currently runs agents on the host. That is not the intended future execution pattern.
+  Host Git/gh availability, credentials and clone paths are not portable product requirements.
+- The librarian must be able to investigate nonconforming repositories, including PR discussions,
+  diffs and history. Web scraping is a viable baseline; specialized tools are additional capabilities.
+  Templates may help later but are not prerequisites. Interpretation requires agency; deterministic
+  mechanics govern identities, validation, persistence and retrieval rather than guaranteeing identical
+  interpretations.
+- Avoid overengineering. Reuse the current coordination tools and data model where they suffice.
+- No agent runs now. Later use a small, question-driven integration exercise through the existing
+  session transport, not an intelligence benchmark or another general E2E framework.
+
+### Views and navigation
+
+| View | Selector | Selected content and purpose |
+|---|---|---|
+| **Projects** (landing) | Projects | Project description, optional checkpoints, participants and concise workstream cards; orientation rather than full work detail |
+| **Progress** | Workstreams grouped under simple muted project headings | Full workstream context, scoped plan, supporting repositories, activity and visible task cards |
+| **People** | Person identity | Optional biography/profile, involvement grouped by project using shared workstream cards, related repositories and only attributable activity |
+| **Repositories** | Owner separate from repository name | Description, default branch, external destination and current work grouped by project using shared workstream cards |
+
+- Overview is retired. Keep aggregate Projects/Workstreams/Open tasks/Blocked tasks/Repositories/People
+  counts in a collapsed **Dashboard summary** above Projects. Old Overview routes fall back to Projects.
+- Display **Project → Workstream → Task**; do not silently migrate the topic/axis/problem schema.
+- Projects summarize; Progress preserves the full substantive reading.
+- All four side selectors use the same pane width (380px at the measured desktop viewports).
+  Progress no longer uses the narrower variant, horizontal project-label rules, guides or dark group boxes.
+- Workstream card titles navigate to the exact Progress entry. Do not add duplicate Open workstream or
+  Review blocker buttons. Keep a lower-right Return to project action in full workstream context.
+- People and Repositories project groups show a short project description and right-aligned Open project
+  action immediately beneath the group heading. This action is not an obsolete Overview card footer.
+
+### Shared presentation
+
+- Keep description surfaces white; use shared bold muted disclosure headings, arrows, dividers and
+  right-aligned status badges. Entity and section disclosures remain; task selection/unfolding is removed.
+- Preserve pre-dark selector styling. The dark inversion and subsequent #f5f5f5 experiment were rejected
+  for this prototype. Final palette harmonization belongs to the original product; the segmented page
+  switch is the preferred newer control styling, not a command to recolor every surface now.
+- Project/workstream selectors use status dots, compact count tags and relative recorded recency with
+  exact-date tooltips. No status contours, Has plan pill or duplicate Blocker reported warning.
+- Retain **No plan** as a reminder; plans themselves remain optional.
+- Known blocked-task count pills are red; typography/padding/height match sibling pills. Never infer
+  blocked children from a parent blocker.
+- Participants have an explicit quiet inline label beneath a divider. Project-header repository rows
+  remain omitted; references have their own scoped placement.
+- Prototype provenance belongs in the overlay and documentation, not repeated copy badges on cards.
+
+### Tasks, descriptions and scoped plans
+
+- Task cards show a concise title, status and full description without clicking a selector row.
+  Use **Tasks (N)**, not the parent title repeated in the section heading. No one-open-task behavior.
+- Omit repeated task status and workstream context from the body. Keep optional scoped plan, supporting
+  repository references and activity beneath the description.
+- Project checkpoints, workstream strategy and task implementation plans are different optional scopes.
+  Place each beside its description, with an independently collapsible bold plan heading and divider.
+- Existing workstream plan summaries, step order and states must survive the production port.
+- Separate short task titles, project checkpoints and task plans are currently editorial examples where
+  unsupported by the source. No automatic checkpoint links, inherited plans or progress rollups are implied.
+- Current live problems have open/resolved states; the prototype's diagnostics blocked task is explicit
+  editorial data, not an implemented live-state extension or an inference from the workstream blocker.
+
+### Repository links, involvement and attribution
+
+- Supporting repositories are explicit many-to-many links at workstream and task scope. A repository may
+  serve multiple projects; tasks do not automatically inherit parent repositories or activity.
+- Repository name opens the exact dashboard entry. Separate **GitHub ↗** opens its actual external URL
+  in a new tab; keep a thin vertical separator within each pair and dots between pairs, permitting wrapping.
+- Repository external navigation belongs at the description footer's lower right; default branch is
+  separate metadata, not an assertion of freshness or a pinned revision.
+- Related repositories in People do not imply maintainership. Project involvement does not establish
+  personal authorship of workstream events. Missing biography or attribution stays explicit.
+- Activity links require an actual source URL or explicit entity association. Do not fabricate PR links
+  or borrow repository-wide events to fill an empty workstream/task feed.
+
+### Activity and pagination
+
+- Activity is a record of updates, not a plan, completed-work inference or performance score.
+  Place it after description → scoped plan → supporting repositories, in an independent disclosure.
+- Use per-list **Previous / numbered pages / Next** with the shared segmented-switch treatment.
+  Prototype page size is five. Hide page buttons when the available list fits on one page; show the
+  actual displayed range and available count. Direct task navigation opens its containing task page.
+- Numbered pagination replaces the 3/5/10/20/50 latest-entry limit switch and growing scroll-list approach.
+  Activity uses newest-first source records. Task ordering is a separate open decision.
+- The prototype currently slices supplied local data and retains a bounded keyboard-focusable activity
+  scroll body. Production must retrieve scoped pages and report availability/completeness honestly.
+  Whether ordinary activity scrolling can be removed is open; do not treat the current scroll cap as a
+  settled product requirement.
+- No dashboard-wide time filter or chart. Charts and cross-project event processing remain deferred.
+- Illustrative reports live in `editorial.json`, labelled **Example report**. They do not change frozen
+  event counts, recency or factual completion claims. Preserve `data.json` unchanged.
+
+## Remaining grounding and data questions
+
+These are requirements to investigate, not silent decisions or an implementation backlog already approved.
+
+| ID | Question / next evidence needed |
+|---|---|
+| G1 | Task meaning: does ordinary planned work belong in an expanded problem model or another representation? Current problems mean work in the way; do not assume a label rename resolves this. |
+| G2 | Task order: time, explicit plan order, state or another simple rule? Activity stays chronological; settle task order independently. |
+| G3 | Pagination: five is the prototype trial size. Define stable tie-breaking, totals versus loaded availability, scope, arrival of new events and the minimum backend read contract. |
+| G4 | Activity height: use pagination to avoid scrolling hundreds of entries; decide whether a page needs a scroll cap at all. User has not yet reviewed a populated multi-page example. |
+| D1 | Which concise titles, summaries and full descriptions are already stored/exposed, which are editorial-only, and which require distinct fields? |
+| D2 | Which explicit states should tasks support and who may assert them? Keep blocked counts and state changes evidence-aware, not parent-derived. |
+| D3 | How to store optional scoped plans/checkpoints with minimal changes? Determine whether prose/ordered steps suffice before considering graphs or automatic rollups. |
+| D4 | Which repository/person associations, biography/profile fields and source-author identities are supported by existing contracts? Never infer roles or attribution to fill missing fields. |
+| D5 | Define each count and recency fact independently of page size; distinguish recorded snapshot events from complete history and total workstreams from active workstreams. |
+| D6 | Preserve actual plan summary/step states and settle the stored-versus-rendered numbering convention; no fixture rebasing or production fix is authorized here. |
+| A1 | For each required datum: identify direct source, user input or librarian synthesis; then its write tool, validation, authorship/conflict rules, read projection and missing-data behavior. |
+| A2 | Review coordinator guidance for permitted independent synthesis. Host access and an unrestricted profile are not a finished librarian contract. |
+| A3 | Specify future execution/tool/credential boundaries without assuming the current host deployment. Do not turn this into an infrastructure redesign now. |
+
+**Grounded data review:** [Dashboard data and maintenance contract](dashboard-data-and-maintenance-contract.md)
+now maps requirements to existing storage/read/write support, corrects audit interpretations, and proposes
+a minimal acquisition/update workflow. Owner selected general actionable tasks with open/blocked/resolved states, simple ordered plans at
+project/workstream/task scope, and separate short/full text with librarian synthesis respecting authored
+text. Detailed compatibility and read/write contracts are the next design work. Retrieval experiments are allowed only when scoped to a
+named unresolved requirement; no repository excursion or Nakama inference run is active now.
+
+## Historical prototype iteration notes (superseded)
+
+The following verbatim notes preserve earlier alternatives. They are NOT current instructions.
+Overview retention, growing-entry switches, one-open-task rows and ruled project headings were superseded
+by the current agreement above.
+
+### Overview navigation and selector inversion
+Overview project titles are the sole project-navigation action; remove duplicate Open project buttons and footer rows. Participants have an explicit quiet inline label. Revert selector colours to the pre-dark prototype scheme; final colour harmonization is deferred to the original product; retain distinct status dots and blocked/reminder tags. Task unfolding rows are not part of this side-selector change.
+
+### Overview retirement and pagination trial
+Retire Overview; Projects is the landing tab and retains counts in a collapsed Dashboard summary. Progress uses the same selector width as sibling views, simple project headings without rules, and always-visible task title/body cards instead of inline unfolding. Trial five entries per page with Previous/numbered pages/Next using the segmented-switch treatment; activity uses the same pagination and a bounded scroll body. Direct task navigation opens its containing page. This supersedes the activity entry-limit switch and one-open-task interaction described below. Page size is currently fixed at five; backend pagination remains a production follow-up, not simulated completeness.
+
+### Overview purpose — reopened
+Owner questions whether Overview adds value beyond duplicated Projects/People navigation. Preserve the useful aggregate numbers while deciding whether to retire Overview or give it a genuine cross-project health/attention role. No tab removal or inferred overall-state metric is authorized by this discussion.
+
+### Overview remapping
+Retain the metrics → projects → recent activity layout; use Project/Workstream/Task vocabulary and shared cards/disclosures/link styling. Project cards show short description, status, workstream/open-task/explicit-blocked counts, latest actual project event, participants and project navigation. Blocked counts include the explicitly authored prototype state, not a live assertion. Recent recorded activity is newest-first with the shared local limit switch and scroll body, actual source links and exact workstream/project navigation. No chart, fabricated events, repository-wide inference or global time filter. Broader palette harmonization is deferred; owner prefers the newer segmented-switch styling as a future direction.
+
+### Activity limit interaction
+Use a one-click segmented switch showing 3 / 5 / 10 / 20 / 50, not a dropdown. Selected value has a bright surface and stronger text; others are subdued. Buttons expose aria-pressed and retain keyboard operation. Default remains 5; the available-count and independent scroll body are unchanged.
+
+### Activity entry limits — implementation follow-through
+Repositories Current work now shares the People project-description/right-aligned navigation row. Prototype populated Recent activity widgets have a local 3/5/10/20/50 selector (default 5), available-entry count and keyboard-focusable bounded scroll body. This currently limits the supplied snapshot/examples only, not backend retrieval. Production port MUST apply the same shared control to every populated activity/history widget, with scope-correct retrieval/pagination and truncation disclosure; empty-state placeholders need no ineffective selector. Charts remain deferred.
+
+### People grouping and local activity controls
+People project groups place short project description and right-aligned Open project navigation immediately beneath the project heading; remove the old group-bottom action. Separate inline repository link pairs with a dot; column/stacked presentation remains an option for larger lists. Future activity/history widgets use independent entry-limit controls (3, 5, 10, 20, 50) and bounded scrollable bodies, not a dashboard-wide time filter. Proposed default is 5; entry limit is not a time window, complete-history claim or chart total. Larger results require correct scoped retrieval/pagination and explicit truncation/loading states; filters by source/type/repository are later product work, not implemented by this layout iteration. Preserve accessible controls, keyboard scrolling and readable content without nested excessive scroll areas.
+
+### People remapping and activity deferral
+Defer activity charts and multi-project event processing until real product usage/data clarify their semantics. Retain existing lists; no chart or invented attribution is added. People uses the shared selector/detail split, collapsible person header, project-grouped compact workstream cards, lower-right project navigation and repository internal/external link pairs. Related repositories are derived from linked workstreams, not asserted maintainership. Missing biography and personal attribution remain honest empty states; workstream events are not person events.
+
+### Repositories detail refinement
+Keep owner and repository name separate in the selector; add recorded repository recency at its upper right. Repository description uses the shared collapsible title styling. External GitHub navigation belongs in the lower-right footer opposite default branch. Trial grouping Current work by project, with individual workstream cards beneath each project label; do not group workstreams by themselves or imply repository ownership by one project.
 
 ### Entity hierarchy and content
 - Display **Project → Workstream → Task**; frozen export keys and live schema remain unchanged.
@@ -57,10 +224,15 @@ below remain background; where they differ, this section defines the current pro
 - Use **Supporting repositories**, not Supporting code: repositories can contain data, calibration
   material and procedures as well as code. Multiple names may wrap in the compact reference row.
 - Default name click should open the **exact entry in Repositories**. A separate accessible **↗**
-  control opens the actual external URL in a new tab. Do not merely switch tabs without identifying
+  control labelled **GitHub ↗** opens the actual external URL in a new tab, separated from the
+  internal name link by a thin vertical rule and spacing. Keep each pair visually associated;
+  internal names have a “View repository in dashboard” tooltip. Do not merely switch tabs without identifying
   the intended repository. Tooltips/accessible labels identify the external destination.
-- **Implementation status:** current draft links still open GitHub directly; exact-entry internal
-  navigation and the separate external icon are agreed follow-ups, not completed functionality.
+- **Prototype implementation:** repository names now route to the exact selected repository in a
+  selector/detail view; separate accessible external icons open real GitHub URLs. Repository details
+  show purpose, branch, associated workstreams and projects. Repository-scoped activity remains an
+  honest empty state where the frozen export supplies no explicit repository association; activity
+  navigation beyond existing source URLs remains deferred.
 
 ### Activity and supporting-reference placement
 - Keep the current placement draft: full description → scoped plan → compact supporting-repository
@@ -75,6 +247,13 @@ below remain background; where they differ, this section defines the current pro
 - Owner is satisfied with the current supporting-reference and activity listing layouts as the basis
   for the next iteration. Next establish the Repositories destination, then add viable activity
   navigation. People follows; neither tab redesign is completed by this spec update.
+
+
+## Historical design and source analysis
+
+The remainder preserves the original analysis and its status as recorded then. Source paths, branch
+identities, verification labels and governance wording below are historical, not a fresh audit.
+Current prototype decisions and open questions above take precedence.
 
 **Status: working design document. NOT ratified. No standing decision has been taken.**
 
@@ -168,18 +347,23 @@ defaultBranch: ''` on all repositories (`2026-10-09-retained-amendment-execution
   committed execution/acceptance records and on the model (`Topic`/`Repository` carry the fields,
   `src/store.ts:101-120`).
 
-### 1.3 Plan-step numbering — stored `1..4`, rendered `2..5` — VERIFIED
+### 1.3 Plan-step numbering — stored `1..4` rendered **as stored** — RESOLVED (owner, 2026-10-10)
 
 - Store model: `position` is a nullable non-negative integer; `optionalPosition` accepts `0` or any
   positive int (`src/store.ts:653-664`); schema `plan_steps.position INTEGER`
   (`migrations/004-ux-v2-model.sql:139`).
-- UI renders **`${step.position + 1}.`** (`src/ui.tsx:4743` — re-opened and confirmed in this pass).
+- **Owner ruling (current agreement, 2026-10-10):** a step's number renders the **stored** `position`
+  directly — `${step.position}.` in `ScopedPlan` — never rebased. A positive value renders as itself
+  (`1..4` → `1., 2., 3., 4.`), a stored `0` renders `0.`, and a `null` position renders **no number**.
+  This settles the earlier 0-based reading: the historical Q3 alternative (`${position + 1}`) is
+  **superseded** and is **not** a current mandate — it is preserved only as a superseded note.
+- **No data rebasing:** the correction is display-only; no stored `position` is rewritten.
 - The public research fixture's diagnostics plan is authored at positions **1, 2, 3, 4**
-  (`docs/plans/public-research-retained-fixture-amendment-design.md` §7.3 E / F12).
-- **Result:** the diagnostics plan renders **2., 3., 4., 5.** while the stored/raw attribute reads
-  `1, 2, 3, 4`. Independently confirmed by the served capture (reviewer report `:44-48`: raw
-  `data-rd-plan-step-position` = `1,2,3,4`; rendered `2.,3.,4.,5.`; **no step renders `1.`**).
-- **This is a fact, not a ruling.** The convention question is **OPEN** ([§4, Q3](#4-open-architecture-questions-not-ratified)): do not silently rebase a live record to `0`, and do not "fix" the formula in code, before the owner rules.
+  (`docs/plans/public-research-retained-fixture-amendment-design.md` §7.3 E / F12). Under the ruling it
+  renders `1., 2., 3., 4.` — the reviewed defect **R1** (`dashboard-production-port-review-findings.md`)
+  observed the pre-fix `2., 3., 4., 5.` on the served dataset, now corrected in `src/ui.tsx`.
+- **Regression:** `harness/reviewer-corrections/regression.mjs` asserts the rendered numbers equal the
+  stored positions for `1..4`, `0`, and `null` at 1280×800 and 1440×900.
 
 ### 1.4 Progress "Current problem" / "Open problems on this axis" — VERIFIED
 
@@ -352,10 +536,11 @@ Stated, not resolved. None of these is answered by this document.
   is the "current problem" the top-left subject (`DECISIONS.md` §13)? Both records remain "accepted" and
   were never cross-referenced. Resolution pattern per this repo: a **dated erratum** naming which record
   supersedes which — **not** a quiet rename (`RESEARCH.md` §5). **OPEN.**
-- **Q3 — Step-numbering convention.** Is the stored convention 0-based (keep `${position + 1}`) or
-  1-based human (render `${position}`)? The UI shows human **1..N**; stored `1..4` renders `2..5`
-  ([§1.3](#13-plan-step-numbering--stored-14-rendered-25)). **Do not** silently rebase a live record to
-  `0`, and **do not** "fix" it in code, before the owner rules. **OPEN.**
+- **Q3 — Step-numbering convention. RESOLVED (owner, 2026-10-10).** Render the **stored** `position`
+  directly (`${position}.`) — no rebasing; a positive value renders as itself, a stored `0` renders `0.`,
+  and a `null` renders no number. The historical 0-based `position + 1` reading is **superseded** (not a
+  current mandate). No live record is rebased; the change is display-only
+  ([§1.3](#13-plan-step-numbering--stored-14-rendered-as-stored--resolved-owner-2026-10-10)).
 - **Q4 — Activity-chart source.** New bucketed projection vs client binning; completeness metadata; the
   **exact** capped-timeline limit (`DEFAULT_TIMELINE_AXIS_LIMIT = 10` axes, `src/store.ts:526`). **OPEN.**
 - **Q5 — Topics RHS description/summary.** Show `description`, `summary`, or both? Definitions are in
@@ -433,15 +618,15 @@ alias-only export and performs no write.
   ownership**.
 - **No active-problem persistence.** Selection is **view state** ([§1.4](#14-progress-current-problem--open-problems-on-this-axis--verified)); the
   prototype keeps it in local state + the URL hash and writes nothing.
-- **Stored step positions are shown as stored** — human `1..4`, matching the source; the prototype does
-  **not** rebase a live record ([§1.3](#13-plan-step-numbering--stored-14-rendered-25), Q3 stays OPEN).
+- **Stored step positions are shown as stored** — human `1..4`, matching the source; not rebased
+  ([§1.3](#13-plan-step-numbering--stored-14-rendered-as-stored--resolved-owner-2026-10-10), Q3 resolved).
 
 ### 7.3 Entity semantics — what the prototype must not do
 
 - It **does not invent data**: no fabricated fields, no manufactured "short summaries", no semantic
   rewrites of source text (title/excerpt only, factual).
 - It **does not resolve** the OPEN questions in [§4](#4-open-architecture-questions-not-ratified) (axis
-  semantics, tree shape, step numbering, description-vs-summary — all remain **OPEN**).
+  semantics, tree shape, description-vs-summary — all remain **OPEN**; step numbering is resolved above).
 - It is a **trial** — if many files, it is archived as a read-only, auth-free zip with semantic aliases
   and no private ids or paths, under public-record hygiene.
 
