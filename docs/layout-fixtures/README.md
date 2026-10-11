@@ -1,116 +1,28 @@
-# Layout fixtures — the states the real corpus cannot show
+# Synthetic layout fixtures
 
-The canonical dataset for this dashboard is `docs/corpus/`: a real public repository's history, seeded
-through the plugin's own action surface. Its value is that nobody chose its state. Its limit is that a
-real repository does not contain every state a layout has to survive — and the ones it lacks are the
-layout-critical ones.
+The fixture is explicitly synthetic and supplies edge states absent from the public corpus.
+Its canonical producer is `harness/apply-layout-fixture.mjs`; the standalone preview derives
+fixture calls from that producer and applies them through the real plugin action layer.
+It covers blocked/evidence-free work, unmapped people, bare repositories, crowded content,
+scoped task support and plan steps. It is not evidence of real research completion.
 
-First measured, on the same 43-check read pass (the current record, which is longer, is at the end of this
-section):
-
-| dataset | result |
-|---|---|
-| `docs/corpus/` (real) | 36 passed · 0 failed · **7 skipped** |
-| `docs/layout-fixtures/` (this directory) | **43 passed · 0 failed · 0 skipped** |
-
-Both at 1440×900 and 1280×800. The seven skips are not harmless: they are the blocked state, the
-hidden-axis case, the evidence-free claim, and the two people cases. A redesign can look excellent on
-the corpus and regress exactly those.
-
-(Those two figures are the numbers as first measured, on a 43-check pass. Checks have been added since —
-U1's "every axis state the payload carries reaches the page as that state", then U4's window check, then six
-with U4's step-2 composition (the three-column Progress layout and its selection, compared against
-`get_progress`'s own answer), then five with step 3 (the optional Plan section: its silent absence, the stored
-positions, the plan ↔ problem link both ways, and the unordered-plan discriminator), then eight more with U4's
-step 4 (the open-problem inventory: its membership and order, the active row, selection driving the card, a
-closed-out problem staying out and an axis with none rendering no section) — one check from step 2 went with
-that step's inline list — and then eleven with U4's step 5 (the three supporting sections: the problem's own
-repositories as tags that both navigate, evidence kept with its source, human steering under separate problem
-and axis scopes, and what none of the three may show — with one guard that the subject axis really has open
-problems), so the same fixture pass reported **80** at U4's step 5, then **87** at U4's step 6 (seven for
-the `Axes | Problems` switch: the control and its default, the problem index against the projection's own list
-and order, the reading surface and parent-axis follow-through when one is picked, the sections rendering from
-that same object, the bridge back to `Axes` in which the parent axis is marked, and the two
-dataset-independent claims — no action call, identical payload), and **96** at U4's step 7 (ten for the
-EntityTag contract: the context line's topic and axis tags, the Activity column's tags against the projection
-row by row, the attributed person as a tag, and topic/person/repository/problem/axis each landing in its
-canonical view with the entity selected — plus no status badge being a tag, and no write action with an
-identical payload). One of the ten used to **skip here** — no recorded event named a repository, so the Activity column's
-repository tag had nothing to render. **U10 §1 closed that with fixture data, not page logic**: one seeded
-activity carries `repositoryFullName`, so the tag renders, its navigation check executes, and the repository it
-names is linked to no topic and no axis (the Repositories view then renders the `empty` notices). This
-directory now records **zero skips** at both viewports, with nothing failing. See `docs/ux-v2/U10-harness.md`.
-**Measured against each other at U10, on separate instances:** this directory **107 · 0 · 0** and the
-corpus **84 · 0 · 22** — the corpus record is taken on a corpus-only instance, and its 22 skips are the checks
-this corpus cannot honestly exercise (13 causes, all classified rung 3 in `docs/ux-v2/U10-harness.md` §4:
-one repository, no plan, no blocked axis, no bare problem), each printed with its reason. The corpus's single failure was a **finding about the page**, not
-about the data — an axis with a resolved problem and none open rendered a problem card under
-`Open problems (0)`. The reviewer ruled it out (remove the fallback), it is fixed, and resolved problems stay
-reachable in the Problems subview; the fix left this directory's record unchanged. So the pair that once read
-36/43 reads **107/84** (at U4's step 7 it read 96/64; step 6, 87/56; step 5, 80/52). The pass also *swapped* one check for
-another at step 5 — the closed-out precondition folded into the conditional that replaced it, and a new
-precondition that `get_progress` carries all three halves the page reads — which is why the fixture total
-stayed **80** rather than moving to 81.
-
-The transcripts in this directory are the record; read a run's own summary line rather than a number in a
-document.)
-
-**Rule: the corpus stays canonical.** This directory is a *second* dataset, applied to the instance
-instead of the corpus and never mixed into `docs/corpus/`. Every file here is labelled synthetic.
-
-## What it covers
-
-| State | Check that skips on the corpus | What the fixture supplies |
-|---|---|---|
-| Blocked axis with a reason | "the blocked axis shows its blocker text" | one axis `state: blocked`, `blockerConfidence: confirmed` |
-| Attention styling | "a topic with a blocked axis is visually distinct" | the blocked axis sits on the first card |
-| A card that hides axes | "a card offers to expand when it hides axes" | 6 axes on one topic (`LEAD_AXES` is 3, so 3 are hidden) |
-| The seventh axis state | "every axis state the payload carries reaches the page as that state" | one axis `state: abandoned` — the only state neither the corpus nor the earlier fixture reached. Without a subject, "the page renders `abandoned`" is untestable: a missing badge and a correct badge look the same in an assertion |
-| Evidence-free claim | "an axis with no evidence says so and shows no confirmed claim" | an axis with no activity, no branch, no document — `evidence 0`, `conf [inferred]` |
-| An axis that states no progress | "an axis that states no progress carries no confidence for it" | the same axis, with no current-state claim at all |
-| One person, several topics | "one person on several topics shows each topic with its own axes underneath" | `Fixture Alpha`, attributable, 2 topics / 4 axes |
-| A person with no mapped account | "a person filter that matches nothing attributable says so…" | `Fixture Zeta`, `attributable=false`, 1 topic |
-| An event that names a repository (U10 §1) | "a repository tag in the Activity column lands in Repositories with that repository selected" | one activity with `repositoryFullName: fixture/0-bare-repository` and `sourceType: github_pr` — the feed's repository tag has a subject, and clicking it lands on that repository |
-| A repository nothing else claims (U10 §1) | "an exceptional state says which one it is, and never navigates" (the `empty` kind) | the same repository, linked to no topic and no axis, sorting first by `full_name`: the Repositories view's default panel renders "no topic names it yet" and "no axis names this repository", and the check derives the expected kind from the dataset's own projection |
-
-## Contents
-
-- `screenshots/1440x900/`, `screenshots/1280x800/` — the seven views, captured from the fixture state.
-- `verify-fixture-read-*.txt` — the harness transcript for each capture, verbatim.
-
-## Reproducing it
-
-Apply the fixture to a checkout's instance (it wipes nothing itself — apply it to an empty or
-throwaway instance so the two datasets do not mix):
+## Preferred UI workflow
 
 ```bash
-node harness/apply-layout-fixture.mjs --env-file /tmp/nakama-review.env
+bun harness/preview/run.mjs --checkout /path/to/nakama --dataset fixture --rebuild --watch
 ```
 
-It prints what it wrote and the resulting rollup, and exits non-zero if any write was refused — a
-fixture that silently fails to apply is worse than none.
+No running Nakama API, credentials or live database is needed. Use `scale` separately for
+oversized data; never merge datasets merely to obtain green coverage.
 
-Capture, from the repository root (see the README's "Run the acceptance pass" for the instance, the web
-dev server and the credentials file):
+## Served acceptance
 
-```bash
-bun run harness:fixture                                            # 1440x900
-bun run harness:fixture -- --viewport 1280x800
-```
+Fixture application and write passes mutate their target. Use a separately authorized,
+explicitly selected disposable instance, not retained research or the corpus store.
+Read `.agents/skills/acceptance-pass/SKILL.md` before recording a served pass. The served-build
+and dataset-identity guards are preconditions. Re-seed the authorized disposable fixture after
+a write pass before an ordinary fixture read.
 
-The run writes its transcript into this directory and its screenshots under `screenshots/<viewport>/`.
-
-Then put the instance back the way you found it — use a second instance (or a fresh `NAKAMA_CONFIG_DIR`)
-rather than wiping the corpus one, or wipe at row level and re-seed `docs/corpus/`.
-
-## Caveats
-
-- **Synthetic by construction.** It proves the states *render*; it says nothing about whether they are
-  representative, or about density under a realistic load. The corpus is the density reference.
-- **The names are ordered on purpose.** `Fixture Alpha` and `Fixture Zeta` are alphabetical so that the
-  person-first view selects the multi-topic person first; the same for the newest activity. That is a
-  fixture convenience, not a naming convention for real data.
-- **Not a substitute for the corpus.** If a claim can be checked against the real dataset, check it
-  there.
-- **`Fixture Alpha` carries the dev instance's own actor id** (`user_admin`, the same id the corpus
-  transcript shows). That is what makes the person *attributable*; no personal account is referenced.
+`verify-fixture-read-*.txt` and `screenshots/<viewport>/` are preserved recorded evidence.
+Their counts, view names and screenshots belong to their recorded builds, not today's UI.
+Current acceptance boundaries are summarized in `docs/DEVELOPMENT.md`.

@@ -1,5 +1,7 @@
 # Preview — see the real page without an instance
 
+> **Current scope (2026-10-11).** The interactive preview mounts the four-view product. The optional automated capture/fidelity helpers retain legacy five-tab assumptions and require separate adaptation and verification. Historical measurements near the end of this guide belong to their recorded builds; they are not a claim about today's capture tools.
+
 `src/ui.tsx` is a host-injected React module: it is handed React, the component library, a stylesheet sink
 and a data channel by the dashboard, and it cannot render without them. The only place it *was* renderable
 was a served instance, and the plugin asset is served from the org's installed **release snapshot** — not
@@ -24,47 +26,13 @@ Then edit `src/ui.tsx`; with `--watch` (or `bun run build:watch` in another shel
 and the browser reloads itself — Vite watches `ui/app.js`, so there is no copy step. Without `--watch`, run
 `bun run build` by hand.
 
-To capture the preview and build a montage against the approved prototypes, in one command:
+## Capture boundary
 
-```bash
-bun run preview:fidelity                          # build, serve, capture, montage (corpus)
-bun run preview:fidelity -- --dataset fixture     # the fixture dataset
-bun run preview:fidelity -- --dataset scale       # the oversized dataset
-bun run preview:fidelity -- --no-rebuild --full   # skip the build; also write full-page PNGs
-```
-
-The capture route works against any of the three datasets: point it at a running preview with
-`bun harness/preview/capture.mjs --url http://127.0.0.1:3012/preview.html --out <dir>`, which writes the
-five-view screenshots wherever `--out` says — useful for the scale dataset without landing new artifacts in
-the committed `docs/ux-v2/fidelity/preview/` tree.
-
-Artifacts land in `docs/ux-v2/fidelity/preview/<dataset>/` in the same `prototype-1440x900/ · current-1440x900/ ·
-side-by-side/` shape the committed fixture pack uses, so the corpus and fixture previews sit beside each
-other. The montage step is handed these freshly rendered prototypes with `--prototype-dir`, so the pack does
-not carry its own copy of them; the `side-by-side/` output and the per-pack prototype renders are git-ignored
-generated artifacts (only the canonical `docs/ux-v2/fidelity/prototype-1440x900/` and `current-1440x900/` are
-tracked). To capture against an already-running preview on another port:
-`bun run preview:capture -- --url http://127.0.0.1:3011/preview.html`.
-
-The capture does not photograph each view's default row — it *selects a representative*: the repository
-whose detail draws the most work, then the Progress axis whose index row carries the most open problems and,
-within it, the problem with the most support (repository threads, evidence, steering, the plan step it sits
-on). That is an **instrument step, not the app's behaviour**: the page still opens every view on the
-projection's own first row, and `bun harness/preview/capture.mjs --no-select` photographs exactly that
-default. Selection exists because the first row is not always the composition worth comparing — the
-fixture's Repositories view opens on `fixture/0-bare-repository`, which no topic and no axis names, and the
-corpus's Progress view opens on a completed axis with no open problem. The capture prints what it selected
-and, where the dataset carries a populated subject, refuses to write unless that populated detail is what
-ended up on screen.
-
-The page is **five peer tabs** — Overview, Topics, People, Repositories, Progress — with Overview the
-default, and the capture clicks each tab's own control and refuses unless the page reports that same tab
-active (`aria-pressed="true"`). Overview is the only tab whose data is scoped by a window; its selector
-lives in its own heading, so the capture also checks that Overview renders a single pressed window option
-inside `[data-rd-view-heading="overview"]` and that a non-Overview tab carries none.
-
-The browser is resolved by `harness/chromium.mjs` (env `CHROMIUM_EXECUTABLE` → the Playwright cache, whatever
-revision is present → a system chromium), so nothing downloads and no user path is hardcoded.
+The interactive preview mounts Projects, Progress, People and Repositories. Legacy
+`capture.mjs` and fidelity helpers retain five-tab/Overview assumptions; do not use their old
+montages or success claims as current verification. Use a real browser against the preview
+for scoped visual inspection until those helpers are separately adapted and tested.
+Chromium is resolved by `harness/chromium.mjs`; no download is required.
 
 ## Generated files in the checkout, and cleanup
 
@@ -153,50 +121,3 @@ is lying about the control.
 - **`harness/` is outside the typechecked program** (`tsconfig.json` includes `src` and `types`), so nothing
   here can break `bun run check` — and nothing here is typechecked either.
 - **`fixtures.json` is generated and git-ignored** (the corpus one is ~845 KB).
-
-## What was measured when this was built
-
-On 2026-10-03, on a bare clone, with the checkout above at `v0.4.31`:
-
-- `bun run check` green (126 pass / 0 fail), and `ui/app.js` rebuilt **byte-identical** to the committed one
-  — so the preview renders exactly the bundle the repo commits.
-- `corpus` → `1 topic · 3 axes · 1 person · 1 repository`, topic `UDV Echo Process`; the committed corpus
-  transcript records the same fixture identity (`axes:3, people:1, repositories:1`), and its
-  `windowEvents: 30` is the *capped* timeline (3 axes × the 10-per-axis limit) against the landing's
-  uncapped `422 events`.
-- `fixture` → `2 topics · 7 axes · 2 people · 3 repositories`, one blocked. The committed fixture transcript's
-  `axes: 6` is its **first topic's** axis count (6 + 1 = 7), so the two agree. Its `FIXTURE` array declares
-  **2** repositories (`layout-fixture-calls.mjs --check` prints that declared count); the third,
-  `fixture/0-bare-repository`, is named only by an activity in the transcript, so the store derives it and the
-  page shows 3. Declared and rendered are different numbers for the same dataset, and both are correct.
-- The page opens on **Overview**, the default peer tab. The capture finds all five tabs
-  (`data-rd-view-option`); each clicked tab reported itself active (`aria-pressed="true"`); Overview shows
-  the landing aggregation in both columns and its window selector (7 / 14 / 30 / all time, 14 days pressed)
-  inside its own heading (`[data-rd-view-heading="overview"]`); and the other four tabs read all time and
-  render no window selector. No tab renders an "archived" toggle — it was removed. This supersedes the
-  earlier "default landing, no view pressed" measurement: Overview is a selected tab, not an unselected
-  shell landing.
-- **Progress is populated on both datasets** (measured on the same 2026-10-03 checkout): `corpus` → 3
-  problems, 2 open / 1 resolved, each on its own repository and event, derived from its own unmerged pull
-  requests; `fixture` → Fixture E's 3 problems (one on a plan step on two repositories with a person, two
-  events and a steering note; one with no step, no repository and no artifact; one closed out) above two
-  plans. `bun harness/preview/test-fixtures.mjs` asserts this for every window and passes.
-- **The capture selects a representative row per view, not the default** (same checkout): for `corpus` it
-  photographs `ajegorovs/udv-echo-process` and the `Signal analysis` axis carrying its two open problems
-  (the default is the completed `Acquisition` axis, with no open problem); for `fixture` it photographs
-  `fixture/crowded-card` (the default is the bare repository) and Fixture E's problem on `Fixture step 2`,
-  with repository threads, evidence and steering on screen. `--no-select` still produces the defaults, which
-  is what keeps the selection an instrument and not a change to the page.
-
-## Preview vs prototype, one command
-
-`harness/preview/fidelity.mjs` (one command: `bun run preview:fidelity`) starts the preview, screenshots it
-across all five views at 1440x900 via `capture.mjs`, renders the approved prototypes at the same viewport with
-the existing `harness/fidelity/render-prototypes.mjs`, and builds the labelled montages with
-`harness/fidelity/montage.mjs`. The montage caption says **PREVIEW (host runtime, no instance)** and carries
-`ui/app.js`'s sha256 — never a served URL — so the artifact cannot be mistaken for a served-UI capture.
-
-Boundaries, restated for the montage: it compares *composition and styling*, not the served page; it is only
-as current as `ui/app.js` at capture time (the printed sha256 is the record); and it does not exercise writes
-or the light/dark theme switch. The datasets' derived problem/plan rows (Fixture E, and the corpus's own
-unmerged-PR problems — see above) are present in the payloads the capture mounts.
