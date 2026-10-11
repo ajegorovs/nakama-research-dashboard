@@ -1,5 +1,7 @@
 # Dashboard production UI port — external review brief
 
+> **Reading status (2026-10-11):** Historical review handoff and correction rounds. For the completed stage and subsequent acceptance, use [the stage closeout](../reviews/2026-10-11-dashboard-rework-stage-closeout.md). Earlier requests and verdicts below retain their original scope and chronology.
+
 **Status: review handoff — not an acceptance record.** This brief asks an external human reviewer for an
 explicit verdict and states what the evidence does and does not cover. It records **no verdict of its own**.
 

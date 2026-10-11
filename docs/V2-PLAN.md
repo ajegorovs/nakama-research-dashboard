@@ -1,5 +1,7 @@
 # V2 plan — coordination model (topics → development axes → evidence)
 
+> **Reading status (2026-10-11):** Historical C0–C11 planning and execution ledger. The later dashboard rework/hardening stage is closed; read [the documentation map](README.md) for current entry points. Preserve dated decisions and results below; pending wording describes the phase in which it was written.
+
 **Status:** **complete for the dashboard itself** — **C0–C10 are done and verified** (decisions, migration
 002, store v2, the action surface, the overview, the topic detail, the people/repositories views, the
 progress view, the provenance pass, the C9a skill audit and the C10 retirement of generation 1).

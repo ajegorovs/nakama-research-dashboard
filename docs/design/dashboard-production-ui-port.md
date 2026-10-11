@@ -1,5 +1,7 @@
 # Dashboard production UI port — checklist
 
+> **Reading status (2026-10-11):** Historical implementation checklist for the completed port, not an outstanding work order. Subsequent hardening and bounded acceptance are summarized in [the stage closeout](../reviews/2026-10-11-dashboard-rework-stage-closeout.md). Unticked or pending entries below are preserved as authored, not new release blockers.
+
 Status: **working port checklist, not an acceptance record and not a decision.** It grounds the production
 UI port strictly in the accepted spec/prototype, mapping each current-agreement requirement to the existing
 component or read API that satisfies it, plus the test that proves it. No new features are authorized by this

@@ -1,12 +1,6 @@
 # Preview — see the real page without an instance
 
-> **Staleness note (2026-10-11).** The body below describes the page as a **five-tab** shell
-> (Overview · Topics · People · Repositories · Progress) with Overview as the landing. The shipped runtime is
-> the **four-view** product — **Projects · People · Repositories · Progress** — with Overview retired to the
-> Dashboard-summary disclosure (`VIEW_OPTIONS` in `src/ui.tsx`). The capture helper still clicks the
-> five-tab shape, so it is **not claimed to be working** against the four-view runtime; re-pointing it is part
-> of the deferred UI restyling, **not done here**. The dated measurement section near the foot is a historical
-> record and is left as written.
+> **Current scope (2026-10-11).** The interactive preview mounts the four-view product. The optional automated capture/fidelity helpers retain legacy five-tab assumptions and require separate adaptation and verification. Historical measurements near the end of this guide belong to their recorded builds; they are not a claim about today's capture tools.
 
 `src/ui.tsx` is a host-injected React module: it is handed React, the component library, a stylesheet sink
 and a data channel by the dashboard, and it cannot render without them. The only place it *was* renderable
@@ -65,11 +59,7 @@ corpus's Progress view opens on a completed axis with no open problem. The captu
 and, where the dataset carries a populated subject, refuses to write unless that populated detail is what
 ended up on screen.
 
-The page is **five peer tabs** — Overview, Topics, People, Repositories, Progress — with Overview the
-default, and the capture clicks each tab's own control and refuses unless the page reports that same tab
-active (`aria-pressed="true"`). Overview is the only tab whose data is scoped by a window; its selector
-lives in its own heading, so the capture also checks that Overview renders a single pressed window option
-inside `[data-rd-view-heading="overview"]` and that a non-Overview tab carries none.
+The current product has **four peer views** — Projects (`topics`), People, Repositories and Progress — with Projects the landing view. Overview is retired; its aggregate summary is a folded disclosure. This guide's interactive preview command mounts that current bundle. The capture/fidelity scripts still contain legacy five-tab and Overview-window assertions; do not treat them as verified against the current product until those assumptions are updated and exercised.
 
 The browser is resolved by `harness/chromium.mjs` (env `CHROMIUM_EXECUTABLE` → the Playwright cache, whatever
 revision is present → a system chromium), so nothing downloads and no user path is hardcoded.

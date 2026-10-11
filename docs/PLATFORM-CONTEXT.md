@@ -1,5 +1,7 @@
 # Platform context — how this plugin fits, and what state it is in
 
+> **Reading status (2026-10-11):** Historical platform reconnaissance (2026-09-30), not current plugin status. Source descriptions and host observations below belong to that period; use [the documentation map](README.md) and [stage closeout](reviews/2026-10-11-dashboard-rework-stage-closeout.md) for the current baseline.
+
 Written for a reviewer who has the plugin but not the platform. Everything here was observed on a
 self-hosted Nakama instance (upstream `ahmadrosid/nakama`, **v0.4.31**, Bun/TypeScript monorepo) on
 2026-09-30 unless marked otherwise.

@@ -1,5 +1,7 @@
 # UX contract v2 — how this is being implemented
 
+> **Reading status (2026-10-11):** This directory documents the historical UX-v2 contract/composition phase. The frozen contract and measurements remain intact; the later product rework is [closed](../reviews/2026-10-11-dashboard-rework-stage-closeout.md). STATUS.md below is that phase’s ledger, not today’s work queue.
+
 `contract/` is the redesign contract, kept **verbatim** as the reviewer wrote it (five Markdown specs,
 five HTML prototypes, its `manifest.json`). The prototypes are visual references for hierarchy, density
 and composition — where behavior or semantics are concerned, the Markdown is authoritative, and nothing

@@ -1,5 +1,7 @@
 # Open questions — what we want the reviewer to weigh in on
 
+> **Reading status (2026-10-11):** Historical review questionnaire, not an active backlog. Several premises below (legacy tables, absent concurrency handling and unimplemented attribution) were superseded by later work. Current qualifications are in [the stage closeout](reviews/2026-10-11-dashboard-rework-stage-closeout.md). No execution authority is conveyed by these questions.
+
 Five areas. Each has: what is **settled** (platform constraints we cannot wish away), what is
 genuinely **open**, and the questions we want answered. `PLATFORM-CONTEXT.md` carries the evidence
 behind every settled claim.

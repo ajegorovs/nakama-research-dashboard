@@ -1,5 +1,7 @@
 # Status — UX v2
 
+> **Reading status (2026-10-11):** Historical UX-v2 phase ledger, not current project status. Its earlier open items and measurements are retained as chronology. The later rework/hardening stage is [closed](../reviews/2026-10-11-dashboard-rework-stage-closeout.md); use [the documentation map](../README.md) for current instructions.
+
 **Live page.** Updated as each chunk lands; every number is a run's own summary line, and every claim
 here should be checkable with `README.md` § "Run the acceptance pass".
 
