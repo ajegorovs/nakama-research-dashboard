@@ -756,10 +756,10 @@ const css = `
  */
 [data-plugin-id="research-dashboard"] {
   --rd-title-view: 23px;
-  --rd-body: 13px;
+  --rd-body: 14px;
   --rd-meta: 12px;
-  --rd-label: 11px;
-  --rd-quiet: 0.62;
+  --rd-label: 12px;
+  --rd-quiet: 0.72;
   --rd-gap-row: 2px;
   --rd-gap-tight: 4px;
   /* V1 (2026-10-03). This read var(--rd-gap): a self-reference, which per CSS Variables makes the custom
@@ -770,13 +770,13 @@ const css = `
      visual pass re-measures that geometry, so the token is repaired here — and the few places that had
      papered over the hole with a literal (.rd-current-work > .rd-axes, gap: 18px) are the survivors to
      reconcile, not the model to follow. */
-  --rd-gap: 8px;
-  --rd-gap-block: 12px;
+  --rd-gap: 6px;
+  --rd-gap-block: 10px;
   /* V1-B/B3 (2026-10-03) — separation between the flat rail sections. A rail is a stack of sections with
      no boxes between them; at 12px the sections read as one run of text (V1-B B3: the
      spacing is insufficient to replace the missing card boundaries). This is the larger step the rail
      wants, and the reviewer's own suggested range (about 20-24px). Not a new box. */
-  --rd-gap-rail: 24px;
+  --rd-gap-rail: 16px;
   /* V1/A4 (2026-10-03) — one index width. A shrinkable basis of 15rem with a 12rem floor let the rail give
      ground whenever the detail wanted room, so the same rail laid out at a different width in each view and
      long entity names wrapped to three and four lines. One basis, and the rail does not shrink below it:
@@ -790,7 +790,14 @@ const css = `
   --rd-index-basis: 23.75rem;
   /* One box edge and one inner line: a surface is a card, and everything inside it is a rule, not a box. */
   --rd-edge: 1px solid var(--border);
-  --rd-rule: 2px solid var(--border);
+  --rd-rule: 1px solid var(--border);
+  /* Variant C (converged) — one slate technical accent, its edge weight, the local mono face kept for
+     genuine technical identifiers only (repo ids and code-like sources), and the squared-surface radii. */
+  --rd-tech: #46536b;
+  --rd-tech-edge: 2px;
+  --rd-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --rd-radius-panel: 4px;
+  --rd-radius-control: 3px;
   /* H1 — keyboard focus, one rule for every control this page draws. The host paints its ring at half alpha
      (Tailwind's ring-ring/50), which measures about 2:1 on the surfaces this page sits on: a reader can see it,
      but it is under the 3:1 that non-text contrast asks for. The plugin asks for the same hue at full strength,
@@ -800,6 +807,10 @@ const css = `
   --rd-focus: var(--ring, oklch(0.55 0.15 65));
   --rd-focus-width: 2px;
   --rd-focus-offset: 2px;
+  /* Variant C — one comfortable root rhythm. Long-form prose opts up to 1.6 where the measure caps it;
+     ordinary short reading is not raised. */
+  font-size: var(--rd-body);
+  line-height: 1.45;
 }
 /*
  * The doubled :focus-visible is deliberate: the host stylesheet declares its ring colour as an
@@ -856,10 +867,10 @@ const css = `
   [data-plugin-id="research-dashboard"] .rd-landing-card {
     background: var(--card, #fff);
     border: var(--rd-edge);
-    border-radius: var(--radius-md, 10px);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+    border-radius: var(--rd-radius-panel);
+    box-shadow: none;
     display: grid;
-    gap: 8px;
+    gap: 6px;
     padding: 12px 14px;
   }
   /* The card head: name + description as one block, and the age stated beside it in the prototype's own
@@ -886,7 +897,7 @@ const css = `
     margin-top: 2px;
     padding: 8px 0 0;
   }
-  [data-plugin-id="research-dashboard"] .rd-event-band .rd-section { font-size: 10px; }
+  [data-plugin-id="research-dashboard"] .rd-event-band .rd-section { font-size: var(--rd-label); }
   [data-plugin-id="research-dashboard"] .rd-event-band .rd-meta { margin-top: 0; }
   /* V1-B/B4 (2026-10-03) — the card's own state line and its blocker, as two lines with a real step
      between them (the review found them concatenated into one serialized sentence). The counts stay the
@@ -977,26 +988,35 @@ const css = `
   border: 0;
   padding: 0;
 }
-[data-plugin-id="research-dashboard"] .rd-views { gap: 4px; }
+/* Variant C — the active view is marked by a slate underline edge, not a lifted white pill. */
+[data-plugin-id="research-dashboard"] .rd-views { gap: 2px; }
 [data-plugin-id="research-dashboard"] .rd-views [data-rd-view-option] {
   border-color: transparent;
+  border-bottom: var(--rd-tech-edge) solid transparent;
+  border-radius: var(--rd-radius-control);
   background: transparent;
-  padding: 7px 11px;
+  padding: 6px 10px;
 }
 [data-plugin-id="research-dashboard"] .rd-views [aria-pressed="true"] {
-  border-color: var(--border);
-  background: var(--card, #fff);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  border-color: transparent;
+  border-bottom: var(--rd-tech-edge) solid var(--rd-tech);
+  background: transparent;
+  box-shadow: none;
+  color: var(--rd-tech);
 }
 [data-plugin-id="research-dashboard"] .rd-views [data-rd-view-option]:hover {
   border-color: var(--border);
+  border-bottom-color: var(--rd-tech);
 }
-[data-plugin-id="research-dashboard"] .rd-muted { font-size: var(--rd-meta); opacity: var(--rd-quiet); }
+[data-plugin-id="research-dashboard"] .rd-muted { color: #59616d; font-size: var(--rd-meta); }
 [data-plugin-id="research-dashboard"] .rd-error { color: var(--destructive, #b91c1c); font-size: var(--rd-body); }
 [data-plugin-id="research-dashboard"] .rd-meta {
   display: block;
   font-size: var(--rd-meta);
-  opacity: var(--rd-quiet);
+  /* Supporting ink is OPAQUE, not a translucent layer (variant C's accepted secondary ink). An
+     opacity here stacked with any ancestor's own opacity and pushed metadata below the 4.5:1
+     text floor; the explicit colour keeps contrast deterministic however deep the node nests. */
+  color: #59616d;
   margin-top: 2px;
 }
 [data-plugin-id="research-dashboard"] .rd-topic-card[data-rd-blocked="true"] {
@@ -1035,8 +1055,10 @@ const css = `
 }
 [data-plugin-id="research-dashboard"] .rd-axis-kind {
   font-size: var(--rd-label);
-  letter-spacing: 0.04em;
-  opacity: var(--rd-quiet);
+  letter-spacing: 0.06em;
+  color: var(--rd-tech);
+  opacity: 1;
+  font-weight: 700;
 }
 /* §7 / V1 — the view names itself, under the shell (brand) title that stays. This is now the page-level
    type step: the token block used to top out at the host's 16px card title, so the shell title outranked the
@@ -1126,19 +1148,19 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-state {
   font-size: var(--rd-label);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   padding: 1px 6px;
-  border-radius: 999px;
+  border-radius: var(--rd-radius-control);
   border: var(--rd-edge);
 }
 [data-plugin-id="research-dashboard"] .rd-state[data-rd-state="blocked"] {
-  border-color: var(--destructive, #b91c1c);
-  color: var(--destructive, #b91c1c);
+  border-color: #9b2c2c;
+  color: #9b2c2c;
 }
 [data-plugin-id="research-dashboard"] .rd-count {
   font-size: var(--rd-meta);
   padding: 1px 6px;
-  border-radius: 6px;
+  border-radius: var(--rd-radius-control);
   background: var(--muted, rgba(127, 127, 127, 0.1));
 }
 [data-plugin-id="research-dashboard"] .rd-count[data-rd-state="blocked"] {
@@ -1165,35 +1187,37 @@ const css = `
   flex-wrap: nowrap;
   gap: 0;
   width: fit-content;
-  padding: 3px;
+  padding: 2px;
   border: var(--rd-edge);
-  border-radius: 9px;
+  border-radius: 5px;
   background: var(--muted, #e5e7eb);
 }
 [data-plugin-id="research-dashboard"] .rd-window [data-rd-window] {
   border: 0;
-  border-radius: 6px;
+  border-bottom: var(--rd-tech-edge) solid transparent;
+  border-radius: var(--rd-radius-control);
   background: transparent;
   opacity: 0.72;
-  padding: 5px 12px;
+  padding: 5px 10px;
 }
 [data-plugin-id="research-dashboard"] .rd-window [aria-pressed="true"] {
-  background: var(--card, #fff);
-  color: var(--foreground, #171717);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
+  background: transparent;
+  border-bottom: var(--rd-tech-edge) solid var(--rd-tech);
+  color: var(--rd-tech);
+  box-shadow: none;
   font-weight: 600;
   opacity: 1;
 }
 [data-plugin-id="research-dashboard"] .rd-views [aria-pressed="true"] { font-weight: 600; }
 /* C8: the qualifier on a state is part of the claim, not decoration — quieter, never optional. */
-[data-plugin-id="research-dashboard"] .rd-claim-suffix { font-weight: 400; opacity: var(--rd-quiet); }
+[data-plugin-id="research-dashboard"] .rd-claim-suffix { font-weight: 400; opacity: 1; }
 [data-plugin-id="research-dashboard"] .rd-newtopic { flex-wrap: nowrap; }
 [data-plugin-id="research-dashboard"] .rd-newtopic input { width: 18rem; }
 [data-plugin-id="research-dashboard"] .rd-activity { display: grid; gap: var(--rd-gap); margin: 0; padding: 0; list-style: none; }
 /* Activity is a flat chronology in every detail rail, not nested cards inside a card. */
 [data-plugin-id="research-dashboard"] .rd-activity li {
   border-bottom: var(--rd-edge);
-  padding: 6px 0 10px;
+  padding: 5px 0 8px;
   min-width: 0;
 }
 [data-plugin-id="research-dashboard"] .rd-activity li:last-child {
@@ -1220,11 +1244,11 @@ const css = `
   /* Work rows are grouped reading surfaces, not a run of equally weighted metadata. */
   border: var(--rd-edge);
   border-left: var(--rd-rule);
-  border-radius: 7px;
+  border-radius: var(--rd-radius-control);
   background: var(--muted, rgba(127, 127, 127, 0.04));
-  padding: 14px 15px;
+  padding: 10px 12px;
   display: grid;
-  gap: 9px;
+  gap: 6px;
 }
 [data-plugin-id="research-dashboard"] .rd-current-work > .rd-axes {
   gap: 18px;
@@ -1244,11 +1268,11 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-conf {
   font-size: var(--rd-label);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   padding: 0 5px;
-  border-radius: 999px;
+  border-radius: var(--rd-radius-control);
   border: 1px dashed var(--border);
-  opacity: var(--rd-quiet);
+  color: #59616d;
 }
 [data-plugin-id="research-dashboard"] .rd-conf[data-rd-conf="confirmed"] { border-style: solid; }
 [data-plugin-id="research-dashboard"] .rd-evidence { font-size: var(--rd-meta); }
@@ -1297,14 +1321,14 @@ const css = `
   overscroll-behavior: contain;
   /* The index is a surface, not a bare list — the prototype's panel. Rows sit inside on a small inset,
      so a pressed row reads as a selected row within a panel rather than a stray rectangle on the page. */
-  padding: 5px;
+  padding: 6px;
   list-style: none;
   display: grid;
-  gap: 2px;
+  gap: 0;
   align-content: start;
   background: var(--card, #fff);
   border: var(--rd-edge);
-  border-radius: var(--radius-md, 10px);
+  border-radius: var(--rd-radius-panel);
 }
 [data-plugin-id="research-dashboard"] .rd-index-item {
   width: 100%;
@@ -1312,12 +1336,15 @@ const css = `
   display: grid;
   gap: var(--rd-gap-row);
   background: none;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  padding: 8px 10px;
+  border: 0;
+  border-bottom: var(--rd-edge);
+  border-radius: 0;
+  padding: 7px 9px;
   cursor: pointer;
 }
+[data-plugin-id="research-dashboard"] .rd-index-item:last-child { border-bottom: 0; }
 [data-plugin-id="research-dashboard"] .rd-index-item:hover {
+  background: var(--muted, rgba(127, 127, 127, 0.06));
   border-color: var(--border);
 }
 /* An index row's age stays whole at the row's end and never breaks mid-label; the counts line below it
@@ -1352,7 +1379,7 @@ const css = `
   flex: 1 1 34rem;
   gap: var(--rd-gap-block);
   min-width: 20rem;
-  padding: 24px;
+  padding: 16px;
   /* V1 Phase-4 ruling (DECISIONS §14.10) — the support band is container-responsive at exactly 720/480.
      The band fills this pane's content box, so the pane is the size query container: its inline-size is
      the band's own width, which is what the ruling's "available" means and what the harness reads. */
@@ -1369,7 +1396,7 @@ const css = `
   border-top: var(--rd-edge);
   display: grid;
   gap: var(--rd-gap-block);
-  padding-top: 10px;
+  padding-top: 8px;
 }
 [data-plugin-id="research-dashboard"] .rd-progress-row {
   grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
@@ -1391,9 +1418,9 @@ const css = `
      band stays two columns and a subject short of material still collapses instead of holding a column
      open (conditional sections natural). Gutter 28px, unchanged. */
   grid-template-columns: minmax(0, 1fr);
-  column-gap: 28px;
+  column-gap: 20px;
   row-gap: var(--rd-gap-block);
-  padding-top: 14px;
+  padding-top: 10px;
 }
 @container (min-width: 480px) {
   [data-plugin-id="research-dashboard"] .rd-progress-band:has(> section:nth-of-type(2)) {
@@ -1415,8 +1442,8 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-progress-band > .rd-progress-steering {
   align-self: start;
   background: var(--muted, rgba(127, 127, 127, 0.05));
-  border-radius: 8px;
-  padding: 12px 14px;
+  border-radius: var(--rd-radius-control);
+  padding: 10px 12px;
 }
 /* The group owns the rule above it; the sections inside it are columns of that group, not stacked bands. */
 [data-plugin-id="research-dashboard"] .rd-progress-row > section,
@@ -1434,11 +1461,11 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-progress-problem > .rd-problem-card {
   background: var(--card, #fff);
   border: var(--rd-edge);
-  border-left: 3px solid var(--border);
-  border-radius: 8px;
-  gap: 12px;
-  min-height: 165px;
-  padding: 18px 20px;
+  border-left: var(--rd-tech-edge) solid var(--rd-tech);
+  border-radius: var(--rd-radius-control);
+  gap: 10px;
+  min-height: 140px;
+  padding: 12px 14px;
 }
 [data-plugin-id="research-dashboard"] .rd-progress-problem > .rd-problem-card > .rd-strong {
   font-size: 18px;
@@ -1461,7 +1488,7 @@ const css = `
 }
 [data-plugin-id="research-dashboard"] .rd-progress-activity .rd-feed > li {
   border-bottom: var(--rd-edge);
-  padding: 5px 0 8px;
+  padding: 5px 0 6px;
 }
 [data-plugin-id="research-dashboard"] .rd-progress-activity {
   min-width: 0;
@@ -1488,7 +1515,6 @@ const css = `
 }
 [data-plugin-id="research-dashboard"] .rd-side-card .rd-activity .rd-meta,
 [data-plugin-id="research-dashboard"] .rd-progress-activity .rd-feed .rd-meta {
-  opacity: 0.78;
   overflow-wrap: anywhere;
 }
 [data-plugin-id="research-dashboard"] .rd-progress-activity .rd-feed .rd-tags {
@@ -1501,7 +1527,7 @@ const css = `
   border-top: var(--rd-edge);
   display: grid;
   gap: var(--rd-gap-tight);
-  padding-top: 10px;
+  padding-top: 8px;
 }
 [data-plugin-id="research-dashboard"] .rd-progress-plan p {
   margin: 0;
@@ -1519,7 +1545,7 @@ const css = `
 }
 [data-plugin-id="research-dashboard"] .rd-step-state {
   border: var(--rd-edge);
-  border-radius: 999px;
+  border-radius: var(--rd-radius-control);
   font-size: var(--rd-meta);
   padding: 0 6px;
 }
@@ -1540,7 +1566,7 @@ const css = `
   border-top: var(--rd-edge);
   display: grid;
   gap: var(--rd-gap-tight);
-  padding-top: 10px;
+  padding-top: 8px;
 }
 [data-plugin-id="research-dashboard"] .rd-problems {
   display: grid;
@@ -1557,14 +1583,14 @@ const css = `
   border-top: var(--rd-edge);
   display: grid;
   gap: var(--rd-gap-tight);
-  padding-top: 10px;
+  padding-top: 8px;
 }
 [data-plugin-id="research-dashboard"] .rd-tags { gap: var(--rd-gap-tight); }
 /* An entity tag: navigation, not a filter — it reads as a chip because it goes somewhere. */
 [data-plugin-id="research-dashboard"] .rd-tag {
-  background: var(--muted, rgba(127, 127, 127, 0.08));
+  background: transparent;
   border: var(--rd-edge);
-  border-radius: 999px;
+  border-radius: var(--rd-radius-control);
   color: inherit;
   cursor: pointer;
   font: inherit;
@@ -1574,7 +1600,7 @@ const css = `
      stays available on the element (title + the accessible name). No font-size games. */
   max-width: 100%;
   overflow: hidden;
-  padding: 1px 8px;
+  padding: 0 6px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1589,7 +1615,8 @@ const css = `
 }
 [data-plugin-id="research-dashboard"] .rd-source {
   border: var(--rd-edge);
-  border-radius: 999px;
+  border-radius: var(--rd-radius-control);
+  font-family: var(--rd-mono);
   font-size: var(--rd-meta);
   padding: 0 6px;
 }
@@ -1610,7 +1637,8 @@ const css = `
 /* …and the selection treatment, on top of that base. */
 [data-plugin-id="research-dashboard"] .rd-index-item[aria-pressed="true"] {
   border-color: var(--border);
-  background: var(--muted, rgba(127, 127, 127, 0.1));
+  background: var(--muted, rgba(127, 127, 127, 0.08));
+  box-shadow: inset 3px 0 0 var(--rd-tech);
 }
 [data-plugin-id="research-dashboard"] .rd-panel {
   flex: 1 1 22rem;
@@ -1620,9 +1648,9 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-involvement {
   border: var(--rd-edge);
   border-left: var(--rd-rule);
-  border-radius: 7px;
+  border-radius: var(--rd-radius-control);
   background: var(--muted, rgba(127, 127, 127, 0.04));
-  padding: 11px 13px;
+  padding: 9px 11px;
   display: grid;
   gap: var(--rd-gap-tight);
 }
@@ -1655,8 +1683,8 @@ const css = `
      draws its own, so the three views read as one surface. */
   background: var(--card, #fff);
   border: var(--rd-edge);
-  border-radius: var(--radius-md, 10px);
-  padding: 16px 18px;
+  border-radius: var(--rd-radius-panel);
+  padding: 12px 14px;
 }
 [data-plugin-id="research-dashboard"] .rd-detail-head {
   display: grid;
@@ -1683,6 +1711,12 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-description [data-rd-claim="description"] {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  /* Variant C convergence — the full stored description is the one long-form prose node: it becomes a
+     block so the ~76ch reading measure actually binds (an inline span ignores max-width), at comfortable
+     1.6 leading. Prose only; no card, table, metadata or short summary is capped. */
+  display: block;
+  max-width: 76ch;
+  line-height: 1.6;
 }
 [data-plugin-id="research-dashboard"] .rd-detail-grid {
   display: grid;
@@ -1713,8 +1747,8 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-side-stack {
   display: grid;
   gap: var(--rd-gap-rail);
-  border-left: var(--rd-rule);
-  padding: 0 0 0 12px;
+  border-left: var(--rd-tech-edge) solid var(--rd-tech);
+  padding: 0 0 0 10px;
 }
 [data-plugin-id="research-dashboard"] .rd-side-card {
   display: grid;
@@ -1748,8 +1782,10 @@ const css = `
   overflow-y: auto;
 }
 [data-plugin-id="research-dashboard"] .rd-side-title {
-  font-size: var(--rd-meta);
-  font-weight: 600;
+  color: var(--rd-tech);
+  font-size: var(--rd-label);
+  font-weight: 700;
+  letter-spacing: 0.06em;
   margin: 0;
 }
 [data-plugin-id="research-dashboard"] .rd-narrow-write {
@@ -1790,13 +1826,13 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-work-card {
   background: var(--card, #fff);
   border: var(--rd-edge);
-  border-left: var(--rd-rule);
-  border-radius: 8px;
+  border-left: var(--rd-tech-edge) solid var(--rd-tech);
+  border-radius: var(--rd-radius-control);
   display: grid;
   gap: var(--rd-gap-tight);
-  padding: 12px 14px;
+  padding: 10px 12px;
 }
-[data-plugin-id="research-dashboard"] .rd-work-card + .rd-work-card { margin-top: 12px; }
+[data-plugin-id="research-dashboard"] .rd-work-card + .rd-work-card { margin-top: 10px; }
 /* No status-coloured contour: the pivot retired the workstream status outline (and the orange/red
    blocker banner). A blocked workstream reads through its state badge and its recorded counts, exactly
    as an active one does; the blocker's own prose lives in the Progress context, not on this card. */
@@ -1836,21 +1872,21 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-work-head {
   align-items: flex-start; display: flex; gap: 10px; justify-content: space-between;
 }
-[data-plugin-id="research-dashboard"] .rd-work-title { font-size: 15px; font-weight: 640; letter-spacing: -0.01em; margin: 0; }
+[data-plugin-id="research-dashboard"] .rd-work-title { font-size: 16px; font-weight: 640; letter-spacing: -0.005em; line-height: 1.4; margin: 0; }
 [data-plugin-id="research-dashboard"] .rd-work-link { color: inherit; text-decoration: none; }
 [data-plugin-id="research-dashboard"] .rd-work-link:hover { text-decoration: underline; }
 /* The blocked-task count pill: red, matching sibling pills' typography/padding/height. */
 [data-plugin-id="research-dashboard"] .rd-blocked-pill,
-[data-plugin-id="research-dashboard"] .rd-count[data-rd-state="blocked"] { color: #a12626; background: #fdecec; }
+[data-plugin-id="research-dashboard"] .rd-count[data-rd-state="blocked"] { color: #9b2c2c; background: #fdecec; }
 /* The selected workstream's full-context panel (Progress): purpose, reading, blocker, plan. */
 [data-plugin-id="research-dashboard"] .rd-context-panel {
   background: var(--card, #fff);
   border: var(--rd-edge);
-  border-left: 3px solid var(--usable, #3a56a0);
-  border-radius: var(--radius-md, 10px);
+  border-left: var(--rd-tech-edge) solid var(--rd-tech);
+  border-radius: var(--rd-radius-panel);
   display: grid;
   gap: var(--rd-gap-tight);
-  padding: 16px 18px;
+  padding: 12px 14px;
 }
 [data-plugin-id="research-dashboard"] .rd-context-body { display: grid; gap: 6px; }
 /* The context body is a grid, and a grid item's default min-width: auto is its min-content width, so a long
@@ -1867,15 +1903,15 @@ const css = `
   overflow-wrap: anywhere;
 }
 [data-plugin-id="research-dashboard"] .rd-context-label {
-  color: var(--muted-foreground, #5c6270); font-size: var(--rd-label); font-weight: 700;
-  letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--rd-tech); font-size: var(--rd-label); font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase; opacity: 1;
 }
 /* The evidence line (D1/#17/#18) and its one-line clamp are retired: V2b renders evidence as the native
    rd-progress-evidence disclosure (count in the summary, full list in the body), so the block-level
    nowrap span these rules styled no longer exists. */
 [data-plugin-id="research-dashboard"] .rd-context-footer {
   align-items: center; border-top: var(--rd-edge); display: flex; gap: 12px;
-  justify-content: space-between; margin-top: 6px; padding-top: 10px;
+  justify-content: space-between; margin-top: 4px; padding-top: 8px;
 }
 /* An optional scoped plan: a bold heading on a rule, steps beneath; absent means absent. */
 [data-plugin-id="research-dashboard"] .rd-scoped-plan { border-top: var(--rd-edge); margin-top: 10px; padding-top: 10px; }
@@ -1894,6 +1930,13 @@ const css = `
 }
 [data-plugin-id="research-dashboard"] .rd-context-more[open] > summary::after { content: " ▾"; }
 [data-plugin-id="research-dashboard"] .rd-context-more > .rd-claim-value { margin: 4px 0 0; min-width: 0; }
+/* The expanded Purpose body is the context panel's one long-form prose node; owned by this details body
+   ([data-rd-axis-description]), the reading measure and 1.6 leading apply here and never to the panel's
+   short current-reading line or any other short summary. */
+[data-plugin-id="research-dashboard"] .rd-context-more[open] > [data-rd-axis-description] {
+  max-width: 76ch;
+  line-height: 1.6;
+}
 [data-plugin-id="research-dashboard"] .rd-progress-evidence,
 [data-plugin-id="research-dashboard"] .rd-progress-activity {
   border-top: var(--rd-edge); display: grid; gap: var(--rd-gap-tight); min-width: 0; padding-top: 10px;
@@ -1913,42 +1956,54 @@ const css = `
 }
 [data-plugin-id="research-dashboard"] .rd-evidence-list > li { min-width: 0; overflow-wrap: anywhere; }
 [data-plugin-id="research-dashboard"] .rd-progress-maintenance {
-  border-top: var(--rd-edge); display: grid; gap: var(--rd-gap-tight); padding-top: 10px;
+  border-top: var(--rd-edge); display: grid; gap: var(--rd-gap-tight); padding-top: 8px;
 }
 /* A visible task card: title + full statement + status + own plan + links, without opening a row. */
 [data-plugin-id="research-dashboard"] .rd-task-card {
   background: var(--card, #fff);
   border: var(--rd-edge);
-  border-radius: var(--radius-md, 10px);
+  border-radius: var(--rd-radius-control);
   display: grid;
   gap: 8px;
-  padding: 14px 16px;
+  padding: 12px 14px;
 }
-[data-plugin-id="research-dashboard"] .rd-task-card + .rd-task-card { margin-top: 12px; }
-[data-plugin-id="research-dashboard"] .rd-task-title { font-size: 15px; font-weight: 640; margin: 0; }
-[data-plugin-id="research-dashboard"] .rd-task-statement { margin: 0; }
+[data-plugin-id="research-dashboard"] .rd-task-card + .rd-task-card { margin-top: 10px; }
+[data-plugin-id="research-dashboard"] .rd-task-title { font-size: 16px; font-weight: 640; letter-spacing: -0.005em; line-height: 1.4; margin: 0; }
+[data-plugin-id="research-dashboard"] .rd-task-statement {
+  margin: 0;
+  /* The substantial task statement is the card's own full-prose node (never the card or its metadata):
+     a bounded 76ch measure and comfortable leading, applied to the text node only. */
+  max-width: 76ch;
+  line-height: 1.6;
+}
 /* Supporting-repository link pairs: internal dashboard name, thin separator, external GitHub ↗. */
-[data-plugin-id="research-dashboard"] .rd-repo-pair { align-items: baseline; display: inline-flex; flex-wrap: wrap; gap: 8px; margin-right: 10px; }
+/* Variant C / the owner decision: monospace marks GENUINE technical identifiers only. The repo-pair
+   used to set mono on the whole pair, which also mono-set the "GitHub ↗" external navigation link
+   beside it; the pair now inherits the surrounding sans, the repo-name tag keeps mono through its own
+   repository type, and the external anchor is ordinary navigation type. */
+[data-plugin-id="research-dashboard"] .rd-tag[data-rd-entity-tag="repository"] { font-family: var(--rd-mono); }
+[data-plugin-id="research-dashboard"] .rd-repo-pair { align-items: baseline; display: inline-flex; flex-wrap: wrap; font-variant-numeric: tabular-nums; gap: 8px; margin-right: 10px; }
 [data-plugin-id="research-dashboard"] .rd-repo-pair + .rd-repo-pair { border-left: var(--rd-edge); padding-left: 8px; }
 [data-plugin-id="research-dashboard"] .rd-repo-ext { border-left: 1px solid var(--border); padding-left: 8px; white-space: nowrap; }
 /* Participants: a quiet inline label beneath a divider. */
 [data-plugin-id="research-dashboard"] .rd-participants {
   align-items: baseline; border-top: var(--rd-edge); display: flex; flex-wrap: wrap; gap: 8px;
-  margin-top: 12px; padding-top: 12px;
+  margin-top: 10px; padding-top: 10px;
 }
 /* The pager: the segmented-switch grammar, one numbered control per paged list. */
-[data-plugin-id="research-dashboard"] .rd-pager { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; margin-top: 12px; row-gap: 6px; }
+[data-plugin-id="research-dashboard"] .rd-pager { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; margin-top: 10px; row-gap: 6px; }
 [data-plugin-id="research-dashboard"] .rd-pager-switch {
-  background: var(--muted, #e5e7eb); border: var(--rd-edge); border-radius: 9px;
-  display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px;
+  background: var(--muted, #e5e7eb); border: var(--rd-edge); border-radius: 5px;
+  display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px;
 }
 [data-plugin-id="research-dashboard"] .rd-pager-btn {
-  background: transparent; border: 0; border-radius: 6px; color: var(--muted-foreground, #5c6270);
-  cursor: pointer; font: inherit; opacity: 0.72; padding: 5px 10px;
+  background: transparent; border: 0; border-bottom: var(--rd-tech-edge) solid transparent;
+  border-radius: var(--rd-radius-control); color: var(--muted-foreground, #5c6270);
+  cursor: pointer; font: inherit; opacity: 0.72; padding: 5px 8px;
 }
 [data-plugin-id="research-dashboard"] .rd-pager-btn[aria-current="page"] {
-  background: var(--card, #fff); color: var(--foreground, #171717);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14); font-weight: 600; opacity: 1;
+  background: transparent; border-bottom: var(--rd-tech-edge) solid var(--rd-tech);
+  color: var(--rd-tech); box-shadow: none; font-weight: 600; opacity: 1;
 }
 [data-plugin-id="research-dashboard"] .rd-pager-btn:disabled { cursor: default; opacity: 0.35; }
 [data-plugin-id="research-dashboard"] .rd-pager-sep { color: var(--muted-foreground, #5c6270); padding: 0 2px; }
