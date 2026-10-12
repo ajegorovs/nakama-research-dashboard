@@ -788,14 +788,6 @@ var css = `
   display: grid;
   gap: var(--rd-gap-row);
 }
-/* Progress is a problem-first page. Keep its activity rail bounded and quiet so a run of
-   verbose recorded events cannot push Plan and supporting evidence out of the glance.
-   Every event remains in the DOM and the rail scrolls; links remain keyboard reachable. */
-[data-plugin-id="research-dashboard"] .rd-progress-activity .rd-feed {
-  max-height: 270px;
-  overflow-y: auto;
-  padding-right: 5px;
-}
 [data-plugin-id="research-dashboard"] .rd-progress-activity .rd-feed > li {
   border-bottom: var(--rd-edge);
   padding: 5px 0 8px;
@@ -1003,6 +995,24 @@ var css = `
   display: grid;
   gap: var(--rd-gap-tight);
 }
+/* V2a — the project detail's Description disclosure: a labelled native <summary> that reads like the
+   neighbouring claim labels, collapsed by default, with the full stored string in its body. The marker is
+   replaced by the same caret affordance the other detail disclosures use, so the route to the full text is
+   visible rather than silent. */
+[data-plugin-id="research-dashboard"] .rd-description > summary { cursor: pointer; list-style: none; }
+[data-plugin-id="research-dashboard"] .rd-description > summary::-webkit-details-marker { display: none; }
+[data-plugin-id="research-dashboard"] .rd-description > summary::after {
+  content: " ▸"; opacity: var(--rd-quiet);
+}
+[data-plugin-id="research-dashboard"] .rd-description[open] > summary::after { content: " ▾"; }
+/* V2 correction — the stored multi-paragraph project description is rendered verbatim, so its own
+   newlines and blank lines belong on screen: pre-wrap keeps them while still wrapping long lines, and
+   overflow-wrap breaks a path/URL that would otherwise push the panel wide. Scoped to the Description
+   body only — every other paragraph on the page keeps the host's normal white-space handling. */
+[data-plugin-id="research-dashboard"] .rd-description [data-rd-claim="description"] {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 [data-plugin-id="research-dashboard"] .rd-detail-grid {
   display: grid;
   gap: var(--rd-gap-block);
@@ -1172,27 +1182,26 @@ var css = `
   padding: 16px 18px;
 }
 [data-plugin-id="research-dashboard"] .rd-context-body { display: grid; gap: 6px; }
-/* The context body is a grid, and a grid item's default min-width: auto is its min-content width — which
-   the nowrap evidence line inside the reading paragraph makes the full unwrapped line. The track would then
-   widen to fit the whole line and the ellipsis would never bite, pushing the pane past its column instead of
-   clamping. A min-width: 0 on the reading cell lets the line clamp to the pane (one line, ellipsised) as the
-   density contract intends. Scoped to this body's own claim cells; nothing else moves. */
+/* The context body is a grid, and a grid item's default min-width: auto is its min-content width, so a long
+   unbroken token in a stored reading would widen the track past the pane instead of wrapping. A min-width: 0
+   on the body's own claim cells lets them wrap within the column; scoped to this body, nothing else moves. */
 [data-plugin-id="research-dashboard"] .rd-context-body > .rd-claim-value { min-width: 0; }
+/* V2 correction — the stored current reading and purpose are paragraphs, and their own blank lines and
+   indentation are part of the record: pre-wrap keeps them on screen while still wrapping long lines, and
+   overflow-wrap breaks a path/URL that would otherwise push the pane wide. Scoped to the Progress context
+   panel only, so the compact WorkstreamCard's reading and the V1 cards keep the host's normal handling. */
+[data-plugin-id="research-dashboard"] .rd-context-panel [data-rd-axis-reading],
+[data-plugin-id="research-dashboard"] .rd-context-panel [data-rd-axis-description] {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 [data-plugin-id="research-dashboard"] .rd-context-label {
   color: var(--muted-foreground, #5c6270); font-size: var(--rd-label); font-weight: 700;
   letter-spacing: 0.04em; text-transform: uppercase;
 }
-/* The evidence line (D1/#17/#18): one compact row stating the projection's own recorded evidence, or the
-   explicit absence of it. It is a block-level span inside the reading's own paragraph, so it costs a line
-   and not a line plus a grid row and gap — the density contract measures the newest activity row against
-   the first screen. Clamped to one line so a long evidence set cannot wrap. */
-[data-plugin-id="research-dashboard"] .rd-evidence {
-  display: block; font-size: var(--rd-meta); line-height: 1.2; overflow: hidden;
-  text-overflow: ellipsis; white-space: nowrap;
-}
-[data-plugin-id="research-dashboard"] .rd-evidence[data-rd-has-evidence="false"] {
-  color: var(--muted-foreground, #5c6270);
-}
+/* The evidence line (D1/#17/#18) and its one-line clamp are retired: V2b renders evidence as the native
+   rd-progress-evidence disclosure (count in the summary, full list in the body), so the block-level
+   nowrap span these rules styled no longer exists. */
 [data-plugin-id="research-dashboard"] .rd-context-footer {
   align-items: center; border-top: var(--rd-edge); display: flex; gap: 12px;
   justify-content: space-between; margin-top: 6px; padding-top: 10px;
@@ -1200,6 +1209,41 @@ var css = `
 /* An optional scoped plan: a bold heading on a rule, steps beneath; absent means absent. */
 [data-plugin-id="research-dashboard"] .rd-scoped-plan { border-top: var(--rd-edge); margin-top: 10px; padding-top: 10px; }
 [data-plugin-id="research-dashboard"] .rd-scoped-plan > summary { cursor: pointer; font-weight: 700; }
+/* V2b — the compact header's secondary disclosures (the enduring purpose) and the after-task sections
+   (evidence, activity, maintenance) share one disclosure affordance: a bold labelled summary with a
+   caret. A closed fold hides nothing silently — the summary names the section and its full body is one
+   click away, never visually truncated. */
+[data-plugin-id="research-dashboard"] .rd-context-more {
+  border-top: var(--rd-edge); margin-top: 6px; padding-top: 8px;
+}
+[data-plugin-id="research-dashboard"] .rd-context-more > summary { cursor: pointer; list-style: none; }
+[data-plugin-id="research-dashboard"] .rd-context-more > summary::-webkit-details-marker { display: none; }
+[data-plugin-id="research-dashboard"] .rd-context-more > summary::after {
+  content: " ▸"; opacity: var(--rd-quiet);
+}
+[data-plugin-id="research-dashboard"] .rd-context-more[open] > summary::after { content: " ▾"; }
+[data-plugin-id="research-dashboard"] .rd-context-more > .rd-claim-value { margin: 4px 0 0; min-width: 0; }
+[data-plugin-id="research-dashboard"] .rd-progress-evidence,
+[data-plugin-id="research-dashboard"] .rd-progress-activity {
+  border-top: var(--rd-edge); display: grid; gap: var(--rd-gap-tight); min-width: 0; padding-top: 10px;
+}
+[data-plugin-id="research-dashboard"] .rd-progress-evidence > summary,
+[data-plugin-id="research-dashboard"] .rd-progress-activity > summary {
+  cursor: pointer; font-weight: 700; list-style: none;
+}
+[data-plugin-id="research-dashboard"] .rd-progress-evidence > summary::-webkit-details-marker,
+[data-plugin-id="research-dashboard"] .rd-progress-activity > summary::-webkit-details-marker { display: none; }
+[data-plugin-id="research-dashboard"] .rd-progress-evidence > summary::after,
+[data-plugin-id="research-dashboard"] .rd-progress-activity > summary::after { content: " ▸"; opacity: var(--rd-quiet); }
+[data-plugin-id="research-dashboard"] .rd-progress-evidence[open] > summary::after,
+[data-plugin-id="research-dashboard"] .rd-progress-activity[open] > summary::after { content: " ▾"; }
+[data-plugin-id="research-dashboard"] .rd-evidence-list {
+  display: grid; gap: var(--rd-gap-tight); list-style: none; margin: 0; padding: 0;
+}
+[data-plugin-id="research-dashboard"] .rd-evidence-list > li { min-width: 0; overflow-wrap: anywhere; }
+[data-plugin-id="research-dashboard"] .rd-progress-maintenance {
+  border-top: var(--rd-edge); display: grid; gap: var(--rd-gap-tight); padding-top: 10px;
+}
 /* A visible task card: title + full statement + status + own plan + links, without opening a row. */
 [data-plugin-id="research-dashboard"] .rd-task-card {
   background: var(--card, #fff);
@@ -1333,9 +1377,48 @@ function partitionInvolvements(topics) {
 var GENERAL_WORKSTREAM_CARD_CONTEXT = {
   view: "general"
 };
-function visibleWorkstreamRepositories(repositories, context) {
-  return context.view === "repository" ? repositories.filter((repository) => repository.id !== context.repositoryId) : repositories;
+function projectWorkstreamCardContext(repositoryIds) {
+  return { repositoryIds, view: "project" };
 }
+function visibleWorkstreamRepositories(repositories, context) {
+  if (context.view === "repository") {
+    return repositories.filter((repository) => repository.id !== context.repositoryId);
+  }
+  if (context.view === "project") {
+    const alreadyShown = new Set(context.repositoryIds);
+    return repositories.filter((repository) => !alreadyShown.has(repository.id));
+  }
+  return repositories;
+}
+function workstreamCardShowsEvent(context) {
+  return context.view !== "project";
+}
+function workstreamCardReading(axis) {
+  return axis.description || axis.currentState || "";
+}
+function projectWorkstreamCardData(axis) {
+  const problems = axis.problems ?? [];
+  const history = axis.history ?? [];
+  return {
+    blockedTasks: problems.filter((task) => task.state === "blocked").length,
+    currentState: axis.currentState,
+    description: axis.description,
+    id: axis.id,
+    latestEvent: history.length > 0 ? { at: history[0].occurredAt, summary: history[0].summary } : null,
+    openTasks: problems.filter((task) => task.state === "open").length,
+    repositories: axis.repositories,
+    state: axis.state,
+    stateConfidence: axis.stateConfidence,
+    title: axis.title
+  };
+}
+function progressEvidenceSummary(count) {
+  return count > 0 ? `Evidence (${count} shown)` : "Evidence";
+}
+function progressActivitySummary(total) {
+  return total > 0 ? `Recent activity (${total})` : "Recent activity";
+}
+var PROGRESS_NO_EVIDENCE_TEXT = "No evidence on record — a 'confirmed' reading needs evidence";
 function partitionRepositoryWorkstreams(axes) {
   const groups = [];
   const byTopic = new Map;
@@ -1856,13 +1939,17 @@ function apply(ctx) {
       "data-rd-pager-range": `${from}-${to}`
     }, total === 0 ? "No entries" : `${from}–${to} of ${total} available`));
   }
-  function ScopedPlan({ label, plan }) {
+  function ScopedPlan({
+    label,
+    plan,
+    defaultOpen = true
+  }) {
     if (!plan || plan.steps.length === 0) {
       return null;
     }
     return /* @__PURE__ */ React.createElement("details", {
       className: "rd-scoped-plan",
-      open: true
+      open: defaultOpen
     }, /* @__PURE__ */ React.createElement("summary", null, label), plan.plan.summary ? /* @__PURE__ */ React.createElement("p", {
       className: "rd-meta"
     }, plan.plan.summary) : null, /* @__PURE__ */ React.createElement("ol", {
@@ -1934,7 +2021,7 @@ function apply(ctx) {
     onOpenEntity,
     onOpenWorkstream
   }) {
-    const summary = axis.description || axis.currentState || "";
+    const reading = workstreamCardReading(axis);
     return /* @__PURE__ */ React.createElement("article", {
       className: "rd-work-card",
       "data-rd-state": axis.state,
@@ -1954,10 +2041,10 @@ function apply(ctx) {
     }, axis.title)), /* @__PURE__ */ React.createElement(StateBadge, {
       confidence: axis.stateConfidence,
       state: axis.state
-    })), summary ? /* @__PURE__ */ React.createElement("p", {
+    })), reading ? /* @__PURE__ */ React.createElement("p", {
       className: "rd-meta",
       "data-rd-work-summary": "true"
-    }, summary) : null, axis.latestEvent ? /* @__PURE__ */ React.createElement("p", {
+    }, reading) : null, axis.latestEvent && workstreamCardShowsEvent(context) ? /* @__PURE__ */ React.createElement("p", {
       className: "rd-meta",
       "data-rd-work-event": "true"
     }, /* @__PURE__ */ React.createElement(EventDate, {
@@ -2652,7 +2739,6 @@ function apply(ctx) {
     const activityTotal = activityPage ? activityPage.total : activityAll.length;
     const axisRepositories = axis?.repositories ?? [];
     const evidence = axis?.evidence ?? [];
-    const evidenceText = evidence.length > 0 ? `Evidence: ${evidence.slice(0, 3).map((item) => item.by ? `${item.label} (${item.by})` : item.label).join(" · ")}${evidence.length > 3 ? " + more recorded evidence" : ""}` : "No evidence on record — a 'confirmed' reading needs evidence";
     const correcting = correction != null && correction.axisId === axis?.id;
     const projectName = workstream?.topic.name ?? groups.find((group) => group.rows.some((row) => row.id === selection?.axisId))?.name ?? "Not recorded";
     return /* @__PURE__ */ React.createElement("div", {
@@ -2714,7 +2800,9 @@ function apply(ctx) {
     }, "Select a workstream to read its context, scoped plan and tasks.") : null, selection && !axis && loading ? /* @__PURE__ */ React.createElement("p", {
       className: "rd-muted",
       "data-rd-progress-loading": "true"
-    }, "Loading this workstream…") : null, selection && axis ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("section", {
+    }, "Loading this workstream…") : null, selection && axis ? /* @__PURE__ */ React.createElement(React.Fragment, {
+      key: axis.id
+    }, /* @__PURE__ */ React.createElement("section", {
       className: "rd-context-panel",
       "data-rd-context-panel": axis.id
     }, /* @__PURE__ */ React.createElement("div", {
@@ -2726,15 +2814,9 @@ function apply(ctx) {
       confidence: axis.stateConfidence,
       state: axis.state
     })), /* @__PURE__ */ React.createElement("div", {
-      className: "rd-context-body"
+      className: "rd-context-body",
+      "data-rd-progress-context": "true"
     }, /* @__PURE__ */ React.createElement("span", {
-      className: "rd-context-label"
-    }, "Purpose"), /* @__PURE__ */ React.createElement("p", {
-      className: "rd-claim-value",
-      "data-rd-axis-description": "true"
-    }, axis.description ? axis.description : /* @__PURE__ */ React.createElement("span", {
-      className: "rd-muted"
-    }, "No workstream purpose recorded.")), /* @__PURE__ */ React.createElement("span", {
       className: "rd-context-label"
     }, "Current reading"), /* @__PURE__ */ React.createElement("p", {
       className: "rd-claim-value",
@@ -2743,62 +2825,27 @@ function apply(ctx) {
       value: axis.currentStateConfidence
     })) : /* @__PURE__ */ React.createElement("span", {
       className: "rd-muted"
-    }, "No current reading recorded."), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-evidence",
-      "data-rd-axis-evidence": evidence.length,
-      "data-rd-has-evidence": evidence.length > 0,
-      title: evidenceText
-    }, evidenceText)), axis.blocker ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("span", {
+    }, "No current reading recorded.")), axis.blocker ? /* @__PURE__ */ React.createElement(React.Fragment, null, /* @__PURE__ */ React.createElement("span", {
       className: "rd-context-label"
     }, "Blocker"), /* @__PURE__ */ React.createElement("p", {
       className: "rd-claim-value",
       "data-rd-axis-blocker": "true"
     }, axis.blocker, /* @__PURE__ */ React.createElement(ConfidenceBadge, {
       value: axis.blockerConfidence
-    }))) : null), /* @__PURE__ */ React.createElement(ScopedPlan, {
-      label: "Workstream plan",
-      plan: axis.plan ?? null
-    }), axisRepositories.length > 0 ? /* @__PURE__ */ React.createElement("div", {
-      className: "rd-cluster rd-tags",
-      "data-rd-context-repositories": axisRepositories.length
-    }, /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta"
-    }, "Supporting repositories ·"), axisRepositories.map((repository) => /* @__PURE__ */ React.createElement(RepoLinkPair, {
-      key: repository.id,
+    }))) : null), /* @__PURE__ */ React.createElement("details", {
+      className: "rd-context-more",
+      "data-rd-progress-context-more": "true"
+    }, /* @__PURE__ */ React.createElement("summary", {
+      className: "rd-context-label"
+    }, "Purpose"), /* @__PURE__ */ React.createElement("p", {
+      className: "rd-claim-value",
+      "data-rd-axis-description": "true"
+    }, axis.description ? axis.description : /* @__PURE__ */ React.createElement("span", {
+      className: "rd-muted"
+    }, "No workstream purpose recorded."))), /* @__PURE__ */ React.createElement(Participants, {
       onOpen: onOpenEntity,
-      repository
-    }))) : null, /* @__PURE__ */ React.createElement("div", {
-      className: "rd-context-footer"
-    }, /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta"
-    }, `Project · ${projectName}`), /* @__PURE__ */ React.createElement("div", {
-      className: "rd-cluster"
-    }, /* @__PURE__ */ React.createElement(Button, {
-      "data-rd-correct-toggle": axis.id,
-      disabled: busy,
-      onClick: () => {
-        if (correcting) {
-          onCorrection(null);
-          return;
-        }
-        onCorrection(draftFrom(axis));
-      },
-      size: "sm",
-      variant: correcting ? "default" : "outline"
-    }, correcting ? "Cancel" : "Correct"), /* @__PURE__ */ React.createElement(Button, {
-      "data-rd-return-project": workstream?.topic.id ?? selection.topicId,
-      onClick: () => onOpenEntity("topic", workstream?.topic.id ?? selection.topicId),
-      size: "sm",
-      variant: "outline"
-    }, "Return to project →")))), correcting && correction ? /* @__PURE__ */ React.createElement(WorkstreamCorrection, {
-      axis,
-      busy,
-      conflict,
-      correction,
-      onCorrection,
-      onReload: onReloadCorrection,
-      onSave: onSaveCorrection
-    }) : null, /* @__PURE__ */ React.createElement("section", {
+      people: axis.people
+    })), /* @__PURE__ */ React.createElement("section", {
       className: "rd-progress-tasks",
       "data-rd-progress-tasks": taskTotal
     }, /* @__PURE__ */ React.createElement("div", {
@@ -2847,12 +2894,45 @@ function apply(ctx) {
       onOffset: onTaskOffset,
       pageSize: PROGRESS_PAGE_SIZE,
       total: taskTotal
-    }))), /* @__PURE__ */ React.createElement("section", {
+    }))), /* @__PURE__ */ React.createElement("details", {
+      className: "rd-progress-evidence",
+      "data-rd-axis-evidence": evidence.length,
+      "data-rd-has-evidence": evidence.length > 0,
+      "data-rd-progress-evidence": evidence.length
+    }, /* @__PURE__ */ React.createElement("summary", null, progressEvidenceSummary(evidence.length)), evidence.length > 0 ? /* @__PURE__ */ React.createElement("ul", {
+      className: "rd-evidence-list",
+      "data-rd-evidence-list": "true"
+    }, evidence.map((item, index) => /* @__PURE__ */ React.createElement("li", {
+      key: `${item.sourceRef}-${index}`,
+      "data-rd-evidence-ref": item.sourceRef || String(index)
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-strong"
+    }, item.label), item.by ? /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, ` · ${item.by}`) : null, item.sourceUrl ? /* @__PURE__ */ React.createElement("a", {
+      className: "rd-repo-ext",
+      "data-rd-evidence-url": item.sourceRef || String(index),
+      href: item.sourceUrl,
+      rel: "noopener noreferrer",
+      target: "_blank",
+      title: item.sourceUrl
+    }, "source ↗") : /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta",
+      "data-rd-evidence-no-url": "true"
+    }, item.sourceRef || item.sourceType)))) : /* @__PURE__ */ React.createElement("p", {
+      className: "rd-muted",
+      "data-rd-evidence-empty": "true"
+    }, PROGRESS_NO_EVIDENCE_TEXT)), axis.plan ? /* @__PURE__ */ React.createElement("div", {
+      "data-rd-progress-plan": "true"
+    }, /* @__PURE__ */ React.createElement(ScopedPlan, {
+      defaultOpen: false,
+      label: "Workstream plan",
+      plan: axis.plan
+    })) : null, /* @__PURE__ */ React.createElement("details", {
       className: "rd-progress-activity",
+      "data-rd-progress-activity": "true",
       "data-rd-progress-activity-total": activityTotal
-    }, /* @__PURE__ */ React.createElement("h3", {
-      className: "rd-side-title"
-    }, "Recent activity"), activityItems.length === 0 ? /* @__PURE__ */ React.createElement("p", {
+    }, /* @__PURE__ */ React.createElement("summary", null, progressActivitySummary(activityTotal)), activityItems.length === 0 ? /* @__PURE__ */ React.createElement("p", {
       className: "rd-muted",
       "data-rd-progress-feed-empty": "true"
     }, "Nothing recorded against this workstream.") : /* @__PURE__ */ React.createElement("ul", {
@@ -2871,7 +2951,53 @@ function apply(ctx) {
       onOffset: onActivityOffset,
       pageSize: PROGRESS_PAGE_SIZE,
       total: activityTotal
-    }) : null)) : null)));
+    }) : null), axisRepositories.length > 0 ? /* @__PURE__ */ React.createElement("div", {
+      className: "rd-cluster rd-tags",
+      "data-rd-context-repositories": axisRepositories.length,
+      "data-rd-progress-provenance": "true"
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, "Supporting repositories ·"), axisRepositories.map((repository) => /* @__PURE__ */ React.createElement(RepoLinkPair, {
+      key: repository.id,
+      onOpen: onOpenEntity,
+      repository
+    }))) : null, /* @__PURE__ */ React.createElement("section", {
+      className: "rd-progress-maintenance",
+      "data-rd-progress-maintenance": "true"
+    }, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-row"
+    }, /* @__PURE__ */ React.createElement("span", {
+      className: "rd-section"
+    }, "Maintenance"), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, `Project · ${projectName}`)), /* @__PURE__ */ React.createElement("div", {
+      className: "rd-cluster"
+    }, /* @__PURE__ */ React.createElement(Button, {
+      "data-rd-correct-toggle": axis.id,
+      disabled: busy,
+      onClick: () => {
+        if (correcting) {
+          onCorrection(null);
+          return;
+        }
+        onCorrection(draftFrom(axis));
+      },
+      size: "sm",
+      variant: correcting ? "default" : "outline"
+    }, correcting ? "Cancel" : "Correct"), /* @__PURE__ */ React.createElement(Button, {
+      "data-rd-return-project": workstream?.topic.id ?? selection.topicId,
+      onClick: () => onOpenEntity("topic", workstream?.topic.id ?? selection.topicId),
+      size: "sm",
+      variant: "outline"
+    }, "Return to project →"))), correcting && correction ? /* @__PURE__ */ React.createElement(WorkstreamCorrection, {
+      axis,
+      busy,
+      conflict,
+      correction,
+      onCorrection,
+      onReload: onReloadCorrection,
+      onSave: onSaveCorrection
+    }) : null) : null)));
   }
   function ResearchPage() {
     const [loadedOverview, setOverview] = React.useState(null);
@@ -3188,6 +3314,7 @@ function apply(ctx) {
     const topicActivityTotal = topicActivityPage?.total ?? 0;
     const currentAxes = (selectedDetails ? selectedDetails.axes : selectedEntry?.axes ?? []).filter((axis) => !isTerminalAxis(axis.state));
     const foldedAxes = selectedDetails ? selectedDetails.axes.filter((axis) => isTerminalAxis(axis.state)) : [];
+    const projectCardContext = projectWorkstreamCardContext((selectedDetails?.repositories ?? selectedEntry?.repositories ?? []).map((repository) => repository.id));
     return /* @__PURE__ */ React.createElement("div", {
       className: "rd-stack"
     }, /* @__PURE__ */ React.createElement("div", {
@@ -3263,6 +3390,7 @@ function apply(ctx) {
       "data-rd-detail": selectedEntry.topic.name,
       "data-rd-detail-header": "true",
       "data-rd-detail-mode": "disclosure",
+      key: selectedEntry.topic.id,
       open: true
     }, /* @__PURE__ */ React.createElement("summary", {
       className: "rd-topic-summary"
@@ -3288,10 +3416,10 @@ function apply(ctx) {
       "data-rd-claim": "summary"
     }, selectedDetails.topic.summary || /* @__PURE__ */ React.createElement("span", {
       className: "rd-muted"
-    }, "No summary recorded."))), /* @__PURE__ */ React.createElement("div", {
-      className: "rd-claim",
+    }, "No summary recorded."))), /* @__PURE__ */ React.createElement("details", {
+      className: "rd-claim rd-description",
       "data-rd-description-field": "true"
-    }, /* @__PURE__ */ React.createElement("span", {
+    }, /* @__PURE__ */ React.createElement("summary", {
       className: "rd-context-label"
     }, "Description"), /* @__PURE__ */ React.createElement("span", {
       className: "rd-claim-value",
@@ -3365,21 +3493,8 @@ function apply(ctx) {
     }, currentAxes.map((axis) => selectedDetails ? /* @__PURE__ */ React.createElement("li", {
       key: axis.id
     }, /* @__PURE__ */ React.createElement(WorkstreamCard, {
-      axis: {
-        blockedTasks: (axis.problems ?? []).filter((task) => task.state === "blocked").length,
-        currentState: axis.currentState,
-        description: axis.description,
-        id: axis.id,
-        latestEvent: axis.history.length > 0 ? {
-          at: axis.history[0].occurredAt,
-          summary: axis.history[0].summary
-        } : null,
-        openTasks: (axis.problems ?? []).filter((task) => task.state === "open").length,
-        repositories: axis.repositories,
-        state: axis.state,
-        stateConfidence: axis.stateConfidence,
-        title: axis.title
-      },
+      axis: projectWorkstreamCardData(axis),
+      context: projectCardContext,
       onOpenEntity: openEntity,
       onOpenWorkstream: (axisId) => openEntity("axis", axisId)
     })) : /* @__PURE__ */ React.createElement(AxisItem, {
@@ -3394,21 +3509,8 @@ function apply(ctx) {
     }, foldedAxes.map((axis) => /* @__PURE__ */ React.createElement("li", {
       key: axis.id
     }, /* @__PURE__ */ React.createElement(WorkstreamCard, {
-      axis: {
-        blockedTasks: (axis.problems ?? []).filter((task) => task.state === "blocked").length,
-        currentState: axis.currentState,
-        description: axis.description,
-        id: axis.id,
-        latestEvent: axis.history.length > 0 ? {
-          at: axis.history[0].occurredAt,
-          summary: axis.history[0].summary
-        } : null,
-        openTasks: (axis.problems ?? []).filter((task) => task.state === "open").length,
-        repositories: axis.repositories,
-        state: axis.state,
-        stateConfidence: axis.stateConfidence,
-        title: axis.title
-      },
+      axis: projectWorkstreamCardData(axis),
+      context: projectCardContext,
       onOpenEntity: openEntity,
       onOpenWorkstream: (axisId) => openEntity("axis", axisId)
     }))))) : null), /* @__PURE__ */ React.createElement("details", {
@@ -3556,10 +3658,17 @@ function apply(ctx) {
 }
 export {
   GENERAL_WORKSTREAM_CARD_CONTEXT,
+  PROGRESS_NO_EVIDENCE_TEXT,
   activityActorIndication,
   apply,
   inject,
   partitionInvolvements,
   partitionRepositoryWorkstreams,
-  visibleWorkstreamRepositories
+  progressActivitySummary,
+  progressEvidenceSummary,
+  projectWorkstreamCardContext,
+  projectWorkstreamCardData,
+  visibleWorkstreamRepositories,
+  workstreamCardReading,
+  workstreamCardShowsEvent
 };

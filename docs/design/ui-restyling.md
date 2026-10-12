@@ -1,8 +1,28 @@
 # UI restyling — scope and iteration contract
 
-Status: draft; no visual direction or implementation is selected yet. The four-view plugin and its
-rework/hardening are the baseline. This brief authorizes no deployment, fixture mutation, agent inference
-or merge. Agree on the visual outcome with the owner/reviewer before substantive restyling.
+Status: bounded composition work is authorized. V1 refines People and Repositories; V2 makes Projects an
+orientation view and Progress a task-centered collaboration view. The four-view plugin and its
+rework/hardening remain the baseline. This brief authorizes no deployment, protected fixture mutation,
+agent inference or merge; palette and typography redesign remain out of scope.
+
+## Selected composition direction
+
+- People puts explicitly workstream-bearing projects before compact project-only affiliations, preserving
+  roles, exact navigation and truthful attribution. Repositories separates workstreams from completed and
+  abandoned work, suppresses only self-links and preserves recorded project relationships. Repository
+  selectors count all associated workstreams; section counts describe their own partitions.
+- Projects retains the selector/detail arrangement: project identity and stored summary orient the reader,
+  complete description remains explicitly accessible, and workstream cards prioritize factual summaries,
+  state, task counts and exact Progress navigation. Repeated repository/event prose is secondary.
+- Progress keeps a compact title/state/current-reading/blocker context above primary task cards. Full
+  purpose, workstream strategy, scoped activity and provenance remain available through secondary
+  disclosures. Task statements, explicit participants/repositories and optional task plans stay accessible.
+  Task/activity backend pages remain independent; maintenance preserves existing conflict/refresh behavior.
+- No task observed-state, next-direction, requested-input fields or membership-derived relationships are
+  introduced. Long text is never silently discarded; any preview must have an accessible full-text path.
+- Use labelled scratch-only supplements through real actions when a required preview case is absent from
+  fixture/scale. Preserve committed inputs and compare supplemental payload identities/totals to real scoped
+  read oracles before relying on pagination measurements.
 
 ## Scope and invariants
 

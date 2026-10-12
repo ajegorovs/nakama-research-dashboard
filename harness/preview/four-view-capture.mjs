@@ -136,6 +136,22 @@ async function settle(page) {
 }
 
 /**
+ * The Recent-activity list now lives inside a native `<details data-rd-progress-activity>` that is
+ * collapsed by default, so its pager controls are not actionable until the fold is opened. Open it with a
+ * real click on its own summary — and never toggle a fold that is already open (a second capture pass must
+ * not close it).
+ */
+async function openProgressActivity(page) {
+  const details = page.locator(`${PLUGIN} [data-rd-progress-activity]`).first();
+  if ((await details.count()) === 0) return false;
+  if ((await details.evaluate((el) => el.open === true)) === false) {
+    await details.locator("summary").first().click();
+    await page.waitForTimeout(200);
+  }
+  return true;
+}
+
+/**
  * Horizontal-overflow probe: every element inside the plugin whose content is wider than its own
  * box, plus the page-level and wrapper-level readings. Eyeballing a screenshot finds clipped text;
  * this names the element that overflows and by how much.
@@ -477,13 +493,21 @@ async function readProgressState(page) {
         text: root.querySelector("[data-rd-pager-range]")?.textContent?.trim() ?? null,
       };
     };
+    // The evidence is now a native `<details>` (collapsed by default) OUTSIDE the context panel; its body —
+    // including the explicit no-evidence sentence when there is none — is hidden while the fold is closed.
+    // Read `textContent` (which includes hidden descendants), never `innerText` (which would be empty).
+    const evidenceDetails = document.querySelector(`${plugin} [data-rd-axis-evidence]`);
     return {
       activityPager: pager("Activity"),
       activityTotal: num("[data-rd-progress-activity-total]", "data-rd-progress-activity-total"),
       blocker: text("[data-rd-axis-blocker]"),
-      evidence: text("[data-rd-axis-evidence]")?.slice(0, 120) ?? null,
+      evidence: evidenceDetails ? (evidenceDetails.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 160) : null,
+      evidenceSummary: evidenceDetails?.querySelector("summary")?.textContent?.trim() ?? null,
+      hasEvidence: evidenceDetails?.getAttribute("data-rd-has-evidence") ?? null,
       feedEmpty: document.querySelector(`${plugin} [data-rd-progress-feed-empty]`) !== null,
-      planSteps: document.querySelectorAll(`${plugin} [data-rd-plan-step-shown]`).length,
+      // The plan count is read off the SCOPED plan's own step marker (`data-rd-scoped-plan-step`,
+      // rendered by `ScopedPlan`); the retired `data-rd-plan-step-shown` no longer exists.
+      planSteps: document.querySelectorAll(`${plugin} [data-rd-scoped-plan-step]`).length,
       state: document.querySelector(`${plugin} [data-rd-index-axis][aria-pressed="true"]`)?.getAttribute("data-rd-index-state") ?? null,
       taskCards: document.querySelectorAll(`${plugin} [data-rd-task-card]`).length,
       tasksEmpty: document.querySelector(`${plugin} [data-rd-progress-tasks-empty]`) !== null,
@@ -511,6 +535,9 @@ async function progressExtras(page) {
   // 1. Activity pager on its second page.
   const activity = state.progress?.activityPager;
   if (activity?.multPage) {
+    // The pager sits inside the collapsed activity disclosure; open it (a real click on its summary)
+    // before the Next control is reachable.
+    await openProgressActivity(page);
     const next = page.locator(`${PLUGIN} [data-rd-pager="Activity"] .rd-pager-btn`, { hasText: "Next" });
     if ((await next.count()) > 0) {
       await next.first().click();

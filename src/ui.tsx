@@ -1459,14 +1459,6 @@ const css = `
   display: grid;
   gap: var(--rd-gap-row);
 }
-/* Progress is a problem-first page. Keep its activity rail bounded and quiet so a run of
-   verbose recorded events cannot push Plan and supporting evidence out of the glance.
-   Every event remains in the DOM and the rail scrolls; links remain keyboard reachable. */
-[data-plugin-id="research-dashboard"] .rd-progress-activity .rd-feed {
-  max-height: 270px;
-  overflow-y: auto;
-  padding-right: 5px;
-}
 [data-plugin-id="research-dashboard"] .rd-progress-activity .rd-feed > li {
   border-bottom: var(--rd-edge);
   padding: 5px 0 8px;
@@ -1674,6 +1666,24 @@ const css = `
   display: grid;
   gap: var(--rd-gap-tight);
 }
+/* V2a — the project detail's Description disclosure: a labelled native <summary> that reads like the
+   neighbouring claim labels, collapsed by default, with the full stored string in its body. The marker is
+   replaced by the same caret affordance the other detail disclosures use, so the route to the full text is
+   visible rather than silent. */
+[data-plugin-id="research-dashboard"] .rd-description > summary { cursor: pointer; list-style: none; }
+[data-plugin-id="research-dashboard"] .rd-description > summary::-webkit-details-marker { display: none; }
+[data-plugin-id="research-dashboard"] .rd-description > summary::after {
+  content: " ▸"; opacity: var(--rd-quiet);
+}
+[data-plugin-id="research-dashboard"] .rd-description[open] > summary::after { content: " ▾"; }
+/* V2 correction — the stored multi-paragraph project description is rendered verbatim, so its own
+   newlines and blank lines belong on screen: pre-wrap keeps them while still wrapping long lines, and
+   overflow-wrap breaks a path/URL that would otherwise push the panel wide. Scoped to the Description
+   body only — every other paragraph on the page keeps the host's normal white-space handling. */
+[data-plugin-id="research-dashboard"] .rd-description [data-rd-claim="description"] {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 [data-plugin-id="research-dashboard"] .rd-detail-grid {
   display: grid;
   gap: var(--rd-gap-block);
@@ -1843,27 +1853,26 @@ const css = `
   padding: 16px 18px;
 }
 [data-plugin-id="research-dashboard"] .rd-context-body { display: grid; gap: 6px; }
-/* The context body is a grid, and a grid item's default min-width: auto is its min-content width — which
-   the nowrap evidence line inside the reading paragraph makes the full unwrapped line. The track would then
-   widen to fit the whole line and the ellipsis would never bite, pushing the pane past its column instead of
-   clamping. A min-width: 0 on the reading cell lets the line clamp to the pane (one line, ellipsised) as the
-   density contract intends. Scoped to this body's own claim cells; nothing else moves. */
+/* The context body is a grid, and a grid item's default min-width: auto is its min-content width, so a long
+   unbroken token in a stored reading would widen the track past the pane instead of wrapping. A min-width: 0
+   on the body's own claim cells lets them wrap within the column; scoped to this body, nothing else moves. */
 [data-plugin-id="research-dashboard"] .rd-context-body > .rd-claim-value { min-width: 0; }
+/* V2 correction — the stored current reading and purpose are paragraphs, and their own blank lines and
+   indentation are part of the record: pre-wrap keeps them on screen while still wrapping long lines, and
+   overflow-wrap breaks a path/URL that would otherwise push the pane wide. Scoped to the Progress context
+   panel only, so the compact WorkstreamCard's reading and the V1 cards keep the host's normal handling. */
+[data-plugin-id="research-dashboard"] .rd-context-panel [data-rd-axis-reading],
+[data-plugin-id="research-dashboard"] .rd-context-panel [data-rd-axis-description] {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 [data-plugin-id="research-dashboard"] .rd-context-label {
   color: var(--muted-foreground, #5c6270); font-size: var(--rd-label); font-weight: 700;
   letter-spacing: 0.04em; text-transform: uppercase;
 }
-/* The evidence line (D1/#17/#18): one compact row stating the projection's own recorded evidence, or the
-   explicit absence of it. It is a block-level span inside the reading's own paragraph, so it costs a line
-   and not a line plus a grid row and gap — the density contract measures the newest activity row against
-   the first screen. Clamped to one line so a long evidence set cannot wrap. */
-[data-plugin-id="research-dashboard"] .rd-evidence {
-  display: block; font-size: var(--rd-meta); line-height: 1.2; overflow: hidden;
-  text-overflow: ellipsis; white-space: nowrap;
-}
-[data-plugin-id="research-dashboard"] .rd-evidence[data-rd-has-evidence="false"] {
-  color: var(--muted-foreground, #5c6270);
-}
+/* The evidence line (D1/#17/#18) and its one-line clamp are retired: V2b renders evidence as the native
+   rd-progress-evidence disclosure (count in the summary, full list in the body), so the block-level
+   nowrap span these rules styled no longer exists. */
 [data-plugin-id="research-dashboard"] .rd-context-footer {
   align-items: center; border-top: var(--rd-edge); display: flex; gap: 12px;
   justify-content: space-between; margin-top: 6px; padding-top: 10px;
@@ -1871,6 +1880,41 @@ const css = `
 /* An optional scoped plan: a bold heading on a rule, steps beneath; absent means absent. */
 [data-plugin-id="research-dashboard"] .rd-scoped-plan { border-top: var(--rd-edge); margin-top: 10px; padding-top: 10px; }
 [data-plugin-id="research-dashboard"] .rd-scoped-plan > summary { cursor: pointer; font-weight: 700; }
+/* V2b — the compact header's secondary disclosures (the enduring purpose) and the after-task sections
+   (evidence, activity, maintenance) share one disclosure affordance: a bold labelled summary with a
+   caret. A closed fold hides nothing silently — the summary names the section and its full body is one
+   click away, never visually truncated. */
+[data-plugin-id="research-dashboard"] .rd-context-more {
+  border-top: var(--rd-edge); margin-top: 6px; padding-top: 8px;
+}
+[data-plugin-id="research-dashboard"] .rd-context-more > summary { cursor: pointer; list-style: none; }
+[data-plugin-id="research-dashboard"] .rd-context-more > summary::-webkit-details-marker { display: none; }
+[data-plugin-id="research-dashboard"] .rd-context-more > summary::after {
+  content: " ▸"; opacity: var(--rd-quiet);
+}
+[data-plugin-id="research-dashboard"] .rd-context-more[open] > summary::after { content: " ▾"; }
+[data-plugin-id="research-dashboard"] .rd-context-more > .rd-claim-value { margin: 4px 0 0; min-width: 0; }
+[data-plugin-id="research-dashboard"] .rd-progress-evidence,
+[data-plugin-id="research-dashboard"] .rd-progress-activity {
+  border-top: var(--rd-edge); display: grid; gap: var(--rd-gap-tight); min-width: 0; padding-top: 10px;
+}
+[data-plugin-id="research-dashboard"] .rd-progress-evidence > summary,
+[data-plugin-id="research-dashboard"] .rd-progress-activity > summary {
+  cursor: pointer; font-weight: 700; list-style: none;
+}
+[data-plugin-id="research-dashboard"] .rd-progress-evidence > summary::-webkit-details-marker,
+[data-plugin-id="research-dashboard"] .rd-progress-activity > summary::-webkit-details-marker { display: none; }
+[data-plugin-id="research-dashboard"] .rd-progress-evidence > summary::after,
+[data-plugin-id="research-dashboard"] .rd-progress-activity > summary::after { content: " ▸"; opacity: var(--rd-quiet); }
+[data-plugin-id="research-dashboard"] .rd-progress-evidence[open] > summary::after,
+[data-plugin-id="research-dashboard"] .rd-progress-activity[open] > summary::after { content: " ▾"; }
+[data-plugin-id="research-dashboard"] .rd-evidence-list {
+  display: grid; gap: var(--rd-gap-tight); list-style: none; margin: 0; padding: 0;
+}
+[data-plugin-id="research-dashboard"] .rd-evidence-list > li { min-width: 0; overflow-wrap: anywhere; }
+[data-plugin-id="research-dashboard"] .rd-progress-maintenance {
+  border-top: var(--rd-edge); display: grid; gap: var(--rd-gap-tight); padding-top: 10px;
+}
 /* A visible task card: title + full statement + status + own plan + links, without opening a row. */
 [data-plugin-id="research-dashboard"] .rd-task-card {
   background: var(--card, #fff);
@@ -2048,17 +2092,32 @@ export function partitionInvolvements(topics: PersonTopicInvolvement[]): {
 }
 
 /**
- * The shared workstream card's rendering context — a small discriminated prop, so the one behaviour that
+ * The shared workstream card's rendering context — a small discriminated prop, so the behaviour that
  * changes between callers is named rather than a boolean.
  *
- * `{ view: "general" }` (the default, used by Projects and People) renders **every** repository the
- * workstream names. `{ view: "repository", repositoryId }` is the repository panel's own context: it
- * suppresses **only** the one repository whose name equals the panel's subject — the panel header already
- * states it, so repeating it on every card is the "pill soup" the review flagged — while every *other*
- * supporting repository and all of the card's metadata (state, counts, latest event) are retained.
+ * `{ view: "general" }` (the default, used by People) renders **every** repository the workstream names.
+ * `{ view: "repository", repositoryId }` is the repository panel's own context: it suppresses **only** the
+ * one repository whose name equals the panel's subject — the panel header already states it, so repeating it
+ * on every card is the "pill soup" the review flagged — while every *other* supporting repository and all of
+ * the card's metadata (state, counts, latest event) are retained.
+ *
+ * `{ view: "project", repositoryIds }` is V2a's Projects detail context. The project panel already lists
+ * its own **directly linked** repositories (`project_repository`) under "Supporting repositories". A
+ * workstream card read there must not repeat *those* — but a workstream's own links (`axis_repository`) are
+ * a different set and are not necessarily shown anywhere else, so the context carries the exact ids the
+ * panel already shows and the card suppresses **only** the overlap. Every other repository the workstream
+ * names stays on the card as its own explicit workstream link; nothing invents a project↔repository
+ * association the record does not state, and nothing is dropped from the model.
+ *
+ * The `project` context also demotes the per-card latest-event prose (`workstreamCardShowsEvent`): rather
+ * than a recency line per card, the workstream's recorded events stay reachable through the card's
+ * title → the exact Progress entry, where the workstream's full history lives. This is **not** a claim that
+ * the project panel's own Activity section contains every axis's events — it need not — only that the card
+ * keeps the one exact navigation and drops the duplicated summary line.
  */
 export type WorkstreamCardContext =
   | { view: "general" }
+  | { repositoryIds: readonly string[]; view: "project" }
   | { repositoryId: string; view: "repository" };
 
 export const GENERAL_WORKSTREAM_CARD_CONTEXT: WorkstreamCardContext = {
@@ -2066,18 +2125,139 @@ export const GENERAL_WORKSTREAM_CARD_CONTEXT: WorkstreamCardContext = {
 };
 
 /**
- * The repositories a workstream card shows, given its context. Pure and exported so the two rules — the
- * default shows all, the repository context drops *only* its own subject — are pinned by a source test
- * without a DOM.
+ * The Projects detail's card context — see `WorkstreamCardContext`. Built per project from the ids the
+ * panel's own "Supporting repositories" list already shows (the project's direct `project_repository`
+ * links), so the card suppresses exactly those and keeps every other workstream repository link.
+ */
+export function projectWorkstreamCardContext(
+  repositoryIds: readonly string[],
+): WorkstreamCardContext {
+  return { repositoryIds, view: "project" };
+}
+
+/**
+ * The repositories a workstream card shows, given its context. Pure and exported so the rules are pinned by
+ * a source test without a DOM: the general context shows all; the repository context drops **only** its own
+ * subject (the panel header already states it); and the project context drops **only** the repository ids
+ * the project panel already lists directly — every other repository the workstream names survives as the
+ * card's own workstream link.
  */
 export function visibleWorkstreamRepositories<T extends { id: string }>(
   repositories: T[],
   context: WorkstreamCardContext,
 ): T[] {
-  return context.view === "repository"
-    ? repositories.filter((repository) => repository.id !== context.repositoryId)
-    : repositories;
+  if (context.view === "repository") {
+    return repositories.filter((repository) => repository.id !== context.repositoryId);
+  }
+  if (context.view === "project") {
+    const alreadyShown = new Set(context.repositoryIds);
+    return repositories.filter((repository) => !alreadyShown.has(repository.id));
+  }
+  return repositories;
 }
+
+/**
+ * V2a: whether a workstream card draws its own latest recorded event. The Projects detail's `project`
+ * context says no: the card's latest-event prose is demoted into the exact Progress navigation the title
+ * already offers, where the workstream's full history lives, rather than duplicating a recency line on every
+ * card. It does **not** claim the project panel's Activity section carries every axis's events.
+ * People (`general`) and the Repositories panel (`repository`) keep the line. Pure and exported so the one
+ * exception is pinned by a source test without a DOM.
+ */
+export function workstreamCardShowsEvent(context: WorkstreamCardContext): boolean {
+  return context.view !== "project";
+}
+
+/**
+ * V2a: a workstream card's one reading line — the axis's stored `description`, else its stored current
+ * reading (`currentState`), else the empty string. The fallback is the record's own second field, never an
+ * invented sentence, and the chosen string is passed through byte-for-byte. Pure and exported so the
+ * precedence is pinned by a source test without a DOM.
+ */
+export function workstreamCardReading(axis: {
+  currentState?: string;
+  description?: string;
+}): string {
+  return axis.description || axis.currentState || "";
+}
+
+/**
+ * V2a: one payload builder for the Projects detail's workstream cards, so the current lane and the
+ * completed/abandoned fold construct the shared card's data the same way (they previously repeated the same
+ * object literal twice). The counts are the axis's own stored task states (`blocked`/`open`), the latest
+ * event is the axis's own newest recorded history row (never a synthesised recency), and the reading,
+ * title, state and supporting repositories are carried through unchanged — nothing is guessed and no stored
+ * string is rewritten. An overview axis (no `history`/`problems` yet) yields zero counts and a null event;
+ * a detail axis supplies them. Pure and exported so the mapping is pinned by a source test without a DOM.
+ */
+export function projectWorkstreamCardData(axis: {
+  currentState: string;
+  description: string;
+  id: string;
+  repositories: LinkedRepository[];
+  state: AxisState;
+  stateConfidence: Confidence;
+  title: string;
+  history?: Activity[];
+  problems?: WorkstreamTask[];
+}): {
+  blockedTasks: number;
+  currentState: string;
+  description: string;
+  id: string;
+  latestEvent: { at: string; summary: string } | null;
+  openTasks: number;
+  repositories: LinkedRepository[];
+  state: AxisState;
+  stateConfidence: Confidence;
+  title: string;
+} {
+  const problems = axis.problems ?? [];
+  const history = axis.history ?? [];
+  return {
+    blockedTasks: problems.filter((task) => task.state === "blocked").length,
+    currentState: axis.currentState,
+    description: axis.description,
+    id: axis.id,
+    latestEvent:
+      history.length > 0
+        ? { at: history[0].occurredAt, summary: history[0].summary }
+        : null,
+    openTasks: problems.filter((task) => task.state === "open").length,
+    repositories: axis.repositories,
+    state: axis.state,
+    stateConfidence: axis.stateConfidence,
+    title: axis.title,
+  };
+}
+
+/**
+ * V2b — the Progress evidence disclosure's summary text: the count of evidence **shown** when there is any,
+ * otherwise just the section label. The count is the projection's own `evidence` length, which the read caps
+ * per source — so it is labelled "shown" rather than presented as the workstream's exact total, which this
+ * view cannot read. The empty case states the explicit absence in the disclosure's body
+ * (`PROGRESS_NO_EVIDENCE_TEXT`), not in its summary. Pure and exported so both forms are pinned without a
+ * DOM.
+ */
+export function progressEvidenceSummary(count: number): string {
+  return count > 0 ? `Evidence (${count} shown)` : "Evidence";
+}
+
+/**
+ * V2b — the Progress activity disclosure's summary text: the exact scoped total when there are events,
+ * otherwise just the label. The total is the backend page's own `total` (or the read's own array length on
+ * the legacy branch), never a client estimate. Pure and exported so both forms are pinned without a DOM.
+ */
+export function progressActivitySummary(total: number): string {
+  return total > 0 ? `Recent activity (${total})` : "Recent activity";
+}
+
+/**
+ * V2b — the explicit no-evidence claim, stated verbatim (V1/#18). One exported string, so the view and its
+ * test cannot drift apart on the exact words — including the apostrophes in "'confirmed'".
+ */
+export const PROGRESS_NO_EVIDENCE_TEXT =
+  "No evidence on record — a 'confirmed' reading needs evidence";
 
 /**
  * V1b (Repositories composition): split a repository's workstreams into the nonterminal ones that read in
@@ -3018,12 +3198,26 @@ export function apply(ctx: Context) {
    * rollup). The label is bold on a rule; the steps are the plan's own list, and a step's number is rendered
    * only where the step claims a `position` — stored positions are shown as stored, never rebased.
    */
-  function ScopedPlan({ label, plan }: { label: string; plan: StoredPlan | null }) {
+  function ScopedPlan({
+    label,
+    plan,
+    defaultOpen = true,
+  }: {
+    label: string;
+    plan: StoredPlan | null;
+    /**
+     * V2b — whether the disclosure starts open. The default is `true` (a task's own implementation plan),
+     * preserving every existing call site's behaviour; the Progress workstream's plan passes `false` so its
+     * summary is the route and the reader opens it. Either way the summary is visible and every stored step
+     * is retained in the body — collapse hides nothing that a click cannot restore.
+     */
+    defaultOpen?: boolean;
+  }) {
     if (!plan || plan.steps.length === 0) {
       return null;
     }
     return (
-      <details className="rd-scoped-plan" open>
+      <details className="rd-scoped-plan" open={defaultOpen}>
         <summary>{label}</summary>
         {plan.plan.summary ? <p className="rd-meta">{plan.plan.summary}</p> : null}
         <ol className="rd-plan-steps" data-rd-scoped-plan-steps={plan.steps.length}>
@@ -3154,19 +3348,25 @@ export function apply(ctx: Context) {
   }: {
     axis: WorkstreamCardData;
     /**
-     * Where the card is being read. Omitted (Projects, People) is the default `{ view: "general" }`, which
-     * renders every supporting repository. The repository panel passes `{ view: "repository", repositoryId }`
-     * so the card suppresses only its own subject's name — see `WorkstreamCardContext`.
+     * Where the card is being read. Omitted (People) is the default `{ view: "general" }`, which renders
+     * every supporting repository. The repository panel passes `{ view: "repository", repositoryId }` so the
+     * card suppresses only its own subject's name; the Projects detail passes
+     * `{ view: "project", repositoryIds }` so the card drops only the repository links the project panel
+     * already lists directly — and demotes the latest-event prose into the exact Progress entry — while
+     * keeping every other workstream repository link. See `WorkstreamCardContext`.
      */
     context?: WorkstreamCardContext;
     onOpenEntity: (type: EntityType, id: string) => void;
     onOpenWorkstream: (axisId: string) => void;
   }) {
-    const summary = axis.description || axis.currentState || "";
+    const reading = workstreamCardReading(axis);
     // Per the accepted pivot the compact card carries title → Progress, the workstream's status and its
     // task counts, and one latest recorded event. It does **not** restate the blocker: the blocker's full
     // prose belongs to the Progress context, and the old in-card blocker line (with its status-coloured
-    // contour) is removed here.
+    // contour) is removed here. The latest-event line is drawn only where the caller is not the project
+    // panel, which demotes it into the card's exact Progress navigation rather than repeating it per card
+    // (`workstreamCardShowsEvent`); the repository tags drop only the links the project panel already lists
+    // directly (see `visibleWorkstreamRepositories`).
     return (
       <article
         className="rd-work-card"
@@ -3189,12 +3389,12 @@ export function apply(ctx: Context) {
           </h3>
           <StateBadge confidence={axis.stateConfidence} state={axis.state} />
         </div>
-        {summary ? (
+        {reading ? (
           <p className="rd-meta" data-rd-work-summary="true">
-            {summary}
+            {reading}
           </p>
         ) : null}
-        {axis.latestEvent ? (
+        {axis.latestEvent && workstreamCardShowsEvent(context) ? (
           <p className="rd-meta" data-rd-work-event="true">
             <EventDate at={axis.latestEvent.at} /> | {axis.latestEvent.summary}
           </p>
@@ -4492,19 +4692,9 @@ export function apply(ctx: Context) {
     const activityTotal = activityPage ? activityPage.total : activityAll.length;
     const axisRepositories = axis?.repositories ?? [];
     // The projection's own recorded evidence for the selected workstream (`axisEvidence`, capped per
-    // source). Declared here so the panel renders the fact rather than a raw `?? []` inline twice.
+    // source). The disclosure's count is this array's length, so it is labelled as the evidence *shown*
+    // rather than presented as the workstream's exact total (see `progressEvidenceSummary`).
     const evidence = axis?.evidence ?? [];
-    // The evidence line's exact displayed words, derived ONCE: the span's text and its native `title`
-    // are the same complete string, so hovering the clamped (one-line, ellipsised) reading reveals
-    // precisely what is shown — including " + more recorded evidence" and the no-evidence claim — and
-    // never a fabricated total the read was not given. One formatter, read twice (D1/#17/#18).
-    const evidenceText =
-      evidence.length > 0
-        ? `Evidence: ${evidence
-            .slice(0, 3)
-            .map((item) => (item.by ? `${item.label} (${item.by})` : item.label))
-            .join(" · ")}${evidence.length > 3 ? " + more recorded evidence" : ""}`
-        : "No evidence on record — a 'confirmed' reading needs evidence";
     const correcting = correction != null && correction.axisId === axis?.id;
     const projectName =
       workstream?.topic.name ??
@@ -4587,11 +4777,18 @@ export function apply(ctx: Context) {
               </p>
             ) : null}
             {selection && axis ? (
-              <>
-                {/* The workstream's full context: purpose (the enduring author description) and current
-                    reading (the mutable current state) shown as two separate claims, the blocker where there
-                    is one, then the workstream's own plan — no duplicate banner, no separate "Current
-                    problem" box. */}
+              /* V2 correction — the selected body is keyed by the axis. A **different** workstream
+                 remounts the body, so every native disclosure inside it (Purpose, evidence, activity,
+                 the workstream plan) returns to its own default. Ordinary **same-axis** pagination keeps
+                 the same key, so the DOM `<details>` elements are reused and a reader's own open/closed
+                 disclosures are never re-closed under them. The correction draft/conflict reload and
+                 save handlers live in the page state above, so nothing the reader typed is lost. */
+              <React.Fragment key={axis.id}>
+                {/* V2b — the compact header leads: title + state, then the current reading and (where
+                    there is one) the blocker in full, each with its own confidence badge. The enduring
+                    purpose is one native disclosure away and the axis's own people are stated explicitly;
+                    the workstream plan, activity, evidence, provenance and maintenance all follow the
+                    tasks below. */}
                 <section
                   className="rd-context-panel"
                   data-rd-context-panel={axis.id}
@@ -4608,17 +4805,7 @@ export function apply(ctx: Context) {
                       state={axis.state}
                     />
                   </div>
-                  <div className="rd-context-body">
-                    <span className="rd-context-label">Purpose</span>
-                    <p className="rd-claim-value" data-rd-axis-description="true">
-                      {axis.description ? (
-                        axis.description
-                      ) : (
-                        <span className="rd-muted">
-                          No workstream purpose recorded.
-                        </span>
-                      )}
-                    </p>
+                  <div className="rd-context-body" data-rd-progress-context="true">
                     <span className="rd-context-label">Current reading</span>
                     <p className="rd-claim-value" data-rd-axis-reading="true">
                       {axis.currentState ? (
@@ -4631,26 +4818,6 @@ export function apply(ctx: Context) {
                           No current reading recorded.
                         </span>
                       )}
-                      {/* The evidence line (D1/#17): what is actually recorded behind this workstream, read
-                          straight off the projection's own `evidence` set — the same set the store's write
-                          rule accepts for a `confirmed` claim. It is stated whether or not there is anything
-                          to name: "no evidence on record" is itself the claim (#18), and it is never inferred
-                          from activity counts, progress or the state confidence. The three shown make the
-                          line a reading. The projection's array is capped per source (5 activities, 5 notes),
-                          so when it holds more than three the line says more evidence is recorded WITHOUT a
-                          number: the true total is not in this read's normalized shape, and printing
-                          `evidence.length - 3` would fabricate an exact remainder the reading was not given.
-                          It rides inside the reading's own cell and line box (a block span), so it costs a
-                          line but not a grid row plus gap — the detail pane's height is measured against the
-                          first screen (the density contract). */}
-                      <span
-                        className="rd-evidence"
-                        data-rd-axis-evidence={evidence.length}
-                        data-rd-has-evidence={evidence.length > 0}
-                        title={evidenceText}
-                      >
-                        {evidenceText}
-                      </span>
                     </p>
                     {axis.blocker ? (
                       <>
@@ -4662,71 +4829,23 @@ export function apply(ctx: Context) {
                       </>
                     ) : null}
                   </div>
-                  <ScopedPlan label="Workstream plan" plan={axis.plan ?? null} />
-                  {axisRepositories.length > 0 ? (
-                    <div
-                      className="rd-cluster rd-tags"
-                      data-rd-context-repositories={axisRepositories.length}
-                    >
-                      <span className="rd-meta">Supporting repositories ·</span>
-                      {axisRepositories.map((repository) => (
-                        <RepoLinkPair
-                          key={repository.id}
-                          onOpen={onOpenEntity}
-                          repository={repository}
-                        />
-                      ))}
-                    </div>
-                  ) : null}
-                  <div className="rd-context-footer">
-                    <span className="rd-meta">{`Project · ${projectName}`}</span>
-                    <div className="rd-cluster">
-                      {/* Correction is the primary control here (P1) — Progress is its detail destination,
-                          so the write lives beside the full workstream reading rather than on the compact
-                          Projects card. Nothing here deletes. */}
-                      <Button
-                        data-rd-correct-toggle={axis.id}
-                        disabled={busy}
-                        onClick={() => {
-                          if (correcting) {
-                            onCorrection(null);
-                            return;
-                          }
-                          onCorrection(draftFrom(axis));
-                        }}
-                        size="sm"
-                        variant={correcting ? "default" : "outline"}
-                      >
-                        {correcting ? "Cancel" : "Correct"}
-                      </Button>
-                      <Button
-                        data-rd-return-project={workstream?.topic.id ?? selection.topicId}
-                        onClick={() =>
-                          onOpenEntity(
-                            "topic",
-                            workstream?.topic.id ?? selection.topicId
-                          )
-                        }
-                        size="sm"
-                        variant="outline"
-                      >
-                        Return to project →
-                      </Button>
-                    </div>
-                  </div>
+                  <details
+                    className="rd-context-more"
+                    data-rd-progress-context-more="true"
+                  >
+                    <summary className="rd-context-label">Purpose</summary>
+                    <p className="rd-claim-value" data-rd-axis-description="true">
+                      {axis.description ? (
+                        axis.description
+                      ) : (
+                        <span className="rd-muted">
+                          No workstream purpose recorded.
+                        </span>
+                      )}
+                    </p>
+                  </details>
+                  <Participants onOpen={onOpenEntity} people={axis.people} />
                 </section>
-
-                {correcting && correction ? (
-                  <WorkstreamCorrection
-                    axis={axis}
-                    busy={busy}
-                    conflict={conflict}
-                    correction={correction}
-                    onCorrection={onCorrection}
-                    onReload={onReloadCorrection}
-                    onSave={onSaveCorrection}
-                  />
-                ) : null}
 
                 <section
                   className="rd-progress-tasks"
@@ -4802,11 +4921,87 @@ export function apply(ctx: Context) {
                   )}
                 </section>
 
-                <section
+                {/* V2b — evidence is a secondary native disclosure, after the tasks, read straight off the
+                    axis's own recorded `evidence` set (the same set the store's write rule accepts for a
+                    `confirmed` claim). The summary states the count of evidence *shown*, because the
+                    projection is capped per source and is not the workstream's exact total; the body lists
+                    each reference with its own label, its author where one is named, and its actual stored
+                    `sourceUrl` where there is one — never a guessed destination — or its recorded source
+                    ref where there is not. The explicit no-evidence sentence is preserved verbatim, and the
+                    confidence distinctions stay on the reading/blocker claims in the compact header, not
+                    here. */}
+                <details
+                  className="rd-progress-evidence"
+                  data-rd-axis-evidence={evidence.length}
+                  data-rd-has-evidence={evidence.length > 0}
+                  data-rd-progress-evidence={evidence.length}
+                >
+                  <summary>{progressEvidenceSummary(evidence.length)}</summary>
+                  {evidence.length > 0 ? (
+                    <ul
+                      className="rd-evidence-list"
+                      data-rd-evidence-list="true"
+                    >
+                      {evidence.map((item, index) => (
+                        <li
+                          key={`${item.sourceRef}-${index}`}
+                          data-rd-evidence-ref={item.sourceRef || String(index)}
+                        >
+                          <span className="rd-strong">{item.label}</span>
+                          {item.by ? (
+                            <span className="rd-meta">{` · ${item.by}`}</span>
+                          ) : null}
+                          {item.sourceUrl ? (
+                            <a
+                              className="rd-repo-ext"
+                              data-rd-evidence-url={item.sourceRef || String(index)}
+                              href={item.sourceUrl}
+                              rel="noopener noreferrer"
+                              target="_blank"
+                              title={item.sourceUrl}
+                            >
+                              source ↗
+                            </a>
+                          ) : (
+                            <span
+                              className="rd-meta"
+                              data-rd-evidence-no-url="true"
+                            >
+                              {item.sourceRef || item.sourceType}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="rd-muted" data-rd-evidence-empty="true">
+                      {PROGRESS_NO_EVIDENCE_TEXT}
+                    </p>
+                  )}
+                </details>
+
+                {/* V2b — the workstream's own scoped plan, collapsed by default: its summary is the route
+                    and every stored step is retained. A **task's** own plan keeps its existing default open
+                    (`ScopedPlan`'s `defaultOpen` default), so only the workstream-level call changes. */}
+                {axis.plan ? (
+                  <div data-rd-progress-plan="true">
+                    <ScopedPlan
+                      defaultOpen={false}
+                      label="Workstream plan"
+                      plan={axis.plan}
+                    />
+                  </div>
+                ) : null}
+
+                {/* V2b — recent activity is a native disclosure, collapsed by default, its exact scoped
+                    total stated in the summary; the rows and the backend Pager are the existing scoped
+                    ones (unchanged handlers, exact total, five per page). */}
+                <details
                   className="rd-progress-activity"
+                  data-rd-progress-activity="true"
                   data-rd-progress-activity-total={activityTotal}
                 >
-                  <h3 className="rd-side-title">Recent activity</h3>
+                  <summary>{progressActivitySummary(activityTotal)}</summary>
                   {activityItems.length === 0 ? (
                     <p className="rd-muted" data-rd-progress-feed-empty="true">
                       Nothing recorded against this workstream.
@@ -4834,8 +5029,83 @@ export function apply(ctx: Context) {
                       total={activityTotal}
                     />
                   ) : null}
+                </details>
+
+                {/* V2b — provenance: the workstream's explicit supporting-repository links, secondary and
+                    after the tasks, unchanged in substance from the context panel they used to sit in. */}
+                {axisRepositories.length > 0 ? (
+                  <div
+                    className="rd-cluster rd-tags"
+                    data-rd-context-repositories={axisRepositories.length}
+                    data-rd-progress-provenance="true"
+                  >
+                    <span className="rd-meta">Supporting repositories ·</span>
+                    {axisRepositories.map((repository) => (
+                      <RepoLinkPair
+                        key={repository.id}
+                        onOpen={onOpenEntity}
+                        repository={repository}
+                      />
+                    ))}
+                  </div>
+                ) : null}
+
+                {/* V2b — maintenance is secondary and after the tasks: the correction control and the
+                    retained Return to project live here. The correction form is **never** hidden behind a
+                    closed fold — a currently open correction stays open (this block renders whenever a
+                    draft is in flight), and the draft/conflict/reload/save handlers are unchanged. */}
+                <section
+                  className="rd-progress-maintenance"
+                  data-rd-progress-maintenance="true"
+                >
+                  <div className="rd-row">
+                    <span className="rd-section">Maintenance</span>
+                    <span className="rd-meta">{`Project · ${projectName}`}</span>
+                  </div>
+                  <div className="rd-cluster">
+                    <Button
+                      data-rd-correct-toggle={axis.id}
+                      disabled={busy}
+                      onClick={() => {
+                        if (correcting) {
+                          onCorrection(null);
+                          return;
+                        }
+                        onCorrection(draftFrom(axis));
+                      }}
+                      size="sm"
+                      variant={correcting ? "default" : "outline"}
+                    >
+                      {correcting ? "Cancel" : "Correct"}
+                    </Button>
+                    <Button
+                      data-rd-return-project={workstream?.topic.id ?? selection.topicId}
+                      onClick={() =>
+                        onOpenEntity(
+                          "topic",
+                          workstream?.topic.id ?? selection.topicId
+                        )
+                      }
+                      size="sm"
+                      variant="outline"
+                    >
+                      Return to project →
+                    </Button>
+                  </div>
                 </section>
-              </>
+
+                {correcting && correction ? (
+                  <WorkstreamCorrection
+                    axis={axis}
+                    busy={busy}
+                    conflict={conflict}
+                    correction={correction}
+                    onCorrection={onCorrection}
+                    onReload={onReloadCorrection}
+                    onSave={onSaveCorrection}
+                  />
+                ) : null}
+              </React.Fragment>
             ) : null}
           </div>
         </div>
@@ -5428,7 +5698,14 @@ export function apply(ctx: Context) {
     const foldedAxes: AxisDetail[] = selectedDetails
       ? selectedDetails.axes.filter((axis) => isTerminalAxis(axis.state))
       : [];
-
+    // V2 correction — the project's card context suppresses exactly the repositories the panel's own
+    // "Supporting repositories" list already shows (its direct `project_repository` links). A workstream's
+    // own links are a different set, so only the overlap is deduplicated; the rest stay on each card.
+    const projectCardContext = projectWorkstreamCardContext(
+      (selectedDetails?.repositories ?? selectedEntry?.repositories ?? []).map(
+        (repository) => repository.id,
+      ),
+    );
 
     return (
       <div className="rd-stack">
@@ -5533,11 +5810,18 @@ export function apply(ctx: Context) {
             </ul>
 
             {selectedEntry ? (
+              /* V2 correction — the project detail is keyed by the selected topic id. A different
+                 selection remounts the panel, so the nested disclosures return to their defaults —
+                 the **Description** disclosure reads collapsed again rather than staying open from the
+                 previous project (the outer panel and the activity fold carry an explicit `open`, so
+                 they stay open). A write draft that the reader typed lives in the page state above as
+                 a controlled field, so remounting never drops it. */
               <details
                 className="rd-panel rd-topic-detail"
                 data-rd-detail={selectedEntry.topic.name}
                 data-rd-detail-header="true"
                 data-rd-detail-mode="disclosure"
+                key={selectedEntry.topic.id}
                 open
               >
                 {/* The shared **native disclosure**: the `<summary>` carries the project's title and
@@ -5562,11 +5846,11 @@ export function apply(ctx: Context) {
                 <div className="rd-topic-body">
                 {selectedDetails ? (
                   <div className="rd-detail-claims">
-                    {/* Concise orientation first (the pivot: `summary` = concise orientation), then the
-                        full purpose (`description`). Both are stored fields; each empty state is honest.
-                        The old "approved summary — a human interpretation, not an agent one" label is
-                        removed: it asserted a human-only rule the data contract no longer holds, so the
-                        field is rendered plainly and an agent may maintain it. */}
+                    {/* V2a — the identity reads first and plainly: the concise stored `summary` is the
+                        prominent orientation. It is a stored field, so its empty state is honest. The old
+                        "approved summary — a human interpretation, not an agent one" label is removed: it
+                        asserted a human-only rule the data contract no longer holds, so the field is
+                        rendered plainly and an agent may maintain it. */}
                     <div className="rd-claim rd-claim-summary">
                       <span className="rd-context-label">Summary</span>
                       <span className="rd-claim-value" data-rd-claim="summary">
@@ -5575,14 +5859,19 @@ export function apply(ctx: Context) {
                         )}
                       </span>
                     </div>
-                    <div className="rd-claim" data-rd-description-field="true">
-                      <span className="rd-context-label">Description</span>
+                    {/* V2a — the complete stored `description` stays reachable but not prominent: a
+                        **native disclosure, collapsed by default**, whose labelled summary is the route
+                        and whose body carries the exact stored string (or its own honest empty). Nothing
+                        is hidden silently — the label names the field — and no preview is clamped here,
+                        so no arbitrary visual truncation stands between the reader and the full text. */}
+                    <details className="rd-claim rd-description" data-rd-description-field="true">
+                      <summary className="rd-context-label">Description</summary>
                       <span className="rd-claim-value" data-rd-claim="description">
                         {selectedDetails.topic.description || (
                           <span className="rd-muted">No description recorded.</span>
                         )}
                       </span>
-                    </div>
+                    </details>
                   </div>
                 ) : null}
                 {/* Participants — an explicit quiet inline label beneath a divider. The hook the
@@ -5677,30 +5966,16 @@ export function apply(ctx: Context) {
                     <ul className="rd-axes">
                       {currentAxes.map((axis) =>
                         selectedDetails ? (
-                          /* The compact shared workstream card (S4): title → the exact Progress entry,
-                             status, the workstream's own task counts and one latest recorded event.
-                             The blocker's full prose is Progress's, not repeated here. */
+                          /* The compact shared workstream card (S4), in the Projects **project context**:
+                             title → the exact Progress entry (its full work context), status, its stored
+                             reading and its own task counts. The card drops only the repository links the
+                             project panel already lists directly, and demotes its latest-event prose into
+                             that exact Progress entry; the same `projectWorkstreamCardData` builds this card
+                             and the folded one below. */
                           <li key={axis.id}>
                             <WorkstreamCard
-                              axis={{
-                                blockedTasks: ((axis as AxisDetail).problems ?? []).filter(
-                                  (task) => task.state === "blocked"
-                                ).length,
-                                currentState: axis.currentState,
-                                description: axis.description,
-                                id: axis.id,
-                                latestEvent: (axis as AxisDetail).history.length > 0 ? {
-                                  at: (axis as AxisDetail).history[0].occurredAt,
-                                  summary: (axis as AxisDetail).history[0].summary,
-                                } : null,
-                                openTasks: ((axis as AxisDetail).problems ?? []).filter(
-                                  (task) => task.state === "open"
-                                ).length,
-                                repositories: axis.repositories,
-                                state: axis.state,
-                                stateConfidence: axis.stateConfidence,
-                                title: axis.title,
-                              }}
+                              axis={projectWorkstreamCardData(axis)}
+                              context={projectCardContext}
                               onOpenEntity={openEntity}
                               onOpenWorkstream={(axisId) => openEntity("axis", axisId)}
                             />
@@ -5726,25 +6001,8 @@ export function apply(ctx: Context) {
                         {foldedAxes.map((axis) => (
                           <li key={axis.id}>
                             <WorkstreamCard
-                              axis={{
-                                blockedTasks: ((axis as AxisDetail).problems ?? []).filter(
-                                  (task) => task.state === "blocked"
-                                ).length,
-                                currentState: axis.currentState,
-                                description: axis.description,
-                                id: axis.id,
-                                latestEvent: (axis as AxisDetail).history.length > 0 ? {
-                                  at: (axis as AxisDetail).history[0].occurredAt,
-                                  summary: (axis as AxisDetail).history[0].summary,
-                                } : null,
-                                openTasks: ((axis as AxisDetail).problems ?? []).filter(
-                                  (task) => task.state === "open"
-                                ).length,
-                                repositories: axis.repositories,
-                                state: axis.state,
-                                stateConfidence: axis.stateConfidence,
-                                title: axis.title,
-                              }}
+                              axis={projectWorkstreamCardData(axis)}
+                              context={projectCardContext}
                               onOpenEntity={openEntity}
                               onOpenWorkstream={(axisId) => openEntity("axis", axisId)}
                             />

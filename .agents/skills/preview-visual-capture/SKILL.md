@@ -83,6 +83,16 @@ to state findings from it as measurements rather than impressions. The instrumen
 12. **The prototype is reference, not spec.** Compare content and behaviour against
     `docs/design/dashboard-information-architecture-pivot.md` and the frozen HTML prototype without treating
     prototype styling as mandatory.
+13. **Freeze the payload for comparisons.** Generate caller-owned scratch fixtures through real actions,
+    then reuse the same file with `--no-fixtures --fixtures <path>` for both builds. Record subject IDs and
+    bundle hashes; regenerated IDs or newly selected subjects are not an exact before/after pair.
+14. **Prove supplemental page totals against scoped reads.** A topic-wide history cap can under-report the
+    axis's real total. Before using a scratch pagination supplement, compare its task/event IDs and order
+    against every real scoped backend page within the supported read limits. Never clone response rows to
+    manufacture coverage; declare absent populated plans or destinations as untested.
+15. **Photograph the secondary content, not just its open flag.** Open a native disclosure through its
+    summary, scroll the actual host port to its body/pager, and capture at the requested viewport. A top-of-
+    page screenshot after clicking page two does not show page-two history below the fold.
 
 ## Verification
 
