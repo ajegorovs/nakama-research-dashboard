@@ -1,11 +1,11 @@
 # UI restyling — scope and iteration contract
 
-Status: bounded composition work is authorized. V1 refines People and Repositories; V2 makes Projects an
-orientation view and Progress a task-centered collaboration view. The four-view plugin and its
-rework/hardening remain the baseline. This brief authorizes no deployment, protected fixture mutation,
-agent inference or merge; palette and typography redesign remain out of scope.
+Status: V1/V2 composition and the V3 converged styling are accepted at preview level and integrated locally.
+UI restyling is complete within that accepted preview scope; served-instance acceptance remains outstanding
+and is not claimed. The four-view plugin and its rework/hardening remain the baseline. This brief authorizes
+no deployment, protected fixture mutation, agent inference or merge.
 
-## Selected composition direction
+## Accepted composition and visual direction
 
 - People puts explicitly workstream-bearing projects before compact project-only affiliations, preserving
   roles, exact navigation and truthful attribution. Repositories separates workstreams from completed and
@@ -23,6 +23,12 @@ agent inference or merge; palette and typography redesign remain out of scope.
 - Use labelled scratch-only supplements through real actions when a required preview case is absent from
   fixture/scale. Preserve committed inputs and compare supplemental payload identities/totals to real scoped
   read oracles before relying on pagination measurements.
+- V3 adopts C's compact spacing, flatter surfaces and clean alignment. Headings, research prose, states,
+  dates and descriptive metadata remain sans-serif; visible monospace is reserved for repository identifiers.
+  Selected rows use a left edge and neutral fill, and active tabs an underline, independently of focus and
+  status indicators. Expanded descriptions, purpose and full task statements have a ~76ch reading measure
+  and comfortable line height; cards, tables, metadata and short summaries are not indiscriminately capped.
+  Palette and typography are settled, not an open redesign workstream.
 
 ## Scope and invariants
 
