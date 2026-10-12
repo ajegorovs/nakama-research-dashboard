@@ -1242,6 +1242,30 @@ var css = `
 [data-plugin-id="research-dashboard"] .rd-task-list { list-style: none; margin: 0; padding: 0; }
 /* A grouped stack of shared work cards (People, Repositories): the project group, sparsely spaced. */
 [data-plugin-id="research-dashboard"] .rd-work-groups { display: grid; gap: 4px; }
+/* V1a: the project-only affiliations — topics the person is named on with no workstream of theirs. A
+   native disclosure keeps the lane compact while preserving each affiliation's tag, status and role. */
+[data-plugin-id="research-dashboard"] .rd-affiliations { margin-top: var(--rd-gap-block); min-width: 0; }
+[data-plugin-id="research-dashboard"] .rd-affiliations-summary {
+  color: var(--muted-foreground, #5c6270); cursor: pointer;
+  font-size: var(--rd-body); font-weight: 700;
+}
+[data-plugin-id="research-dashboard"] .rd-affiliation-list {
+  display: grid; gap: var(--rd-gap-tight); list-style: none;
+  margin: var(--rd-gap-row) 0 0; padding: 0; min-width: 0;
+}
+[data-plugin-id="research-dashboard"] .rd-affiliation {
+  align-items: baseline; display: flex; flex-wrap: wrap; gap: 8px;
+  min-width: 0;
+}
+/* A long affiliation topic name: the shared tag is normally nowrap (max-width:100%, ellipsis). Inside the
+   People lane that nowrap min-content sets the affiliation row's own min-content, forces the lane's grid
+   item past its track and overlaps the rail at 1280. Scoped to the affiliation list only, the tag may wrap
+   its name — overflow-wrap:anywhere is explicitly the value that lowers min-content, so the row shrinks
+   with the lane and the name reads in full instead of truncating to an unreadable ellipsis. No other tag,
+   project group or grid changes. */
+[data-plugin-id="research-dashboard"] .rd-affiliation .rd-tag {
+  max-width: 100%; overflow-wrap: anywhere; text-overflow: clip; white-space: normal;
+}
 /* The selector-row status dot: colour by state, never the only signal (the state word is always beside it).
    Its default is the muted *foreground* (a mid grey), not the near-white --muted background token — a
    selector row's dot must read at a glance whatever its state. */
@@ -1299,6 +1323,36 @@ function describeAge(iso) {
     return `${Math.floor(days / 7)} weeks ago`;
   }
   return `${Math.floor(days / 30)} months ago`;
+}
+function partitionInvolvements(topics) {
+  return {
+    bearing: topics.filter((involvement) => involvement.axes.length > 0),
+    projectOnly: topics.filter((involvement) => involvement.axes.length === 0)
+  };
+}
+var GENERAL_WORKSTREAM_CARD_CONTEXT = {
+  view: "general"
+};
+function visibleWorkstreamRepositories(repositories, context) {
+  return context.view === "repository" ? repositories.filter((repository) => repository.id !== context.repositoryId) : repositories;
+}
+function partitionRepositoryWorkstreams(axes) {
+  const groups = [];
+  const byTopic = new Map;
+  for (const axis of axes) {
+    let at = byTopic.get(axis.topicId);
+    if (at === undefined) {
+      at = groups.length;
+      byTopic.set(axis.topicId, at);
+      groups.push({ historical: [], nonterminal: [], topicId: axis.topicId });
+    }
+    (isTerminalAxis(axis.state) ? groups[at].historical : groups[at].nonterminal).push(axis);
+  }
+  return {
+    groups,
+    historicalCount: groups.reduce((n, group) => n + group.historical.length, 0),
+    nonterminalCount: groups.reduce((n, group) => n + group.nonterminal.length, 0)
+  };
 }
 function apply(ctx) {
   const React = ctx.React;
@@ -1876,6 +1930,7 @@ function apply(ctx) {
   }
   function WorkstreamCard({
     axis,
+    context = GENERAL_WORKSTREAM_CARD_CONTEXT,
     onOpenEntity,
     onOpenWorkstream
   }) {
@@ -1914,7 +1969,7 @@ function apply(ctx) {
     }, countLabel(axis.openTasks, "open task", "open tasks")) : null, typeof axis.blockedTasks === "number" && axis.blockedTasks > 0 ? /* @__PURE__ */ React.createElement("span", {
       className: "rd-count rd-blocked-pill",
       "data-rd-state": "blocked"
-    }, countLabel(axis.blockedTasks, "blocked", "blocked")) : null, axis.repositories.map((repository) => /* @__PURE__ */ React.createElement(RepoLinkPair, {
+    }, countLabel(axis.blockedTasks, "blocked", "blocked")) : null, visibleWorkstreamRepositories(axis.repositories, context).map((repository) => /* @__PURE__ */ React.createElement(RepoLinkPair, {
       key: repository.id,
       onOpen: onOpenEntity,
       repository
@@ -2068,9 +2123,9 @@ function apply(ctx) {
     return parts.join(" · ");
   }
   function supportsLine(entry) {
-    const current = entry.axes.filter((axis) => !isTerminalAxis(axis.state)).length;
-    const topics = entry.topics.length === 0 ? "no project names it" : `supports ${countLabel(entry.topics.length, "project", "projects")}`;
-    return `${topics} · ${current === 0 ? "no current workstream" : countLabel(current, "current workstream", "current workstreams")}`;
+    const workstreams = entry.axes.length === 0 ? "no workstreams" : countLabel(entry.axes.length, "workstream", "workstreams");
+    const topics = entry.topics.length === 0 ? "no direct project link" : `supports ${countLabel(entry.topics.length, "project", "projects")}`;
+    return `${topics} · ${workstreams}`;
   }
   function ActivityList({
     dataAttr,
@@ -2112,6 +2167,7 @@ function apply(ctx) {
       }
       return [...seen.values()];
     }, [entry]);
+    const { bearing: bearingProjects, projectOnly } = partitionInvolvements(entry.topics);
     return /* @__PURE__ */ React.createElement("details", {
       className: "rd-panel rd-topic-detail",
       "data-rd-detail-header": "true",
@@ -2124,23 +2180,6 @@ function apply(ctx) {
       badge: entry.person.githubLogin ? /* @__PURE__ */ React.createElement("span", {
         className: "rd-muted"
       }, "@", entry.person.githubLogin) : null,
-      context: entry.topics.length > 0 || relatedRepositories.length > 0 ? /* @__PURE__ */ React.createElement(React.Fragment, null, entry.topics.slice(0, 4).map((involvement) => /* @__PURE__ */ React.createElement(EntityTag, {
-        compact: true,
-        id: involvement.topic.id,
-        key: involvement.topic.id,
-        label: involvement.topic.name,
-        onOpen: onOpenEntity,
-        type: "topic"
-      })), entry.topics.length > 4 ? /* @__PURE__ */ React.createElement("span", {
-        className: "rd-muted"
-      }, "+", entry.topics.length - 4, " more") : null, relatedRepositories.slice(0, 3).map((repository) => /* @__PURE__ */ React.createElement(EntityTag, {
-        compact: true,
-        id: repository.id,
-        key: repository.id,
-        label: repository.fullName,
-        onOpen: onOpenEntity,
-        type: "repository"
-      }))) : null,
       title: /* @__PURE__ */ React.createElement(CardTitle, null, entry.person.displayName)
     }, /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta",
@@ -2158,23 +2197,23 @@ function apply(ctx) {
     }, "Involvement"), /* @__PURE__ */ React.createElement("div", {
       className: "rd-work-groups",
       "data-rd-person-topics": entry.topics.length
-    }, entry.topics.map((involvement) => /* @__PURE__ */ React.createElement("section", {
+    }, bearingProjects.map((involvement) => /* @__PURE__ */ React.createElement("section", {
       className: "rd-project-group",
       "data-rd-involvement": involvement.topic.name,
       key: involvement.topic.id
     }, /* @__PURE__ */ React.createElement("div", {
-      className: "rd-project-heading"
+      className: "rd-project-heading",
+      "data-rd-project-name": involvement.topic.name
     }, involvement.topic.name), /* @__PURE__ */ React.createElement("div", {
-      className: "rd-project-intro"
+      className: "rd-project-intro",
+      "data-rd-project-link": involvement.topic.id
     }, /* @__PURE__ */ React.createElement("p", {
       className: "rd-meta"
     }, involvement.role ? `${involvement.topic.status} · ${involvement.role}` : involvement.topic.status), /* @__PURE__ */ React.createElement(Button, {
       onClick: () => onOpenEntity("topic", involvement.topic.id),
       size: "sm",
       variant: "outline"
-    }, "Open project →")), involvement.axes.length === 0 ? /* @__PURE__ */ React.createElement(Notice, {
-      kind: "empty"
-    }, "no workstream of theirs here") : [
+    }, "Open project →")), [
       ...involvement.axes.filter((axis) => !isTerminalAxis(axis.state)),
       ...involvement.axes.filter((axis) => isTerminalAxis(axis.state))
     ].map((axis) => /* @__PURE__ */ React.createElement(WorkstreamCard, {
@@ -2188,7 +2227,28 @@ function apply(ctx) {
       key: axis.id,
       onOpenEntity,
       onOpenWorkstream: (axisId) => onOpenEntity("axis", axisId)
-    })))), entry.topics.length === 0 ? /* @__PURE__ */ React.createElement(Notice, {
+    })))), projectOnly.length > 0 ? /* @__PURE__ */ React.createElement("details", {
+      className: "rd-affiliations",
+      "data-rd-person-affiliations": projectOnly.length
+    }, /* @__PURE__ */ React.createElement("summary", {
+      className: "rd-affiliations-summary"
+    }, "Project-only affiliations (", projectOnly.length, ")"), /* @__PURE__ */ React.createElement("p", {
+      className: "rd-meta"
+    }, "No explicitly linked workstreams"), /* @__PURE__ */ React.createElement("ul", {
+      className: "rd-affiliation-list"
+    }, projectOnly.map((involvement) => /* @__PURE__ */ React.createElement("li", {
+      className: "rd-affiliation",
+      "data-rd-involvement": involvement.topic.name,
+      key: involvement.topic.id
+    }, /* @__PURE__ */ React.createElement(EntityTag, {
+      compact: true,
+      id: involvement.topic.id,
+      label: involvement.topic.name,
+      onOpen: onOpenEntity,
+      type: "topic"
+    }), /* @__PURE__ */ React.createElement("span", {
+      className: "rd-meta"
+    }, involvement.role ? `${involvement.topic.status} · ${involvement.role}` : involvement.topic.status))))) : null, entry.topics.length === 0 ? /* @__PURE__ */ React.createElement(Notice, {
       kind: "empty"
     }, "Not linked to a topic yet — the link is what puts work on this page.") : null)), /* @__PURE__ */ React.createElement("aside", {
       className: "rd-side-stack",
@@ -2333,6 +2393,7 @@ function apply(ctx) {
   }
   function RepositoriesView({
     onOpenEntity,
+    overviewTopics,
     people,
     peopleTruncated,
     preselect,
@@ -2347,26 +2408,44 @@ function apply(ctx) {
       }
     }, [preselect?.id, preselect?.seq]);
     const selected = repositories.find((entry) => entry.repository.id === selectedId) ?? repositories[0] ?? null;
-    const repositoryGroups = [];
-    {
-      const byTopic = new Map;
-      for (const axis of selected?.axes ?? []) {
-        const name = selected?.topics.find((link) => link.topic.id === axis.topicId)?.topic.name ?? "Unrecorded project";
-        let at = byTopic.get(axis.topicId);
-        if (at === undefined) {
-          at = repositoryGroups.length;
-          byTopic.set(axis.topicId, at);
-          repositoryGroups.push({ topic: { id: axis.topicId, name }, axes: [] });
-        }
-        repositoryGroups[at].axes.push(axis);
-      }
-      for (const group of repositoryGroups) {
-        group.axes = [
-          ...group.axes.filter((axis) => !isTerminalAxis(axis.state)),
-          ...group.axes.filter((axis) => isTerminalAxis(axis.state))
-        ];
-      }
-    }
+    const { groups, historicalCount, nonterminalCount } = partitionRepositoryWorkstreams(selected?.axes ?? []);
+    const topicNameById = new Map(overviewTopics.map((entry) => [entry.topic.id, entry.topic.name]));
+    const linkByTopic = new Map((selected?.topics ?? []).map((link) => [link.topic.id, link]));
+    const nameFor = (topicId) => topicNameById.get(topicId) ?? linkByTopic.get(topicId)?.topic.name ?? "Project name unavailable in this projection";
+    const laneGroups = groups.filter((group) => group.nonterminal.length > 0);
+    const foldGroups = groups.filter((group) => group.historical.length > 0);
+    const laneTopicIds = new Set(laneGroups.map((group) => group.topicId));
+    const groupedTopicIds = new Set(groups.map((group) => group.topicId));
+    const sidebarTopics = (selected?.topics ?? []).filter((link) => !groupedTopicIds.has(link.topic.id));
+    const groupIntro = (topicId) => {
+      const link = linkByTopic.get(topicId);
+      return /* @__PURE__ */ React.createElement("div", {
+        className: "rd-project-intro",
+        "data-rd-project-link": topicId
+      }, /* @__PURE__ */ React.createElement("p", {
+        className: "rd-meta"
+      }, "Workstreams this repository supports."), link ? /* @__PURE__ */ React.createElement("span", {
+        className: "rd-meta",
+        "data-rd-project-relationship": link.relationship
+      }, link.relationship) : null, /* @__PURE__ */ React.createElement(Button, {
+        onClick: () => onOpenEntity("topic", topicId),
+        size: "sm",
+        variant: "outline"
+      }, "Open project →"));
+    };
+    const groupCards = (axes) => axes.map((axis) => /* @__PURE__ */ React.createElement(WorkstreamCard, {
+      axis: {
+        id: axis.id,
+        repositories: axis.repositories,
+        state: axis.state,
+        stateConfidence: axis.stateConfidence,
+        title: axis.title
+      },
+      context: { repositoryId: selected?.repository.id ?? "", view: "repository" },
+      key: axis.id,
+      onOpenEntity,
+      onOpenWorkstream: (axisId) => onOpenEntity("axis", axisId)
+    }));
     const repositoryPeople = people.filter((entry) => entry.axes.some((axis) => axis.repositories.some((link) => link.id === selected?.repository.id)));
     if (repositories.length === 0) {
       return /* @__PURE__ */ React.createElement(Card, null, /* @__PURE__ */ React.createElement(CardContent, null, /* @__PURE__ */ React.createElement("p", {
@@ -2412,20 +2491,16 @@ function apply(ctx) {
         "data-rd-repository-last": "true"
       }, selected.lastActivityAt ? /* @__PURE__ */ React.createElement(RecencyLabel, {
         at: selected.lastActivityAt,
-        prefix: "last activity "
+        prefix: "related activity "
       }) : /* @__PURE__ */ React.createElement("span", {
         className: "rd-muted"
-      }, "no activity recorded yet")),
-      context: selected.topics.length > 0 || selected.axes.length > 0 ? /* @__PURE__ */ React.createElement(React.Fragment, null, selected.topics.map((link) => /* @__PURE__ */ React.createElement(EntityTag, {
-        compact: true,
-        id: link.topic.id,
-        key: link.topic.id,
-        label: link.topic.name,
-        onOpen: onOpenEntity,
-        type: "topic"
-      })), selected.axes.length > 0 ? /* @__PURE__ */ React.createElement("span", {
+      }, "no activity recorded yet"), /* @__PURE__ */ React.createElement("span", {
+        className: "rd-meta",
+        "data-rd-repository-recency-note": "true"
+      }, "Recency includes repository and associated workstream events.")),
+      context: selected.axes.length > 0 ? /* @__PURE__ */ React.createElement("span", {
         className: "rd-meta"
-      }, countLabel(selected.axes.length, "workstream", "workstreams")) : null) : null,
+      }, countLabel(selected.axes.length, "workstream", "workstreams")) : null,
       title: /* @__PURE__ */ React.createElement(CardTitle, null, selected.repository.fullName)
     }, /* @__PURE__ */ React.createElement("span", {
       className: "rd-meta",
@@ -2450,48 +2525,39 @@ function apply(ctx) {
       "data-rd-repository-split": "true"
     }, /* @__PURE__ */ React.createElement("section", {
       className: "rd-current-work",
-      "data-rd-repository-current": selected.axes.length,
+      "data-rd-repository-current": nonterminalCount,
       "data-rd-repository-lane": "current"
     }, /* @__PURE__ */ React.createElement("span", {
       className: "rd-section"
-    }, "Current work"), selected.axes.length === 0 ? /* @__PURE__ */ React.createElement("p", {
+    }, `Workstreams (${nonterminalCount})`), selected.axes.length === 0 ? /* @__PURE__ */ React.createElement("p", {
       className: "rd-muted"
     }, "No workstream names this repository yet.") : /* @__PURE__ */ React.createElement("div", {
       "data-rd-repository-axes": selected.axes.length
-    }, repositoryGroups.map((group) => /* @__PURE__ */ React.createElement("section", {
+    }, nonterminalCount === 0 ? /* @__PURE__ */ React.createElement("p", {
+      className: "rd-muted"
+    }, "No workstreams in this section.") : null, laneGroups.map((group) => /* @__PURE__ */ React.createElement("section", {
       className: "rd-project-group",
-      key: group.topic.id
+      key: group.topicId
     }, /* @__PURE__ */ React.createElement("div", {
       className: "rd-project-heading"
-    }, group.topic.name), /* @__PURE__ */ React.createElement("div", {
-      className: "rd-project-intro"
-    }, /* @__PURE__ */ React.createElement("p", {
-      className: "rd-meta"
-    }, "Workstreams this repository supports."), /* @__PURE__ */ React.createElement(Button, {
-      onClick: () => onOpenEntity("topic", group.topic.id),
-      size: "sm",
-      variant: "outline"
-    }, "Open project →")), group.axes.map((axis) => /* @__PURE__ */ React.createElement(WorkstreamCard, {
-      axis: {
-        id: axis.id,
-        repositories: axis.repositories,
-        state: axis.state,
-        stateConfidence: axis.stateConfidence,
-        title: axis.title
-      },
-      key: axis.id,
-      onOpenEntity,
-      onOpenWorkstream: (axisId) => onOpenEntity("axis", axisId)
-    })))))), /* @__PURE__ */ React.createElement("aside", {
+    }, nameFor(group.topicId)), groupIntro(group.topicId), groupCards(group.nonterminal))), historicalCount > 0 ? /* @__PURE__ */ React.createElement("details", {
+      className: "rd-completed-fold",
+      "data-rd-repository-folded": historicalCount
+    }, /* @__PURE__ */ React.createElement("summary", null, "Completed and abandoned work (", historicalCount, ")"), foldGroups.map((group) => /* @__PURE__ */ React.createElement("section", {
+      className: "rd-project-group",
+      key: group.topicId
+    }, /* @__PURE__ */ React.createElement("div", {
+      className: "rd-project-heading"
+    }, nameFor(group.topicId)), laneTopicIds.has(group.topicId) ? null : groupIntro(group.topicId), groupCards(group.historical)))) : null)), /* @__PURE__ */ React.createElement("aside", {
       className: "rd-side-stack"
     }, /* @__PURE__ */ React.createElement("section", {
       className: "rd-side-card"
     }, /* @__PURE__ */ React.createElement("h3", {
       className: "rd-side-title"
-    }, "Recent activity"), /* @__PURE__ */ React.createElement(PagedActivityFeed, {
+    }, "Repository-scoped activity"), /* @__PURE__ */ React.createElement(PagedActivityFeed, {
       countAttr: "data-rd-repository-activity",
       dataAttr: "data-rd-repository-activity-list",
-      emptyText: "No repository-scoped events in this snapshot.",
+      emptyText: "No directly scoped events recorded. Related workstream events may still exist.",
       key: selected.repository.id,
       labelFor: (item) => ({
         axis: selected.axes.find((axis) => axis.id === item.axisId)?.title ?? null,
@@ -2499,15 +2565,16 @@ function apply(ctx) {
       }),
       onOpenEntity,
       scope: { repositoryId: selected.repository.id }
-    })), /* @__PURE__ */ React.createElement("section", {
+    })), sidebarTopics.length > 0 || selected.topics.length === 0 ? /* @__PURE__ */ React.createElement("section", {
       className: "rd-side-card"
     }, /* @__PURE__ */ React.createElement("h3", {
       className: "rd-side-title"
-    }, "Supports"), /* @__PURE__ */ React.createElement("ul", {
+    }, sidebarTopics.length === selected.topics.length ? "Supports" : "Other project links"), /* @__PURE__ */ React.createElement("ul", {
       className: "rd-view",
-      "data-rd-repository-topics": selected.topics.length
-    }, selected.topics.map((link) => /* @__PURE__ */ React.createElement("li", {
+      "data-rd-repository-topics": sidebarTopics.length
+    }, sidebarTopics.map((link) => /* @__PURE__ */ React.createElement("li", {
       className: "rd-cluster",
+      "data-rd-project-link": link.topic.id,
       key: link.topic.id
     }, /* @__PURE__ */ React.createElement(EntityTag, {
       compact: true,
@@ -2516,15 +2583,20 @@ function apply(ctx) {
       onOpen: onOpenEntity,
       type: "topic"
     }), /* @__PURE__ */ React.createElement("span", {
-      className: "rd-muted"
+      className: "rd-muted",
+      "data-rd-project-relationship": link.relationship
     }, "· ", link.relationship))), selected.topics.length === 0 ? /* @__PURE__ */ React.createElement("li", null, /* @__PURE__ */ React.createElement(Notice, {
       kind: "empty"
-    }, "no topic names it yet")) : null)), repositoryPeople.length > 0 || peopleTruncated ? /* @__PURE__ */ React.createElement("section", {
+    }, "no topic names it yet")) : null)) : null, repositoryPeople.length > 0 || peopleTruncated ? /* @__PURE__ */ React.createElement("section", {
       className: "rd-side-card",
       "data-rd-repository-people": repositoryPeople.length
     }, /* @__PURE__ */ React.createElement("h3", {
       className: "rd-side-title"
-    }, "People"), /* @__PURE__ */ React.createElement("div", {
+    }, "People"), /* @__PURE__ */ React.createElement("p", {
+      className: "rd-meta"
+    }, "People linked through supporting workstreams."), repositoryPeople.length === 0 ? /* @__PURE__ */ React.createElement(Notice, {
+      kind: "empty"
+    }, "No workstream-linked people in this projection.") : /* @__PURE__ */ React.createElement("div", {
       className: "rd-cluster rd-tags"
     }, repositoryPeople.map((entry) => /* @__PURE__ */ React.createElement(EntityTag, {
       id: entry.person.id,
@@ -3436,6 +3508,7 @@ function apply(ctx) {
       windowDays: scopeWindow
     }) : null, view === "repositories" ? /* @__PURE__ */ React.createElement(RepositoriesView, {
       onOpenEntity: openEntity,
+      overviewTopics: overview?.topics ?? [],
       people: overview?.people ?? [],
       peopleTruncated: overview?.peopleTruncated === true,
       preselect: entityTarget?.type === "repository" ? entityTarget : null,
@@ -3482,7 +3555,11 @@ function apply(ctx) {
   ctx.slots.register("page", ResearchPage);
 }
 export {
+  GENERAL_WORKSTREAM_CARD_CONTEXT,
   activityActorIndication,
   apply,
-  inject
+  inject,
+  partitionInvolvements,
+  partitionRepositoryWorkstreams,
+  visibleWorkstreamRepositories
 };

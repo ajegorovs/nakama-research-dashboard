@@ -1913,6 +1913,30 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-task-list { list-style: none; margin: 0; padding: 0; }
 /* A grouped stack of shared work cards (People, Repositories): the project group, sparsely spaced. */
 [data-plugin-id="research-dashboard"] .rd-work-groups { display: grid; gap: 4px; }
+/* V1a: the project-only affiliations — topics the person is named on with no workstream of theirs. A
+   native disclosure keeps the lane compact while preserving each affiliation's tag, status and role. */
+[data-plugin-id="research-dashboard"] .rd-affiliations { margin-top: var(--rd-gap-block); min-width: 0; }
+[data-plugin-id="research-dashboard"] .rd-affiliations-summary {
+  color: var(--muted-foreground, #5c6270); cursor: pointer;
+  font-size: var(--rd-body); font-weight: 700;
+}
+[data-plugin-id="research-dashboard"] .rd-affiliation-list {
+  display: grid; gap: var(--rd-gap-tight); list-style: none;
+  margin: var(--rd-gap-row) 0 0; padding: 0; min-width: 0;
+}
+[data-plugin-id="research-dashboard"] .rd-affiliation {
+  align-items: baseline; display: flex; flex-wrap: wrap; gap: 8px;
+  min-width: 0;
+}
+/* A long affiliation topic name: the shared tag is normally nowrap (max-width:100%, ellipsis). Inside the
+   People lane that nowrap min-content sets the affiliation row's own min-content, forces the lane's grid
+   item past its track and overlaps the rail at 1280. Scoped to the affiliation list only, the tag may wrap
+   its name — overflow-wrap:anywhere is explicitly the value that lowers min-content, so the row shrinks
+   with the lane and the name reads in full instead of truncating to an unreadable ellipsis. No other tag,
+   project group or grid changes. */
+[data-plugin-id="research-dashboard"] .rd-affiliation .rd-tag {
+  max-width: 100%; overflow-wrap: anywhere; text-overflow: clip; white-space: normal;
+}
 /* The selector-row status dot: colour by state, never the only signal (the state word is always beside it).
    Its default is the muted *foreground* (a mid grey), not the near-white --muted background token — a
    selector row's dot must read at a glance whatever its state. */
@@ -2003,6 +2027,100 @@ function describeAge(iso: string | null): string {
     return `${Math.floor(days / 7)} weeks ago`;
   }
   return `${Math.floor(days / 30)} months ago`;
+}
+
+/**
+ * V1a (People composition): split a person's topic involvements into the projects that carry at least one
+ * of the person's own workstreams (the *bearing* projects) and the project-only affiliations. Both lists
+ * keep the projection's own order, and together they are the original list exactly once — so partitioning
+ * can never drop, duplicate or reorder an affiliation, and the panel's `data-rd-person-topics` total stays
+ * the true count rather than the bearing subset. Pure and exported so the invariant is pinned by a source
+ * test without a DOM.
+ */
+export function partitionInvolvements(topics: PersonTopicInvolvement[]): {
+  bearing: PersonTopicInvolvement[];
+  projectOnly: PersonTopicInvolvement[];
+} {
+  return {
+    bearing: topics.filter((involvement) => involvement.axes.length > 0),
+    projectOnly: topics.filter((involvement) => involvement.axes.length === 0),
+  };
+}
+
+/**
+ * The shared workstream card's rendering context — a small discriminated prop, so the one behaviour that
+ * changes between callers is named rather than a boolean.
+ *
+ * `{ view: "general" }` (the default, used by Projects and People) renders **every** repository the
+ * workstream names. `{ view: "repository", repositoryId }` is the repository panel's own context: it
+ * suppresses **only** the one repository whose name equals the panel's subject — the panel header already
+ * states it, so repeating it on every card is the "pill soup" the review flagged — while every *other*
+ * supporting repository and all of the card's metadata (state, counts, latest event) are retained.
+ */
+export type WorkstreamCardContext =
+  | { view: "general" }
+  | { repositoryId: string; view: "repository" };
+
+export const GENERAL_WORKSTREAM_CARD_CONTEXT: WorkstreamCardContext = {
+  view: "general",
+};
+
+/**
+ * The repositories a workstream card shows, given its context. Pure and exported so the two rules — the
+ * default shows all, the repository context drops *only* its own subject — are pinned by a source test
+ * without a DOM.
+ */
+export function visibleWorkstreamRepositories<T extends { id: string }>(
+  repositories: T[],
+  context: WorkstreamCardContext,
+): T[] {
+  return context.view === "repository"
+    ? repositories.filter((repository) => repository.id !== context.repositoryId)
+    : repositories;
+}
+
+/**
+ * V1b (Repositories composition): split a repository's workstreams into the nonterminal ones that read in
+ * the dominant lane and the historical (completed/abandoned) ones that fold, grouped by their parent
+ * project. The split is the one `isTerminalAxis` predicate, groups keep the projection's first-appearance
+ * order and each group keeps its own order, and together the two partitions are the original list exactly
+ * once — so the fold can never drop, duplicate or reorder a workstream, and the lane's
+ * `data-rd-repository-current` count and the fold's own count are the true partitions rather than guesses.
+ * Pure and exported so the invariant is pinned by a source test without a DOM.
+ */
+export function partitionRepositoryWorkstreams<
+  T extends { state: string; topicId: string },
+>(axes: T[]): {
+  groups: Array<{ historical: T[]; nonterminal: T[]; topicId: string }>;
+  historicalCount: number;
+  nonterminalCount: number;
+} {
+  const groups: Array<{
+    historical: T[];
+    nonterminal: T[];
+    topicId: string;
+  }> = [];
+  const byTopic = new Map<string, number>();
+  for (const axis of axes) {
+    let at = byTopic.get(axis.topicId);
+    if (at === undefined) {
+      at = groups.length;
+      byTopic.set(axis.topicId, at);
+      groups.push({ historical: [], nonterminal: [], topicId: axis.topicId });
+    }
+    (isTerminalAxis(axis.state as AxisScan["state"])
+      ? groups[at].historical
+      : groups[at].nonterminal
+    ).push(axis);
+  }
+  return {
+    groups,
+    historicalCount: groups.reduce((n, group) => n + group.historical.length, 0),
+    nonterminalCount: groups.reduce(
+      (n, group) => n + group.nonterminal.length,
+      0,
+    ),
+  };
 }
 
 export function apply(ctx: Context) {
@@ -3030,10 +3148,17 @@ export function apply(ctx: Context) {
 
   function WorkstreamCard({
     axis,
+    context = GENERAL_WORKSTREAM_CARD_CONTEXT,
     onOpenEntity,
     onOpenWorkstream,
   }: {
     axis: WorkstreamCardData;
+    /**
+     * Where the card is being read. Omitted (Projects, People) is the default `{ view: "general" }`, which
+     * renders every supporting repository. The repository panel passes `{ view: "repository", repositoryId }`
+     * so the card suppresses only its own subject's name — see `WorkstreamCardContext`.
+     */
+    context?: WorkstreamCardContext;
     onOpenEntity: (type: EntityType, id: string) => void;
     onOpenWorkstream: (axisId: string) => void;
   }) {
@@ -3085,13 +3210,15 @@ export function apply(ctx: Context) {
               {countLabel(axis.blockedTasks, "blocked", "blocked")}
             </span>
           ) : null}
-          {axis.repositories.map((repository) => (
-            <RepoLinkPair
-              key={repository.id}
-              onOpen={onOpenEntity}
-              repository={repository}
-            />
-          ))}
+          {visibleWorkstreamRepositories(axis.repositories, context).map(
+            (repository) => (
+              <RepoLinkPair
+                key={repository.id}
+                onOpen={onOpenEntity}
+                repository={repository}
+              />
+            ),
+          )}
         </div>
       </article>
     );
@@ -3321,21 +3448,23 @@ export function apply(ctx: Context) {
 
   /**
    * The repository index row's second line, phrased from the rollup's own numbers — the prototype's
-   * "supports 1 topic · 2 current axes". "Current" is the same partition the lane below the row uses, through
-   * the one predicate, so the row and the lane cannot disagree about what current means; a repository with
-   * nothing current says so here instead of filing stopped work under the lane's heading.
+   * "supports 1 topic · 2 workstreams". The workstream half states the repository's own total (the same
+   * total the panel header carries), so the row and the panel cannot disagree about how much work the
+   * repository holds; the lane's current/terminal split is the panel's own composition and is not restated
+   * here. The projects half counts the rollup's *direct* topic links: a project one of the axes names
+   * without the repository being filed under it is navigable but is not a direct link, so a repository with
+   * none says "no direct project link" rather than "no project names it".
    */
   function supportsLine(entry: { axes: AxisScan[]; topics: unknown[] }): string {
-    const current = entry.axes.filter((axis) => !isTerminalAxis(axis.state)).length;
+    const workstreams =
+      entry.axes.length === 0
+        ? "no workstreams"
+        : countLabel(entry.axes.length, "workstream", "workstreams");
     const topics =
       entry.topics.length === 0
-        ? "no project names it"
+        ? "no direct project link"
         : `supports ${countLabel(entry.topics.length, "project", "projects")}`;
-    return `${topics} · ${
-      current === 0
-        ? "no current workstream"
-        : countLabel(current, "current workstream", "current workstreams")
-    }`;
+    return `${topics} · ${workstreams}`;
   }
 
   /**
@@ -3426,6 +3555,17 @@ export function apply(ctx: Context) {
       }
       return [...seen.values()];
     }, [entry]);
+    /**
+     * V1a: the involvement lane is **partitioned, not reordered**. A topic the person is on where they hold
+     * a workstream (a "bearing" project) reads first as a full project group; a topic they are only named on
+     * — a role, no workstream of theirs — is a project-only affiliation and reads as a compact list instead
+     * of an empty group. Each partition keeps the projection's own order, and `entry.topics.length` still
+     * states the true total (the two partitions together), so the lane's count never shrinks to the bearing
+     * subset.
+     */
+    const { bearing: bearingProjects, projectOnly } = partitionInvolvements(
+      entry.topics,
+    );
     return (
       <details
         className="rd-panel rd-topic-detail"
@@ -3439,38 +3579,6 @@ export function apply(ctx: Context) {
             badge={
               entry.person.githubLogin ? (
                 <span className="rd-muted">@{entry.person.githubLogin}</span>
-              ) : null
-            }
-            context={
-              /* C2 grammar: the header names the entities this person belongs to as navigation tags —
-                 the topics they are on and the repositories their own axes name, derived from the rollup
-                 already in hand and never fetched again. */
-              entry.topics.length > 0 || relatedRepositories.length > 0 ? (
-                <>
-                  {entry.topics.slice(0, 4).map((involvement) => (
-                    <EntityTag
-                      compact
-                      id={involvement.topic.id}
-                      key={involvement.topic.id}
-                      label={involvement.topic.name}
-                      onOpen={onOpenEntity}
-                      type="topic"
-                    />
-                  ))}
-                  {entry.topics.length > 4 ? (
-                    <span className="rd-muted">+{entry.topics.length - 4} more</span>
-                  ) : null}
-                  {relatedRepositories.slice(0, 3).map((repository) => (
-                    <EntityTag
-                      compact
-                      id={repository.id}
-                      key={repository.id}
-                      label={repository.fullName}
-                      onOpen={onOpenEntity}
-                      type="repository"
-                    />
-                  ))}
-                </>
               ) : null
             }
             title={<CardTitle>{entry.person.displayName}</CardTitle>}
@@ -3495,16 +3603,28 @@ export function apply(ctx: Context) {
                   section, no sub-navigation: a fold can come later if historical axes ever outnumber these. */}
               <span className="rd-section">Involvement</span>
               <div className="rd-work-groups" data-rd-person-topics={entry.topics.length}>
-                {entry.topics.map((involvement) => (
+                {bearingProjects.map((involvement) => (
                   <section
                     className="rd-project-group"
                     data-rd-involvement={involvement.topic.name}
                     key={involvement.topic.id}
                   >
                     {/* The shared project group: a muted heading, then a short project intro with the
-                        right-aligned Open project action — the same grammar Repositories uses. */}
-                    <div className="rd-project-heading">{involvement.topic.name}</div>
-                    <div className="rd-project-intro">
+                        right-aligned Open project action — the same grammar Repositories uses. Every
+                        bearing project holds at least one workstream, so the group never renders empty.
+                        The intro carries `data-rd-project-link` (the topic's id) and the heading
+                        `data-rd-project-name`, so this group is a project *navigation* the pass can read
+                        and click even though a bearing group renders no topic tag. */}
+                    <div
+                      className="rd-project-heading"
+                      data-rd-project-name={involvement.topic.name}
+                    >
+                      {involvement.topic.name}
+                    </div>
+                    <div
+                      className="rd-project-intro"
+                      data-rd-project-link={involvement.topic.id}
+                    >
                       <p className="rd-meta">
                         {involvement.role
                           ? `${involvement.topic.status} · ${involvement.role}`
@@ -3520,35 +3640,72 @@ export function apply(ctx: Context) {
                         Open project →
                       </Button>
                     </div>
-                    {involvement.axes.length === 0 ? (
-                      <Notice kind="empty">no workstream of theirs here</Notice>
-                    ) : (
-                      [
-                        ...involvement.axes.filter(
-                          (axis) => !isTerminalAxis(axis.state),
-                        ),
-                        ...involvement.axes.filter((axis) =>
-                          isTerminalAxis(axis.state),
-                        ),
-                      ].map((axis) => (
-                        <WorkstreamCard
-                          axis={{
-                            id: axis.id,
-                            repositories: axis.repositories,
-                            state: axis.state,
-                            stateConfidence: axis.stateConfidence,
-                            title: axis.title,
-                          }}
-                          key={axis.id}
-                          onOpenEntity={onOpenEntity}
-                          onOpenWorkstream={(axisId) =>
-                            onOpenEntity("axis", axisId)
-                          }
-                        />
-                      ))
-                    )}
+                    {[
+                      ...involvement.axes.filter(
+                        (axis) => !isTerminalAxis(axis.state),
+                      ),
+                      ...involvement.axes.filter((axis) =>
+                        isTerminalAxis(axis.state),
+                      ),
+                    ].map((axis) => (
+                      <WorkstreamCard
+                        axis={{
+                          id: axis.id,
+                          repositories: axis.repositories,
+                          state: axis.state,
+                          stateConfidence: axis.stateConfidence,
+                          title: axis.title,
+                        }}
+                        key={axis.id}
+                        onOpenEntity={onOpenEntity}
+                        onOpenWorkstream={(axisId) =>
+                          onOpenEntity("axis", axisId)
+                        }
+                      />
+                    ))}
                   </section>
                 ))}
+                {/* V1a: the project-only affiliations, folded into one compact disclosure. Each is a
+                    topic the person is named on but where they hold no workstream of their own — the fact
+                    the old per-project group stated as an empty "no workstream of theirs here". The summary
+                    names the relationship ("Project-only affiliations (N)") and the disclosure states the
+                    reason once ("No explicitly linked workstreams"); each row keeps its own
+                    `data-rd-involvement` marker (so the lane's involvements still total
+                    `data-rd-person-topics`), the project tag navigates to the exact topic, and the
+                    status · role meta is the recorded role, the same string the group intro shows. */}
+                {projectOnly.length > 0 ? (
+                  <details
+                    className="rd-affiliations"
+                    data-rd-person-affiliations={projectOnly.length}
+                  >
+                    <summary className="rd-affiliations-summary">
+                      Project-only affiliations ({projectOnly.length})
+                    </summary>
+                    <p className="rd-meta">No explicitly linked workstreams</p>
+                    <ul className="rd-affiliation-list">
+                      {projectOnly.map((involvement) => (
+                        <li
+                          className="rd-affiliation"
+                          data-rd-involvement={involvement.topic.name}
+                          key={involvement.topic.id}
+                        >
+                          <EntityTag
+                            compact
+                            id={involvement.topic.id}
+                            label={involvement.topic.name}
+                            onOpen={onOpenEntity}
+                            type="topic"
+                          />
+                          <span className="rd-meta">
+                            {involvement.role
+                              ? `${involvement.topic.status} · ${involvement.role}`
+                              : involvement.topic.status}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                ) : null}
                 {entry.topics.length === 0 ? (
                   <Notice kind="empty">
                     Not linked to a topic yet — the link is what puts work on this
@@ -3814,6 +3971,7 @@ export function apply(ctx: Context) {
    */
   function RepositoriesView({
     onOpenEntity,
+    overviewTopics,
     people,
     peopleTruncated,
     preselect,
@@ -3822,6 +3980,13 @@ export function apply(ctx: Context) {
     windowDays,
   }: {
     onOpenEntity: (type: EntityType, id: string) => void;
+    /**
+     * V1b: the overview's own topics, read only to resolve a workstream's parent project name. The
+     * repository rollup names the topics it links directly, but an axis can name a project the repository
+     * is not filed under — so the group heading is resolved from the projection the page already holds
+     * rather than guessed from the links, and no new backend field is introduced.
+     */
+    overviewTopics: TopicOverview[];
     /** D5: the people rollup, read only to derive this repository's people — never to assert one. */
     people: PersonRollup[];
     peopleTruncated: boolean;
@@ -3846,34 +4011,86 @@ export function apply(ctx: Context) {
       repositories[0] ??
       null;
 
-    // The repository's work grouped by project: a muted project heading, a short project intro with the
-    // right-aligned Open project action, then the shared work cards. Current work reads first inside each
-    // group (the one terminal predicate), and the projection's own order survives within each partition.
-    const repositoryGroups: Array<{
-      topic: { id: string; name: string };
-      axes: AxisScan[];
-    }> = [];
-    {
-      const byTopic = new Map<string, number>();
-      for (const axis of selected?.axes ?? []) {
-        const name =
-          selected?.topics.find((link) => link.topic.id === axis.topicId)?.topic
-            .name ?? "Unrecorded project";
-        let at = byTopic.get(axis.topicId);
-        if (at === undefined) {
-          at = repositoryGroups.length;
-          byTopic.set(axis.topicId, at);
-          repositoryGroups.push({ topic: { id: axis.topicId, name }, axes: [] });
-        }
-        repositoryGroups[at].axes.push(axis);
-      }
-      for (const group of repositoryGroups) {
-        group.axes = [
-          ...group.axes.filter((axis) => !isTerminalAxis(axis.state)),
-          ...group.axes.filter((axis) => isTerminalAxis(axis.state)),
-        ];
-      }
-    }
+    // V1b — the repository's work, split by the one terminal predicate and grouped by parent project. The
+    // nonterminal work reads in the dominant lane (parked and draft are neither completed nor abandoned, so
+    // the heading names the nonterminal split rather than claiming "current"); the historical work folds
+    // into a native disclosure. Both partitions group by the axis's parent project, whose name is resolved
+    // from the overview's own topics (an axis may name a project the repository is not filed under, so the
+    // links alone cannot name it). The direct topic links carry the *relationship* the projection records,
+    // shown beside a group's intro only where such a link exists — an association is never invented for a
+    // project the repository is not filed under.
+    const { groups, historicalCount, nonterminalCount } =
+      partitionRepositoryWorkstreams(selected?.axes ?? []);
+    const topicNameById = new Map(
+      overviewTopics.map((entry) => [entry.topic.id, entry.topic.name]),
+    );
+    const linkByTopic = new Map(
+      (selected?.topics ?? []).map((link) => [link.topic.id, link]),
+    );
+    const nameFor = (topicId: string) =>
+      topicNameById.get(topicId) ??
+      linkByTopic.get(topicId)?.topic.name ??
+      "Project name unavailable in this projection";
+    const laneGroups = groups.filter((group) => group.nonterminal.length > 0);
+    const foldGroups = groups.filter((group) => group.historical.length > 0);
+    const laneTopicIds = new Set(laneGroups.map((group) => group.topicId));
+    // Consolidation: a project represented by a work group already carries its own navigation, so the
+    // sidebar lists only the *direct* topic links no work group represents — every relationship label and
+    // every navigation target is still reachable exactly once.
+    const groupedTopicIds = new Set(groups.map((group) => group.topicId));
+    const sidebarTopics = (selected?.topics ?? []).filter(
+      (link) => !groupedTopicIds.has(link.topic.id),
+    );
+    /**
+     * A work group's intro: the project is named once as a heading, navigated once by the Open-project
+     * action, and carries the *recorded* relationship beside the intro only where the repository is filed
+     * directly under that project — an axis naming a project the repository is not filed under gets no
+     * invented association.
+     */
+    const groupIntro = (topicId: string) => {
+      const link = linkByTopic.get(topicId);
+      return (
+        <div className="rd-project-intro" data-rd-project-link={topicId}>
+          <p className="rd-meta">Workstreams this repository supports.</p>
+          {link ? (
+            <span
+              className="rd-meta"
+              data-rd-project-relationship={link.relationship}
+            >
+              {link.relationship}
+            </span>
+          ) : null}
+          <Button
+            onClick={() => onOpenEntity("topic", topicId)}
+            size="sm"
+            variant="outline"
+          >
+            Open project →
+          </Button>
+        </div>
+      );
+    };
+    /**
+     * The shared work cards for a group, in its own recorded order. The repository context suppresses only
+     * the panel's own subject's name on each card; the card's state, counts, latest event and every *other*
+     * supporting repository are retained.
+     */
+    const groupCards = (axes: AxisScan[]) =>
+      axes.map((axis) => (
+        <WorkstreamCard
+          axis={{
+            id: axis.id,
+            repositories: axis.repositories,
+            state: axis.state,
+            stateConfidence: axis.stateConfidence,
+            title: axis.title,
+          }}
+          context={{ repositoryId: selected?.repository.id ?? "", view: "repository" }}
+          key={axis.id}
+          onOpenEntity={onOpenEntity}
+          onOpenWorkstream={(axisId) => onOpenEntity("axis", axisId)}
+        />
+      ));
     // D5: the people on this repository, derived from the people rollup's own axes (an axis carries the
     // repositories it names). When that rollup is truncated the card says so rather than presenting a bounded
     // subset as the whole list.
@@ -3938,41 +4155,31 @@ export function apply(ctx: Context) {
               <DetailHeader
                 badge={
                   /* The prototype's age box: how stale this is, before any of the detail, in the title row
-                     where it reads. The marker the previous composition carried moves with it. */
+                     where it reads. The marker the previous composition carried moves with it. The label is
+                     "related activity" because the repository's recency is a union of its own events and those
+                     recorded against its associated workstreams (never its projects); the quiet note beside
+                     it states that scope, always, so the age is never read as this repository's own events
+                     alone. */
                   <span className="rd-cluster" data-rd-repository-last="true">
                     {selected.lastActivityAt ? (
-                      <RecencyLabel at={selected.lastActivityAt} prefix="last activity " />
+                      <RecencyLabel at={selected.lastActivityAt} prefix="related activity " />
                     ) : (
                       <span className="rd-muted">no activity recorded yet</span>
                     )}
+                    <span className="rd-meta" data-rd-repository-recency-note="true">
+                      Recency includes repository and associated workstream events.
+                    </span>
                   </span>
                 }
                 context={
-                  /* C5 grammar: the header names the entities this repository belongs to as navigation
-                     tags — its supporting topics, straight from the rollup. V1-B/B2 (2026-10-03): it used
-                     to also enumerate every axis as a pill, then "+N more", directly above a Current work
-                     lane that names the same axes — the "pill soup" the review flagged (V1-B B2: sections 6
-                     and 11). Work detail belongs in the lane, so the header states how much work the
-                     repository holds as quiet metadata and keeps only the topics as navigable pills. Each
-                     axis stays one click away in the lane, where its own title is the navigable tag. */
-                  selected.topics.length > 0 || selected.axes.length > 0 ? (
-                    <>
-                      {selected.topics.map((link) => (
-                        <EntityTag
-                          compact
-                          id={link.topic.id}
-                          key={link.topic.id}
-                          label={link.topic.name}
-                          onOpen={onOpenEntity}
-                          type="topic"
-                        />
-                      ))}
-                      {selected.axes.length > 0 ? (
-                        <span className="rd-meta">
-                          {countLabel(selected.axes.length, "workstream", "workstreams")}
-                        </span>
-                      ) : null}
-                    </>
+                  /* C5, narrowed by the V1-B/B2 review and V1b: the header states the repository's own
+                     workstream total as quiet metadata only. Its supporting projects are navigation now —
+                     each is named and navigated once in its work group or the "Other project links" card —
+                     so the header carries no project tags. */
+                  selected.axes.length > 0 ? (
+                    <span className="rd-meta">
+                      {countLabel(selected.axes.length, "workstream", "workstreams")}
+                    </span>
                   ) : null
                 }
                 title={<CardTitle>{selected.repository.fullName}</CardTitle>}
@@ -4012,65 +4219,81 @@ export function apply(ctx: Context) {
               <div className="rd-detail-grid" data-rd-repository-split="true">
                 <section
                   className="rd-current-work"
-                  data-rd-repository-current={selected.axes.length}
+                  data-rd-repository-current={nonterminalCount}
                   data-rd-repository-lane="current"
                 >
-                  <span className="rd-section">Current work</span>
+                  {/* V1b terminology closure: the lane holds the *nonterminal* workstreams — parked and
+                      draft are neither completed nor abandoned — and its heading states the lane's own
+                      count, exactly as the Progress panel's "Tasks (N)" heading does. The heading names the
+                      workstreams it holds rather than the partition, so "nonterminal" reads only where the
+                      contrast matters: the fold below, which is the completed-and-abandoned work. */}
+                  <span className="rd-section">{`Workstreams (${nonterminalCount})`}</span>
                   {selected.axes.length === 0 ? (
-                    <p className="rd-muted">No workstream names this repository yet.</p>
+                    <p className="rd-muted">
+                      No workstream names this repository yet.
+                    </p>
                   ) : (
                     <div data-rd-repository-axes={selected.axes.length}>
-                      {repositoryGroups.map((group) => (
+                      {nonterminalCount === 0 ? (
+                        <p className="rd-muted">
+                          No workstreams in this section.
+                        </p>
+                      ) : null}
+                      {laneGroups.map((group) => (
                         <section
                           className="rd-project-group"
-                          key={group.topic.id}
+                          key={group.topicId}
                         >
                           <div className="rd-project-heading">
-                            {group.topic.name}
+                            {nameFor(group.topicId)}
                           </div>
-                          <div className="rd-project-intro">
-                            <p className="rd-meta">
-                              Workstreams this repository supports.
-                            </p>
-                            <Button
-                              onClick={() =>
-                                onOpenEntity("topic", group.topic.id)
-                              }
-                              size="sm"
-                              variant="outline"
-                            >
-                              Open project →
-                            </Button>
-                          </div>
-                          {group.axes.map((axis) => (
-                            <WorkstreamCard
-                              axis={{
-                                id: axis.id,
-                                repositories: axis.repositories,
-                                state: axis.state,
-                                stateConfidence: axis.stateConfidence,
-                                title: axis.title,
-                              }}
-                              key={axis.id}
-                              onOpenEntity={onOpenEntity}
-                              onOpenWorkstream={(axisId) =>
-                                onOpenEntity("axis", axisId)
-                              }
-                            />
-                          ))}
+                          {groupIntro(group.topicId)}
+                          {groupCards(group.nonterminal)}
                         </section>
                       ))}
+                      {historicalCount > 0 ? (
+                        <details
+                          className="rd-completed-fold"
+                          data-rd-repository-folded={historicalCount}
+                        >
+                          <summary>
+                            Completed and abandoned work ({historicalCount})
+                          </summary>
+                          {foldGroups.map((group) => (
+                            <section
+                              className="rd-project-group"
+                              key={group.topicId}
+                            >
+                              <div className="rd-project-heading">
+                                {nameFor(group.topicId)}
+                              </div>
+                              {/* The project's nav lives once: a group already stated in the lane does
+                                  not repeat it here, so the fold navigates only the projects it alone
+                                  holds — every parent target is still one click away. */}
+                              {laneTopicIds.has(group.topicId)
+                                ? null
+                                : groupIntro(group.topicId)}
+                              {groupCards(group.historical)}
+                            </section>
+                          ))}
+                        </details>
+                      ) : null}
                     </div>
                   )}
                 </section>
 
                 <aside className="rd-side-stack">
                   <section className="rd-side-card">
-                    <h3 className="rd-side-title">Recent activity</h3>
+                    <h3 className="rd-side-title">Repository-scoped activity</h3>
+                    {/* V1b: this feed is the *directly* scoped page — events recorded against this
+                        repository itself. Events associated with its workstreams (and projects) live on
+                        those entities, so an empty here is not a claim that nothing related happened; the
+                        empty text says exactly that, and names only workstream events — recency is never
+                        asserted to include project events. */}
                     <PagedActivityFeed
                       countAttr="data-rd-repository-activity"
                       dataAttr="data-rd-repository-activity-list"
-                      emptyText="No repository-scoped events in this snapshot."
+                      emptyText="No directly scoped events recorded. Related workstream events may still exist."
                       key={selected.repository.id}
                       labelFor={(item) => ({
                         axis:
@@ -4084,47 +4307,85 @@ export function apply(ctx: Context) {
                     />
                   </section>
 
-                  <section className="rd-side-card">
-                    <h3 className="rd-side-title">Supports</h3>
-                    <ul className="rd-view" data-rd-repository-topics={selected.topics.length}>
-                      {selected.topics.map((link) => (
-                        <li className="rd-cluster" key={link.topic.id}>
-                          <EntityTag
-                            compact
-                            id={link.topic.id}
-                            label={link.topic.name}
-                            onOpen={onOpenEntity}
-                            type="topic"
-                          />
-                          <span className="rd-muted">· {link.relationship}</span>
-                        </li>
-                      ))}
-                      {selected.topics.length === 0 ? (
-                        <li>
-                          <Notice kind="empty">no topic names it yet</Notice>
-                        </li>
-                      ) : null}
-                    </ul>
-                  </section>
+                  {/* Consolidation: a direct topic link whose project is already a work group is named and
+                      navigated in that group, so this card lists only the links no work group represents —
+                      every link stays reachable, nothing is listed twice. When that leaves nothing to show
+                      *and* the repository does link projects, the card is not rendered at all rather than
+                      standing empty; when the repository links no project it stays, with its empty notice.
+                      It is "Other project links" whenever some links were consolidated into groups, and the
+                      plain "Supports" only when every link is a direct one. */}
+                  {sidebarTopics.length > 0 || selected.topics.length === 0 ? (
+                    <section className="rd-side-card">
+                      <h3 className="rd-side-title">
+                        {sidebarTopics.length === selected.topics.length
+                          ? "Supports"
+                          : "Other project links"}
+                      </h3>
+                      <ul
+                        className="rd-view"
+                        data-rd-repository-topics={sidebarTopics.length}
+                      >
+                        {sidebarTopics.map((link) => (
+                          <li
+                            className="rd-cluster"
+                            data-rd-project-link={link.topic.id}
+                            key={link.topic.id}
+                          >
+                            <EntityTag
+                              compact
+                              id={link.topic.id}
+                              label={link.topic.name}
+                              onOpen={onOpenEntity}
+                              type="topic"
+                            />
+                            <span
+                              className="rd-muted"
+                              data-rd-project-relationship={link.relationship}
+                            >
+                              · {link.relationship}
+                            </span>
+                          </li>
+                        ))}
+                        {selected.topics.length === 0 ? (
+                          <li>
+                            <Notice kind="empty">no topic names it yet</Notice>
+                          </li>
+                        ) : null}
+                      </ul>
+                    </section>
+                  ) : null}
 
-                  {/* D5: the rollup carries no people of its own, so this is derived from the people rollup's
-                      axes — and it *collapses* when the derivation has nothing (a repository with no linked
-                      person does not get a prototype-shaped empty card). While that rollup is truncated the
-                      card says so rather than presenting a bounded subset as the whole list. */}
+                  {/* D5: the rollup carries no people of its own, so this is derived truthfully from the
+                      people rollup's axes (each axis carries the repositories it names) — never invented.
+                      It *collapses* only when the derivation is complete and finds nothing (a repository with
+                      no linked person does not get a prototype-shaped empty card). While that rollup is
+                      truncated the card stays, saying so **even when the derived list is empty** — an empty
+                      list under a truncated rollup is not the same fact as an empty list under a complete
+                      one, and presenting the two the same way is exactly the coverage claim we must not
+                      make. */}
                   {repositoryPeople.length > 0 || peopleTruncated ? (
                     <section className="rd-side-card" data-rd-repository-people={repositoryPeople.length}>
                       <h3 className="rd-side-title">People</h3>
-                      <div className="rd-cluster rd-tags">
-                        {repositoryPeople.map((entry) => (
-                          <EntityTag
-                            id={entry.person.id}
-                            key={entry.person.id}
-                            label={entry.person.displayName}
-                            onOpen={onOpenEntity}
-                            type="person"
-                          />
-                        ))}
-                      </div>
+                      {/* The card's scope, stated once: this derives people through the workstreams those
+                          people hold on this repository, not through the repository's own people field. */}
+                      <p className="rd-meta">People linked through supporting workstreams.</p>
+                      {repositoryPeople.length === 0 ? (
+                        <Notice kind="empty">
+                          No workstream-linked people in this projection.
+                        </Notice>
+                      ) : (
+                        <div className="rd-cluster rd-tags">
+                          {repositoryPeople.map((entry) => (
+                            <EntityTag
+                              id={entry.person.id}
+                              key={entry.person.id}
+                              label={entry.person.displayName}
+                              onOpen={onOpenEntity}
+                              type="person"
+                            />
+                          ))}
+                        </div>
+                      )}
                       {peopleTruncated ? (
                         <Notice kind="truncated">
                           the people rollup is truncated, so this list may be partial
@@ -5666,6 +5927,7 @@ export function apply(ctx: Context) {
         {view === "repositories" ? (
           <RepositoriesView
             onOpenEntity={openEntity}
+            overviewTopics={overview?.topics ?? []}
             people={overview?.people ?? []}
             peopleTruncated={overview?.peopleTruncated === true}
             preselect={entityTarget?.type === "repository" ? entityTarget : null}

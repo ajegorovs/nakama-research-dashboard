@@ -78,7 +78,9 @@ to state findings from it as measurements rather than impressions. The instrumen
 9. **A preview capture is not a served record.** Light theme, writes refused, a different mount entry. It
    supports composition, density and styling judgements; it is not production readiness, and it does not
    replace `harness/read-pass.sh`.
-10. **The prototype is reference, not spec.** Compare content and behaviour against
+10. **Capture opened disclosures too.** Initial frames can hide long-name min-content expansion. Open affiliation/history disclosures, measure lane and rail rectangles plus horizontal overflow, and inspect the expanded image. Keep selection fixed between before/after shots; detail-text-length scoring can select a different person after a composition change.
+11. **Use the focus instrument's preview mode for local checks.** `bun harness/focus-matrix.mjs --preview --url http://127.0.0.1:3011/preview.html --viewport 1280x800` measures real Tab focus without a served guard or login. Repeat both viewports/datasets and run `--negative-control`; label results preview-only, not served acceptance.
+12. **The prototype is reference, not spec.** Compare content and behaviour against
     `docs/design/dashboard-information-architecture-pivot.md` and the frozen HTML prototype without treating
     prototype styling as mandatory.
 
