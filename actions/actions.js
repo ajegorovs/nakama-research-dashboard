@@ -400,6 +400,45 @@ function evidenceLabel(sourceType, sourceRef) {
   }
   return ref.toLowerCase().includes(base.toLowerCase()) ? ref : `${base} ${ref}`;
 }
+var EVIDENCE_UNION_SQL = `
+  SELECT 'branch' AS kind, '' AS sort_at, ('branch:' || ?) AS sort_id,
+         NULL AS record_id, '' AS summary, '' AS author_id, '' AS by_category,
+         NULL AS source_type, '' AS source_ref, ? AS source_url, ? AS label
+   WHERE ? <> ''
+  UNION ALL
+  SELECT 'pull_request', '', ('PR:' || ?), NULL, '', '', '',
+         NULL, '', ?, ?
+   WHERE ? IS NOT NULL OR ? <> ''
+  UNION ALL
+  SELECT 'activity', occurred_at, ('activity:' || id), id, summary,
+         actor_id, actor_type, source_type, source_ref, source_url, NULL
+    FROM activities WHERE axis_id = ?
+  UNION ALL
+  SELECT 'annotation', created_at, ('annotation:' || id), id, text,
+         author_id, author_type, NULL, '', '', 'note'
+    FROM annotations WHERE axis_id = ?`;
+function toAxisEvidenceRecord(row) {
+  const kind = row.kind;
+  const sourceType = row.source_type ?? null;
+  return {
+    at: row.sort_at,
+    authorId: row.author_id,
+    by: row.by_category,
+    id: row.sort_id,
+    kind,
+    label: kind === "activity" ? evidenceLabel(sourceType ?? "manual", row.source_ref) : row.label ?? "",
+    recordId: row.record_id,
+    sourceRef: row.source_ref,
+    sourceType,
+    sourceUrl: row.source_url,
+    summary: row.summary
+  };
+}
+function githubRepoBase(url) {
+  const cleaned = url.trim().replace(/\/+$/, "").replace(/\.git$/i, "");
+  const match = cleaned.match(/^https?:\/\/(?:www\.)?github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/i);
+  return match ? `https://github.com/${match[1]}/${match[2]}` : null;
+}
 var AXIS_STATE_ATTENTION = {
   abandoned: 6,
   active: 1,
@@ -988,6 +1027,57 @@ class ResearchStore {
       });
     }
     return items;
+  }
+  evidencePage(scope, paging) {
+    const offset = pageOffset(paging?.offset);
+    const limit = pageLimit(paging?.limit);
+    return this.snapshot(() => {
+      const axis = this.getAxis(required(scope.axisId ?? "", "axisId"));
+      if (!axis) {
+        throw new ResearchStoreError("Axis not found.");
+      }
+      if (scope.topicId && axis.topicId !== scope.topicId) {
+        throw new ResearchStoreError("Axis does not belong to this topic.");
+      }
+      const branch = axis.branch.trim();
+      const prUrl = axis.prUrl.trim();
+      const prNumber = axis.prNumber;
+      const branchUrl = branch ? this.branchEvidenceUrl(axis, branch) : "";
+      const params = [
+        axis.id,
+        branchUrl,
+        branch,
+        branch,
+        axis.id,
+        prUrl,
+        prNumber !== null ? `PR #${prNumber}` : "PR",
+        prNumber,
+        prUrl,
+        axis.id,
+        axis.id
+      ];
+      const total = this.db.query(`SELECT count(*) AS n FROM (${EVIDENCE_UNION_SQL})`).get(...params).n;
+      const rows = this.db.query(`SELECT * FROM (${EVIDENCE_UNION_SQL})
+            ORDER BY CASE kind WHEN 'branch' THEN 0 WHEN 'pull_request' THEN 1 ELSE 2 END,
+                     sort_at DESC, kind ASC, sort_id ASC
+            LIMIT ? OFFSET ?`).all(...params, limit, offset);
+      return {
+        hasMore: offset + rows.length < total,
+        items: rows.map(toAxisEvidenceRecord),
+        limit,
+        offset,
+        total
+      };
+    });
+  }
+  branchEvidenceUrl(axis, branch) {
+    const repositories = this.listAxisRepositories(axis.id);
+    const [only] = repositories;
+    if (repositories.length !== 1 || !only) {
+      return "";
+    }
+    const base = githubRepoBase(only.url);
+    return base ? `${base}/tree/${encodeURIComponent(branch)}` : "";
   }
   getTopicDetail(topicId, options) {
     return this.snapshot(() => {
@@ -3509,6 +3599,14 @@ function readPaging(input) {
   }
   return { limit: pageSize, offset };
 }
+function readEvidencePaging(input) {
+  const offset = optionalInt(input.evidenceOffset, "evidenceOffset", 0, 1e6);
+  const pageSize = optionalInt(input.evidencePageSize, "evidencePageSize", 1, 100);
+  if (offset === undefined && pageSize === undefined) {
+    return null;
+  }
+  return { limit: pageSize, offset };
+}
 function actorOf(context) {
   const id = context.actor?.id ?? "";
   if (context.profileId) {
@@ -3625,6 +3723,7 @@ async function dispatch(input, context, store) {
       const scopedAxis = resolveAxis(store, topic, input);
       if (scopedAxis) {
         const paging = readPaging(input);
+        const evidencePaging = readEvidencePaging(input);
         return {
           ok: true,
           ...store.getAxisWorkstream(topic.id, scopedAxis.id, {
@@ -3634,6 +3733,9 @@ async function dispatch(input, context, store) {
           ...paging ? {
             activityPage: store.activityPage({ axisId: scopedAxis.id }, paging),
             problemPage: store.taskPage({ axisId: scopedAxis.id }, paging)
+          } : {},
+          ...evidencePaging ? {
+            evidencePage: store.evidencePage({ axisId: scopedAxis.id, topicId: topic.id }, evidencePaging)
           } : {}
         };
       }
