@@ -493,9 +493,9 @@ describe("A2 — an axis's state is recorded, never typed in through axes[]", ()
 });
 
 /**
- * The statement seeded for `problemOnYId`. An *existing* problem still requires `statement` in the input
- * (the schema is unchanged), so every update below echoes it — an unchanged echo transfers nothing and
- * must never be the reason a call is refused. What is under test here is the *axis* the update names.
+ * The statement seeded for `problemOnYId`. These updates deliberately echo it: an unchanged echo
+ * transfers nothing and must never be the reason a call is refused. Omission is also supported;
+ * what is under test here is the *axis* the update names.
  */
 const PROBLEM_ON_Y_STATEMENT = "A problem that lives on Axis Y";
 

@@ -6,10 +6,15 @@ Make the Nakama librarian able to read and maintain the research fixture through
 plugin tools, with enough explicit control over the facts and relationships the four views display.
 Measure instructions, tool reachability, validation and persistence—not general model intelligence.
 
-This is a **plan-first draft**, based on the closed UI work in PR #9 at
-`76d68174b4389aa2cbcfa38e2bbb7ef85995bae2`. Creating this PR authorizes preparation only:
-no agent inference, fixture/database writes, installation, service restart or deployment.
-Implementation and a bounded live exercise require an agreed control matrix and exact target.
+This is a plan-first draft, based on the closed UI work in PR #9 at
+`76d68174b4389aa2cbcfa38e2bbb7ef85995bae2`. Two stages are kept distinct:
+
+- **Source scope — implemented.** The plugin's action/store hardening and its matrix below are done and
+  carry their own development checks. This is what the "Current maintenance scope and accepted
+  exclusions" section and the control matrix describe. It did not touch a live instance.
+- **Live stage — unrun.** Running a real librarian turn (inference, fixture/database writes, installation,
+  service restart, deployment) still needs an agreed target, profile and write grant. Source completion
+  does not authorize or establish any of it.
 
 ## Current source-grounded starting point
 
@@ -29,23 +34,76 @@ Implementation and a bounded live exercise require an agreed control matrix and 
   `docs/librarian-reconciliation/` are retained inputs, not standing live-execution authorization.
   Do not expand their frozen case registries or reopen historical grants for this workstream.
 
-### Initial control findings—not the completed audit
+### Field-to-tool control matrix (source-grounded)
 
-| Surface | Present public path | What must be checked |
-|---|---|---|
-| Project name, summary, description and status | `reconcile_topic.topic`; `get_topic` | Readback, version conflicts; topic text protection is instruction-level, not mechanical. |
-| Workstream identity, purpose, current reading, blocker and confidence | `reconcile_topic.axes`; scoped `get_topic` | Existing-ID updates, backed/inferred claims and separation of enduring purpose from current reading. |
-| Task title/body, state and relationships | `reconcile_topic.problems` and `transitions` | Stable IDs, agent-vs-human text protection, explicit blocked state and exact parent scope. |
-| Project/workstream/task plans and step states | `reconcile_topic.plans`; owner-bearing reads | Creation order, existing owner/step IDs, positions including zero, update/reorder/removal coverage and ownership guards. |
-| Repository description/URL/default branch and links | Repository inputs at topic/workstream scope; task repository references | Correct shared identity, primary/supporting constraints, link replacement/removal semantics and complete readback. |
-| People identities, roles and links | `people`, workstream `people`, task `personIds` | Shared identity matching, relationship-specific roles and project-only affiliations; absence must not fabricate authorship. |
-| People About text | Store has person notes; public people inputs lack a notes field | **Confirmed public-writer gap** for a field displayed in the fixture. Decide the minimal safe authoring/update policy before adding it. |
-| Activity and annotations | `record_activity`, reconciliation arrays and scoped reads | Dates, actual source refs/URLs, task/workstream containment, append vs correction semantics and recoverable complete reads. |
-| Supporting evidence | Scoped `get_topic.evidenceOffset/evidencePageSize` | Complete pages and totals; recorded support is not claim-specific proof. Task-to-evidence citations remain deferred. |
+Each row traces a stored fact the fixture/UI displays from its manifest input through the action to the
+store method and back out through a supported read. `Support` values: **supported** (public agent path
+exists), **read-only**, **missing** (no public writer — see the accepted exclusions), **not needed**.
+Classification covers the five exposed tools only; page/admin actions and direct store methods are not
+agent capabilities.
 
-The coordinator skill also needs review: it omits the new evidence-paging inputs, and its
-same-call-only backing wording is stronger than the existing-evidence admission rule. Correct
-instructions against actual behavior; do not tighten/relax writer rules to satisfy prose.
+| Group | Operation (field) | Support | Guards / omit / clear / version | Trace: manifest input → action → store → readback | Test anchor |
+|---|---|---|---|---|---|
+| Project | name | supported | Echo of the stored name is dropped (no version bump); a case-insensitive clash is refused; topics carry no authorship column, so text protection is instruction-level | `reconcile_topic.topic.name` → `reconcile_topic` → `applyTopicPatch` → `get_topic`/`get_overview` | actions.test.ts "reconcile_topic is the single write path…" |
+| Project | summary, description | supported | Merged with `??`: omitted keeps stored; an empty string is accepted (max 4000, no min). No mechanical text guard | `reconcile_topic.topic.summary\|description` → `applyTopicPatch` | actions.test.ts "read actions" |
+| Project | status (lifecycle) | supported | Enum active/paused/completed/archived; a plain field update — topics have no state log | `reconcile_topic.topic.status` → `applyTopicPatch` | actions.test.ts |
+| Project | row version | supported | Top-level `expectedVersion` is checked even with no `topic` patch; a newly created topic has no prior version | `reconcile_topic.expectedVersion` → `assertVersion("topic")` | actions-librarian-concurrency A3 |
+| Axis | identity id/title | supported | id must exist and belong to this topic; title matched case-insensitively; a new axis requires a title | `axes[].id\|title` → `applyAxisPatch`/`insertAxis` → `findAxisByTitle` | actions-librarian-integrity A1-edge |
+| Axis | description (enduring purpose) | supported | Omitted keeps stored; no authorship guard | `axes[].description` → `applyAxisPatch` | store-read-pagination §5 "carries the enduring description" |
+| Axis | kind | supported | Enum feature/experiment/test/investigation/maintenance; default feature on create | `axes[].kind` → `insertAxis`/`applyAxisPatch` | actions-librarian-integrity |
+| Axis | branch | supported | Omitted keeps stored; empty string clears the branch | `axes[].branch` → `applyAxisPatch` | evidence-page "builds it only from exactly one GitHub repository" |
+| Axis | PR (prNumber, prUrl) | supported | `prNumber` omitted keeps stored; both contribute to the evidence line | `axes[].prNumber\|prUrl` → `insertAxis`/`applyAxisPatch` | evidence-page |
+| Axis | state (lifecycle) | supported via `transitions[]` | `axes[].state` is refused on an existing axis (an echo of the stored state is accepted, records nothing); a change goes only through `transitions[]`; a no-op is refused; no forbidden-edge table | `axes[].state` / `transitions[].toState` → `applyAxisPatch`/`transitionAxis` → `axisStateHistory` | actions-librarian-integrity A2; actions.test.ts U3 |
+| Axis | current reading (currentState) | supported | Text ≤2000; confidence defaults confirmed | `axes[].currentState` → `insertAxis`/`applyAxisPatch` | store-read-pagination §5; actions.test.ts U3 |
+| Axis | blocker | supported | Must be nonblank when entering `blocked`; otherwise optional text | `axes[].blocker`, `transitions[].blocker` → `applyAxisPatch`/`transitionAxis` → `assertBlockerPresent` | actions-librarian-integrity A2 |
+| Axis | confidences | supported | Enum confirmed/inferred/uncertain; an asserted state or nonblank current-reading/blocker marked `confirmed` requires the axis to carry evidence (branch, PR, activity or note — stored or added in the same call) or the whole call is refused | `axes[].stateConfidence\|currentStateConfidence\|blockerConfidence` → `assertClaimsAreBacked(axisEvidence)` | actions.test.ts U3 |
+| Axis | row version | supported | `axes[].expectedVersion` guards an existing axis row; ignored on create; omitted leaves it unchecked | `axes[].expectedVersion` → `assertVersion("axis")` | actions-librarian-concurrency A3 |
+| Task | statement (text) | supported | Required on create, optional on update (omitted preserves); human-authored text is refused for an agent, an unchanged echo is not a rewrite; authorship follows the words | `problems[].statement` → `createProblem`/`updateProblem` → `assertTextIsReplaceable` | actions-librarian-omission B2; store-task-plan-text |
+| Task | title (short text) | supported | Shares one authorship pair with the statement; `""` clears the title row; omitted preserves | `problems[].title` → `updateProblem`/`writeProblemTitle` | store-task-plan-text "title and mixed-text authorship" |
+| Task | axis containment | supported | Create needs axisId/axisTitle; an existing task is verified in-topic and on the named axis before any write | `problems[].axisId\|axisTitle` → `resolveAxisId`/`resolveProblemInTopic` | actions-librarian-integrity A1 |
+| Task | plan-step link (planStepId) | supported | Nullable — `null` clears; a named step must belong to the same-axis or task-owned plan | `problems[].planStepId` → `assertPlanStepBelongsToProblem` | store-task-plan-text "plan_step_id containment" |
+| Task | person links (personIds) | supported | Replace-set on an existing task; `[]` clears | `problems[].personIds` → `replaceProblemPeople` | actions-librarian-omission B2 |
+| Task | repo links (repositoryFullNames) | supported | Replace-set; `[]` clears; full names are registered in the same transaction | `problems[].repositoryFullNames` → `replaceProblemRepositories`/`upsertRepository` | actions-librarian-omission B2 |
+| Task | state (lifecycle) | supported via `transitions[]` | `problems[].state` accepted on create only, refused on an existing task; change only through `transitions[]`, no-op refused, history append-only | `problems[].state` / `transitions[]` → `transitionProblem` → `problemStateHistory` | actions-librarian-integrity A2; store-task-plan-text |
+| Task | stateConfidence | supported | Enum; no evidence guard on tasks | `problems[].stateConfidence` → `updateProblem`/`createProblem` | store-task-plan-text |
+| Task | row version | supported | `problems[].expectedVersion` guards an existing task; ignored on create; omitted leaves it unchecked | `problems[].expectedVersion` → `assertVersion("problem")` | actions-librarian-concurrency A3 |
+| Plan | owner | supported | Exactly one of topicId / axisId\|axisTitle / problemId; a topic owner must be this topic; a task owner must name an existing task (create the task, read it back, second reconcile); owner is immutable | `plans[].topicId\|axisId\|axisTitle\|problemId` → `resolveReconcilePlanOwner` → `createPlan`/`updatePlan` + `plan_owners` | store-task-plan-text "polymorphic ownership"; actions-librarian-omission B2 |
+| Plan | summary | supported | Required on create and update; a human-authored summary is refused for an agent, an echo is allowed | `plans[].summary` → `updatePlan` → `assertTextIsReplaceable` | store-task-plan-text; actions.test.ts |
+| Plan step | step title | supported | Required on create, optional on update (omitted preserves); plan_steps carry no authorship column, so a step title is not mechanically guarded (accepted exclusion) | `plans[].steps[].title` → `createPlanStep`/`updatePlanStep` | actions-librarian-omission B2 |
+| Plan step | position | supported | Integer ≥0 (0 is valid) or `null`; omitted preserves | `plans[].steps[].position` → `optionalPosition` | actions-librarian-omission B2 |
+| Plan step | step state | supported | Enum pending/active/done/blocked; default pending on create | `plans[].steps[].state` → `updatePlanStep` | actions-librarian-omission B2 |
+| Plan step | containment | supported | A named stepId must belong to the plan being written | `plans[].steps[].stepId` → `assertStepBelongsToPlan` | store-task-plan-text "refuses a step that belongs to another plan"; actions-librarian-omission B2 |
+| Plan | row version | supported | `plans[].expectedVersion` guards an existing plan; ignored on create; omitted leaves it unchecked | `plans[].expectedVersion` → `assertVersion("plan")` | actions-librarian-concurrency A3 |
+| Plan step | row version | not needed | plan_steps have no version column | — | actions-librarian-omission B2 |
+| People | identity | supported | Matched on nakamaUserId/githubLogin first, else an unambiguous exact-name match (NOCASE); an ambiguous name is refused; otherwise a row is created | `people[].displayName\|githubLogin\|nakamaUserId` → `resolvePersonForLink` → `upsertPerson` | store.test.ts (registerPerson) |
+| People | roles | supported | Relationship-specific role upsert (`topic_people`/`axis_people` ON CONFLICT DO UPDATE) | `people[].role` → reconcile link | ui-people-repositories-v12 |
+| People | About (biography) | missing (accepted exclusion) | `people.notes` exists but has no public writer: the manifest `people[]` entry has no `notes` field. Agent biography create/edit/clear is deferred; do not bypass via storage. Unknown-provenance text must be protected | (no path) | actions.test.ts "…deferred biography maintenance" |
+| People | links, task personIds | supported | Topic/axis people upsert; task `personIds` is replace-set | `people[]`, `problems[].personIds` | ui-people-partition; actions-librarian-omission B2 |
+| People | actor affiliation | supported | Links the actor only if the dashboard already knows them as a person — never invents a row; absence must not fabricate authorship | `context.actor` → reconcile `topic_people` link | actions.test.ts attribution |
+| Repo | identity (fullName) | supported | Upsert key; registration inside the transaction | `repositories[].fullName` → `upsertRepository` | actions.test.ts "record_activity … registers the named repository" |
+| Repo | metadata (url/description/defaultBranch) | supported | Merged with `??`: omitted keeps stored; no version guard | `repositories[].url\|description\|defaultBranch` → `upsertRepository` | evidence-page branch URL |
+| Repo | link relationship | supported | Enum primary/supporting, default supporting; promoting one primary demotes the previous holder; link upsert | `repositories[].relationship` → `linkRepository` | ui-repositories-v1b |
+| Repo | shared identity | supported | One repository row reused across owners; primary constrained per parent | `upsertRepository` + `linkRepository` | ui-people-repositories-v12 |
+| Repo | unlink | missing (accepted exclusion) | No removal input; empty arrays do not unlink. Task `repositoryFullNames` does replace, and `[]` clears that task's set | — | — |
+| Activity | summary | supported | Required | `activities[].summary` / `record_activity.summary` → `insertActivity` | actions.test.ts write actions |
+| Activity | source (sourceType/ref/url) | supported | sourceType enum (8 values, default manual in reconcile); ref/url free text | `…sourceType\|sourceRef\|sourceUrl` → `insertActivity` | actions.test.ts |
+| Activity | date (occurredAt) | supported | Free text ≤40; defaults to now | `activities[].occurredAt` | store-read-pagination §6 |
+| Activity | principal (actor) | supported | Always `context.actor` (+ `profileId`); never read from input; the host strips spoofable keys | `context` → `actorOf` → `insertActivity` | actions.test.ts "identity is never read from input" |
+| Activity | context (axis/problem/repo) | supported | Containment: a named problem's own axis and topic must match; a named repository is registered | `activities[].axisId\|problemId\|repositoryFullName` → `resolveAxisId`/`insertActivity` pairing guard | store-task-plan-text "record_activity problemId pairing"; actions-librarian-integrity A1 |
+| Activity | readback | read-only | `listActivity`/`activityPage`; `get_topic` activity arrays | `get_topic`/`get_overview` (page-only `list_activity` is not an agent tool) | store-read-pagination §6; actions.test.ts |
+| Note | text | supported | Required | `annotations[].text` → `insertAnnotation` | actions.test.ts |
+| Note | target (axisId/axisTitle/problemId) | supported | A `note` keeps the topic+axis shape; a claim (`interpretation`/`steering`) must name exactly one target of topic/axis/problem, else invalid-input | `annotations[]` → `resolveProblemInTopic`/`insertAnnotation` | actions.test.ts U4 "a mis-targeted claim" |
+| Note | kind | supported | Enum note/interpretation/steering (default note) | `annotations[].kind` | actions.test.ts U4 |
+| Note | provenance (confidence) | supported | Enum confirmed/inferred/uncertain; a `note` stores null; a claim carries a value or null | `annotations[].confidence` | actions.test.ts U4 |
+| Note | containment | supported | A named problem must belong to this topic and the named axis | → `resolveProblemInTopic` | actions-librarian-integrity A1 |
+| Evidence | legacy evidence line | read-only | The capped `axis.evidence` line; `coverage.evidence` states the trimming; the same definition backs the confirmed-claim guard | `get_topic` axis scope → `axisEvidence` | evidence-page "legacy evidence membership matches the page's" |
+| Evidence | evidencePage | read-only | Its own `evidenceOffset`/`evidencePageSize` (default 5, max 100); a complete, authoritatively-totaled union of branch, PR, activities and notes, scoped to one axis | `get_topic evidenceOffset/evidencePageSize` → `evidencePage` | evidence-page "get_topic evidencePage" |
+| Evidence | task-to-evidence citation | not needed | Outside scope (deferred) | — | — |
+| Read | includeArchived | supported | Default false drops archived projects from overview, search, lists and timelines; inventory totals always include archived; reads never mutate | `get_overview`/`search_dashboard.includeArchived` → `getOverview`/`searchDashboard` | actions-archive-filtering |
+
+The coordinator skill documents evidence paging and existing-evidence admission. Guidance changes
+do not tighten or relax backend admission. Test anchors below identify relevant suites, not a claim
+that every matrix field has an independent action-level regression.
 
 ## Procedure and checkpoints
 
@@ -137,11 +195,31 @@ not proof of consultation, persistence or preservation.
 - Report source completion, profile/tool assignment, inference result and production readiness
   separately. Do not mark this draft ready or merge merely because a plan exists.
 
+## Current maintenance scope and accepted exclusions
+
+The owner-approved source scope covers reconciliation containment, recorded lifecycle changes,
+existing optional version guards, non-text task/step maintenance, archived result filtering and truthful
+evidence-read instructions. The exclusions below were explicitly accepted for this PR; they are not
+unresolved implementation promises. These development checks do not establish live librarian acceptance.
+
+- **People About remains human-managed.** Agent biography creation, editing and clearing are deferred;
+  the five-tool surface has no supported About writer. Do not bypass this through direct storage or
+  overwrite biography through an affiliation update. A future writer needs separately approved stable
+  identity, authorship, clear/omit and concurrency semantics plus a declared migration. Existing
+  nonempty text of unknown provenance must be protected, not assumed agent-authored.
+- **Project/workstream unlinking is deferred.** Existing task-link replacement remains supported.
+  A future unlink must target one explicit relationship, never delete a shared identity or infer
+  removal from omission. Existing empty project/workstream arrays do not unlink.
+- **No additional topic/step authorship migration in this pass.** Preserve known human text by
+  instruction where no mechanical guard exists; task text and plan-summary guards remain enforced.
+- **No expanded person/repository search or read-pagination machinery without demonstrated need.**
+  Existing truncation and missing-page limits must remain explicit.
+- **Live acceptance is separately authorized.** No profile reassignment, inference, fixture mutation,
+  installation or deployment follows from source completion.
+
 ## Decisions still needed
 
 - Which exact live instance, organization, librarian profile and disposable fixture are in scope?
-- Is ordinary maintenance enough, or are explicit unlink/reorder/correction operations required?
-- What is the intended authorship/update policy for People About text and shared person metadata?
 - Which investigation tools should the librarian have beyond the five dashboard tools?
 - What bounded write/inference grant and acceptance cases will demonstrate sufficient control?
 

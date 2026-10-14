@@ -1433,7 +1433,8 @@ class ResearchStore {
     const { repositoriesByAxis, scans, topicRefs, visible } = this.visibleContext({ includeArchived });
     const events = this.db.query(`SELECT * FROM activities
            WHERE (? IS NULL OR occurred_at >= ?)
-           ORDER BY occurred_at DESC, rowid DESC`).all(since, since).map(toActivity);
+             AND (? = 1 OR ${ownerVisibleSql("activities")})
+           ORDER BY occurred_at DESC, rowid DESC`).all(since, since, includeArchived ? 1 : 0).map(toActivity);
     const people = this.db.query("SELECT * FROM people ORDER BY display_name COLLATE NOCASE ASC").all();
     const idByAccount = new Map;
     for (const row of people) {
@@ -1454,7 +1455,10 @@ class ResearchStore {
       }
     }
     const lastByAccount = new Map;
-    for (const row of this.db.query("SELECT actor_id, max(occurred_at) AS last FROM activities WHERE actor_id <> '' GROUP BY actor_id").all()) {
+    for (const row of this.db.query(`SELECT actor_id, max(occurred_at) AS last FROM activities
+         WHERE actor_id <> ''
+           AND (? = 1 OR ${ownerVisibleSql("activities")})
+         GROUP BY actor_id`).all(includeArchived ? 1 : 0)) {
       lastByAccount.set(row.actor_id, row.last);
     }
     const axesByPerson = new Map;
@@ -1515,6 +1519,9 @@ class ResearchStore {
     const repositoryIdsByAxis = new Map;
     const axisIdsByRepository = new Map;
     for (const [axisId, linked] of repositoriesByAxis) {
+      if (!scans.has(axisId)) {
+        continue;
+      }
       repositoryIdsByAxis.set(axisId, linked.map((repository) => repository.id));
       for (const repository of linked) {
         const own = axisIdsByRepository.get(repository.id) ?? [];
@@ -1546,12 +1553,18 @@ class ResearchStore {
       }
     };
     for (const row of this.db.query(`SELECT repository_id, max(occurred_at) AS last FROM activities
-         WHERE repository_id IS NOT NULL GROUP BY repository_id`).all()) {
+         WHERE repository_id IS NOT NULL
+           AND (? = 1 OR ${ownerVisibleSql("activities")})
+         GROUP BY repository_id`).all(includeArchived ? 1 : 0)) {
       noteLast(row.repository_id, row.last);
     }
     for (const row of this.db.query(`SELECT ar.repository_id AS repository_id, max(x.occurred_at) AS last
          FROM activities x JOIN axis_repositories ar ON ar.axis_id = x.axis_id
-         GROUP BY ar.repository_id`).all()) {
+         WHERE (? = 1 OR ${ownerVisibleSql("x")})
+           AND (? = 1 OR ar.axis_id IN (
+             SELECT a.id FROM development_axes a JOIN topics t ON t.id = a.topic_id
+             WHERE t.status <> 'archived'))
+         GROUP BY ar.repository_id`).all(includeArchived ? 1 : 0, includeArchived ? 1 : 0)) {
       noteLast(row.repository_id, row.last);
     }
     const topicsByRepository = new Map;

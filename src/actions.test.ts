@@ -938,10 +938,19 @@ describe("the shipped skill matches the surface it promises (C9a)", () => {
       /annotations and corrections are human notes/i,
       /outranks your inference/i,
       /Reconcile, do not recreate/i,
-      /must be backed by something in that call/i,
+      /must be backed by evidence on the axis/i,
     ]) {
       expect(skill).toMatch(phrase);
     }
+  });
+
+  test("documents existing-evidence admission and deferred biography maintenance", () => {
+    expect(skill).toMatch(/whether already recorded or added in this call/i);
+    expect(skill).toContain("evidencePageSize");
+    expect(skill).toContain("hasMore");
+    expect(skill).toMatch(/People About is human-managed/i);
+    expect(skill).toMatch(/unlinking are deferred/i);
+    expect(skill).not.toMatch(/must be backed by something in that call/i);
   });
 
   test("states the U3 semantics: recorded states, the refusal kinds, and history retention", () => {

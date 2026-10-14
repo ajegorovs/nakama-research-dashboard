@@ -56,6 +56,13 @@ skill defines operational tool use. This document does not authorize writes or d
   concurrent edits to those records. Plan steps have no independent version and step-only edits are
   not guaranteed to advance their plan's version. Use each available row guard without claiming
   broader protection. This bounded policy does not add step or relationship versioning.
+- Creation has no prior row version: per-task/plan versions are ignored on create, and a top-level
+  version does not guard a newly created project unless a topic-field patch subsequently checks it.
+  Do not use `expectedVersion` as an existence assertion; resolve the project by stable ID first.
+- Reconciliation processes updates before transitions. If both target the same row, an update may
+  advance its version before the transition checks it. Reusing the original version on both entries
+  can therefore conflict and roll back. Versions are checked at each operation, not against a frozen
+  call-entry snapshot; split through fresh readback when necessary.
 
 ## Non-text maintenance without text echoes
 
@@ -75,7 +82,20 @@ archived projects. Its result lists honor `includeArchived` (default false), as 
 hits. Filtering occurs before result limits: hidden archived rows do not consume the visible page.
 Activity and annotations follow their owning project, including ownership through a workstream or
 task when no direct project target is stored. Truly topicless records remain visible; topic-grouped
-timelines still require a project. This is a presentation filter, not an authorization boundary.
+timelines still require a project. This applies to the overview/search archive options and explicit
+archive-filtered activity reads, not an access restriction on `get_topic`: scoped entity reads remain
+available for archived projects, and internal `listActivity` calls without the option retain their
+unfiltered behavior. This is a presentation filter, not an authorization boundary.
+
+## Rollup activity recency
+
+People and repository `recentActivity` apply the same owner-visibility rule as the overview feed,
+including direct repository events and events associated through visible workstreams. A shared
+repository does not make archived-project events visible. Truly topicless events remain eligible.
+`lastActivityAt` is the latest attributable event across visible projects (and eligible topicless
+records), independent of the selected activity window. With `includeArchived: true`, archived events
+also participate. With false, an identity whose only activity belongs to archived projects has null
+`lastActivityAt`, not its last-ever timestamp. This filter does not remove the shared identity row.
 
 ## Supporting evidence
 

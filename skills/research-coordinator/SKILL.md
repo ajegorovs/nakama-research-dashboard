@@ -130,10 +130,13 @@ How to work:
   changed: a workstream already on the topic is the same axis, not a new one. A parallel axis for the same
   workstream, or a second topic for the same direction, splits the record — that is the failure this write
   path exists to prevent.
-- Put the evidence in the same call as the claim. A claim marked `confirmed` (the default for `state`,
-  `currentState`, `blocker`) must be backed by something in that call — a branch, a PR number/URL, an
-  activity or an annotation — or the whole update is refused. When nothing could have confirmed it, say
-  so with `stateConfidence`/`currentStateConfidence`/`blockerConfidence` set to `inferred`.
+- A claim marked `confirmed` must be backed by evidence on the axis — a branch, a PR number/URL,
+  an activity or an annotation, whether already recorded or added in this call — or the whole update
+  is refused. The guard checks an explicitly supplied axis `state` and nonblank stored current-reading
+  or blocker text; an unasserted initial state default is not itself a claim. Evidence presence is
+  admission, not proof that a reference supports this particular claim. Read and judge the source.
+  When nothing could have confirmed a claim, use `stateConfidence`/`currentStateConfidence`/
+  `blockerConfidence` set to `inferred` rather than inventing evidence.
 - Read `version` from `get_topic` and send it back as top-level `expectedVersion`; a supplied stale
   topic version refuses even a link-only or note-only reconciliation. For existing task and plan
   updates, also pass their own row versions as `problems[].expectedVersion` and
@@ -153,6 +156,11 @@ How to work:
   and when unsure, propose the change rather than applying it.
 - Do not create a near-duplicate: `search_dashboard` first, then extend the topic that is already
   there. Never invent activity to fill a gap — a missing record stays missing until someone reports it.
+- People About is human-managed in the current maintenance scope: the agent tools do not expose a
+  biography writer. Do not invent a `notes` input or bypass the tools through direct storage. Agent
+  biography updates and project/workstream unlinking are deferred. Affiliation inputs add/upsert;
+  an empty project/workstream people/repository array does not unlink. Task `personIds` and
+  `repositoryFullNames` are different: on existing tasks they replace the set, and `[]` clears it.
 - Identity comes from the session, not from you: the platform records who acted. Do not pass an actor,
   a user id or a database path.
 

@@ -3797,15 +3797,17 @@ export class ResearchStore {
     const { repositoriesByAxis, scans, topicRefs, visible } =
       this.visibleContext({ includeArchived });
 
-    // Every event inside the window, read once: the two rollups slice it differently.
+    // Every event inside the window, read once: the two rollups slice it differently. The archived
+    // rule applies here too, so a hidden project's event cannot reach either rollup's recent list.
     const events = (
       this.db
         .query(
           `SELECT * FROM activities
            WHERE (? IS NULL OR occurred_at >= ?)
+             AND (? = 1 OR ${ownerVisibleSql("activities")})
            ORDER BY occurred_at DESC, rowid DESC`
         )
-        .all(since, since) as ActivityRow[]
+        .all(since, since, includeArchived ? 1 : 0) as ActivityRow[]
     ).map(toActivity);
 
     // ---------------------------------------------------------------------------- people
@@ -3838,9 +3840,12 @@ export class ResearchStore {
     const lastByAccount = new Map<string, string>();
     for (const row of this.db
       .query(
-        "SELECT actor_id, max(occurred_at) AS last FROM activities WHERE actor_id <> '' GROUP BY actor_id"
+        `SELECT actor_id, max(occurred_at) AS last FROM activities
+         WHERE actor_id <> ''
+           AND (? = 1 OR ${ownerVisibleSql("activities")})
+         GROUP BY actor_id`
       )
-      .all() as Array<{ actor_id: string; last: string }>) {
+      .all(includeArchived ? 1 : 0) as Array<{ actor_id: string; last: string }>) {
       lastByAccount.set(row.actor_id, row.last);
     }
 
@@ -3933,6 +3938,11 @@ export class ResearchStore {
     const repositoryIdsByAxis = new Map<string, string[]>();
     const axisIdsByRepository = new Map<string, string[]>();
     for (const [axisId, linked] of repositoriesByAxis) {
+      // Only axes whose project is in scope: an event that names a hidden axis must not pull its
+      // codebase in through the association map either.
+      if (!scans.has(axisId)) {
+        continue;
+      }
       repositoryIdsByAxis.set(
         axisId,
         linked.map((repository) => repository.id)
@@ -3981,18 +3991,27 @@ export class ResearchStore {
     for (const row of this.db
       .query(
         `SELECT repository_id, max(occurred_at) AS last FROM activities
-         WHERE repository_id IS NOT NULL GROUP BY repository_id`
+         WHERE repository_id IS NOT NULL
+           AND (? = 1 OR ${ownerVisibleSql("activities")})
+         GROUP BY repository_id`
       )
-      .all() as Array<{ last: string; repository_id: string }>) {
+      .all(includeArchived ? 1 : 0) as Array<{ last: string; repository_id: string }>) {
       noteLast(row.repository_id, row.last);
     }
     for (const row of this.db
       .query(
         `SELECT ar.repository_id AS repository_id, max(x.occurred_at) AS last
          FROM activities x JOIN axis_repositories ar ON ar.axis_id = x.axis_id
+         WHERE (? = 1 OR ${ownerVisibleSql("x")})
+           AND (? = 1 OR ar.axis_id IN (
+             SELECT a.id FROM development_axes a JOIN topics t ON t.id = a.topic_id
+             WHERE t.status <> 'archived'))
          GROUP BY ar.repository_id`
       )
-      .all() as Array<{ last: string; repository_id: string }>) {
+      .all(includeArchived ? 1 : 0, includeArchived ? 1 : 0) as Array<{
+      last: string;
+      repository_id: string;
+    }>) {
       noteLast(row.repository_id, row.last);
     }
 
