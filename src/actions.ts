@@ -150,6 +150,30 @@ function readPaging(input: Input): { limit?: number; offset?: number } | null {
 }
 
 /**
+ * The supporting-evidence page's **own** paging inputs, distinct from `offset`/`pageSize` so a workstream
+ * can page its evidence independently of its activity and task pages. Read in one place, validated the same
+ * way (`evidenceOffset` a non-negative integer, `evidencePageSize` in `[1, 100]`, default page size 5).
+ *
+ * Returns `null` when **neither** was sent, so an existing scoped caller's payload gains no key it did not
+ * ask for; the page sibling appears only when its own inputs were, exactly as `readPaging` behaves.
+ */
+function readEvidencePaging(
+  input: Input
+): { limit?: number; offset?: number } | null {
+  const offset = optionalInt(input.evidenceOffset, "evidenceOffset", 0, 1_000_000);
+  const pageSize = optionalInt(
+    input.evidencePageSize,
+    "evidencePageSize",
+    1,
+    100
+  );
+  if (offset === undefined && pageSize === undefined) {
+    return null;
+  }
+  return { limit: pageSize, offset };
+}
+
+/**
  * Who is acting. `profileId` is present on agent tool calls, so a machine and a person can be told
  * apart without guessing; an unrecognised actor stays `unknown` rather than being assumed human (F6).
  */
@@ -340,6 +364,7 @@ async function dispatch(
       const scopedAxis = resolveAxis(store, topic, input);
       if (scopedAxis) {
         const paging = readPaging(input);
+        const evidencePaging = readEvidencePaging(input);
         return {
           ok: true,
           ...store.getAxisWorkstream(topic.id, scopedAxis.id, {
@@ -354,6 +379,19 @@ async function dispatch(
             ? {
                 activityPage: store.activityPage({ axisId: scopedAxis.id }, paging),
                 problemPage: store.taskPage({ axisId: scopedAxis.id }, paging),
+              }
+            : {}),
+          // The **complete** supporting-evidence page for this workstream, paged by its own
+          // `evidenceOffset`/`evidencePageSize` (default page size 5, max 100) and added only when one of
+          // those inputs was sent. It is a true backend page of the whole union — branch, PR, every
+          // activity and every note — with an authoritative `total`; the capped `axis.evidence` line and
+          // `coverage.evidence` beside it keep their legacy shape and semantics unchanged.
+          ...(evidencePaging
+            ? {
+                evidencePage: store.evidencePage(
+                  { axisId: scopedAxis.id, topicId: topic.id },
+                  evidencePaging
+                ),
               }
             : {}),
         };

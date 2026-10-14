@@ -10,6 +10,8 @@
 | Source investigation and data maintenance | [Maintenance](design/dashboard-data-and-maintenance-contract.md) |
 | Presentation, evidence and safety policies | [Decisions](ux-v2/DECISIONS.md) |
 | Build, preview, installation and verification | [Development](DEVELOPMENT.md), [preview mechanics](../harness/preview/README.md) |
+| Visual information-design research problem and next checkpoint | [Research brief](design/visual-information-design.md) |
+| Current representative preview and historical screenshot distinction | [Screenshot gallery](screenshots/README.md) |
 | Contributor rules | [AGENTS](../AGENTS.md) and `.agents/skills/` |
 | Used dataset provenance | [Corpus](corpus/README.md), [axis rule](corpus/AXIS-RULE.md), [synthetic fixtures](layout-fixtures/README.md) |
 | Supported collector transport | [Collector contract](evidence-automation/CONTRACT.md) |

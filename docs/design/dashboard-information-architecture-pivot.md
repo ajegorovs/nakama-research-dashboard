@@ -40,8 +40,9 @@ data questions; [development boundaries](../DEVELOPMENT.md) states acceptance bo
 | **People** | Person identity | Optional biography/profile, involvement grouped by project using shared workstream cards, related repositories and only attributable activity |
 | **Repositories** | Owner separate from repository name | Description, default branch, external destination and current work grouped by project using shared workstream cards |
 
-- Overview is retired. Keep aggregate Projects/Workstreams/Open tasks/Blocked tasks/Repositories/People
-  counts in a collapsed **Dashboard summary** above Projects. Old Overview routes fall back to Projects.
+- Overview and its legacy Dashboard summary presentation are retired. The accepted V12 composition
+  contains no aggregate disclosure or replacement placement; backend aggregate reads remain available.
+  Old Overview routes fall back to Projects.
 - Display **Project → Workstream → Task**; do not silently migrate the topic/axis/problem schema.
 - Projects summarize; Progress preserves the full substantive reading.
 - All four side selectors use the same pane width (380px at the measured desktop viewports).

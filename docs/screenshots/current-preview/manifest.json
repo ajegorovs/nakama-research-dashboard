@@ -1,0 +1,80 @@
+{
+  "sourceCommit": "bdd349875c08218b40db0a1cf83b5f88d0d5d3a5",
+  "dataset": "scale-pagination-supplement",
+  "bundleSha256": "5243558d4b0cb2ddd6d52846b6cd256c7607c74f5727876207bee39dd2422268",
+  "bundleBytes": 169547,
+  "lightTheme": true,
+  "servedAcceptance": false,
+  "shots": [
+    {
+      "file": "historical-progress-prototype-1440.png",
+      "width": 1440,
+      "height": 1222,
+      "sha256": "2c438e13d59fa782101539c23acb168f7c2d5dc55a1840cde1e6fb4f84dc1459",
+      "kind": "historical static prototype"
+    },
+    {
+      "file": "people-1280x800.png",
+      "width": 1280,
+      "height": 800,
+      "sha256": "4bd9f251dc9594fb264588d0373d6b1bbfa8547651c07c877d8a58c613a0e97d",
+      "kind": "current synthetic host preview"
+    },
+    {
+      "file": "people-1440x900.png",
+      "width": 1440,
+      "height": 900,
+      "sha256": "fd7ea68bdefe3d8bd93bdb34b418d14fedd7f0d71eb259b9f7d7f7c893ae3a8a",
+      "kind": "current synthetic host preview"
+    },
+    {
+      "file": "progress-1280x800.png",
+      "width": 1280,
+      "height": 800,
+      "sha256": "25d38d83b55c234e2a792d3009a53274fb7215bbf1a824c34077c4f3bff439a8",
+      "kind": "current synthetic host preview"
+    },
+    {
+      "file": "progress-1440x900.png",
+      "width": 1440,
+      "height": 900,
+      "sha256": "2626742b6228fc85fdc7dc41991812a1fe91b16652916e43b9554e4ed1a96057",
+      "kind": "current synthetic host preview"
+    },
+    {
+      "file": "progress-expanded-1440x1500.png",
+      "width": 1440,
+      "height": 1500,
+      "sha256": "5b888908525c794fb5dceb0c8ae2f339da4e96b8a8fd7d4605df239a94c60b7c",
+      "kind": "current synthetic host preview"
+    },
+    {
+      "file": "projects-1280x800.png",
+      "width": 1280,
+      "height": 800,
+      "sha256": "b794edb689ee852fa75899f06dd8ffcb414be36d9f50b1a4a39f61dab50bedbe",
+      "kind": "current synthetic host preview"
+    },
+    {
+      "file": "projects-1440x900.png",
+      "width": 1440,
+      "height": 900,
+      "sha256": "e851a4d6688ca0f725a21473c43032c8bd1a568cdda7679b12e30d865ab8842f",
+      "kind": "current synthetic host preview"
+    },
+    {
+      "file": "repositories-1280x800.png",
+      "width": 1280,
+      "height": 800,
+      "sha256": "91d5d7ec1018a3944c80fe7017d28dfef6a20798e37d8d77a9f8551416c84ac1",
+      "kind": "current synthetic host preview"
+    },
+    {
+      "file": "repositories-1440x900.png",
+      "width": 1440,
+      "height": 900,
+      "sha256": "0ac8489147e68c97557ed3a5ae0796a2517485049861fedc0d17eb46c0e81407",
+      "kind": "current synthetic host preview"
+    }
+  ]
+}

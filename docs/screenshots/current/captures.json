@@ -1,0 +1,75 @@
+{
+  "dataset": "environmental-programme-v1",
+  "classification": "fictional, read-only host-backed preview; not production acceptance",
+  "clock": "2026-10-14T09:00:00.000Z",
+  "locale": "en-US",
+  "timezone": "UTC",
+  "theme": "light",
+  "build": {
+    "uiSha256": "a53aeee081911d873be534090fa90f9ca6cd6d6ee78328ff0a80d2c0be3d8a2b",
+    "actionsSha256": "9c56bf5a5571831bf03062e6389fc4b935a13c714f25853297e6befd4c867235",
+    "sourceHashes": {
+      "src/ui.tsx": "3920c63efdf5da33457101da4505c71d6c0e52222d590555d0ac033dbf2d2c5c",
+      "src/store.ts": "3d781e958773986a0a657f3748f324367696c2baf4b24bd038d87c81a17c6b4b",
+      "src/actions.ts": "209238d3bc6e90cdc452deacb7a925cc62e0fc6f6a2376315d82f5b18c06ce58",
+      "harness/preview/preview-main.tsx": "222d1285583b7c230f187105318f953959b23bc1da40f88f96c0fa5d4c1590eb"
+    },
+    "fetchedModuleSha256": "73f776764a4c94dd1b0c60161f78b5072b63509b0f5663d3c08c3c5e84bec5c2",
+    "fetchedModuleBytes": 1150982,
+    "note": "Fetched development module contains the complete bundle prefix plus Vite source-map data; whole-response identity is host-dependent."
+  },
+  "fixture": {
+    "path": "harness/preview/datasets/environmental-programme-v1.json",
+    "sha256": "0376ed087c660e9aaa8fc58beb02247388db3aa29c653767b0a45f06aa1c3f62"
+  },
+  "images": [
+    {
+      "file": "people-repositories.png",
+      "subject": "Leon Duarte / related repositories",
+      "width": 386,
+      "height": 36,
+      "sha256": "8c72dffa4f2b735ca0a95f1fd5ecadc5c9b38d989ead46a48dce3b0ea32fe15a",
+      "capture": "element crop from 1440\u00d71800 viewport"
+    },
+    {
+      "file": "people.png",
+      "subject": "Maya Chen",
+      "width": 1440,
+      "height": 900,
+      "sha256": "4d9deedfce9fd2b95d0bdc735b6a4560ef8927b7e1ce7740556755186d51761b",
+      "capture": "1440\u00d7900 viewport"
+    },
+    {
+      "file": "progress.png",
+      "subject": "RiverWatch / Integration",
+      "width": 1440,
+      "height": 900,
+      "sha256": "7e950c87d574ac6b2dcf6853ae51031cd9645ee857e607ed672e0bec64071fc8",
+      "capture": "1440\u00d7900 viewport"
+    },
+    {
+      "file": "projects.png",
+      "subject": "RiverWatch",
+      "width": 1440,
+      "height": 900,
+      "sha256": "26a1f0f36ce045b16e8072cd7989d519faffd6af28bb8071ce2b691b256efddd",
+      "capture": "1440\u00d7900 viewport"
+    },
+    {
+      "file": "repositories.png",
+      "subject": "observation-schema",
+      "width": 1440,
+      "height": 900,
+      "sha256": "6baccea36be52471d586e2b0d02417235e357260c2ab6aa70250465bec591612",
+      "capture": "1440\u00d7900 viewport"
+    },
+    {
+      "file": "task-plan-status.png",
+      "subject": "RiverWatch / Integration / task plan",
+      "width": 1003,
+      "height": 99,
+      "sha256": "00ce43af1d3dcdb69c307af32e83ab9abb4945f58dc5ff17738219eea527c6ce",
+      "capture": "element crop from 1440\u00d71800 viewport"
+    }
+  ]
+}

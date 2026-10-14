@@ -1,6 +1,11 @@
 # Preview — see the real page without an instance
 
-> **Current scope (2026-10-11).** The interactive preview mounts the four-view product. The optional automated capture/fidelity helpers retain legacy five-tab assumptions and require separate adaptation and verification. Historical measurements near the end of this guide belong to their recorded builds; they are not a claim about today's capture tools.
+> **Current scope (2026-10-11).** The interactive preview mounts the four-view product. For an
+> instance-free record, `four-view-capture.mjs` (screenshots plus a report) and `four-view-measure.mjs`
+> (geometry) capture and measure it directly — see [Capture boundary](#capture-boundary). The older
+> `capture.mjs` and the `harness/fidelity/` helpers retain legacy five-tab/Overview assumptions: they are
+> not adapted to the four-view product, and their montages are not current verification. Historical
+> measurements near the end of this guide belong to their recorded builds.
 
 `src/ui.tsx` is a host-injected React module: it is handed React, the component library, a stylesheet sink
 and a data channel by the dashboard, and it cannot render without them. The only place it *was* renderable
@@ -28,11 +33,41 @@ and the browser reloads itself — Vite watches `ui/app.js`, so there is no copy
 
 ## Capture boundary
 
-The interactive preview mounts Projects, Progress, People and Repositories. Legacy
-`capture.mjs` and fidelity helpers retain five-tab/Overview assumptions; do not use their old
-montages or success claims as current verification. Use a real browser against the preview
-for scoped visual inspection until those helpers are separately adapted and tested.
-Chromium is resolved by `harness/chromium.mjs`; no download is required.
+The interactive preview mounts Projects, Progress, People and Repositories. Two instance-free instruments
+cover that four-view product, both reading the page's own `data-rd-*` markers and clicking the page's own
+controls, so neither knows an id, name or payload in advance:
+
+```bash
+bun harness/preview/run.mjs --dataset fixture --port 3011        # one dataset at a time
+bun harness/preview/four-view-capture.mjs --dataset fixture \
+  --url http://127.0.0.1:3011/preview.html --out .hermes/scratch/ui-baseline/fixture
+bun harness/preview/four-view-measure.mjs http://127.0.0.1:3011/preview.html
+```
+
+`four-view-capture.mjs` writes all four views at 1440×900 and 1280×800, plus tall same-width detail frames
+for the selected entity — the host wrapper is `h-screen` around an inner `overflow-auto` scroller, so
+`page.screenshot({fullPage: true})` returns exactly one viewport and height is the only way to reach the
+rest of a detail stack. It also writes Progress's activity-pager second page, a blocked workstream, a
+workstream with nothing behind it, and a `capture-report.json` carrying the commit, the `ui/app.js` sha256,
+the dataset, each shot's selection and a horizontal-overflow probe.
+
+Two policies make it trustworthy: a state the dataset cannot reach is **recorded as unreachable with its
+reason** — never fabricated, and not fatal — while a *structural* failure (the page did not mount, a tab
+did not become active, a view container or the selected detail is missing) exits **3** as REFUSED, because a
+photograph taken under a wrong label is worse than no photograph.
+
+`four-view-measure.mjs` answers what a screenshot only *shows*: which element owns a clip and by how many
+pixels, what caps a scroll container, whether a list rail is uniform or one row's state badge grows it,
+whether the last row is sliced through, and how the two Progress pagers present themselves side by side. It
+exits **2** on a fault.
+
+Shots default to the git-ignored `.hermes/scratch/` — they are working shots — and generated captures are
+not committed (AGENTS.md); the committed packs belong to the served pass. Chromium is resolved by
+`harness/chromium.mjs`; no download is required.
+
+Legacy `capture.mjs` and the `harness/fidelity/` helpers cannot run against this build (`capture.mjs` waits
+on `[data-rd-landing]`, which is no longer rendered). Do not use their montages or success claims as current
+verification.
 
 ## Generated files in the checkout, and cleanup
 

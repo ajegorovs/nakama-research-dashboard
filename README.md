@@ -7,15 +7,66 @@ projects, workstreams or tasks. Evidence and history remain attached to their ac
 
 ## Current status
 
-The dashboard rework and hardening/testing stage is **closed**, merged through PR #8. UI restyling
-is a separate next stage; production readiness is not established by development acceptance.
+The earlier dashboard rework and hardening/testing stage is **closed**, merged through PR #8.
+The subsequent V12 four-view UI rework is complete at the local implementation/preview boundary.
+Production readiness, installation and deployment remain separate from this development checkpoint.
 
 - [Developer guide](docs/DEVELOPMENT.md): UI loop, verification, installation boundaries and known limitations.
 - [Documentation index](docs/README.md): current references and historical recovery.
 - [Contributor rules](AGENTS.md): build/serve, acceptance, preservation and public-record hygiene.
 
-Historical screenshots in `docs/screenshots/` and `docs/ux-v2/fidelity/` belong to their recorded
-builds. They are not a gallery of the current four-view product.
+Older screenshot packs in `docs/screenshots/` and `docs/ux-v2/fidelity/` belong to their recorded
+builds. The current illustrative examples below are separate from that historical evidence.
+
+## Dashboard examples
+
+These are **fictional environmental-programme examples**, not live research or production screenshots.
+They show the real plugin in the local host-backed preview at **1440×900**, light theme, UTC/en-US,
+with the reference clock fixed at **2026-10-14 09:00 UTC**. The programme spans RiverWatch, AirTrack
+and Open Observatory; names, repositories and events are illustrative.
+
+### Projects
+
+Project orientation, purpose, workstream cards and explicit relationships.
+
+![Projects: fictional RiverWatch programme](docs/screenshots/current/projects.png)
+
+### Progress
+
+Workstream reading, compact plan and paged tasks. Activity and Supporting evidence continue below
+with their own independent pages. Evidence remains workstream-level; explicit task citations are
+[a deferred extension](docs/design/dashboard-data-and-maintenance-contract.md#deferred-task-to-evidence-traceability).
+
+![Progress: fictional RiverWatch integration workstream](docs/screenshots/current/progress.png)
+
+### People
+
+Explicit project/workstream involvement, recorded biography and related repositories, one per line.
+
+![People: fictional Maya Chen](docs/screenshots/current/people.png)
+
+### Repositories
+
+Repository purpose, supported work and explicitly associated people and activity.
+
+![Repositories: fictional observation-schema repository](docs/screenshots/current/repositories.png)
+
+Details: [plan-step statuses beside titles](docs/screenshots/current/task-plan-status.png) ·
+[People repository links on separate lines](docs/screenshots/current/people-repositories.png).
+[Capture identities and image hashes](docs/screenshots/current/captures.json) bind these examples
+to their measured build; they are illustrative preview evidence, not served acceptance.
+
+To explore the same frozen data with a compatible host checkout:
+
+```bash
+bun harness/preview/run.mjs --checkout /path/to/nakama \
+  --dataset environmental-programme-v1 --no-fixtures \
+  --fixtures harness/preview/datasets/environmental-programme-v1.json
+```
+
+The [fixture specification](docs/design/realistic-programme-fixture-spec.md) defines its fictional
+facts and supported-write validation. This frozen preview supports read-only exploration, not
+persistence or proof that external repositories/PRs exist.
 
 ## Build and test
 
@@ -28,9 +79,9 @@ bun run typecheck:host # additionally requires a compatible Nakama checkout
 bun run harness:records
 ```
 
-The established stage baseline is **376 source tests + 47 harness tests**, zero failures;
-host typechecking reported zero plugin diagnostics. These are dated measurements, not guaranteed
-counts for future changes. There is no GitHub CI workflow currently validating this branch.
+The local UI closeout checkpoint measured **536 source tests + 47 harness tests**, zero failures;
+compatible-host typechecking reported zero plugin diagnostics. These are bounded measurements,
+not guaranteed counts for future changes or production acceptance. There is no GitHub CI workflow currently validating this branch.
 
 `types/host.d.ts` supplies local declarations for unpublished host packages; real host typechecking
 is authoritative. Set `NAKAMA_CHECKOUT` to the host checkout when running that check. Harness `.mjs`

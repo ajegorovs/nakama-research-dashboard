@@ -80,7 +80,7 @@ function resolveFixture(action: string, input: unknown) {
       topicId?: string;
       axisId?: string;
     }>;
-    const actorId = typeof bag.actorId === "string" ? bag.actorId : undefined;
+    const actorId = typeof bag.personActorId === "string" ? bag.personActorId : undefined;
     const repositoryId = typeof bag.repositoryId === "string" ? bag.repositoryId : undefined;
     const offset = typeof bag.offset === "number" ? bag.offset : 0;
     const pageSize = typeof bag.pageSize === "number" ? bag.pageSize : PAGE_SIZE;
@@ -120,10 +120,20 @@ function resolveFixture(action: string, input: unknown) {
           ok: false,
         };
       }
+      // Optional complete evidence pages exported verbatim from real scoped action reads.
+      // Never construct a complete page from the legacy capped axis.evidence array.
+      const evidencePages = responses[`evidencePages:${axisId}`] as
+        Record<string, unknown> | undefined;
+      const wantsEvidence = bag.evidenceOffset !== undefined || bag.evidencePageSize !== undefined;
+      const evidenceKey = `${bag.evidencePageSize ?? PAGE_SIZE}:${bag.evidenceOffset ?? 0}`;
+      if (wantsEvidence && evidencePages && !evidencePages[evidenceKey]) {
+        return { ok: false, error: "preview: evidence page not exported", kind: "invalid-input" };
+      }
       return {
         axis,
         axisId,
         ok: true,
+        ...(wantsEvidence && evidencePages ? { evidencePage: evidencePages[evidenceKey] } : {}),
         topic: base.topic,
         ...(paged
           ? {
@@ -152,6 +162,8 @@ const host = {
       sink.push({
         action,
         axisId: bag.axisId ?? null,
+        evidenceOffset: bag.evidenceOffset ?? null,
+        evidencePageSize: bag.evidencePageSize ?? null,
         offset: bag.offset ?? null,
         pageSize: bag.pageSize ?? null,
       });

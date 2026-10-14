@@ -39,6 +39,8 @@
     "harness:write": "bash harness/read-pass.sh --write",
     "preview": "bun harness/preview/run.mjs",
     "preview:fixture": "bun harness/preview/run.mjs --dataset fixture",
+    "preview:shots": "bun harness/preview/four-view-capture.mjs",
+    "preview:measure": "bun harness/preview/four-view-measure.mjs",
     "preview:capture": "bun harness/preview/capture.mjs",
     "preview:fidelity": "bun harness/preview/fidelity.mjs",
     "prototype:serve": "bun prototypes/dashboard-ui-rework/serve.mjs"

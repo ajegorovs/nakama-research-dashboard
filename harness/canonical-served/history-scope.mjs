@@ -145,6 +145,15 @@ try {
   await page.locator('div[data-plugin-id] [data-rd-view-option="progress"]').first().click();
   await page.waitForSelector(`div[data-plugin-id] [data-rd-index-axis="${payload.chosen.axisId}"]`, { timeout: 15000 });
   await page.locator(`div[data-plugin-id] [data-rd-index-axis="${payload.chosen.axisId}"]`).first().click();
+  // The Recent-activity feed now lives inside a native `<details data-rd-progress-activity>` that is
+  // collapsed by default, so `ul.rd-feed` is hidden (and would never satisfy a visibility wait) until the
+  // fold is opened. Wait for the SELECTED context to load first, then open the actual disclosure with a
+  // real click on its own summary, and only then wait for the feed to become visible.
+  await page.waitForSelector(`div[data-plugin-id] [data-rd-context-panel="${payload.chosen.axisId}"]`, { timeout: 15000 });
+  const activityDetails = page.locator('div[data-plugin-id] [data-rd-progress-activity]').first();
+  if ((await activityDetails.count()) > 0 && (await activityDetails.evaluate((el) => el.open === true)) === false) {
+    await activityDetails.locator("summary").first().click();
+  }
   await page.waitForSelector("div[data-plugin-id] .rd-progress-activity ul.rd-feed", { timeout: 15000 });
   await sleep(500);
 

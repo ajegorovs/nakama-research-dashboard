@@ -1444,6 +1444,103 @@ export type AxisEvidence = {
   at: string;
 };
 
+/**
+ * One evidence item as a **paged, addressable** record: the `AxisEvidence` fields a reader sees, plus
+ * the identity and text a pager needs. The legacy `AxisEvidence` line stays exactly as it was (capped per
+ * source, unpaged); this is the shape the complete `evidencePage` returns, so its extra keys are additive.
+ *
+ * `id` is stable across reads and independent of the item's text: `branch:<axisId>` / `PR:<axisId>` for the
+ * structural items, `activity:<rowId>` / `annotation:<rowId>` for the recorded ones. A caller keys a list
+ * on it rather than on the label, which a later edit can change.
+ */
+export type AxisEvidenceRecord = AxisEvidence & {
+  /** Stable identity: `branch:<axisId>`, `PR:<axisId>`, `activity:<id>` or `annotation:<id>`. */
+  id: string;
+  /** The stored row id for an activity/annotation; null for the structural branch/PR, which is no row. */
+  recordId: string | null;
+  /** The record's own text — an activity's summary, a note's **full** text; empty for a structural item. */
+  summary: string;
+  /** The recorded author's id (the activity actor / the note author); empty for a structural item. */
+  authorId: string;
+};
+
+/**
+ * The complete evidence union, as one SQL statement so the database — not JS — pages it. In reading order
+ * it is: the structural branch, the structural PR, then every activity recorded against the axis and every
+ * note filed on it (a multi-target note that also names a problem or the topic included, exactly as the
+ * capped legacy read includes it). No arm is `LIMIT`-bounded: the page is the only window.
+ *
+ * The structural arms are inert without parameters (empty branch, no PR), so the union is complete even
+ * for a bare axis. `sort_id` carries the stable id; `sort_at` the item's own `occurredAt`/`createdAt`.
+ */
+const EVIDENCE_UNION_SQL = `
+  SELECT 'branch' AS kind, '' AS sort_at, ('branch:' || ?) AS sort_id,
+         NULL AS record_id, '' AS summary, '' AS author_id, '' AS by_category,
+         NULL AS source_type, '' AS source_ref, ? AS source_url, ? AS label
+   WHERE ? <> ''
+  UNION ALL
+  SELECT 'pull_request', '', ('PR:' || ?), NULL, '', '', '',
+         NULL, '', ?, ?
+   WHERE ? IS NOT NULL OR ? <> ''
+  UNION ALL
+  SELECT 'activity', occurred_at, ('activity:' || id), id, summary,
+         actor_id, actor_type, source_type, source_ref, source_url, NULL
+    FROM activities WHERE axis_id = ?
+  UNION ALL
+  SELECT 'annotation', created_at, ('annotation:' || id), id, text,
+         author_id, author_type, NULL, '', '', 'note'
+    FROM annotations WHERE axis_id = ?`;
+
+/** One row of `EVIDENCE_UNION_SQL`, before it is mapped to `AxisEvidenceRecord`. */
+type EvidenceUnionRow = {
+  kind: string;
+  sort_at: string;
+  sort_id: string;
+  record_id: string | null;
+  summary: string;
+  author_id: string;
+  by_category: string;
+  source_type: string | null;
+  source_ref: string;
+  source_url: string;
+  label: string | null;
+};
+
+/** The union row in the record shape: the label re-derived from real source data, never a guessed link. */
+function toAxisEvidenceRecord(row: EvidenceUnionRow): AxisEvidenceRecord {
+  const kind = row.kind as AxisEvidence["kind"];
+  const sourceType = (row.source_type as SourceType | null) ?? null;
+  return {
+    at: row.sort_at,
+    authorId: row.author_id,
+    by: row.by_category,
+    id: row.sort_id,
+    kind,
+    label:
+      kind === "activity"
+        ? evidenceLabel(sourceType ?? "manual", row.source_ref)
+        : (row.label ?? ""),
+    recordId: row.record_id,
+    sourceRef: row.source_ref,
+    sourceType,
+    sourceUrl: row.source_url,
+    summary: row.summary,
+  };
+}
+
+/**
+ * A stored repository URL as its canonical `https://github.com/<owner>/<repo>` base, or null when it is not
+ * a recognisable GitHub owner/repo address. Anything else — a self-hosted host, a deep link, an empty
+ * value — returns null, so the caller leaves the URL empty rather than build one on a guess.
+ */
+function githubRepoBase(url: string): string | null {
+  const cleaned = url.trim().replace(/\/+$/, "").replace(/\.git$/i, "");
+  const match = cleaned.match(
+    /^https?:\/\/(?:www\.)?github\.com\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/i
+  );
+  return match ? `https://github.com/${match[1]}/${match[2]}` : null;
+}
+
 /** One axis as the detail view shows it: full metadata, its own history and notes, its evidence. */
 export type AxisDetail = Axis & {
   people: LinkedPerson[];
@@ -2876,6 +2973,95 @@ export class ResearchStore {
       });
     }
     return items;
+  }
+
+  /**
+   * One page of **all** the supporting evidence a workstream carries — the complete union, paged in the
+   * database (`LIMIT`/`OFFSET` over the union/order), never a full fetch sliced in JS.
+   *
+   * The union is exactly the set `axisEvidence` names as evidence: the structural branch and PR the axis
+   * names, every activity recorded against it, and every note filed on it — a multi-target note that also
+   * names a problem or the topic included, as the capped legacy read already includes it. The legacy
+   * `axisEvidence` line stays capped per source and unpaged; this read is complete and reports the honest
+   * `total`, so the two never disagree about membership, only about how much one call returns.
+   *
+   * Order is fixed: the structural branch first, then the PR, then every dated item newest-first by its own
+   * `occurredAt`/`createdAt`, with the stable `kind`/`id` pair breaking a same-instant tie. `items`, `total`
+   * and `hasMore` come from one predicate in one snapshot, so a page and its count cannot describe two
+   * scopes. Offset paging carries no concurrent-insert stability, which is stated, not claimed.
+   *
+   * The axis is re-resolved and re-validated here rather than trusting the action boundary: an unknown id
+   * and one belonging to a different topic are refused, the same convention `getAxisWorkstream` follows.
+   */
+  evidencePage(
+    scope: { topicId?: string; axisId?: string },
+    paging?: { limit?: number; offset?: number }
+  ): ScopedPage<AxisEvidenceRecord> {
+    const offset = pageOffset(paging?.offset);
+    const limit = pageLimit(paging?.limit);
+    return this.snapshot(() => {
+      const axis = this.getAxis(required(scope.axisId ?? "", "axisId"));
+      if (!axis) {
+        throw new ResearchStoreError("Axis not found.");
+      }
+      if (scope.topicId && axis.topicId !== scope.topicId) {
+        throw new ResearchStoreError("Axis does not belong to this topic.");
+      }
+      const branch = axis.branch.trim();
+      const prUrl = axis.prUrl.trim();
+      const prNumber = axis.prNumber;
+      const branchUrl = branch ? this.branchEvidenceUrl(axis, branch) : "";
+      // Positional params for EVIDENCE_UNION_SQL: branch (id,url,label,guard), PR (id,url,label,guard pair),
+      // then the activity and annotation axis ids.
+      const params: Array<string | number | null> = [
+        axis.id,
+        branchUrl,
+        branch,
+        branch,
+        axis.id,
+        prUrl,
+        prNumber !== null ? `PR #${prNumber}` : "PR",
+        prNumber,
+        prUrl,
+        axis.id,
+        axis.id,
+      ];
+      const total = (
+        this.db
+          .query(`SELECT count(*) AS n FROM (${EVIDENCE_UNION_SQL})`)
+          .get(...params) as { n: number }
+      ).n;
+      const rows = this.db
+        .query(
+          `SELECT * FROM (${EVIDENCE_UNION_SQL})
+            ORDER BY CASE kind WHEN 'branch' THEN 0 WHEN 'pull_request' THEN 1 ELSE 2 END,
+                     sort_at DESC, kind ASC, sort_id ASC
+            LIMIT ? OFFSET ?`
+        )
+        .all(...params, limit, offset) as EvidenceUnionRow[];
+      return {
+        hasMore: offset + rows.length < total,
+        items: rows.map(toAxisEvidenceRecord),
+        limit,
+        offset,
+        total,
+      };
+    });
+  }
+
+  /**
+   * The branch's own URL, or "" — composed only when the axis links **exactly one** repository whose stored
+   * URL is already a GitHub owner/repo address. With none, or more than one, there is no single destination
+   * to name: this never reaches the network and never invents a URL from an ambiguous repository.
+   */
+  private branchEvidenceUrl(axis: Axis, branch: string): string {
+    const repositories = this.listAxisRepositories(axis.id);
+    const [only] = repositories;
+    if (repositories.length !== 1 || !only) {
+      return "";
+    }
+    const base = githubRepoBase(only.url);
+    return base ? `${base}/tree/${encodeURIComponent(branch)}` : "";
   }
 
   /**

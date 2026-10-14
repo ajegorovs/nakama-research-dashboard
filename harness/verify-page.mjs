@@ -423,6 +423,17 @@ const CORPUS = await page.evaluate(
       people: all.people.map((person) => ({
         attributable: person.attributable,
         axes: person.axes.length,
+        // C6 (People composition): each topic involvement with the payload's own topic identity and the
+        // axes the person owns *on that topic*. The lane's bearing/project-only partition is derived from
+        // exactly this — a topic with an empty axis list is a project-only affiliation — so the checks
+        // below compare against the payload rather than counting rendered cards.
+        involvements: person.topics.map((entry) => ({
+          axes: entry.axes.map((axis) => axis.id),
+          name: entry.topic.name,
+          role: entry.role,
+          status: entry.topic.status,
+          topicId: entry.topic.id,
+        })),
         // C2: the repositories the payload's own axes name — the rail's card must be exactly this set,
         // derived rather than invented, so the check compares ids rather than trusting the rendering.
         axisRepoIds: [
@@ -441,6 +452,13 @@ const CORPUS = await page.evaluate(
         axes: repo.axes.map((axis) => axis.title),
         fullName: repo.repository.fullName,
         topicCount: (repo.topics ?? []).length,
+        // The rollup's own direct topic links: id + recorded relationship. The panel consolidates a link
+        // whose project is already a work group into that group, so the check reads coverage by id across
+        // both surfaces rather than the rail's now-subset count.
+        topicLinks: (repo.topics ?? []).map((link) => ({
+          id: link.topic.id,
+          relationship: link.relationship,
+        })),
       })),
       // The projection groups each topic's window events into axis buckets; an event that named its topic
       // but no axis is a legitimate **topic-level** bucket whose `axis` is `null` (store key `""`). Return
@@ -2172,17 +2190,38 @@ const researcher = await page.evaluate(
   (needle) => {
     const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
     const panel = scope?.querySelector("[data-rd-person-panel]");
+    const lane = panel?.querySelector("[data-rd-person-lane]");
+    // V1a partitions the lane: a *bearing* project is a topic group carrying at least one of the person's
+    // own workstreams (the shared compact `data-rd-work-card`); a *project-only* affiliation is a compact
+    // `li` inside the folded disclosure, a topic the person is named on but holds no workstream of their
+    // own. BOTH keep a `data-rd-involvement` marker, so the lane's total is read across the two.
+    const bearing = [...(lane?.querySelectorAll("section[data-rd-involvement]") ?? [])].map((node) => ({
+      axes: [...node.querySelectorAll("[data-rd-work-card]")].map((axis) =>
+        axis.getAttribute("data-rd-work-card")
+      ),
+      // The group intro states the recorded `status · role`, the same string the affiliation row shows.
+      meta: (node.querySelector(".rd-project-intro .rd-meta")?.textContent ?? "").trim(),
+      topic: node.getAttribute("data-rd-involvement"),
+    }));
+    const affiliations = panel?.querySelector("details[data-rd-person-affiliations]");
     return {
-      involvement: [...(panel?.querySelectorAll("[data-rd-involvement]") ?? [])].map((node) => ({
-        // The current person panel renders each topic group's axes as the shared compact workstream card
-        // (`data-rd-work-card`); the older per-axis `data-rd-scan-axis` row hook is retired.
-        axes: [...node.querySelectorAll("[data-rd-work-card]")].map((axis) =>
-          axis.getAttribute("data-rd-work-card")
-        ),
-        topic: node.getAttribute("data-rd-involvement"),
-      })),
+      affiliations: {
+        count: Number(affiliations?.getAttribute("data-rd-person-affiliations") ?? 0),
+        present: affiliations !== null,
+        rows: [...(affiliations?.querySelectorAll("li[data-rd-involvement]") ?? [])].map((node) => ({
+          meta: (node.querySelector(".rd-meta")?.textContent ?? "").trim(),
+          topic: node.getAttribute("data-rd-involvement"),
+          topicId:
+            node.querySelector('[data-rd-entity-tag="topic"]')?.getAttribute("data-rd-entity-id") ?? "",
+        })),
+      },
+      bearing,
+      involvementTotal: lane?.querySelectorAll("[data-rd-involvement]").length ?? -1,
       name: panel?.getAttribute("data-rd-person-panel") ?? "",
       rows: scope?.querySelectorAll(`[data-rd-person="${needle}"]`).length ?? 0,
+      topicsMarker: Number(
+        panel?.querySelector("[data-rd-person-topics]")?.getAttribute("data-rd-person-topics") ?? -1
+      ),
     };
   },
   personName
@@ -2193,25 +2232,75 @@ check(
   `rows ${researcher.rows}, panel ${researcher.name}`
 );
 const personPayload = CORPUS.people.find((person) => person.name === personName);
-if (personPayload !== undefined && personPayload.topics >= 2) {
-  // Each topic group must be its own scope: a distinct topic label, at least one axis of its own, and NO
-  // axis id shared between two groups (no axis inherited/copied from one topic into another).
-  const groups = researcher.involvement;
+// The oracle is the payload's own involvement partition, never a rendered count: a bearing topic is an
+// involvement that owns at least one axis, a project-only one owns none. A person named on many topics
+// but holding a single axis therefore has exactly ONE bearing group — the check never demands a second.
+const involvementWanted = personPayload?.involvements ?? [];
+const bearingWanted = involvementWanted.filter((entry) => entry.axes.length > 0);
+const projectOnlyWanted = involvementWanted.filter((entry) => entry.axes.length === 0);
+if (personPayload !== undefined && bearingWanted.length >= 1) {
+  // Each bearing group must be its own scope: the payload's own topic, in the payload's own order,
+  // carrying exactly that topic's axis ids — none inherited, dropped or copied between groups — and the
+  // groups' topic labels are distinct.
+  const groups = researcher.bearing;
+  const bearingMatch =
+    groups.length === bearingWanted.length &&
+    groups.every((group, index) => {
+      const want = bearingWanted[index];
+      return (
+        group.topic === want.name &&
+        [...group.axes].sort().join(",") === [...want.axes].sort().join(",")
+      );
+    });
+  const distinctTopics = new Set(groups.map((group) => group.topic)).size === groups.length;
   const allAxisIds = groups.flatMap((group) => group.axes);
   const noSharedAxis = new Set(allAxisIds).size === allAxisIds.length;
-  const distinctTopics = new Set(groups.map((group) => group.topic)).size === groups.length;
   check(
-    "one person on several topics shows each topic with its own axes underneath — distinct topic labels, each with its own axis ids and no axis shared between groups (no inherited scope)",
-    groups.length >= 2 &&
+    "one person's bearing projects each show their own axes — the payload's own topics, ids and axis ids, no axis shared between groups (no inherited scope)",
+    bearingMatch &&
       distinctTopics &&
-      groups.every((group) => (group.topic ?? "") !== "" && group.axes.length >= 1) &&
-      noSharedAxis,
-    JSON.stringify(groups)
+      noSharedAxis &&
+      groups.every((group) => group.topic !== "" && group.axes.length >= 1),
+    JSON.stringify({ groups, bearingWanted })
   );
 } else {
   skip(
-    "one person on several topics shows each topic with its own axes underneath",
-    `this corpus links ${personName || "the person"} to ${personPayload?.topics ?? 1} topic(s), so the grouping has one entry`
+    "one person's bearing projects each show their own axes",
+    personPayload === undefined
+      ? `no payload rollup for ${personName || "the person"}`
+      : `${personName} bears no workstream on any of their ${personPayload.topics} topic(s), so the lane renders no bearing group`
+  );
+}
+if (personPayload !== undefined) {
+  // The compact project-only affiliations keep every non-bearing topic — same id, same recorded
+  // `status · role` — the disclosure's own count matches what it holds, and the two partitions together
+  // still state the lane's true total (`data-rd-person-topics`, the payload's own topic count).
+  const compact = researcher.affiliations;
+  const roleOf = (entry) => `${entry.status}${entry.role ? ` · ${entry.role}` : ""}`;
+  const rowsMatch =
+    compact.rows.length === projectOnlyWanted.length &&
+    compact.rows.every((row, index) => {
+      const want = projectOnlyWanted[index];
+      return row.topic === want.name && row.topicId === want.topicId && row.meta === roleOf(want);
+    });
+  const disclosureOk =
+    projectOnlyWanted.length === 0
+      ? !compact.present && compact.count === 0
+      : compact.present && compact.count === projectOnlyWanted.length;
+  const totalOk =
+    researcher.topicsMarker === personPayload.topics &&
+    researcher.bearing.length + compact.rows.length === researcher.topicsMarker &&
+    researcher.involvementTotal === researcher.topicsMarker;
+  check(
+    "the compact project-only affiliations preserve every non-bearing topic — the payload's own ids and status · role — and the two partitions still state the lane's true total",
+    rowsMatch && disclosureOk && totalOk,
+    JSON.stringify({
+      compact,
+      involvementTotal: researcher.involvementTotal,
+      projectOnlyWanted,
+      topicsMarker: researcher.topicsMarker,
+      totalOk,
+    })
   );
 }
 
@@ -2382,25 +2471,44 @@ if (!linkedRepository) {
   const linked = await page.evaluate(() => {
     const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
     const panel = scope?.querySelector("[data-rd-repository-panel]");
+    // Consolidation: a project that is already a work group is navigated by that group, so the panel's
+    // project navigations are the lane's group links plus the rail's direct links — read both, by id and
+    // recorded relationship, so the count claim holds after consolidation instead of reading the subset.
+    const links = [...(panel?.querySelectorAll("[data-rd-project-link]") ?? [])].map((node) => ({
+      id: node.getAttribute("data-rd-project-link"),
+      relationship:
+        node
+          .querySelector("[data-rd-project-relationship]")
+          ?.getAttribute("data-rd-project-relationship") ?? null,
+    }));
     return {
       axes: [...(panel?.querySelectorAll("[data-rd-work-card]") ?? [])].map(
         (axis) => axis.getAttribute("data-rd-work-card")
       ),
+      links,
       name: panel?.getAttribute("data-rd-repository-panel") ?? "",
-      supports: Number(
-        panel
-          ?.querySelector("[data-rd-repository-topics]")
-          ?.getAttribute("data-rd-repository-topics") ?? -1
-      ),
     };
+  });
+  const linkedIds = new Set(linked.links.map((link) => link.id));
+  const missingTopicLinks = (linkedRepository.topicLinks ?? []).filter(
+    (link) => !linkedIds.has(link.id)
+  );
+  const wrongTopicRelationship = (linkedRepository.topicLinks ?? []).filter((link) => {
+    const nav = linked.links.find((entry) => entry.id === link.id);
+    return !nav || nav.relationship !== link.relationship;
   });
   check(
     "a repository that supports work names the topics it supports and the axes happening in it",
     linked.name === linkedRepository.fullName &&
-      linked.supports === linkedRepository.topicCount &&
+      missingTopicLinks.length === 0 &&
+      wrongTopicRelationship.length === 0 &&
       linked.axes.length === (linkedRepository.axes ?? []).length,
-    `panel ${linked.name}: supports ${linked.supports} of ${linkedRepository.topicCount}, ` +
-      `axes ${linked.axes.length} of ${(linkedRepository.axes ?? []).length}`
+    `panel ${linked.name}: ${linked.links.length} project link(s) for ${linkedRepository.topicCount} ` +
+      `direct link(s) (missing ${JSON.stringify(
+        missingTopicLinks.map((link) => link.id)
+      )}), relationship mismatches ${JSON.stringify(
+        wrongTopicRelationship.map((link) => link.id)
+      )}, axes ${linked.axes.length} of ${(linkedRepository.axes ?? []).length}`
   );
 }
 
@@ -6153,9 +6261,8 @@ if (WRITE) {
     );
   }
 
-  // (4) The tags a view shows are the entities *its own projection* names — same ids, same labels.
+  // (4) The projects a view navigates to are the topics *its own projection* names — same ids, same names.
   const peopleProjection = overviewProjection?.people ?? [];
-  const personRow = snapshots.people;
   // The People view has to be on screen to read *which* person's panel is showing: the snapshot above was
   // taken while it was, but the loop has since moved on, and a view that is not mounted has no DOM.
   await showView("people");
@@ -6170,27 +6277,49 @@ if (WRITE) {
   const person = peopleProjection.find((entry) => entry.person.id === selectedPersonId) ?? null;
   if (person === null || person.topics.length === 0) {
     skip(
-      "a person's topic tags are the topics their own rollup links them to",
-      "no person with a topic link is on screen, so the panel has no topic tag to check"
+      "a person's project navigations are the topics their own rollup links them to",
+      "no person with a topic link is on screen, so the lane has no project navigation to check"
     );
   } else {
+    // V1a composition: a *bearing* project (one the person holds a workstream on) reads as a heading + an
+    // Open-project action whose intro carries `data-rd-project-link`/`data-rd-project-name`; a
+    // *project-only* affiliation reads as a compact topic tag. Both are project navigations, so coverage is
+    // read from the navigation markers the lane renders — not from `data-rd-entity-tag`, which only the
+    // affiliations carry any more and so could never cover a bearing project.
+    const navigations = await page.evaluate(() => {
+      const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+      const lane = scope?.querySelector("[data-rd-person-lane]");
+      const bearing = [...(lane?.querySelectorAll("section[data-rd-involvement]") ?? [])].map(
+        (node) => ({
+          id: node.querySelector("[data-rd-project-link]")?.getAttribute("data-rd-project-link") ?? null,
+          label:
+            node.querySelector("[data-rd-project-name]")?.getAttribute("data-rd-project-name") ??
+            (node.querySelector(".rd-project-heading")?.textContent ?? "").trim(),
+        })
+      );
+      const affiliations = [
+        ...(lane?.querySelectorAll('details[data-rd-person-affiliations] [data-rd-entity-tag="topic"]') ??
+          []),
+      ].map((node) => ({
+        id: node.getAttribute("data-rd-entity-id"),
+        label: node.getAttribute("data-rd-tag-label"),
+      }));
+      return [...bearing, ...affiliations];
+    });
     const wanted = person.topics.map((involvement) => involvement.topic);
-    const shown = personRow.tags.filter((tag) => tag.type === "topic");
-    // Every linked topic has to be reachable, and nothing may be tagged that the rollup does not link:
-    // the panel's activity rows tag their topics too, so the count is an upper bound, not an equality.
     const covered = wanted.every((topic) =>
-      shown.some((tag) => tag.id === topic.id && tag.label === topic.name)
+      navigations.some((nav) => nav.id === topic.id && nav.label === topic.name)
     );
-    const foreign = shown.filter(
-      (tag) => !wanted.some((topic) => topic.id === tag.id)
+    const foreign = navigations.filter(
+      (nav) => !wanted.some((topic) => topic.id === nav.id)
     );
     check(
-      "a person's topic tags are the topics their own rollup links them to, ids and names alike",
+      "a person's project navigations are the topics their own rollup links them to, ids and names alike",
       covered && foreign.length === 0,
-      `${shown.length} tag(s) covering ${wanted.length} link(s); ` +
+      `${navigations.length} project navigation(s) covering ${wanted.length} link(s); ` +
         (foreign.length === 0
-          ? "every tag names a linked topic"
-          : `foreign: ${foreign.map((tag) => tag.label).join(", ")}`)
+          ? "every navigation names a linked topic"
+          : `foreign: ${foreign.map((nav) => nav.label).join(", ")}`)
     );
   }
 
@@ -6203,8 +6332,8 @@ if (WRITE) {
   );
   if (!repositoryWithTopics) {
     skip(
-      "a repository's topic tags are the topics its own rollup links it to",
-      "no repository in this dataset links a topic, so no panel has a topic tag to check"
+      "a repository's project navigations carry its rollup's direct links, ids and recorded relationships alike",
+      "no repository in this dataset links a topic, so no panel has a project navigation to check"
     );
   } else {
     await showView("repositories");
@@ -6212,53 +6341,108 @@ if (WRITE) {
       .locator(`[data-rd-repository="${repositoryWithTopics.repository.fullName}"]`)
       .click();
     await page.waitForTimeout(600);
-    const shownTags = await page.evaluate(() => {
+    // V1b composition: the lane's work groups navigate their parent project through the intro's
+    // `data-rd-project-link`, carrying the *recorded* relationship (`data-rd-project-relationship`) only
+    // where the repository is filed directly under it; the rail's "Other project links" card navigates the
+    // direct links no work group represents. Both are project navigations, so coverage is read from them —
+    // not from `data-rd-entity-tag`, which only the consolidated rail subset carries any more. An axis's
+    // parent project the repository is not filed under is a legitimate navigation with *no* relationship;
+    // asserting one for it would be exactly the fabricated direct link this check must forbid.
+    const navigations = await page.evaluate(() => {
       const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
-      const root = scope?.querySelector("[data-rd-repository-panel]");
-      return [...(root?.querySelectorAll("[data-rd-entity-tag]") ?? [])].map((n) => ({
-        id: n.getAttribute("data-rd-entity-id"),
-        label: n.getAttribute("data-rd-tag-label"),
-        type: n.getAttribute("data-rd-entity-tag"),
-      }));
+      const panel = scope?.querySelector("[data-rd-repository-panel]");
+      const navLink = (node) => ({
+        id: node.getAttribute("data-rd-project-link"),
+        relationship:
+          node
+            .querySelector("[data-rd-project-relationship]")
+            ?.getAttribute("data-rd-project-relationship") ?? null,
+      });
+      const group = [
+        ...(panel?.querySelectorAll("[data-rd-repository-lane] [data-rd-project-link]") ?? []),
+      ].map(navLink);
+      const rail = [
+        ...(panel?.querySelectorAll("[data-rd-repository-topics] [data-rd-project-link]") ?? []),
+      ].map(navLink);
+      return { group, rail };
     });
-    const wanted = repositoryWithTopics.topics.map((link) => link.topic);
-    const shown = shownTags.filter((tag) => tag.type === "topic");
-    const covered = wanted.every((topic) =>
-      shown.some((tag) => tag.id === topic.id && tag.label === topic.name)
-    );
-    const foreign = shown.filter(
-      (tag) => !wanted.some((topic) => topic.id === tag.id)
+    const navs = [...navigations.group, ...navigations.rail];
+    const wanted = repositoryWithTopics.topics.map((link) => ({
+      id: link.topic.id,
+      relationship: link.relationship,
+    }));
+    const missing = wanted.filter((link) => !navs.some((nav) => nav.id === link.id));
+    const wrongRelationship = wanted.filter((link) => {
+      const nav = navs.find((entry) => entry.id === link.id);
+      return !nav || nav.relationship !== link.relationship;
+    });
+    const fabricated = navs.filter(
+      (nav) => !wanted.some((link) => link.id === nav.id) && nav.relationship !== null
     );
     check(
-      "a repository's topic tags are the topics its own rollup links it to, ids and names alike",
-      covered && foreign.length === 0,
-      `${shown.length} tag(s) covering ${wanted.length} link(s) in ${repositoryWithTopics.repository.fullName}; ` +
-        (foreign.length === 0
-          ? "every tag names a linked topic"
-          : `foreign: ${foreign.map((tag) => tag.label).join(", ")}`)
+      "a repository's project navigations carry its rollup's direct links, ids and recorded relationships alike, and never fabricate one for an axis-parent project",
+      missing.length === 0 && wrongRelationship.length === 0 && fabricated.length === 0,
+      `${navigations.group.length} work-group link(s) + ${navigations.rail.length} rail link(s) for ${wanted.length} projected link(s) in ${repositoryWithTopics.repository.fullName}; ` +
+        (missing.length === 0 && wrongRelationship.length === 0 && fabricated.length === 0
+          ? "every direct link navigates with its recorded relationship, and no axis-parent project invents one"
+          : `missing ${JSON.stringify(missing.map((link) => link.id))}, ` +
+            `relationship mismatches ${JSON.stringify(wrongRelationship.map((link) => link.id))}, ` +
+            `fabricated ${JSON.stringify(fabricated.map((nav) => nav.id))}`)
     );
   }
 
-  // (5) A tag clicked in a view lands on that entity, selected, under the destination's own name.
+  // (5) A project navigation clicked in a view lands on that entity, selected, under the destination's own
+  // name. In People the lane navigates a project two ways — a bearing group's Open-project action (its intro
+  // carries `data-rd-project-link`/`data-rd-project-name`) or a project-only affiliation's compact topic tag
+  // — and either is a real navigation, so the check exercises whichever the lane renders instead of skipping
+  // because the tag form happens to be absent.
   await showView("people");
-  const peopleTag = (
-    await readGrammar()
-  ).tags.find((tag) => tag.type === "topic");
-  if (peopleTag === undefined) {
+  const peopleNav = await page.evaluate(() => {
+    const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
+    const lane = scope?.querySelector("[data-rd-person-lane]");
+    // Prefer the compact tag: it is the exact control the retired check clicked.
+    const tag = lane?.querySelector('[data-rd-entity-tag="topic"][data-rd-entity-id]');
+    if (tag) {
+      return {
+        id: tag.getAttribute("data-rd-entity-id"),
+        label: tag.getAttribute("data-rd-tag-label"),
+        via: "tag",
+      };
+    }
+    const intro = lane?.querySelector("[data-rd-project-link]");
+    const id = intro?.getAttribute("data-rd-project-link") ?? null;
+    if (!id) return null;
+    const group = intro?.closest("section[data-rd-involvement]");
+    return {
+      id,
+      label:
+        group?.querySelector("[data-rd-project-name]")?.getAttribute("data-rd-project-name") ??
+        (group?.querySelector(".rd-project-heading")?.textContent ?? "").trim(),
+      via: "group",
+    };
+  });
+  if (peopleNav === null || peopleNav.id === null || !peopleNav.label) {
     skip(
-      "a topic tag clicked in People lands in Topics with that topic open",
-      "the selected person's panel shows no topic tag, so this view has no subject for it"
+      "a project navigation clicked in People lands in Topics with that topic open",
+      "the selected person's lane renders no project navigation, so this view has no subject for it"
     );
   } else {
-    await root
-      .locator(
-        `[data-rd-entity-tag="topic"][data-rd-entity-id="${peopleTag.id}"]`
-      )
-      .first()
-      .click();
+    const peopleNavKind =
+      peopleNav.via === "tag" ? "a project-only topic tag" : "a bearing group's Open-project action";
+    if (peopleNav.via === "tag") {
+      await root
+        .locator(`[data-rd-entity-tag="topic"][data-rd-entity-id="${peopleNav.id}"]`)
+        .first()
+        .click();
+    } else {
+      await root
+        .locator(`[data-rd-project-link="${peopleNav.id}"] button`)
+        .first()
+        .click();
+    }
     // The route switches view and selects asynchronously (entity target -> effect -> get_topic), so wait
     // on the completion condition rather than a sleep: on Topics, this topic's rail row pressed, its pane
-    // up. No arbitrary delay, and nothing read until the page is actually where the tag sent it.
+    // up. No arbitrary delay, and nothing read until the page is actually where the navigation sent it.
     await page
       .waitForFunction(
         ([pluginId, label]) => {
@@ -6270,7 +6454,7 @@ if (WRITE) {
             pressed?.getAttribute("data-rd-index-topic") === label
           );
         },
-        [PLUGIN_ID, peopleTag.label],
+        [PLUGIN_ID, peopleNav.label],
         { polling: 50, timeout: 8000 }
       )
       .catch(() => {});
@@ -6288,9 +6472,11 @@ if (WRITE) {
       };
     });
     check(
-      "a topic tag clicked in People lands in Topics with that topic open, under the same name",
-      landed.view === "topics" && landed.name === peopleTag.label,
-      `view ${landed.view ?? "none"}, opened "${landed.name ?? "none"}" (wanted "${peopleTag.label}")`
+      "a project navigation clicked in People lands in Topics with that topic open, under the same name",
+      landed.view === "topics" && landed.name === peopleNav.label,
+      `${peopleNavKind} — view ${landed.view ?? "none"}, opened "${landed.name ?? "none"}" (wanted "${
+        peopleNav.label
+      }")`
     );
   }
 
@@ -6462,16 +6648,20 @@ if (WRITE) {
   const c5Current = (entry) => (entry.axes ?? []).filter((axis) => !TERMINAL.has(axis.state));
   const c5Terminal = (entry) => (entry.axes ?? []).filter((axis) => TERMINAL.has(axis.state));
   const c5Count = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-  // The row's second line, as the page writes it, from the projection's own numbers.
+  // The row's second line, as the page writes it, from the projection's own numbers. The wording mirrors
+  // `supportsLine` in `src/ui.tsx` exactly: the workstream half states the repository's own total (the same
+  // total the panel header carries), and the projects half counts the rollup's *direct* topic links — a
+  // project an axis names without the repository being filed under it is navigable but is not a direct link.
   const c5SupportsLine = (entry) => {
-    const current = c5Current(entry).length;
+    const workstreams =
+      (entry.axes ?? []).length === 0
+        ? "no workstreams"
+        : c5Count((entry.axes ?? []).length, "workstream", "workstreams");
     const topics =
       (entry.topics ?? []).length === 0
-        ? "no project names it"
+        ? "no direct project link"
         : `supports ${c5Count((entry.topics ?? []).length, "project", "projects")}`;
-    return `${topics} · ${
-      current === 0 ? "no current workstream" : c5Count(current, "current workstream", "current workstreams")
-    }`;
+    return `${topics} · ${workstreams}`;
   };
 
   const c5ShowRepositories = async () => {
@@ -6494,6 +6684,16 @@ if (WRITE) {
       const supports = panel?.querySelector("[data-rd-repository-topics]");
       const people = panel?.querySelector("[data-rd-repository-people]");
       const activity = panel?.querySelector("[data-rd-repository-activity]");
+      // A project navigation: `data-rd-project-link` marks it with the project's id, and its recorded
+      // relationship rides on `data-rd-project-relationship`. Groups carry it in the lane; direct links
+      // carry it in the rail. Reading both is how the check stays a coverage claim after consolidation.
+      const navLink = (node) => ({
+        id: node.getAttribute("data-rd-project-link"),
+        relationship:
+          node
+            .querySelector("[data-rd-project-relationship]")
+            ?.getAttribute("data-rd-project-relationship") ?? null,
+      });
       const tagsIn = (node) =>
         [...(node?.querySelectorAll("[data-rd-entity-tag]") ?? [])].map((n) => ({
           id: n.getAttribute("data-rd-entity-id"),
@@ -6550,6 +6750,9 @@ if (WRITE) {
           count: Number(lane?.getAttribute("data-rd-repository-current") ?? -1),
           rows: inLane,
         },
+        // Every project navigation inside the lane (each work group's heading/Open-project action, in both
+        // the lane and the fold). Each carries its own id and recorded relationship.
+        groupLinks: [...(lane?.querySelectorAll("[data-rd-project-link]") ?? [])].map(navLink),
         notesOmitted: panel?.querySelector("[data-rd-repository-notes-omitted]") !== null,
         panelName: panel?.getAttribute("data-rd-repository-panel") ?? null,
         people: people
@@ -6578,6 +6781,8 @@ if (WRITE) {
         supports: {
           count: Number(supports?.getAttribute("data-rd-repository-topics") ?? -1),
           inRail: rail?.contains(supports) ?? false,
+          // The rail's direct project links — the ones no work group represents (the consolidated subset).
+          links: [...(supports?.querySelectorAll("[data-rd-project-link]") ?? [])].map(navLink),
           tags: tagsIn(supports),
         },
       };
@@ -6638,26 +6843,27 @@ if (WRITE) {
     .map((row, i) => ({ expected: c5LineFor(c5Repositories[i] ?? {}), row }))
     .filter((entry) => entry.expected !== entry.row.meta);
   check(
-    "every repository row's second line is the rollup's own numbers, on the lane's own current/terminal split",
+    "every repository row's second line is the rollup's own workstream total and its direct project links",
     lineMismatch.length === 0,
     lineMismatch.length === 0
       ? indexRead.rows.map((row) => row.meta).join(" | ")
       : `${lineMismatch[0].row.name}: "${lineMismatch[0].row.meta}" — wanted "${lineMismatch[0].expected}"`
   );
-  // The zero-case branch is only visible where the dataset has a repository with nothing current — the
-  // fixture's bare repository exists for exactly this. Reported with its reason, never silently passed.
+  // The zero-case branch is only visible where the dataset has a repository with no direct project link and
+  // no nonterminal axis — the fixture's bare repository exists for exactly this. Reported with its reason,
+  // never silently passed.
   const quietRepository = c5Repositories.find(
     (entry) => c5Current(entry).length === 0 && (entry.topics ?? []).length === 0
   );
   if (!quietRepository) {
     skip(
-      "a repository with nothing current says so, instead of filing stopped work under the lane's heading",
-      "this dataset has no repository with neither a topic link nor a current axis"
+      "a repository with no direct project link states its own workstream total, even when only stopped work remains",
+      "this dataset has no repository with neither a topic link nor a nonterminal axis"
     );
   } else {
     const quietRow = indexRead.rows.find((row) => row.id === quietRepository.repository.id);
     check(
-      "a repository with nothing current says so, instead of filing stopped work under the lane's heading",
+      "a repository with no direct project link states its own workstream total, even when only stopped work remains",
       quietRow?.meta === c5LineFor(quietRepository),
       `${quietRepository.repository.fullName}: "${quietRow?.meta ?? "no row"}"`
     );
@@ -6746,21 +6952,38 @@ if (WRITE) {
         }`
       );
     }
+    // Consolidation: a project a work group already names and navigates is not repeated as a rail link, so
+    // the rail holds only the *direct* links no group represents. The claim is therefore coverage without
+    // duplication across both surfaces: every topic link the rollup records is navigated exactly once — as
+    // a work-group link in the lane or a rail link — and carries the relationship the projection records.
+    // Reading `data-rd-project-link` in the lane (groups) plus in the rail (direct links) is what makes the
+    // assertion hold after consolidation rather than shrink to the rail subset.
+    const projectedLinks = (laneSubject.topics ?? []).map((link) => ({
+      id: link.topic.id,
+      relationship: link.relationship,
+    }));
+    const navLinks = [...laneRead.groupLinks, ...laneRead.supports.links];
+    const navIds = navLinks.map((link) => link.id);
+    const missingLinks = projectedLinks.filter((link) => !navIds.includes(link.id));
+    const duplicateNav = navIds.filter((id, index) => navIds.indexOf(id) !== index);
+    const wrongRelationship = projectedLinks.filter((link) => {
+      const nav = navLinks.find((entry) => entry.id === link.id);
+      return !nav || nav.relationship !== link.relationship;
+    });
     check(
-      "the topic links are the rollup's own links, and they sit in the rail as context, not in the lane",
-      laneRead.supports.count === (laneSubject.topics ?? []).length &&
-        laneRead.supports.inRail &&
-        laneRead.supports.tags.filter((tag) => tag.type === "topic").length ===
-          (laneSubject.topics ?? []).length &&
-        (laneSubject.topics ?? []).every((link) =>
-          laneRead.supports.tags.some(
-            (tag) =>
-              tag.type === "topic" && tag.id === link.topic.id && tag.label === link.topic.name
-          )
-        ),
-      `${laneRead.supports.count} link(s), ${
-        laneRead.supports.tags.filter((tag) => tag.type === "topic").length
-      } topic tag(s), ${laneRead.supports.inRail ? "inside the rail" : "NOT in the rail"}`
+      "every topic link the rollup records is navigated exactly once — as a work-group link or a rail link — with its recorded relationship",
+      missingLinks.length === 0 &&
+        duplicateNav.length === 0 &&
+        wrongRelationship.length === 0 &&
+        (laneRead.supports.links.length === 0 || laneRead.supports.inRail),
+      `${laneRead.groupLinks.length} work-group link(s) + ${laneRead.supports.links.length} rail link(s) ` +
+        `for ${projectedLinks.length} projected link(s); missing ${JSON.stringify(
+          missingLinks.map((link) => link.id)
+        )}, duplicated ${JSON.stringify(duplicateNav)}, relationship mismatches ${JSON.stringify(
+          wrongRelationship.map((link) => link.id)
+        )}; supports.count ${laneRead.supports.count}, ${
+          laneRead.supports.inRail ? "rail in place" : "no rail card"
+        }`
     );
     // D5: the people card is *derived* from the people rollup's axes, or it is absent — never a
     // prototype-shaped empty card, and never a person this rollup does not link here.

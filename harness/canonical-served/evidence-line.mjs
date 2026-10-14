@@ -153,14 +153,22 @@ const confirmedSubject = projection.supportedConfirmed[0] ?? null;
 const defaultConfirmedSubject = projection.defaultConfirmed[0] ?? null;
 
 // Drive the served page: the Progress view, select a workstream by its index row, read its context panel.
+// The evidence disclosure moved OUT of the context panel into a sibling `<details>` of the selected detail
+// OWNER (`[data-rd-progress-detail], which carries data-rd-progress-detail-axis`), so: identity, the current
+// reading and the claim/state confidences come from the context panel, while the evidence marker is read
+// from the owner. The evidence body is hidden while the fold is closed, so its text is read via `textContent`
+// (which includes hidden descendants), never `innerText` — the absent case's explicit no-evidence sentence
+// must remain visible to the assertion.
 const readPanel = () =>
   page.evaluate(() => {
     const scope = document.querySelector('div[data-plugin-id="research-dashboard"]');
     const panel = scope?.querySelector("[data-rd-context-panel]");
-    const line = panel?.querySelector("[data-rd-axis-evidence]");
+    const owner = scope?.querySelector("[data-rd-progress-detail]");
+    const line = owner?.querySelector("[data-rd-axis-evidence]");
     const reading = panel?.querySelector("[data-rd-axis-reading]");
     return {
       axis: panel?.getAttribute("data-rd-context-panel") ?? null,
+      detailAxis: owner?.getAttribute("data-rd-progress-detail-axis") ?? null,
       confs: [...(panel?.querySelectorAll("[data-rd-conf]") ?? [])].map((n) => n.getAttribute("data-rd-conf")),
       evidenceCount: line ? Number(line.getAttribute("data-rd-axis-evidence")) : null,
       evidenceText: (line?.textContent ?? "").replace(/\s+/g, " ").trim(),
