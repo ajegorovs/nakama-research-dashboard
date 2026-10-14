@@ -66,8 +66,10 @@ How to work:
   workstream and a blocked task are **different facts**: a workstream blocked on something external is not
   a task being blocked, and vice versa — say *why* something is blocked in its body or a note rather than
   leaving the state to carry the reason. To change a state that already exists, send a `transitions` entry
-  (`{subject, toState, …}`) — never a `state` field on the update, which is refused because it would leave
-  the change unrecorded. Every change between two different states is allowed and appended to the history,
+  (`{subject, toState, …}`) — never change `state` through the update, which is refused because it would
+  leave the change unrecorded. An unchanged existing-axis state echo is accepted without a history row
+  (the ordinary patch still advances its version); new axes may specify their initial state.
+  Every change between two different states is allowed and appended to the history,
   reopening included; a change that would not change anything is refused as `no-op`. The task's history
   keeps what it was, so reopening `open → resolved → open` still shows it was once resolved.
 - **A problem is a real record, not a status note** — and a task is general actionable work. Raise one —
@@ -77,6 +79,10 @@ How to work:
   the record, a problem is actionable work. Mark a problem's state with `stateConfidence`, and link the
   repository it concerns with `repositoryFullNames` when there is one. Its `title` is concise, distinct
   text you author — see the text rule below.
+- Keep every existing `problemId` inside the reconciled topic. When also supplying `axisId` or
+  `axisTitle` for a task update, transition or annotation, both must identify that task's actual
+  workstream. These selectors verify scope; they do not move the task. Foreign or contradictory
+  targets are refused as `invalid-input`, and the entire reconciliation rolls back.
 - **A plan is optional and belongs to one owner.** Send
   `plans: [{topicId|axisTitle|problemId, summary, steps: [{title, state}]}]` only when the conversation
   established one; an axis without a plan is normal. Exactly one owner: a project (`topicId`), a
@@ -114,9 +120,14 @@ How to work:
   `currentState`, `blocker`) must be backed by something in that call — a branch, a PR number/URL, an
   activity or an annotation — or the whole update is refused. When nothing could have confirmed it, say
   so with `stateConfidence`/`currentStateConfidence`/`blockerConfidence` set to `inferred`.
-- Read `version` from `get_topic` and send it back as `expectedVersion` on the update. If someone else
-  changed the topic in between, the call fails with a `conflict: ` error; re-read the topic and decide
-  with the fresh state instead of overwriting.
+- Read `version` from `get_topic` and send it back as top-level `expectedVersion`; a supplied stale
+  topic version refuses even a link-only or note-only reconciliation. For existing task and plan
+  updates, also pass their own row versions as `problems[].expectedVersion` and
+  `plans[].expectedVersion`. On `conflict`, reread and decide again. Versions are optional; omitting
+  one leaves that check disabled. The topic version is **not an aggregate revision**: child/link
+  changes and appended notes/activity need not advance it. Plan steps have no independent version,
+  and a step-only edit need not advance the plan version. Do not claim these checks protect all
+  concurrent relationship or step edits.
 - `record_activity` is for objective events that can be pointed at: a merged pull request, a completed
   run, a commit, a document update. Use the declared `sourceType` values (`github_pr`, `github_commit`,
   `github_issue`, `repo_document`, `group_chat`, `experiment`, `agent_review`, `manual`) and put the

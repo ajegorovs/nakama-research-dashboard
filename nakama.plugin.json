@@ -143,7 +143,7 @@
       "effect": "write",
       "entry": "actions/actions.js",
       "exposeAsTool": true,
-      "description": "The single write path for a topic update. Applies topic fields, axes (created or updated by id or title), repository and person links, activity and annotations in ONE transaction: either all of it lands or none of it does. Send only what the conversation established. Pass expectedVersion (from get_topic) to fail with a conflict instead of overwriting a change someone else made. Any claim you mark 'confirmed' must be backed by evidence in the same call — an activity, an annotation, a branch or a PR; without evidence, label it 'inferred'. Axis state names are active, usable, draft, blocked, parked, completed and abandoned; usable (not completed) is the state for work that is operationally relevant and still has acknowledged gaps. Problems are raised and updated through problems[], plans and their steps through plans[], and state changes through transitions[]; a problem's state is accepted only when creating it, because changing an existing state is a recorded transition, not a field update. A refusal returns {ok:false, kind}: conflict means re-read and retry, no-op means it is already in that state so do not retry, invalid-state means that state name does not exist, human-authored means an agent may not rewrite text a human wrote (ask the person instead), and invalid-input is every other fixable-rule refusal.",
+      "description": "The single write path for a topic update. Applies topic fields, axes (created or updated by id or title), repository and person links, activity and annotations in ONE transaction: either all of it lands or none of it does. Send only what the conversation established. Pass the top-level expectedVersion (the topic row's OWN version from get_topic — a single row's version, not an aggregate over the axes, problems or plans below it) to fail with a conflict instead of overwriting a change someone else made; it is checked even when no `topic` patch is sent. A problem entry or a plan entry may carry its own optional expectedVersion: it guards THAT existing row (identified by problemId / planId) when the entry updates it, is ignored when the entry creates a new row, and omitting it leaves that row unchecked — a version you did not read is never inferred. Any claim you mark 'confirmed' must be backed by evidence in the same call — an activity, an annotation, a branch or a PR; without evidence, label it 'inferred'. Axis state names are active, usable, draft, blocked, parked, completed and abandoned; usable (not completed) is the state for work that is operationally relevant and still has acknowledged gaps. Problems are raised and updated through problems[], plans and their steps through plans[], and state changes through transitions[]; a problem's state is accepted only when creating it, because changing an existing state is a recorded transition, not a field update. A refusal returns {ok:false, kind}: conflict means re-read and retry, no-op means it is already in that state so do not retry, invalid-state means that state name does not exist, human-authored means an agent may not rewrite text a human wrote (ask the person instead), and invalid-input is every other fixable-rule refusal.",
       "inputSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -503,6 +503,10 @@
                   "minLength": 1,
                   "maxLength": 100
                 },
+                "expectedVersion": {
+                  "type": "integer",
+                  "minimum": 1
+                },
                 "statement": {
                   "type": "string",
                   "minLength": 1,
@@ -567,6 +571,10 @@
                   "type": "string",
                   "minLength": 1,
                   "maxLength": 100
+                },
+                "expectedVersion": {
+                  "type": "integer",
+                  "minimum": 1
                 },
                 "topicId": {
                   "type": "string",

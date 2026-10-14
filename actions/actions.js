@@ -2896,6 +2896,9 @@ class ResearchStore {
       oneOf(actor.type, ACTOR_TYPES, "actor.type");
       const resolved = this.resolveTopicForReconcile(input);
       let topic = resolved.topic;
+      if (!resolved.created) {
+        this.assertVersion("topic", topic.name, topic.version, input.expectedVersion);
+      }
       if (actor.id) {
         const known = this.db.query("SELECT id FROM people WHERE nakama_user_id = ? LIMIT 1").get(actor.id);
         if (known) {
@@ -3002,6 +3005,9 @@ class ResearchStore {
       }
       for (const annotationInput of input.annotations ?? []) {
         const axisId = this.resolveAxisId(topic.id, annotationInput.axisId, annotationInput.axisTitle);
+        if (annotationInput.problemId) {
+          this.resolveProblemInTopic(topic.id, annotationInput.problemId, annotationInput.axisId, annotationInput.axisTitle);
+        }
         const kind = optionalOneOf(annotationInput.kind, ANNOTATION_KINDS, "kind") ?? "note";
         const annotation = this.insertAnnotation({
           authorId: actor.id,
@@ -3030,6 +3036,7 @@ class ResearchStore {
         const plan = planInput.planId ? this.updatePlan({
           authorId: actor.id,
           authorType,
+          expectedVersion: planInput.expectedVersion,
           id: planInput.planId,
           owner,
           summary: required(planInput.summary, "summary")
@@ -3065,12 +3072,14 @@ class ResearchStore {
       for (const problemInput of input.problems ?? []) {
         const statement = required(problemInput.statement, "statement");
         if (problemInput.problemId) {
+          this.resolveProblemInTopic(topic.id, problemInput.problemId, problemInput.axisId, problemInput.axisTitle);
           if (problemInput.state !== undefined) {
             throw new ResearchStoreError("problems[].state applies when creating. To change an existing problem's state, send it in `transitions` so the change is recorded.");
           }
           touchedProblems.push(this.updateProblem({
             authorId: actor.id,
             authorType,
+            expectedVersion: problemInput.expectedVersion,
             id: problemInput.problemId,
             personIds: problemInput.personIds,
             planStepId: problemInput.planStepId,
@@ -3101,6 +3110,7 @@ class ResearchStore {
       for (const transitionInput of input.transitions ?? []) {
         const observedAt = text(transitionInput.observedAt);
         if (transitionInput.subject === "problem") {
+          this.resolveProblemInTopic(topic.id, required(transitionInput.problemId, "problemId"), transitionInput.axisId, transitionInput.axisTitle);
           const result = this.transitionProblem({
             actorId: actor.id,
             expectedVersion: transitionInput.expectedVersion,
@@ -3217,6 +3227,10 @@ class ResearchStore {
     }
     const stored = this.db.query("SELECT current_state_confidence, blocker_confidence FROM development_axes WHERE id = ?").get(id);
     this.assertVersion("axis", existing.title, existing.version, options?.expectedVersion);
+    const requestedState = optionalOneOf(patch.state, AXIS_STATES, "state");
+    if (requestedState !== undefined && requestedState !== existing.state) {
+      throw new ResearchStoreError("axes[].state applies when creating. To change an existing axis's state, send it in `transitions` so the change is recorded.");
+    }
     const next = {
       blocker: patch.blocker ?? existing.blocker,
       blockerConfidence: optionalOneOf(patch.blockerConfidence, CONFIDENCES, "blockerConfidence"),
@@ -3227,7 +3241,7 @@ class ResearchStore {
       kind: optionalOneOf(patch.kind, AXIS_KINDS, "kind"),
       prNumber: patch.prNumber === undefined ? existing.prNumber : patch.prNumber,
       prUrl: patch.prUrl ?? existing.prUrl,
-      state: optionalOneOf(patch.state, AXIS_STATES, "state"),
+      state: requestedState,
       stateConfidence: optionalOneOf(patch.stateConfidence, CONFIDENCES, "stateConfidence"),
       title: patch.title === undefined ? existing.title : required(patch.title, "axis.title")
     };
@@ -3394,14 +3408,7 @@ class ResearchStore {
       throw new ResearchStoreError("A plan has exactly one owner: name one of topicId, axisId/axisTitle or problemId.");
     }
     if (planInput.problemId) {
-      const problem = this.getProblem(required(planInput.problemId, "problemId"));
-      if (!problem) {
-        throw new ResearchStoreError("Problem not found.");
-      }
-      const axis = this.getAxis(problem.axisId);
-      if (!axis || axis.topicId !== topicId) {
-        throw new ResearchStoreError("Problem does not belong to this topic.");
-      }
+      const problem = this.resolveProblemInTopic(topicId, planInput.problemId);
       return { problemId: problem.id, scope: "problem" };
     }
     if (planInput.topicId) {
@@ -3507,6 +3514,26 @@ class ResearchStore {
       return axis.id;
     }
     return null;
+  }
+  resolveProblemInTopic(topicId, problemId, axisId, axisTitle) {
+    const problem = this.getProblem(required(problemId, "problemId"));
+    if (!problem) {
+      throw new ResearchStoreError("Problem not found.", "invalid-input");
+    }
+    const axis = this.getAxis(problem.axisId);
+    if (!axis || axis.topicId !== topicId) {
+      throw new ResearchStoreError("The named problem does not belong to this topic.", "invalid-input");
+    }
+    if (axisId && axisId !== problem.axisId) {
+      throw new ResearchStoreError("The named problem is not on the axis it is scoped to.", "invalid-input");
+    }
+    if (axisTitle && axisTitle.trim().length > 0) {
+      const titled = this.findAxisByTitle(topicId, axisTitle);
+      if (!titled || titled.id !== problem.axisId) {
+        throw new ResearchStoreError("The named problem is not on the axis it is scoped to.", "invalid-input");
+      }
+    }
+    return problem;
   }
   repositoryExists(id) {
     return Boolean(this.db.query("SELECT 1 AS present FROM repositories WHERE id = ?").get(id));

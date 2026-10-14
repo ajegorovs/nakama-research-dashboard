@@ -1171,6 +1171,12 @@ export type ReconcileTopicInput = {
   problems?: Array<{
     problemId?: string;
     statement: string;
+    /**
+     * The task row's own version (from get_topic), for an optimistic guard. Honoured only when
+     * `problemId` updates an existing task; ignored on creation, where there is no prior version to
+     * expect. Sending a version you did not read is what this field exists to refuse.
+     */
+    expectedVersion?: number;
     /** The task's concise short text, distinct from `statement`. Omitted or empty stores no title row. */
     title?: string;
     axisId?: string;
@@ -1188,6 +1194,12 @@ export type ReconcileTopicInput = {
    */
   plans?: Array<{
     planId?: string;
+    /**
+     * The plan row's own version (from get_topic), for an optimistic guard. Honoured only when
+     * `planId` updates an existing plan; ignored on creation, where there is no prior version to
+     * expect. Optional by design: omit it to leave the row unchecked rather than guess a version.
+     */
+    expectedVersion?: number;
     topicId?: string;
     axisId?: string;
     axisTitle?: string;
@@ -6502,6 +6514,14 @@ export class ResearchStore {
       const resolved = this.resolveTopicForReconcile(input);
       let topic = resolved.topic;
 
+      // The topic-row optimistic guard, before any write and even when no `topic` patch is sent: the
+      // caller names the version it read (from get_topic) and the whole reconcile is refused if someone
+      // else moved the row first. A topic this call just created has no prior version to expect, so the
+      // guard runs only for an existing topic — creation invents no version semantics.
+      if (!resolved.created) {
+        this.assertVersion("topic", topic.name, topic.version, input.expectedVersion);
+      }
+
       // Whoever just wrote is on the topic they wrote to, if the dashboard already knows them as a
       // person. A link, never a new row: "who touched this" must not invent people (F6).
       if (actor.id) {
@@ -6667,6 +6687,17 @@ export class ResearchStore {
           annotationInput.axisId,
           annotationInput.axisTitle
         );
+        // A note (or claim) may name a problem by bare id. Whether or not it also names an axis, the
+        // problem has to belong to this topic and sit on the axis the caller named — never a foreign
+        // problem, never one on a sibling axis of this topic.
+        if (annotationInput.problemId) {
+          this.resolveProblemInTopic(
+            topic.id,
+            annotationInput.problemId,
+            annotationInput.axisId,
+            annotationInput.axisTitle
+          );
+        }
         const kind =
           optionalOneOf(annotationInput.kind, ANNOTATION_KINDS, "kind") ?? "note";
         const annotation = this.insertAnnotation({
@@ -6721,6 +6752,7 @@ export class ResearchStore {
           ? this.updatePlan({
               authorId: actor.id,
               authorType,
+              expectedVersion: planInput.expectedVersion,
               id: planInput.planId,
               owner,
               summary: required(planInput.summary, "summary"),
@@ -6760,6 +6792,15 @@ export class ResearchStore {
       for (const problemInput of input.problems ?? []) {
         const statement = required(problemInput.statement, "statement");
         if (problemInput.problemId) {
+          // A problem is reachable by bare id: make sure it is *this* topic's, and on the axis the caller
+          // named, before the update touches it. Refused here, in the same transaction, so a valid write
+          // earlier in the call rolls back with a foreign reference.
+          this.resolveProblemInTopic(
+            topic.id,
+            problemInput.problemId,
+            problemInput.axisId,
+            problemInput.axisTitle
+          );
           if (problemInput.state !== undefined) {
             // Not an oversight: a state change goes through `transitions` so that it is recorded. Accepting
             // it here would let a caller overwrite the state with no history row, which is the one thing the
@@ -6772,6 +6813,7 @@ export class ResearchStore {
             this.updateProblem({
               authorId: actor.id,
               authorType,
+              expectedVersion: problemInput.expectedVersion,
               id: problemInput.problemId,
               personIds: problemInput.personIds,
               planStepId: problemInput.planStepId,
@@ -6820,6 +6862,14 @@ export class ResearchStore {
       for (const transitionInput of input.transitions ?? []) {
         const observedAt = text(transitionInput.observedAt);
         if (transitionInput.subject === "problem") {
+          // The transition moves a problem by bare id: it must be reachable from the topic this call is
+          // scoped to (and from the axis named, if any) before anything is recorded.
+          this.resolveProblemInTopic(
+            topic.id,
+            required(transitionInput.problemId, "problemId"),
+            transitionInput.axisId,
+            transitionInput.axisTitle
+          );
           const result = this.transitionProblem({
             actorId: actor.id,
             expectedVersion: transitionInput.expectedVersion,
@@ -7061,6 +7111,17 @@ export class ResearchStore {
       existing.version,
       options?.expectedVersion
     );
+    // A state is recorded, never typed in: `transitions` is the only path that appends to `state_log`, the
+    // same rule an existing problem's `state` already follows. An echo of the state already stored transfers
+    // nothing and stays accepted (and still bumps the version like any other patch); anything else would
+    // move the lifecycle with no history row, which is the one thing the state log exists to prevent. The
+    // enum is validated first, so an unknown state name is refused as such rather than as a "change".
+    const requestedState = optionalOneOf(patch.state, AXIS_STATES, "state");
+    if (requestedState !== undefined && requestedState !== existing.state) {
+      throw new ResearchStoreError(
+        "axes[].state applies when creating. To change an existing axis's state, send it in `transitions` so the change is recorded."
+      );
+    }
     const next = {
       blocker: patch.blocker ?? existing.blocker,
       blockerConfidence: optionalOneOf(
@@ -7080,7 +7141,7 @@ export class ResearchStore {
       prNumber:
         patch.prNumber === undefined ? existing.prNumber : patch.prNumber,
       prUrl: patch.prUrl ?? existing.prUrl,
-      state: optionalOneOf(patch.state, AXIS_STATES, "state"),
+      state: requestedState,
       stateConfidence: optionalOneOf(
         patch.stateConfidence,
         CONFIDENCES,
@@ -7497,14 +7558,9 @@ export class ResearchStore {
       );
     }
     if (planInput.problemId) {
-      const problem = this.getProblem(required(planInput.problemId, "problemId"));
-      if (!problem) {
-        throw new ResearchStoreError("Problem not found.");
-      }
-      const axis = this.getAxis(problem.axisId);
-      if (!axis || axis.topicId !== topicId) {
-        throw new ResearchStoreError("Problem does not belong to this topic.");
-      }
+      // Reuses the one problem→axis→topic check, so a task-owned plan cannot be pointed at a problem from
+      // another topic of the same reconcile.
+      const problem = this.resolveProblemInTopic(topicId, planInput.problemId);
       return { problemId: problem.id, scope: "problem" };
     }
     if (planInput.topicId) {
@@ -7750,6 +7806,50 @@ export class ResearchStore {
       return axis.id;
     }
     return null;
+  }
+
+  /**
+   * Resolves a problem named by id against the topic a reconcile is scoped to, and — when the caller named
+   * one — against the axis it claims the problem sits on. A problem is reached by bare id from `problems[]`,
+   * `transitions[]` and `annotations[]`, so without this a call scoped to Topic A could update, move or
+   * annotate a problem belonging to Topic B, or hang a note on a problem that lives on a sibling axis of the
+   * same topic. Every reference is refused as a caller mistake **before** anything is written, which is what
+   * lets the whole call roll back atomically. Both an `axisId` and an `axisTitle` are honoured when given: a
+   * title that contradicts the id is a mistake, not something to ignore.
+   */
+  private resolveProblemInTopic(
+    topicId: string,
+    problemId: string,
+    axisId?: string,
+    axisTitle?: string
+  ): Problem {
+    const problem = this.getProblem(required(problemId, "problemId"));
+    if (!problem) {
+      throw new ResearchStoreError("Problem not found.", "invalid-input");
+    }
+    const axis = this.getAxis(problem.axisId);
+    if (!axis || axis.topicId !== topicId) {
+      throw new ResearchStoreError(
+        "The named problem does not belong to this topic.",
+        "invalid-input"
+      );
+    }
+    if (axisId && axisId !== problem.axisId) {
+      throw new ResearchStoreError(
+        "The named problem is not on the axis it is scoped to.",
+        "invalid-input"
+      );
+    }
+    if (axisTitle && axisTitle.trim().length > 0) {
+      const titled = this.findAxisByTitle(topicId, axisTitle);
+      if (!titled || titled.id !== problem.axisId) {
+        throw new ResearchStoreError(
+          "The named problem is not on the axis it is scoped to.",
+          "invalid-input"
+        );
+      }
+    }
+    return problem;
   }
 
   private repositoryExists(id: string): boolean {

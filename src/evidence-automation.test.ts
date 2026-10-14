@@ -1404,7 +1404,13 @@ describe("interpreted state is stable across ingest", () => {
       store.updateAxis(axis.id, {
         blocker: "waiting on upstream",
         currentState: "downstream review",
-        state: "blocked",
+      });
+      // The lifecycle move is a recorded transition, not a field on the patch: an existing axis's state
+      // changes only through `transitions`.
+      store.transitionAxis({
+        axisId: axis.id,
+        origin: "human",
+        toState: "blocked",
       });
       store.updateTopic(topicId, { summary: "human topic summary" });
       const enrollmentId = enroll(store, axis.id, topicId);

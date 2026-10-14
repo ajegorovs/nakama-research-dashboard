@@ -650,7 +650,11 @@ export function evaluateStore({ store, makeStore, pluginActions, harnessSources,
     s.reconcileTopic({ topicName: "Guard pre-existing", axes: [{ title: "A", state: "active", stateConfidence: "inferred" }] });
     s.reconcileTopic({ topicName: "Guard pre-existing", activities: [{ summary: "backing", axisTitle: "A", sourceType: "github_pr", sourceRef: "PR #1", occurredAt: "2026-01-01" }] });
     // Now assert `confirmed` on a later transaction: the evidence already exists, so it must pass.
-    const updated = s.reconcileTopic({ topicName: "Guard pre-existing", axes: [{ title: "A", state: "usable", stateConfidence: "confirmed" }] });
+    const updated = s.reconcileTopic({
+      topicName: "Guard pre-existing",
+      axes: [{ title: "A", state: "active", stateConfidence: "confirmed" }],
+      transitions: [{ subject: "axis", axisTitle: "A", toState: "usable" }],
+    });
     const a = updated.axes[0];
     results.push(
       a.stateConfidence === "confirmed"

@@ -28,6 +28,35 @@ skill defines operational tool use. This document does not authorize writes or d
 - Use `personActorId` at the public activity boundary; reserved `actorId` is stripped by the
   host. This is a read filter, not access control.
 
+## Reconciliation scope and lifecycle integrity
+
+- Existing task IDs in reconciliation updates, transitions and annotations must resolve through their
+  workstream to the reconciled project. A supplied workstream ID or title must match the task's
+  actual workstream; these selectors are checks, not task-move inputs. Contradictory selectors are
+  refused as `invalid-input`, including for task claims whose stored project target is null.
+- A refused reconciliation rolls back the whole transaction, including earlier valid writes,
+  relationship changes, versions, notes and state-history entries.
+- An existing workstream's lifecycle state changes only through `transitions`. A different state in
+  `axes[]` is refused as `invalid-input`; an unchanged state echo is accepted without adding history.
+  Echo acceptance retains the existing axis-patch version-increment behavior, not a version no-op.
+  New workstreams may still specify their initial state. State-confidence patches and evidence
+  admission retain their existing rules; confidence is not permission to bypass recorded transitions.
+
+## Optional version checks
+
+- A supplied reconciliation `expectedVersion` is checked against the resolved project's current
+  version before any writes, even for relationship-only, annotation-only or empty updates.
+- Existing-task updates accept `problems[].expectedVersion`; existing-plan updates accept
+  `plans[].expectedVersion`. These check the existing row versions, including task link replacement
+  and plan summary updates. A stale supplied version refuses the whole transaction as `conflict`.
+- Versions remain optional: omission retains existing unchecked-write behavior. Per-task and per-plan
+  versions apply to updates by existing ID, not creation. No new version counters are introduced.
+- The project version is not an aggregate revision: child changes, relationship writes and appended
+  notes/activity do not necessarily advance it. A matching project version alone cannot detect
+  concurrent edits to those records. Plan steps have no independent version and step-only edits are
+  not guaranteed to advance their plan's version. Use each available row guard without claiming
+  broader protection. This bounded policy does not add step or relationship versioning.
+
 ## Supporting evidence
 
 - Progress has its own five-item evidence page, independent of task and activity pages. The scoped
