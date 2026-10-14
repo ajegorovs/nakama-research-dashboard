@@ -459,8 +459,10 @@ describe("read actions", () => {
     const topicId = (created.topic as { id: string }).id;
     const axisId = (created.axes as Array<{ id: string }>)[0]?.id as string;
 
-    // A person parks an axis that nothing else backs yet, and says why in the same call. The note is
-    // what makes 'confirmed' reachable — the evidence rule reads it in that transaction.
+    // A person parks an axis that nothing else backs yet, and says why in the same call. The state is
+    // moved through `transitions` so the lifecycle change is recorded; the confidence rides on the
+    // patch, and the note is what makes 'confirmed' reachable — the evidence rule reads it in that
+    // transaction. The 'active' echo is the axis's stored state, accepted unchanged.
     const corrected = await call(
       "reconcile_topic",
       {
@@ -470,8 +472,9 @@ describe("read actions", () => {
             text: "waiting intentionally for the October hardware slot",
           },
         ],
-        axes: [{ id: axisId, state: "parked", stateConfidence: "confirmed" }],
+        axes: [{ id: axisId, state: "active", stateConfidence: "confirmed" }],
         topicId,
+        transitions: [{ axisId, subject: "axis", toState: "parked" }],
       },
       { path }
     );
@@ -935,10 +938,19 @@ describe("the shipped skill matches the surface it promises (C9a)", () => {
       /annotations and corrections are human notes/i,
       /outranks your inference/i,
       /Reconcile, do not recreate/i,
-      /must be backed by something in that call/i,
+      /must be backed by evidence on the axis/i,
     ]) {
       expect(skill).toMatch(phrase);
     }
+  });
+
+  test("documents existing-evidence admission and deferred biography maintenance", () => {
+    expect(skill).toMatch(/whether already recorded or added in this call/i);
+    expect(skill).toContain("evidencePageSize");
+    expect(skill).toContain("hasMore");
+    expect(skill).toMatch(/People About is human-managed/i);
+    expect(skill).toMatch(/unlinking are deferred/i);
+    expect(skill).not.toMatch(/must be backed by something in that call/i);
   });
 
   test("states the U3 semantics: recorded states, the refusal kinds, and history retention", () => {

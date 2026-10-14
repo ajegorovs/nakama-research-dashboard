@@ -28,6 +28,75 @@ skill defines operational tool use. This document does not authorize writes or d
 - Use `personActorId` at the public activity boundary; reserved `actorId` is stripped by the
   host. This is a read filter, not access control.
 
+## Reconciliation scope and lifecycle integrity
+
+- Existing task IDs in reconciliation updates, transitions and annotations must resolve through their
+  workstream to the reconciled project. A supplied workstream ID or title must match the task's
+  actual workstream; these selectors are checks, not task-move inputs. Contradictory selectors are
+  refused as `invalid-input`, including for task claims whose stored project target is null.
+- A refused reconciliation rolls back the whole transaction, including earlier valid writes,
+  relationship changes, versions, notes and state-history entries.
+- An existing workstream's lifecycle state changes only through `transitions`. A different state in
+  `axes[]` is refused as `invalid-input`; an unchanged state echo is accepted without adding history.
+  Echo acceptance retains the existing axis-patch version-increment behavior, not a version no-op.
+  New workstreams may still specify their initial state. State-confidence patches and evidence
+  admission retain their existing rules; confidence is not permission to bypass recorded transitions.
+
+## Optional version checks
+
+- A supplied reconciliation `expectedVersion` is checked against the resolved project's current
+  version before any writes, even for relationship-only, annotation-only or empty updates.
+- Existing-task updates accept `problems[].expectedVersion`; existing-plan updates accept
+  `plans[].expectedVersion`. These check the existing row versions, including task link replacement
+  and plan summary updates. A stale supplied version refuses the whole transaction as `conflict`.
+- Versions remain optional: omission retains existing unchecked-write behavior. Per-task and per-plan
+  versions apply to updates by existing ID, not creation. No new version counters are introduced.
+- The project version is not an aggregate revision: child changes, relationship writes and appended
+  notes/activity do not necessarily advance it. A matching project version alone cannot detect
+  concurrent edits to those records. Plan steps have no independent version and step-only edits are
+  not guaranteed to advance their plan's version. Use each available row guard without claiming
+  broader protection. This bounded policy does not add step or relationship versioning.
+- Creation has no prior row version: per-task/plan versions are ignored on create, and a top-level
+  version does not guard a newly created project unless a topic-field patch subsequently checks it.
+  Do not use `expectedVersion` as an existence assertion; resolve the project by stable ID first.
+- Reconciliation processes updates before transitions. If both target the same row, an update may
+  advance its version before the transition checks it. Reusing the original version on both entries
+  can therefore conflict and roll back. Versions are checked at each operation, not against a frozen
+  call-entry snapshot; split through fresh readback when necessary.
+
+## Non-text maintenance without text echoes
+
+- Existing `problems[].problemId` updates may omit `statement`; existing `steps[].stepId` updates
+  may omit `title`. Omission preserves stored text and task authorship. This permits task link-only
+  maintenance and plan-step state/position-only updates without repeating human text.
+- New tasks still require a nonblank statement; new steps still require a nonblank title. Explicit
+  blank text is not omission. Plan updates still require their summary and owner selectors.
+- These inputs reuse existing writers and version semantics: task people/repository link-only writes
+  need not advance the task version, and step-only edits need not advance the plan version. They do
+  not introduce stronger concurrency or step-title authorship guarantees.
+
+## Archived-record filtering
+
+`get_overview` inventory totals (`counts`, status totals, workstream/task state totals) always include
+archived projects. Its result lists honor `includeArchived` (default false), as do dashboard search
+hits. Filtering occurs before result limits: hidden archived rows do not consume the visible page.
+Activity and annotations follow their owning project, including ownership through a workstream or
+task when no direct project target is stored. Truly topicless records remain visible; topic-grouped
+timelines still require a project. This applies to the overview/search archive options and explicit
+archive-filtered activity reads, not an access restriction on `get_topic`: scoped entity reads remain
+available for archived projects, and internal `listActivity` calls without the option retain their
+unfiltered behavior. This is a presentation filter, not an authorization boundary.
+
+## Rollup activity recency
+
+People and repository `recentActivity` apply the same owner-visibility rule as the overview feed,
+including direct repository events and events associated through visible workstreams. A shared
+repository does not make archived-project events visible. Truly topicless events remain eligible.
+`lastActivityAt` is the latest attributable event across visible projects (and eligible topicless
+records), independent of the selected activity window. With `includeArchived: true`, archived events
+also participate. With false, an identity whose only activity belongs to archived projects has null
+`lastActivityAt`, not its last-ever timestamp. This filter does not remove the shared identity row.
+
 ## Supporting evidence
 
 - Progress has its own five-item evidence page, independent of task and activity pages. The scoped

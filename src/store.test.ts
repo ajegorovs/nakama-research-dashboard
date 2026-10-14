@@ -535,9 +535,13 @@ describe("ResearchStore reconcileTopic", () => {
       activities: [
         { axisTitle: "Signal explorer", summary: "filtering run finished" },
       ],
-      axes: [{ state: "parked", title: "Signal explorer" }],
       topic: { status: "paused" },
       topicName: "Signal Processing",
+      // The axis is named by title and moved through `transitions`, so the lifecycle change is recorded
+      // and the version advances exactly once — the same single bump the axes[] patch used to give it.
+      transitions: [
+        { axisTitle: "Signal explorer", subject: "axis", toState: "parked" },
+      ],
     });
 
     expect(again.created).toMatchObject({ axes: 0, topic: false });
@@ -1187,15 +1191,17 @@ describe("ResearchStore topic detail and evidence (C5)", () => {
     });
     expect(store.axisEvidence(axis)).toEqual([]);
 
-    // Nothing backs this axis, so the strict claim is refused...
+    // Nothing backs this axis, so the strict claim is refused. The state is echoed unchanged — an echo
+    // is accepted, and mentioning `state` is what holds its 'confirmed' reading to the evidence rule.
     expect(() =>
       store.updateAxis(axis.id, {
-        state: "parked",
+        state: "active",
         stateConfidence: "confirmed",
       })
     ).toThrow(ResearchStoreError);
 
-    // ...and a note arriving in the same call is what makes it a fact rather than a guess.
+    // ...and a note arriving in the same call is what makes it a fact rather than a guess. The state
+    // itself moves through `transitions`, so the change is recorded; the confidence rides on the patch.
     const result = store.reconcileTopic({
       actor: { id: "user-1", type: "human" },
       annotations: [
@@ -1204,8 +1210,9 @@ describe("ResearchStore topic detail and evidence (C5)", () => {
           text: "waiting intentionally for the October hardware slot",
         },
       ],
-      axes: [{ id: axis.id, state: "parked", stateConfidence: "confirmed" }],
+      axes: [{ id: axis.id, state: "active", stateConfidence: "confirmed" }],
       topicId: topic.id,
+      transitions: [{ axisId: axis.id, subject: "axis", toState: "parked" }],
     });
     expect(result.axes[0]).toMatchObject({
       state: "parked",
@@ -1584,11 +1591,17 @@ describe("ResearchStore two-session concurrency (C8)", () => {
         {
           expectedVersion: read.version,
           id: read.id,
-          state: "parked" as const,
           stateConfidence: "inferred" as const,
         },
       ],
       topicId: topic.id,
+      transitions: [
+        {
+          axisId: read.id,
+          subject: "axis" as const,
+          toState: "parked" as const,
+        },
+      ],
     };
     let refusal = "";
     try {

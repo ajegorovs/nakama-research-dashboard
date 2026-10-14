@@ -31,6 +31,14 @@ Tools (assign them to the profile alongside this skill) — the whole agent surf
   Under `axisId` only `historyLimit` and `notesLimit` apply; `includeAnnotations`, `activityLimit`
   and `activitySinceDays` are ignored. Sibling axes are
   not returned; an `axisId` that is unknown or belongs to another topic is refused.
+  For complete workstream supporting evidence, opt in with `axisId`, `evidenceOffset: 0` and
+  `evidencePageSize` (default 5, maximum 100). Read `evidencePage.items`, `total`, `offset`, `limit`
+  and `hasMore`; advance `evidenceOffset` by the returned page's `limit` until `hasMore` is false.
+  This page covers the full supporting-evidence union; legacy `axis.evidence` remains capped.
+  Report `coverage.truncated` and any unvisited pages explicitly: partial reads are not evidence of
+  absence or complete coverage. Offset paging is not stable under concurrent inserts; changing totals
+  or duplicate/missing IDs make completeness uncertain. This does not add paging for topic-wide notes
+  or the overview's truncated people/repository rollups.
 - `plugin_research_dashboard__search_dashboard` — substring search across topics, axes, tasks
   (`statement` and `title`), activity and annotations; each hit says which field matched. Use it before
   creating anything.
@@ -66,8 +74,10 @@ How to work:
   workstream and a blocked task are **different facts**: a workstream blocked on something external is not
   a task being blocked, and vice versa — say *why* something is blocked in its body or a note rather than
   leaving the state to carry the reason. To change a state that already exists, send a `transitions` entry
-  (`{subject, toState, …}`) — never a `state` field on the update, which is refused because it would leave
-  the change unrecorded. Every change between two different states is allowed and appended to the history,
+  (`{subject, toState, …}`) — never change `state` through the update, which is refused because it would
+  leave the change unrecorded. An unchanged existing-axis state echo is accepted without a history row
+  (the ordinary patch still advances its version); new axes may specify their initial state.
+  Every change between two different states is allowed and appended to the history,
   reopening included; a change that would not change anything is refused as `no-op`. The task's history
   keeps what it was, so reopening `open → resolved → open` still shows it was once resolved.
 - **A problem is a real record, not a status note** — and a task is general actionable work. Raise one —
@@ -77,6 +87,10 @@ How to work:
   the record, a problem is actionable work. Mark a problem's state with `stateConfidence`, and link the
   repository it concerns with `repositoryFullNames` when there is one. Its `title` is concise, distinct
   text you author — see the text rule below.
+- Keep every existing `problemId` inside the reconciled topic. When also supplying `axisId` or
+  `axisTitle` for a task update, transition or annotation, both must identify that task's actual
+  workstream. These selectors verify scope; they do not move the task. Foreign or contradictory
+  targets are refused as `invalid-input`, and the entire reconciliation rolls back.
 - **A plan is optional and belongs to one owner.** Send
   `plans: [{topicId|axisTitle|problemId, summary, steps: [{title, state}]}]` only when the conversation
   established one; an axis without a plan is normal. Exactly one owner: a project (`topicId`), a
@@ -84,6 +98,12 @@ How to work:
   rollups**. A task's plan is **created after the task exists**: `plans` are applied before `problems` in
   one call, so create the task, read its id back, then attach its plan in a later call. A step's state is
   `pending`, `active`, `done` or `blocked`.
+- For an existing task (`problemId`), omit `statement` when only maintaining its links; omission
+  preserves the text and authorship. For an existing plan step (`stepId`), omit `title` when only
+  changing state or position (including `0`). New tasks/steps still require nonblank text, and plans
+  still require their summary and owner. Step-title authorship is not mechanically protected;
+  preserve known human text deliberately. Link-only task writes and step-only edits need not bump
+  their task/plan version, so do not claim full concurrent-edit protection.
 - **A state change is not a rewrite.** A topic's `summary` is a concise orientation and its `description`
   is the full purpose; a task's `statement` is the full text and its `title` is a concise label distinct
   from it. You **may draft and maintain** a topic's `summary`/`description` and a task's `title` from
@@ -110,13 +130,21 @@ How to work:
   changed: a workstream already on the topic is the same axis, not a new one. A parallel axis for the same
   workstream, or a second topic for the same direction, splits the record — that is the failure this write
   path exists to prevent.
-- Put the evidence in the same call as the claim. A claim marked `confirmed` (the default for `state`,
-  `currentState`, `blocker`) must be backed by something in that call — a branch, a PR number/URL, an
-  activity or an annotation — or the whole update is refused. When nothing could have confirmed it, say
-  so with `stateConfidence`/`currentStateConfidence`/`blockerConfidence` set to `inferred`.
-- Read `version` from `get_topic` and send it back as `expectedVersion` on the update. If someone else
-  changed the topic in between, the call fails with a `conflict: ` error; re-read the topic and decide
-  with the fresh state instead of overwriting.
+- A claim marked `confirmed` must be backed by evidence on the axis — a branch, a PR number/URL,
+  an activity or an annotation, whether already recorded or added in this call — or the whole update
+  is refused. The guard checks an explicitly supplied axis `state` and nonblank stored current-reading
+  or blocker text; an unasserted initial state default is not itself a claim. Evidence presence is
+  admission, not proof that a reference supports this particular claim. Read and judge the source.
+  When nothing could have confirmed a claim, use `stateConfidence`/`currentStateConfidence`/
+  `blockerConfidence` set to `inferred` rather than inventing evidence.
+- Read `version` from `get_topic` and send it back as top-level `expectedVersion`; a supplied stale
+  topic version refuses even a link-only or note-only reconciliation. For existing task and plan
+  updates, also pass their own row versions as `problems[].expectedVersion` and
+  `plans[].expectedVersion`. On `conflict`, reread and decide again. Versions are optional; omitting
+  one leaves that check disabled. The topic version is **not an aggregate revision**: child/link
+  changes and appended notes/activity need not advance it. Plan steps have no independent version,
+  and a step-only edit need not advance the plan version. Do not claim these checks protect all
+  concurrent relationship or step edits.
 - `record_activity` is for objective events that can be pointed at: a merged pull request, a completed
   run, a commit, a document update. Use the declared `sourceType` values (`github_pr`, `github_commit`,
   `github_issue`, `repo_document`, `group_chat`, `experiment`, `agent_review`, `manual`) and put the
@@ -128,6 +156,11 @@ How to work:
   and when unsure, propose the change rather than applying it.
 - Do not create a near-duplicate: `search_dashboard` first, then extend the topic that is already
   there. Never invent activity to fill a gap — a missing record stays missing until someone reports it.
+- People About is human-managed in the current maintenance scope: the agent tools do not expose a
+  biography writer. Do not invent a `notes` input or bypass the tools through direct storage. Agent
+  biography updates and project/workstream unlinking are deferred. Affiliation inputs add/upsert;
+  an empty project/workstream people/repository array does not unlink. Task `personIds` and
+  `repositoryFullNames` are different: on existing tasks they replace the set, and `[]` clears it.
 - Identity comes from the session, not from you: the platform records who acted. Do not pass an actor,
   a user id or a database path.
 

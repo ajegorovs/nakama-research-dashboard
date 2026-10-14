@@ -843,6 +843,29 @@ function collectionCoverage(
   };
 }
 
+/**
+ * The SQL predicate for "this record's owning project is not archived", shared by every reader that
+ * honors `includeArchived` over the activity/annotation tables.
+ *
+ * Ownership is the row's **direct** target when it stores one (`topic_id`); otherwise it is resolved
+ * through the row's workstream (`axis_id` → that axis's topic) or its task (`problem_id` → the task's
+ * axis's topic). A note or a `steering`/`interpretation` claim aimed at an axis stores a **null**
+ * `topic_id` on purpose — its target is the axis, not the topic — so a direct-`topic_id` test alone
+ * would keep returning an archived topic's note. Following the axis (or the task's axis) is what makes
+ * the filter "follow the owning project".
+ *
+ * A record owned by nothing at all — genuinely topicless — is kept: the rule hides work under an
+ * archived project, it does not require a project to exist. `alias` is the table name (or its alias)
+ * carrying the three target columns.
+ */
+function ownerVisibleSql(alias: string): string {
+  const owner = `COALESCE(${alias}.topic_id,
+      (SELECT a.topic_id FROM development_axes a WHERE a.id = ${alias}.axis_id),
+      (SELECT pa.topic_id FROM problems p JOIN development_axes pa ON pa.id = p.axis_id
+        WHERE p.id = ${alias}.problem_id))`;
+  return `(${owner} IS NULL OR ${owner} IN (SELECT id FROM topics WHERE status <> 'archived'))`;
+}
+
 export function isTopicStatus(value: unknown): value is TopicStatus {
   return (
     typeof value === "string" &&
@@ -1170,7 +1193,17 @@ export type ReconcileTopicInput = {
    */
   problems?: Array<{
     problemId?: string;
-    statement: string;
+    /**
+     * The task's full body text. Required when creating a new problem (no `problemId`); on an update it is
+     * optional — omit it to leave the stored statement untouched, send it to replace it.
+     */
+    statement?: string;
+    /**
+     * The task row's own version (from get_topic), for an optimistic guard. Honoured only when
+     * `problemId` updates an existing task; ignored on creation, where there is no prior version to
+     * expect. Sending a version you did not read is what this field exists to refuse.
+     */
+    expectedVersion?: number;
     /** The task's concise short text, distinct from `statement`. Omitted or empty stores no title row. */
     title?: string;
     axisId?: string;
@@ -1188,6 +1221,12 @@ export type ReconcileTopicInput = {
    */
   plans?: Array<{
     planId?: string;
+    /**
+     * The plan row's own version (from get_topic), for an optimistic guard. Honoured only when
+     * `planId` updates an existing plan; ignored on creation, where there is no prior version to
+     * expect. Optional by design: omit it to leave the row unchecked rather than guess a version.
+     */
+    expectedVersion?: number;
     topicId?: string;
     axisId?: string;
     axisTitle?: string;
@@ -1195,7 +1234,11 @@ export type ReconcileTopicInput = {
     summary: string;
     steps?: Array<{
       stepId?: string;
-      title: string;
+      /**
+       * The step's text. Required when creating a new step (no `stepId`); on an update it is optional —
+       * omit it to leave the stored title untouched, send it to replace it.
+       */
+      title?: string;
       position?: number | null;
       state?: PlanStepState;
     }>;
@@ -2646,6 +2689,13 @@ export class ResearchStore {
     repositoryId?: string;
     sinceDays?: number;
     limit?: number;
+    /**
+     * When explicitly supplied, apply the archived-topic rule to the rows: `false` hides activity whose
+     * owning project is archived (following the row's axis or task when no direct topic is stored),
+     * `true` includes it. Left `undefined`, **no** archive filter is applied — the behavior these array
+     * reads have always had, so an internal caller that does not pass it is unchanged.
+     */
+    includeArchived?: boolean;
   }): Activity[] {
     const limit = clampLimit(
       options?.limit,
@@ -2653,6 +2703,11 @@ export class ResearchStore {
       MAX_ACTIVITY_LIMIT
     );
     const since = options?.sinceDays ? isoDaysAgo(options.sinceDays) : null;
+    // Only an explicit `false` narrows the read; `true` and `undefined` both leave it open.
+    const archiveFilter =
+      options?.includeArchived === false
+        ? `AND ${ownerVisibleSql("activities")}`
+        : "";
     const rows = this.db
       .query(
         `SELECT * FROM activities
@@ -2661,6 +2716,7 @@ export class ResearchStore {
            AND (? IS NULL OR actor_id = ?)
            AND (? IS NULL OR repository_id = ?)
            AND (? IS NULL OR occurred_at >= ?)
+           ${archiveFilter}
          ORDER BY occurred_at DESC, id DESC
          LIMIT ?`
       )
@@ -2705,8 +2761,7 @@ export class ResearchStore {
          AND (? IS NULL OR actor_id = ?)
          AND (? IS NULL OR repository_id = ?)
          AND (? IS NULL OR occurred_at >= ?)
-         AND (? IS NULL OR ? = 1
-              OR topic_id IN (SELECT id FROM topics WHERE status <> 'archived'))`;
+         AND (? IS NULL OR ? = 1 OR ${ownerVisibleSql("activities")})`;
     // `includeArchived` is passed twice (the `IS NULL` guard and the `= 1` test); `undefined` keeps the
     // archive clause open so a read scoped to one entity is unchanged.
     const archiveParam =
@@ -3357,6 +3412,7 @@ export class ResearchStore {
           `SELECT a.*, t.name AS topic_name
            FROM development_axes a JOIN topics t ON t.id = a.topic_id
            WHERE a.state = 'blocked'
+             ${includeArchived ? "" : "AND t.status <> 'archived'"}
            ORDER BY a.updated_at DESC`
         )
         .all() as Array<AxisRow & { topic_name: string }>;
@@ -3387,13 +3443,16 @@ export class ResearchStore {
         people: rollups.people,
         peopleTruncated: rollups.peopleTruncated,
         recentActivity: this.listActivity({
+          includeArchived,
           limit: 25,
           sinceDays: activitySinceDays > 0 ? activitySinceDays : undefined,
         }),
         recentTopics: (
           this.db
             .query(
-              "SELECT * FROM topics ORDER BY updated_at DESC, name ASC LIMIT ?"
+              `SELECT * FROM topics
+               ${includeArchived ? "" : "WHERE status <> 'archived'"}
+               ORDER BY updated_at DESC, name ASC LIMIT ?`
             )
             .all(limit) as TopicRow[]
         ).map(toTopic),
@@ -3632,13 +3691,17 @@ export class ResearchStore {
    * grouping follows the relationship. An event that names a topic and no axis is kept as its own group
    * (topic-level events are real) instead of being dropped; an event that names neither is not shown,
    * because there is no honest place to put it.
+   *
+   * The archived rule is the same one every other projection uses: an event whose group resolves to an
+   * archived project is dropped unless the caller asked for archived. The grouping (topic → axis) is
+   * unchanged — this filters which projects appear, not how the survivors are grouped.
    */
   private recentProgress(
     since: string | null,
     includeArchived: boolean,
     limit: number
   ): TimelineGroup[] {
-    const { scans, topicRefs } = this.visibleContext({ includeArchived });
+    const { scans, topicRefs, visible } = this.visibleContext({ includeArchived });
     const personByAccount = this.personRefByAccount();
     const rows = this.db
       .query(
@@ -3654,7 +3717,9 @@ export class ResearchStore {
       const event = toActivity(row);
       const axis = event.axisId ? (scans.get(event.axisId) ?? null) : null;
       const topicId = axis?.topicId ?? event.topicId ?? "";
-      if (topicId === "" || !topicRefs.has(topicId)) {
+      // `visible` carries both rules at once: the group must resolve to a real project, and (unless the
+      // caller asked for archived) not an archived one.
+      if (!visible(topicId)) {
         continue;
       }
       const buckets = byTopic.get(topicId) ?? new Map<string, TimelineAxis>();
@@ -3732,15 +3797,17 @@ export class ResearchStore {
     const { repositoriesByAxis, scans, topicRefs, visible } =
       this.visibleContext({ includeArchived });
 
-    // Every event inside the window, read once: the two rollups slice it differently.
+    // Every event inside the window, read once: the two rollups slice it differently. The archived
+    // rule applies here too, so a hidden project's event cannot reach either rollup's recent list.
     const events = (
       this.db
         .query(
           `SELECT * FROM activities
            WHERE (? IS NULL OR occurred_at >= ?)
+             AND (? = 1 OR ${ownerVisibleSql("activities")})
            ORDER BY occurred_at DESC, rowid DESC`
         )
-        .all(since, since) as ActivityRow[]
+        .all(since, since, includeArchived ? 1 : 0) as ActivityRow[]
     ).map(toActivity);
 
     // ---------------------------------------------------------------------------- people
@@ -3773,9 +3840,12 @@ export class ResearchStore {
     const lastByAccount = new Map<string, string>();
     for (const row of this.db
       .query(
-        "SELECT actor_id, max(occurred_at) AS last FROM activities WHERE actor_id <> '' GROUP BY actor_id"
+        `SELECT actor_id, max(occurred_at) AS last FROM activities
+         WHERE actor_id <> ''
+           AND (? = 1 OR ${ownerVisibleSql("activities")})
+         GROUP BY actor_id`
       )
-      .all() as Array<{ actor_id: string; last: string }>) {
+      .all(includeArchived ? 1 : 0) as Array<{ actor_id: string; last: string }>) {
       lastByAccount.set(row.actor_id, row.last);
     }
 
@@ -3868,6 +3938,11 @@ export class ResearchStore {
     const repositoryIdsByAxis = new Map<string, string[]>();
     const axisIdsByRepository = new Map<string, string[]>();
     for (const [axisId, linked] of repositoriesByAxis) {
+      // Only axes whose project is in scope: an event that names a hidden axis must not pull its
+      // codebase in through the association map either.
+      if (!scans.has(axisId)) {
+        continue;
+      }
       repositoryIdsByAxis.set(
         axisId,
         linked.map((repository) => repository.id)
@@ -3916,18 +3991,27 @@ export class ResearchStore {
     for (const row of this.db
       .query(
         `SELECT repository_id, max(occurred_at) AS last FROM activities
-         WHERE repository_id IS NOT NULL GROUP BY repository_id`
+         WHERE repository_id IS NOT NULL
+           AND (? = 1 OR ${ownerVisibleSql("activities")})
+         GROUP BY repository_id`
       )
-      .all() as Array<{ last: string; repository_id: string }>) {
+      .all(includeArchived ? 1 : 0) as Array<{ last: string; repository_id: string }>) {
       noteLast(row.repository_id, row.last);
     }
     for (const row of this.db
       .query(
         `SELECT ar.repository_id AS repository_id, max(x.occurred_at) AS last
          FROM activities x JOIN axis_repositories ar ON ar.axis_id = x.axis_id
+         WHERE (? = 1 OR ${ownerVisibleSql("x")})
+           AND (? = 1 OR ar.axis_id IN (
+             SELECT a.id FROM development_axes a JOIN topics t ON t.id = a.topic_id
+             WHERE t.status <> 'archived'))
          GROUP BY ar.repository_id`
       )
-      .all() as Array<{ last: string; repository_id: string }>) {
+      .all(includeArchived ? 1 : 0, includeArchived ? 1 : 0) as Array<{
+      last: string;
+      repository_id: string;
+    }>) {
       noteLast(row.repository_id, row.last);
     }
 
@@ -4014,6 +4098,15 @@ export class ResearchStore {
       const archivedFilter = includeArchived
         ? ""
         : "AND t.status <> 'archived'";
+      // Activity and annotation hits have no mandatory topic join: their owning project is the row's
+      // direct target, or its axis / task's axis when only those are stored. Same rule, before `LIMIT`,
+      // so a hidden archived row cannot consume a page slot.
+      const activityArchiveFilter = includeArchived
+        ? ""
+        : `AND ${ownerVisibleSql("x")}`;
+      const annotationArchiveFilter = includeArchived
+        ? ""
+        : `AND ${ownerVisibleSql("n")}`;
 
       const topicRows = this.db
         .query(
@@ -4043,6 +4136,7 @@ export class ResearchStore {
         .query(
           `SELECT x.*, t.name AS topic_name FROM activities x LEFT JOIN topics t ON t.id = x.topic_id
            WHERE (x.summary LIKE ? ESCAPE '\\' OR x.source_ref LIKE ? ESCAPE '\\')
+             ${activityArchiveFilter}
            ORDER BY x.occurred_at DESC, x.rowid DESC
            LIMIT ?`
         )
@@ -4054,6 +4148,7 @@ export class ResearchStore {
         .query(
           `SELECT n.*, t.name AS topic_name FROM annotations n LEFT JOIN topics t ON t.id = n.topic_id
            WHERE n.text LIKE ? ESCAPE '\\'
+             ${annotationArchiveFilter}
            ORDER BY n.created_at DESC, n.rowid DESC
            LIMIT ?`
         )
@@ -6502,6 +6597,14 @@ export class ResearchStore {
       const resolved = this.resolveTopicForReconcile(input);
       let topic = resolved.topic;
 
+      // The topic-row optimistic guard, before any write and even when no `topic` patch is sent: the
+      // caller names the version it read (from get_topic) and the whole reconcile is refused if someone
+      // else moved the row first. A topic this call just created has no prior version to expect, so the
+      // guard runs only for an existing topic — creation invents no version semantics.
+      if (!resolved.created) {
+        this.assertVersion("topic", topic.name, topic.version, input.expectedVersion);
+      }
+
       // Whoever just wrote is on the topic they wrote to, if the dashboard already knows them as a
       // person. A link, never a new row: "who touched this" must not invent people (F6).
       if (actor.id) {
@@ -6667,6 +6770,17 @@ export class ResearchStore {
           annotationInput.axisId,
           annotationInput.axisTitle
         );
+        // A note (or claim) may name a problem by bare id. Whether or not it also names an axis, the
+        // problem has to belong to this topic and sit on the axis the caller named — never a foreign
+        // problem, never one on a sibling axis of this topic.
+        if (annotationInput.problemId) {
+          this.resolveProblemInTopic(
+            topic.id,
+            annotationInput.problemId,
+            annotationInput.axisId,
+            annotationInput.axisTitle
+          );
+        }
         const kind =
           optionalOneOf(annotationInput.kind, ANNOTATION_KINDS, "kind") ?? "note";
         const annotation = this.insertAnnotation({
@@ -6721,6 +6835,7 @@ export class ResearchStore {
           ? this.updatePlan({
               authorId: actor.id,
               authorType,
+              expectedVersion: planInput.expectedVersion,
               id: planInput.planId,
               owner,
               summary: required(planInput.summary, "summary"),
@@ -6740,7 +6855,10 @@ export class ResearchStore {
               id: step.stepId,
               position: step.position,
               state: optionalOneOf(step.state, PLAN_STEP_STATES, "state"),
-              title: required(step.title, "title"),
+              // Optional on an update: omitted leaves the stored title untouched; a provided title is still
+              // validated. A new step below still requires one.
+              title:
+                step.title === undefined ? undefined : required(step.title, "title"),
             });
           } else {
             this.createPlanStep({
@@ -6758,8 +6876,16 @@ export class ResearchStore {
       }
 
       for (const problemInput of input.problems ?? []) {
-        const statement = required(problemInput.statement, "statement");
         if (problemInput.problemId) {
+          // A problem is reachable by bare id: make sure it is *this* topic's, and on the axis the caller
+          // named, before the update touches it. Refused here, in the same transaction, so a valid write
+          // earlier in the call rolls back with a foreign reference.
+          this.resolveProblemInTopic(
+            topic.id,
+            problemInput.problemId,
+            problemInput.axisId,
+            problemInput.axisTitle
+          );
           if (problemInput.state !== undefined) {
             // Not an oversight: a state change goes through `transitions` so that it is recorded. Accepting
             // it here would let a caller overwrite the state with no history row, which is the one thing the
@@ -6772,11 +6898,14 @@ export class ResearchStore {
             this.updateProblem({
               authorId: actor.id,
               authorType,
+              expectedVersion: problemInput.expectedVersion,
               id: problemInput.problemId,
               personIds: problemInput.personIds,
               planStepId: problemInput.planStepId,
               repositoryFullNames: problemInput.repositoryFullNames,
-              statement,
+              // Optional on an update: omitted leaves the stored statement untouched; provided is validated
+              // by updateProblem itself. A new problem below still requires it.
+              statement: problemInput.statement,
               stateConfidence: optionalOneOf(
                 problemInput.stateConfidence,
                 CONFIDENCES,
@@ -6797,6 +6926,8 @@ export class ResearchStore {
             "problems[] need an axisId or axisTitle: a problem is raised against an axis."
           );
         }
+        // A new problem has no prior statement to leave untouched, so it is still required here.
+        const statement = required(problemInput.statement, "statement");
         touchedProblems.push(
           this.createProblem({
             authorId: actor.id,
@@ -6820,6 +6951,14 @@ export class ResearchStore {
       for (const transitionInput of input.transitions ?? []) {
         const observedAt = text(transitionInput.observedAt);
         if (transitionInput.subject === "problem") {
+          // The transition moves a problem by bare id: it must be reachable from the topic this call is
+          // scoped to (and from the axis named, if any) before anything is recorded.
+          this.resolveProblemInTopic(
+            topic.id,
+            required(transitionInput.problemId, "problemId"),
+            transitionInput.axisId,
+            transitionInput.axisTitle
+          );
           const result = this.transitionProblem({
             actorId: actor.id,
             expectedVersion: transitionInput.expectedVersion,
@@ -7061,6 +7200,17 @@ export class ResearchStore {
       existing.version,
       options?.expectedVersion
     );
+    // A state is recorded, never typed in: `transitions` is the only path that appends to `state_log`, the
+    // same rule an existing problem's `state` already follows. An echo of the state already stored transfers
+    // nothing and stays accepted (and still bumps the version like any other patch); anything else would
+    // move the lifecycle with no history row, which is the one thing the state log exists to prevent. The
+    // enum is validated first, so an unknown state name is refused as such rather than as a "change".
+    const requestedState = optionalOneOf(patch.state, AXIS_STATES, "state");
+    if (requestedState !== undefined && requestedState !== existing.state) {
+      throw new ResearchStoreError(
+        "axes[].state applies when creating. To change an existing axis's state, send it in `transitions` so the change is recorded."
+      );
+    }
     const next = {
       blocker: patch.blocker ?? existing.blocker,
       blockerConfidence: optionalOneOf(
@@ -7080,7 +7230,7 @@ export class ResearchStore {
       prNumber:
         patch.prNumber === undefined ? existing.prNumber : patch.prNumber,
       prUrl: patch.prUrl ?? existing.prUrl,
-      state: optionalOneOf(patch.state, AXIS_STATES, "state"),
+      state: requestedState,
       stateConfidence: optionalOneOf(
         patch.stateConfidence,
         CONFIDENCES,
@@ -7497,14 +7647,9 @@ export class ResearchStore {
       );
     }
     if (planInput.problemId) {
-      const problem = this.getProblem(required(planInput.problemId, "problemId"));
-      if (!problem) {
-        throw new ResearchStoreError("Problem not found.");
-      }
-      const axis = this.getAxis(problem.axisId);
-      if (!axis || axis.topicId !== topicId) {
-        throw new ResearchStoreError("Problem does not belong to this topic.");
-      }
+      // Reuses the one problem→axis→topic check, so a task-owned plan cannot be pointed at a problem from
+      // another topic of the same reconcile.
+      const problem = this.resolveProblemInTopic(topicId, planInput.problemId);
       return { problemId: problem.id, scope: "problem" };
     }
     if (planInput.topicId) {
@@ -7750,6 +7895,50 @@ export class ResearchStore {
       return axis.id;
     }
     return null;
+  }
+
+  /**
+   * Resolves a problem named by id against the topic a reconcile is scoped to, and — when the caller named
+   * one — against the axis it claims the problem sits on. A problem is reached by bare id from `problems[]`,
+   * `transitions[]` and `annotations[]`, so without this a call scoped to Topic A could update, move or
+   * annotate a problem belonging to Topic B, or hang a note on a problem that lives on a sibling axis of the
+   * same topic. Every reference is refused as a caller mistake **before** anything is written, which is what
+   * lets the whole call roll back atomically. Both an `axisId` and an `axisTitle` are honoured when given: a
+   * title that contradicts the id is a mistake, not something to ignore.
+   */
+  private resolveProblemInTopic(
+    topicId: string,
+    problemId: string,
+    axisId?: string,
+    axisTitle?: string
+  ): Problem {
+    const problem = this.getProblem(required(problemId, "problemId"));
+    if (!problem) {
+      throw new ResearchStoreError("Problem not found.", "invalid-input");
+    }
+    const axis = this.getAxis(problem.axisId);
+    if (!axis || axis.topicId !== topicId) {
+      throw new ResearchStoreError(
+        "The named problem does not belong to this topic.",
+        "invalid-input"
+      );
+    }
+    if (axisId && axisId !== problem.axisId) {
+      throw new ResearchStoreError(
+        "The named problem is not on the axis it is scoped to.",
+        "invalid-input"
+      );
+    }
+    if (axisTitle && axisTitle.trim().length > 0) {
+      const titled = this.findAxisByTitle(topicId, axisTitle);
+      if (!titled || titled.id !== problem.axisId) {
+        throw new ResearchStoreError(
+          "The named problem is not on the axis it is scoped to.",
+          "invalid-input"
+        );
+      }
+    }
+    return problem;
   }
 
   private repositoryExists(id: string): boolean {

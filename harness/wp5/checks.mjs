@@ -650,7 +650,11 @@ export function evaluateStore({ store, makeStore, pluginActions, harnessSources,
     s.reconcileTopic({ topicName: "Guard pre-existing", axes: [{ title: "A", state: "active", stateConfidence: "inferred" }] });
     s.reconcileTopic({ topicName: "Guard pre-existing", activities: [{ summary: "backing", axisTitle: "A", sourceType: "github_pr", sourceRef: "PR #1", occurredAt: "2026-01-01" }] });
     // Now assert `confirmed` on a later transaction: the evidence already exists, so it must pass.
-    const updated = s.reconcileTopic({ topicName: "Guard pre-existing", axes: [{ title: "A", state: "usable", stateConfidence: "confirmed" }] });
+    const updated = s.reconcileTopic({
+      topicName: "Guard pre-existing",
+      axes: [{ title: "A", state: "active", stateConfidence: "confirmed" }],
+      transitions: [{ subject: "axis", axisTitle: "A", toState: "usable" }],
+    });
     const a = updated.axes[0];
     results.push(
       a.stateConfidence === "confirmed"
@@ -787,10 +791,7 @@ export function evaluateStore({ store, makeStore, pluginActions, harnessSources,
     results.push(fail("C15", "retained-like amendment delta idempotency", "amendment", err.message));
   }
 
-  // C16 — version discipline. Both a stale `axes[].expectedVersion` and a stale top-level topic
-  // `expectedVersion` refuse with `conflict`; the store's problem/plan writers support a version guard,
-  // but the reconcile tool input exposes NO `expectedVersion` for `problems[]`/`plans[]` — an asymmetry,
-  // recorded not hidden.
+  // C16 — stale topic, axis, task and plan versions refuse through reconciliation.
   try {
     const topic0 = store.getTopicByName(TOPIC_NAMES[0]);
     const axis0 = store.listAxes(topic0.id)[0];
@@ -810,7 +811,7 @@ export function evaluateStore({ store, makeStore, pluginActions, harnessSources,
       topicConflict = err;
     }
 
-    // The store CAN guard a problem/plan; the tool path does not expose it.
+    // Direct writers and the public reconciliation path share the same row guards.
     const problem = store.listProblems(planAxis.id)[0];
     let problemConflict = null;
     try {
@@ -826,15 +827,23 @@ export function evaluateStore({ store, makeStore, pluginActions, harnessSources,
       planConflict = err;
     }
 
-    // The tool path drops an `expectedVersion` supplied on a problems[] item: no conflict is raised.
-    let toolPathRaised = false;
+    let toolProblemConflict = null;
     try {
       store.reconcileTopic({
-        topicName: topic0.name,
-        problems: [{ problemId: problem.id, statement: problem.statement, expectedVersion: problem.version + 50 }],
+        topicId: planAxis.topicId,
+        problems: [{ problemId: problem.id, expectedVersion: problem.version + 50 }],
       });
-    } catch {
-      toolPathRaised = true;
+    } catch (err) {
+      toolProblemConflict = err;
+    }
+    let toolPlanConflict = null;
+    try {
+      store.reconcileTopic({
+        topicId: planAxis.topicId,
+        plans: [{ planId: plan.plan.id, axisId: planAxis.id, summary: plan.plan.summary, expectedVersion: plan.plan.version + 50 }],
+      });
+    } catch (err) {
+      toolPlanConflict = err;
     }
 
     const ok =
@@ -842,15 +851,16 @@ export function evaluateStore({ store, makeStore, pluginActions, harnessSources,
       topicConflict instanceof ResearchStoreConflictError &&
       problemConflict instanceof ResearchStoreConflictError &&
       planConflict instanceof ResearchStoreConflictError &&
-      !toolPathRaised;
+      toolProblemConflict instanceof ResearchStoreConflictError &&
+      toolPlanConflict instanceof ResearchStoreConflictError;
     results.push(
       assertThat(
         "C16",
-        "version discipline — stale topic AND axes[].expectedVersion conflict; problem/plan lack a tool-level guard",
+        "version discipline — stale topic, axis, task and plan versions conflict",
         "amendment",
         ok,
-        "a stale topic and a stale `axes[].expectedVersion` both refuse with `conflict`; the store's problem/plan writers also conflict, but the reconcile tool input exposes no `expectedVersion` for `problems[]`/`plans[]`, so the tool path cannot be version-guarded (an asymmetry, stated not hidden)",
-        `axisConflict ${axisConflict?.constructor?.name ?? "none"}, topicConflict ${topicConflict?.constructor?.name ?? "none"}, problemConflict ${problemConflict?.constructor?.name ?? "none"}, planConflict ${planConflict?.constructor?.name ?? "none"}, toolPathRaised ${toolPathRaised}`
+        "stale topic and axis versions conflict; stale task and plan versions conflict through both direct writers and reconciliation",
+        `axisConflict ${axisConflict?.constructor?.name ?? "none"}, topicConflict ${topicConflict?.constructor?.name ?? "none"}, problemConflict ${problemConflict?.constructor?.name ?? "none"}, planConflict ${planConflict?.constructor?.name ?? "none"}, toolProblemConflict ${toolProblemConflict?.constructor?.name ?? "none"}, toolPlanConflict ${toolPlanConflict?.constructor?.name ?? "none"}`
       )
     );
   } catch (err) {
