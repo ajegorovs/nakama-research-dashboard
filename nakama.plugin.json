@@ -557,7 +557,7 @@
                   }
                 }
               },
-              "required": ["statement"]
+              "required": []
             }
           },
           "plans": {
@@ -627,7 +627,7 @@
                         "enum": ["pending", "active", "done", "blocked"]
                       }
                     },
-                    "required": ["title"]
+                    "required": []
                   }
                 }
               },

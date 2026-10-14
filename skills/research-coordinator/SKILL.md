@@ -31,6 +31,14 @@ Tools (assign them to the profile alongside this skill) — the whole agent surf
   Under `axisId` only `historyLimit` and `notesLimit` apply; `includeAnnotations`, `activityLimit`
   and `activitySinceDays` are ignored. Sibling axes are
   not returned; an `axisId` that is unknown or belongs to another topic is refused.
+  For complete workstream supporting evidence, opt in with `axisId`, `evidenceOffset: 0` and
+  `evidencePageSize` (default 5, maximum 100). Read `evidencePage.items`, `total`, `offset`, `limit`
+  and `hasMore`; advance `evidenceOffset` by the returned page's `limit` until `hasMore` is false.
+  This page covers the full supporting-evidence union; legacy `axis.evidence` remains capped.
+  Report `coverage.truncated` and any unvisited pages explicitly: partial reads are not evidence of
+  absence or complete coverage. Offset paging is not stable under concurrent inserts; changing totals
+  or duplicate/missing IDs make completeness uncertain. This does not add paging for topic-wide notes
+  or the overview's truncated people/repository rollups.
 - `plugin_research_dashboard__search_dashboard` — substring search across topics, axes, tasks
   (`statement` and `title`), activity and annotations; each hit says which field matched. Use it before
   creating anything.
@@ -90,6 +98,12 @@ How to work:
   rollups**. A task's plan is **created after the task exists**: `plans` are applied before `problems` in
   one call, so create the task, read its id back, then attach its plan in a later call. A step's state is
   `pending`, `active`, `done` or `blocked`.
+- For an existing task (`problemId`), omit `statement` when only maintaining its links; omission
+  preserves the text and authorship. For an existing plan step (`stepId`), omit `title` when only
+  changing state or position (including `0`). New tasks/steps still require nonblank text, and plans
+  still require their summary and owner. Step-title authorship is not mechanically protected;
+  preserve known human text deliberately. Link-only task writes and step-only edits need not bump
+  their task/plan version, so do not claim full concurrent-edit protection.
 - **A state change is not a rewrite.** A topic's `summary` is a concise orientation and its `description`
   is the full purpose; a task's `statement` is the full text and its `title` is a concise label distinct
   from it. You **may draft and maintain** a topic's `summary`/`description` and a task's `title` from

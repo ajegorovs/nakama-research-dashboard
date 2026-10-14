@@ -248,7 +248,7 @@ describe("A3 — an existing task update honours problems[].expectedVersion", ()
       {
         problems: [
           {
-            // An existing task still requires its statement; echoing the current one transfers nothing.
+            // An unchanged statement echo remains valid and transfers no authorship.
             expectedVersion: stale,
             problemId: seeded.problemId,
             repositoryFullNames: ["acme/thing"],

@@ -183,6 +183,13 @@ function collectionCoverage(limit, returned, total, limitScope) {
     truncated: total > returned
   };
 }
+function ownerVisibleSql(alias) {
+  const owner = `COALESCE(${alias}.topic_id,
+      (SELECT a.topic_id FROM development_axes a WHERE a.id = ${alias}.axis_id),
+      (SELECT pa.topic_id FROM problems p JOIN development_axes pa ON pa.id = p.axis_id
+        WHERE p.id = ${alias}.problem_id))`;
+  return `(${owner} IS NULL OR ${owner} IN (SELECT id FROM topics WHERE status <> 'archived'))`;
+}
 function isTopicStatus(value) {
   return typeof value === "string" && TOPIC_STATUSES.includes(value);
 }
@@ -856,12 +863,14 @@ class ResearchStore {
   listActivity(options) {
     const limit = clampLimit(options?.limit, DEFAULT_ACTIVITY_LIMIT, MAX_ACTIVITY_LIMIT);
     const since = options?.sinceDays ? isoDaysAgo(options.sinceDays) : null;
+    const archiveFilter = options?.includeArchived === false ? `AND ${ownerVisibleSql("activities")}` : "";
     const rows = this.db.query(`SELECT * FROM activities
          WHERE (? IS NULL OR topic_id = ?)
            AND (? IS NULL OR axis_id = ?)
            AND (? IS NULL OR actor_id = ?)
            AND (? IS NULL OR repository_id = ?)
            AND (? IS NULL OR occurred_at >= ?)
+           ${archiveFilter}
          ORDER BY occurred_at DESC, id DESC
          LIMIT ?`).all(options?.topicId ?? null, options?.topicId ?? null, options?.axisId ?? null, options?.axisId ?? null, options?.actorId ?? null, options?.actorId ?? null, options?.repositoryId ?? null, options?.repositoryId ?? null, since, since, limit);
     return rows.map(toActivity);
@@ -876,8 +885,7 @@ class ResearchStore {
          AND (? IS NULL OR actor_id = ?)
          AND (? IS NULL OR repository_id = ?)
          AND (? IS NULL OR occurred_at >= ?)
-         AND (? IS NULL OR ? = 1
-              OR topic_id IN (SELECT id FROM topics WHERE status <> 'archived'))`;
+         AND (? IS NULL OR ? = 1 OR ${ownerVisibleSql("activities")})`;
     const archiveParam = scope?.includeArchived === undefined ? null : scope.includeArchived ? 1 : 0;
     const params = [
       scope?.topicId ?? null,
@@ -1219,6 +1227,7 @@ class ResearchStore {
       const blocked = this.db.query(`SELECT a.*, t.name AS topic_name
            FROM development_axes a JOIN topics t ON t.id = a.topic_id
            WHERE a.state = 'blocked'
+             ${includeArchived ? "" : "AND t.status <> 'archived'"}
            ORDER BY a.updated_at DESC`).all();
       const rollups = this.involvementRollups(includeArchived, since, MAX_ROLLUP_LIMIT);
       return {
@@ -1240,10 +1249,13 @@ class ResearchStore {
         people: rollups.people,
         peopleTruncated: rollups.peopleTruncated,
         recentActivity: this.listActivity({
+          includeArchived,
           limit: 25,
           sinceDays: activitySinceDays > 0 ? activitySinceDays : undefined
         }),
-        recentTopics: this.db.query("SELECT * FROM topics ORDER BY updated_at DESC, name ASC LIMIT ?").all(limit).map(toTopic),
+        recentTopics: this.db.query(`SELECT * FROM topics
+               ${includeArchived ? "" : "WHERE status <> 'archived'"}
+               ORDER BY updated_at DESC, name ASC LIMIT ?`).all(limit).map(toTopic),
         repositories: rollups.repositories,
         repositoriesTruncated: rollups.repositoriesTruncated,
         timeline: this.recentProgress(since, includeArchived, DEFAULT_TIMELINE_AXIS_LIMIT),
@@ -1370,7 +1382,7 @@ class ResearchStore {
     return map;
   }
   recentProgress(since, includeArchived, limit) {
-    const { scans, topicRefs } = this.visibleContext({ includeArchived });
+    const { scans, topicRefs, visible } = this.visibleContext({ includeArchived });
     const personByAccount = this.personRefByAccount();
     const rows = this.db.query(`SELECT * FROM activities
          WHERE (? IS NULL OR occurred_at >= ?)
@@ -1380,7 +1392,7 @@ class ResearchStore {
       const event = toActivity(row);
       const axis = event.axisId ? scans.get(event.axisId) ?? null : null;
       const topicId = axis?.topicId ?? event.topicId ?? "";
-      if (topicId === "" || !topicRefs.has(topicId)) {
+      if (!visible(topicId)) {
         continue;
       }
       const buckets = byTopic.get(topicId) ?? new Map;
@@ -1584,6 +1596,8 @@ class ResearchStore {
     const pattern = `%${query.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_")}%`;
     return this.snapshot(() => {
       const archivedFilter = includeArchived ? "" : "AND t.status <> 'archived'";
+      const activityArchiveFilter = includeArchived ? "" : `AND ${ownerVisibleSql("x")}`;
+      const annotationArchiveFilter = includeArchived ? "" : `AND ${ownerVisibleSql("n")}`;
       const topicRows = this.db.query(`SELECT t.* FROM topics t
            WHERE (t.name LIKE ? ESCAPE '\\' OR t.description LIKE ? ESCAPE '\\' OR t.summary LIKE ? ESCAPE '\\')
              ${archivedFilter}
@@ -1598,10 +1612,12 @@ class ResearchStore {
            LIMIT ?`).all(pattern, pattern, pattern, pattern, pattern, limit + 1);
       const activityRows = this.db.query(`SELECT x.*, t.name AS topic_name FROM activities x LEFT JOIN topics t ON t.id = x.topic_id
            WHERE (x.summary LIKE ? ESCAPE '\\' OR x.source_ref LIKE ? ESCAPE '\\')
+             ${activityArchiveFilter}
            ORDER BY x.occurred_at DESC, x.rowid DESC
            LIMIT ?`).all(pattern, pattern, limit + 1);
       const annotationRows = this.db.query(`SELECT n.*, t.name AS topic_name FROM annotations n LEFT JOIN topics t ON t.id = n.topic_id
            WHERE n.text LIKE ? ESCAPE '\\'
+             ${annotationArchiveFilter}
            ORDER BY n.created_at DESC, n.rowid DESC
            LIMIT ?`).all(pattern, limit + 1);
       const problemRows = this.db.query(`SELECT p.id, p.axis_id, p.statement, p.state, p.state_confidence,
@@ -3053,7 +3069,7 @@ class ResearchStore {
               id: step.stepId,
               position: step.position,
               state: optionalOneOf(step.state, PLAN_STEP_STATES, "state"),
-              title: required(step.title, "title")
+              title: step.title === undefined ? undefined : required(step.title, "title")
             });
           } else {
             this.createPlanStep({
@@ -3070,7 +3086,6 @@ class ResearchStore {
         });
       }
       for (const problemInput of input.problems ?? []) {
-        const statement = required(problemInput.statement, "statement");
         if (problemInput.problemId) {
           this.resolveProblemInTopic(topic.id, problemInput.problemId, problemInput.axisId, problemInput.axisTitle);
           if (problemInput.state !== undefined) {
@@ -3084,7 +3099,7 @@ class ResearchStore {
             personIds: problemInput.personIds,
             planStepId: problemInput.planStepId,
             repositoryFullNames: problemInput.repositoryFullNames,
-            statement,
+            statement: problemInput.statement,
             stateConfidence: optionalOneOf(problemInput.stateConfidence, CONFIDENCES, "stateConfidence"),
             title: problemInput.title
           }));
@@ -3094,6 +3109,7 @@ class ResearchStore {
         if (!axisId) {
           throw new ResearchStoreError("problems[] need an axisId or axisTitle: a problem is raised against an axis.");
         }
+        const statement = required(problemInput.statement, "statement");
         touchedProblems.push(this.createProblem({
           authorId: actor.id,
           authorType,

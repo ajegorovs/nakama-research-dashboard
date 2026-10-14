@@ -57,6 +57,26 @@ skill defines operational tool use. This document does not authorize writes or d
   not guaranteed to advance their plan's version. Use each available row guard without claiming
   broader protection. This bounded policy does not add step or relationship versioning.
 
+## Non-text maintenance without text echoes
+
+- Existing `problems[].problemId` updates may omit `statement`; existing `steps[].stepId` updates
+  may omit `title`. Omission preserves stored text and task authorship. This permits task link-only
+  maintenance and plan-step state/position-only updates without repeating human text.
+- New tasks still require a nonblank statement; new steps still require a nonblank title. Explicit
+  blank text is not omission. Plan updates still require their summary and owner selectors.
+- These inputs reuse existing writers and version semantics: task people/repository link-only writes
+  need not advance the task version, and step-only edits need not advance the plan version. They do
+  not introduce stronger concurrency or step-title authorship guarantees.
+
+## Archived-record filtering
+
+`get_overview` inventory totals (`counts`, status totals, workstream/task state totals) always include
+archived projects. Its result lists honor `includeArchived` (default false), as do dashboard search
+hits. Filtering occurs before result limits: hidden archived rows do not consume the visible page.
+Activity and annotations follow their owning project, including ownership through a workstream or
+task when no direct project target is stored. Truly topicless records remain visible; topic-grouped
+timelines still require a project. This is a presentation filter, not an authorization boundary.
+
 ## Supporting evidence
 
 - Progress has its own five-item evidence page, independent of task and activity pages. The scoped
