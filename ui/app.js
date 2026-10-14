@@ -1008,7 +1008,17 @@ var css = `
    rows already carry for their status dot — and align the number and the state badge to that first line
    rather than floating them over a two-line title. One rule, shared by the project, workstream and task
    plans. */
-[data-plugin-id="research-dashboard"] .rd-plan-step .rd-row { align-items: baseline; }
+[data-plugin-id="research-dashboard"] .rd-plan-step .rd-row { align-items: baseline; justify-content: flex-start; }
+[data-plugin-id="research-dashboard"] .rd-plan-step .rd-step-state { margin-inline-start: 6px; }
+[data-plugin-id="research-dashboard"] .rd-scoped-plan[data-rd-plan-status="right"] .rd-row { justify-content: space-between; flex-wrap: nowrap; }
+[data-plugin-id="research-dashboard"] .rd-scoped-plan[data-rd-plan-status="right"] .rd-cluster { min-width: 0; }
+[data-plugin-id="research-dashboard"] .rd-scoped-plan[data-rd-plan-status="right"] .rd-step-state { flex: 0 0 auto; margin-inline-start: 0; }
+[data-plugin-id="research-dashboard"] .rd-person-repository-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: start;
+  gap: 6px;
+}
 [data-plugin-id="research-dashboard"] .rd-plan-step .rd-cluster { flex-wrap: nowrap; align-items: baseline; }
 [data-plugin-id="research-dashboard"] .rd-plan-step .rd-cluster > .rd-meta { margin-top: 0; }
 [data-plugin-id="research-dashboard"] .rd-plan-step .rd-cluster > .rd-strong { min-width: 0; }
@@ -1467,7 +1477,15 @@ var css = `
 [data-plugin-id="research-dashboard"] .rd-evidence-list {
   display: grid; gap: var(--rd-gap-tight); list-style: none; margin: 0; padding: 0;
 }
-[data-plugin-id="research-dashboard"] .rd-evidence-list > li { min-width: 0; overflow-wrap: anywhere; }
+[data-plugin-id="research-dashboard"] .rd-evidence-list > li {
+  border-bottom: var(--rd-edge); display: grid; gap: 4px;
+  min-width: 0; overflow-wrap: anywhere; padding: 8px 0;
+}
+[data-plugin-id="research-dashboard"] .rd-evidence-list > li:last-child { border-bottom: 0; }
+[data-plugin-id="research-dashboard"] .rd-evidence-body { display: block; max-width: 80ch; }
+[data-plugin-id="research-dashboard"] .rd-evidence-meta {
+  align-items: baseline; display: flex; flex-wrap: wrap; gap: 4px 10px;
+}
 [data-plugin-id="research-dashboard"] .rd-progress-maintenance {
   border-top: var(--rd-edge); display: grid; gap: var(--rd-gap-tight); padding-top: 8px;
 }
@@ -1981,8 +1999,36 @@ function projectWorkstreamCardData(axis) {
     title: axis.title
   };
 }
-function progressEvidenceSummary(count) {
-  return count > 0 ? `Evidence (${count} shown)` : "Evidence";
+function progressEvidenceSummary(input) {
+  if (input.total !== undefined && input.total !== null) {
+    return input.total > 0 ? `Supporting evidence (${input.total})` : "Supporting evidence";
+  }
+  return input.count > 0 ? `Supporting evidence (${input.count} shown)` : "Supporting evidence";
+}
+function evidenceRecordParts(item) {
+  const href = /^https?:\/\//i.test(item.sourceUrl ?? "") ? item.sourceUrl : null;
+  const body = typeof item.summary === "string" ? item.summary : "";
+  const authorId = typeof item.authorId === "string" ? item.authorId : "";
+  const author = item.by ? authorId ? `${item.by} · ${authorId}` : item.by : authorId;
+  const date = item.at || "";
+  const label = item.label ?? "";
+  if (item.kind === "pull_request") {
+    return { author, body, date, href, name: "Open pull request", provenance: label };
+  }
+  if (item.kind === "branch") {
+    return {
+      author,
+      body,
+      date,
+      href,
+      name: href ? "Open branch" : label || "Branch",
+      provenance: href ? label : ""
+    };
+  }
+  if (item.kind === "annotation") {
+    return { author, body, date, href, name: label, provenance: "" };
+  }
+  return { author, body, date, href, name: label, provenance: label };
 }
 function progressActivitySummary(total) {
   return total > 0 ? `Recent activity (${total})` : "Recent activity";
@@ -2556,7 +2602,8 @@ function apply(ctx) {
     label,
     plan,
     defaultOpen = true,
-    collapsible = true
+    collapsible = true,
+    statusPlacement = "inline"
   }) {
     if (!plan || plan.steps.length === 0) {
       return null;
@@ -2565,6 +2612,7 @@ function apply(ctx) {
     const PlanHeading = collapsible ? "summary" : "h4";
     return /* @__PURE__ */ React.createElement(PlanContainer, {
       className: "rd-scoped-plan",
+      "data-rd-plan-status": statusPlacement,
       ...collapsible ? { open: defaultOpen } : {}
     }, /* @__PURE__ */ React.createElement(PlanHeading, null, label, hint ? /* @__PURE__ */ React.createElement("span", {
       className: "rd-plan-hint"
@@ -2586,12 +2634,17 @@ function apply(ctx) {
       className: "rd-cluster"
     }, step.position === null ? null : /* @__PURE__ */ React.createElement("span", {
       className: "rd-plan-position"
-    }, step.position), /* @__PURE__ */ React.createElement("span", {
+    }, step.position), statusPlacement === "inline" ? /* @__PURE__ */ React.createElement("span", {
       className: "rd-strong"
-    }, step.title)), /* @__PURE__ */ React.createElement(StateBadge, {
+    }, step.title, " ", /* @__PURE__ */ React.createElement(StateBadge, {
       kind: "stored",
       state: step.state
-    }))))));
+    })) : /* @__PURE__ */ React.createElement("span", {
+      className: "rd-strong"
+    }, step.title)), statusPlacement === "right" ? /* @__PURE__ */ React.createElement(StateBadge, {
+      kind: "stored",
+      state: step.state
+    }) : null)))));
   }
   function TextExcerpt({ text, emptyText = "" }) {
     return /* @__PURE__ */ React.createElement(PurposeExcerpt, {
@@ -3042,7 +3095,7 @@ function apply(ctx) {
     }, /* @__PURE__ */ React.createElement("h3", {
       className: "rd-side-title"
     }, "Related repositories"), /* @__PURE__ */ React.createElement("div", {
-      className: "rd-cluster rd-tags",
+      className: "rd-cluster rd-tags rd-person-repository-list",
       "data-rd-person-repositories": relatedRepositories.length
     }, relatedRepositories.map((repository) => /* @__PURE__ */ React.createElement(EntityTag, {
       id: repository.id,
@@ -3415,9 +3468,12 @@ function apply(ctx) {
     busy,
     conflict,
     correction,
+    evidenceOffset,
+    evidencePage,
     loading,
     onActivityOffset,
     onCorrection,
+    onEvidenceOffset,
     onOpenEntity,
     onReloadCorrection,
     onSaveCorrection,
@@ -3451,6 +3507,7 @@ function apply(ctx) {
     const activityTotal = activityPage ? activityPage.total : activityAll.length;
     const axisRepositories = axis?.repositories ?? [];
     const evidence = axis?.evidence ?? [];
+    const evidenceItems = evidencePage ? evidencePage.items : evidence;
     const correcting = correction != null && correction.axisId === axis?.id;
     const projectName = workstream?.topic.name ?? groups.find((group) => group.rows.some((row) => row.id === selection?.axisId))?.name ?? "Not recorded";
     return /* @__PURE__ */ React.createElement("div", {
@@ -3587,6 +3644,7 @@ function apply(ctx) {
       hint: countLabel(axis.plan.steps.length, "recorded step", "recorded steps"),
       collapsible: false,
       label: "Workstream plan",
+      statusPlacement: "right",
       plan: axis.plan
     })) : null), /* @__PURE__ */ React.createElement("section", {
       className: "rd-progress-tasks",
@@ -3712,33 +3770,65 @@ function apply(ctx) {
       className: "rd-progress-evidence",
       "data-rd-axis-evidence": evidence.length,
       "data-rd-has-evidence": evidence.length > 0,
-      "data-rd-progress-evidence": evidence.length
+      "data-rd-progress-evidence": evidence.length,
+      "data-rd-progress-evidence-page": evidencePage ? "true" : "false",
+      "data-rd-progress-evidence-total": evidencePage ? evidencePage.total : ""
     }, /* @__PURE__ */ React.createElement("h4", {
       className: "rd-section-heading"
-    }, progressEvidenceSummary(evidence.length)), evidence.length > 0 ? /* @__PURE__ */ React.createElement("ul", {
+    }, progressEvidenceSummary({
+      count: evidence.length,
+      total: evidencePage ? evidencePage.total : null
+    })), evidenceItems.length > 0 ? /* @__PURE__ */ React.createElement("ul", {
       className: "rd-evidence-list",
       "data-rd-evidence-list": "true"
-    }, evidence.map((item, index) => /* @__PURE__ */ React.createElement("li", {
-      key: `${item.sourceRef}-${index}`,
-      "data-rd-evidence-ref": item.sourceRef || String(index)
-    }, /* @__PURE__ */ React.createElement("span", {
-      className: "rd-strong"
-    }, item.label), item.by ? /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta"
-    }, ` · ${item.by}`) : null, item.sourceUrl ? /* @__PURE__ */ React.createElement("a", {
-      className: "rd-repo-ext",
-      "data-rd-evidence-url": item.sourceRef || String(index),
-      href: item.sourceUrl,
-      rel: "noopener noreferrer",
-      target: "_blank",
-      title: item.sourceUrl
-    }, "source ↗") : /* @__PURE__ */ React.createElement("span", {
-      className: "rd-meta",
-      "data-rd-evidence-no-url": "true"
-    }, item.sourceRef || item.sourceType)))) : /* @__PURE__ */ React.createElement("p", {
+    }, evidenceItems.map((item, index) => {
+      const parts = evidenceRecordParts(item);
+      const ref = item.sourceRef || String(index);
+      const record = item;
+      const id = typeof record.id === "string" && record.id ? record.id : ref;
+      const structural = item.kind === "branch" || item.kind === "pull_request";
+      return /* @__PURE__ */ React.createElement("li", {
+        "data-rd-evidence-id": id,
+        "data-rd-evidence-kind": item.kind,
+        "data-rd-evidence-no-url": parts.href ? undefined : "true",
+        "data-rd-evidence-record-id": record.recordId ?? "",
+        "data-rd-evidence-ref": ref,
+        key: id
+      }, structural || !parts.body ? /* @__PURE__ */ React.createElement("span", {
+        className: "rd-strong"
+      }, structural ? item.label : parts.name) : /* @__PURE__ */ React.createElement("span", {
+        className: "rd-evidence-body"
+      }, /* @__PURE__ */ React.createElement(TextExcerpt, {
+        text: parts.body
+      })), /* @__PURE__ */ React.createElement("div", {
+        className: "rd-evidence-meta"
+      }, item.kind === "annotation" ? /* @__PURE__ */ React.createElement("span", {
+        className: "rd-meta"
+      }, "Note") : null, parts.body && parts.provenance && !structural ? /* @__PURE__ */ React.createElement("span", {
+        className: "rd-meta"
+      }, parts.provenance) : null, parts.author ? /* @__PURE__ */ React.createElement("span", {
+        className: "rd-meta",
+        "data-rd-evidence-author": parts.author
+      }, parts.author) : null, parts.date ? /* @__PURE__ */ React.createElement(EventDate, {
+        at: parts.date
+      }) : null, parts.href ? /* @__PURE__ */ React.createElement("a", {
+        className: "rd-repo-ext",
+        "data-rd-evidence-url": ref,
+        href: parts.href,
+        rel: "noopener noreferrer",
+        target: "_blank",
+        title: parts.href
+      }, structural ? `${parts.name} ↗` : "Open source ↗") : null));
+    })) : /* @__PURE__ */ React.createElement("p", {
       className: "rd-muted",
       "data-rd-evidence-empty": "true"
-    }, PROGRESS_NO_EVIDENCE_TEXT)), axisRepositories.length > 0 ? /* @__PURE__ */ React.createElement("div", {
+    }, PROGRESS_NO_EVIDENCE_TEXT), evidencePage && evidencePage.total > 0 ? /* @__PURE__ */ React.createElement(Pager, {
+      label: "Evidence",
+      offset: evidenceOffset,
+      onOffset: onEvidenceOffset,
+      pageSize: evidencePage.limit,
+      total: evidencePage.total
+    }) : null), axisRepositories.length > 0 ? /* @__PURE__ */ React.createElement("div", {
       className: "rd-cluster rd-tags",
       "data-rd-context-repositories": axisRepositories.length,
       "data-rd-progress-provenance": "true"
@@ -3772,10 +3862,12 @@ function apply(ctx) {
     const [progressSelection, setProgressSelection] = React.useState(null);
     const [workstream, setWorkstream] = React.useState(null);
     const [workstreamActivity, setWorkstreamActivity] = React.useState(null);
+    const [workstreamEvidence, setWorkstreamEvidence] = React.useState(null);
     const [workstreamTask, setWorkstreamTask] = React.useState(null);
     const [workstreamLoading, setWorkstreamLoading] = React.useState(false);
     const [taskOffset, setTaskOffset] = React.useState(0);
     const [activityOffset, setActivityOffset] = React.useState(0);
+    const [evidenceOffset, setEvidenceOffset] = React.useState(0);
     const [correction, setCorrection] = React.useState(null);
     const [topicNote, setTopicNote] = React.useState("");
     const [conflict, setConflict] = React.useState(null);
@@ -3839,11 +3931,11 @@ function apply(ctx) {
     }
     function reloadCurrent() {
       if (progressSelection) {
-        loadWorkstream(progressSelection, taskOffset, activityOffset);
+        loadWorkstream(progressSelection, taskOffset, activityOffset, evidenceOffset);
       }
       return load(scopeWindow);
     }
-    async function loadWorkstream(selection, nextTaskOffset, nextActivityOffset) {
+    async function loadWorkstream(selection, nextTaskOffset, nextActivityOffset, nextEvidenceOffset) {
       const seq = ++workstreamSeq.current;
       const stale = () => workstreamSeq.current !== seq;
       setWorkstreamLoading(true);
@@ -3853,7 +3945,12 @@ function apply(ctx) {
         topicId: selection.topicId
       };
       const [taskResult, activityResult] = await Promise.all([
-        call("get_topic", { ...scope, offset: nextTaskOffset }, { isStale: stale }),
+        call("get_topic", {
+          ...scope,
+          evidenceOffset: nextEvidenceOffset,
+          evidencePageSize: PROGRESS_PAGE_SIZE,
+          offset: nextTaskOffset
+        }, { isStale: stale }),
         call("get_topic", { ...scope, offset: nextActivityOffset }, { isStale: stale })
       ]);
       if (ctx.signal.aborted) {
@@ -3879,6 +3976,7 @@ function apply(ctx) {
       } : null);
       setWorkstreamTask(taskResult?.problemPage ?? null);
       setWorkstreamActivity(activityResult?.activityPage ?? null);
+      setWorkstreamEvidence(taskResult?.evidencePage ?? null);
       return axis;
     }
     function selectWorkstream(topicId, axisId) {
@@ -3886,12 +3984,14 @@ function apply(ctx) {
       setProgressSelection(next);
       setTaskOffset(0);
       setActivityOffset(0);
+      setEvidenceOffset(0);
       setCorrection(null);
       setConflict(null);
       setWorkstream(null);
       setWorkstreamTask(null);
       setWorkstreamActivity(null);
-      loadWorkstream(next, 0, 0);
+      setWorkstreamEvidence(null);
+      loadWorkstream(next, 0, 0, 0);
     }
     const problemFocusRef = React.useRef(null);
     React.useEffect(() => {
@@ -3916,6 +4016,15 @@ function apply(ctx) {
       }
     }, [entityTarget?.id, entityTarget?.seq, visibleProgress]);
     React.useEffect(() => {
+      if (view !== "progress" || progressSelection || !visibleProgress || entityTarget?.type === "axis" || entityTarget?.type === "problem") {
+        return;
+      }
+      const first = visibleProgress.axes.axes.find((row) => row.id && row.topicId);
+      if (first) {
+        selectWorkstream(first.topicId, first.id);
+      }
+    }, [view, visibleProgress, progressSelection, entityTarget?.type]);
+    React.useEffect(() => {
       const focus = problemFocusRef.current;
       if (!focus || !workstream || !progressSelection) {
         return;
@@ -3926,7 +4035,7 @@ function apply(ctx) {
       if (at >= 0) {
         const next = Math.floor(at / PROGRESS_PAGE_SIZE) * PROGRESS_PAGE_SIZE;
         setTaskOffset(next);
-        loadWorkstream(progressSelection, next, activityOffset);
+        loadWorkstream(progressSelection, next, activityOffset, evidenceOffset);
       }
     }, [workstream]);
     React.useEffect(() => {
@@ -4006,7 +4115,7 @@ function apply(ctx) {
       if (!progressSelection) {
         return;
       }
-      const fresh = await loadWorkstream(progressSelection, taskOffset, activityOffset);
+      const fresh = await loadWorkstream(progressSelection, taskOffset, activityOffset, evidenceOffset);
       if (ctx.signal.aborted) {
         return;
       }
@@ -4398,14 +4507,22 @@ function apply(ctx) {
       busy,
       conflict,
       correction,
+      evidenceOffset,
+      evidencePage: workstreamEvidence,
       loading: workstreamLoading,
       onActivityOffset: (next) => {
         setActivityOffset(next);
         if (progressSelection) {
-          loadWorkstream(progressSelection, taskOffset, next);
+          loadWorkstream(progressSelection, taskOffset, next, evidenceOffset);
         }
       },
       onCorrection: setCorrection,
+      onEvidenceOffset: (next) => {
+        setEvidenceOffset(next);
+        if (progressSelection) {
+          loadWorkstream(progressSelection, taskOffset, activityOffset, next);
+        }
+      },
       onOpenEntity: openEntity,
       onReloadCorrection: () => {
         reloadWorkstreamCorrection();
@@ -4417,7 +4534,7 @@ function apply(ctx) {
       onTaskOffset: (next) => {
         setTaskOffset(next);
         if (progressSelection) {
-          loadWorkstream(progressSelection, next, activityOffset);
+          loadWorkstream(progressSelection, next, activityOffset, evidenceOffset);
         }
       },
       progress: visibleProgress,
@@ -4436,6 +4553,7 @@ export {
   PROGRESS_NO_EVIDENCE_TEXT,
   activityActorIndication,
   apply,
+  evidenceRecordParts,
   inject,
   partitionInvolvements,
   partitionRepositoryWorkstreams,

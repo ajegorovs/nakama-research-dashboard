@@ -28,12 +28,22 @@ const source = await Bun.file(new URL("./ui.tsx", import.meta.url)).text();
 const at = (needle: string): number => source.indexOf(needle);
 
 describe("V12 Progress disclosures — pure helpers", () => {
-  test("the evidence summary states the count shown, or just the label", () => {
-    // The projection caps evidence per source, so the count is the evidence *shown*, not the workstream's
-    // exact total — the label says so rather than asserting a total the view cannot read.
-    expect(progressEvidenceSummary(0)).toBe("Evidence");
-    expect(progressEvidenceSummary(1)).toBe("Evidence (1 shown)");
-    expect(progressEvidenceSummary(7)).toBe("Evidence (7 shown)");
+  test("the evidence summary is the authoritative total when paged, else the count shown", () => {
+    // With a backend page the heading carries the page's own total, independent of the rows returned
+    // (6 shown, 7 total → "7"); without one the capped `axis.evidence` count is labelled as *shown*.
+    expect(progressEvidenceSummary({ count: 0 })).toBe("Supporting evidence");
+    expect(progressEvidenceSummary({ count: 1 })).toBe(
+      "Supporting evidence (1 shown)",
+    );
+    expect(progressEvidenceSummary({ count: 7 })).toBe(
+      "Supporting evidence (7 shown)",
+    );
+    expect(progressEvidenceSummary({ count: 6, total: 7 })).toBe(
+      "Supporting evidence (7)",
+    );
+    expect(progressEvidenceSummary({ count: 0, total: 0 })).toBe(
+      "Supporting evidence",
+    );
   });
 
   test("the activity summary carries the exact scoped total, or just the label", () => {
@@ -178,7 +188,7 @@ describe("V12 Progress — plan steps are the three-part stored row", () => {
     expect(source).toContain('[data-plugin-id="research-dashboard"] .rd-plan-position {');
     // Status stays the stored (square) tag, and the step title stays neutral strong text.
     expect(source).toContain('<StateBadge kind="stored" state={step.state} />');
-    expect(source).toContain('<span className="rd-strong">{step.title}</span>');
+    expect(source).toContain('<span className="rd-strong">{step.title}{" "}<StateBadge kind="stored" state={step.state} /></span>');
   });
 });
 
@@ -279,13 +289,13 @@ describe("Owner corrections — activity before maintenance and final evidence",
 });
 
 describe("V12 Progress — evidence, maintenance and preserved hooks", () => {
-  test("evidence is a native disclosure with a real stored link, never a guessed href", () => {
+  test("evidence is a static section with a real stored link, never a guessed href", () => {
     const evidence = at('className="rd-progress-evidence"');
-    const block = source.slice(evidence, evidence + 2200);
+    const block = source.slice(evidence, evidence + 3600);
     expect(block).toContain("data-rd-axis-evidence={evidence.length}");
     expect(block).toContain("data-rd-has-evidence={evidence.length > 0}");
-    expect(block).toContain("progressEvidenceSummary(evidence.length)");
-    expect(block).toContain("href={item.sourceUrl}");
+    expect(block).toContain("progressEvidenceSummary({");
+    expect(block).toContain("href={parts.href}");
     expect(block).toContain("data-rd-evidence-no-url");
     expect(block).not.toContain("title={evidenceText}");
     expect(source).not.toContain("evidenceText");

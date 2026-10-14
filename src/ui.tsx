@@ -109,6 +109,22 @@ type AxisEvidence = {
   at: string;
 };
 
+/**
+ * One supporting-evidence record from the complete backend page (`evidencePage`): the legacy
+ * `AxisEvidence` fields a row reads, plus the stable identity and text a pager needs. `id` is
+ * stable across reads (`branch:<axisId>` / `PR:<axisId>` / `activity:<rowId>` / `annotation:<rowId>`);
+ * `recordId` is the stored row id, null for the structural branch/PR, which is no row; `summary` is
+ * the record's own text (an activity's summary, a note's **full** text), empty for a structural
+ * item; `authorId` is the recorded actor's id, empty for a structural item. Mirrors the store's
+ * exported `AxisEvidenceRecord`; the legacy `axis.evidence` line stays the capped, unpaged shape.
+ */
+type AxisEvidenceRecord = AxisEvidence & {
+  id: string;
+  recordId: string | null;
+  summary: string;
+  authorId: string;
+};
+
 /** One axis in the detail view: full metadata, its own history, its own notes, its evidence. */
 type AxisDetail = Axis & {
   people: LinkedPerson[];
@@ -1679,7 +1695,17 @@ const css = `
    rows already carry for their status dot — and align the number and the state badge to that first line
    rather than floating them over a two-line title. One rule, shared by the project, workstream and task
    plans. */
-[data-plugin-id="research-dashboard"] .rd-plan-step .rd-row { align-items: baseline; }
+[data-plugin-id="research-dashboard"] .rd-plan-step .rd-row { align-items: baseline; justify-content: flex-start; }
+[data-plugin-id="research-dashboard"] .rd-plan-step .rd-step-state { margin-inline-start: 6px; }
+[data-plugin-id="research-dashboard"] .rd-scoped-plan[data-rd-plan-status="right"] .rd-row { justify-content: space-between; flex-wrap: nowrap; }
+[data-plugin-id="research-dashboard"] .rd-scoped-plan[data-rd-plan-status="right"] .rd-cluster { min-width: 0; }
+[data-plugin-id="research-dashboard"] .rd-scoped-plan[data-rd-plan-status="right"] .rd-step-state { flex: 0 0 auto; margin-inline-start: 0; }
+[data-plugin-id="research-dashboard"] .rd-person-repository-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: start;
+  gap: 6px;
+}
 [data-plugin-id="research-dashboard"] .rd-plan-step .rd-cluster { flex-wrap: nowrap; align-items: baseline; }
 [data-plugin-id="research-dashboard"] .rd-plan-step .rd-cluster > .rd-meta { margin-top: 0; }
 [data-plugin-id="research-dashboard"] .rd-plan-step .rd-cluster > .rd-strong { min-width: 0; }
@@ -2138,7 +2164,15 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-evidence-list {
   display: grid; gap: var(--rd-gap-tight); list-style: none; margin: 0; padding: 0;
 }
-[data-plugin-id="research-dashboard"] .rd-evidence-list > li { min-width: 0; overflow-wrap: anywhere; }
+[data-plugin-id="research-dashboard"] .rd-evidence-list > li {
+  border-bottom: var(--rd-edge); display: grid; gap: 4px;
+  min-width: 0; overflow-wrap: anywhere; padding: 8px 0;
+}
+[data-plugin-id="research-dashboard"] .rd-evidence-list > li:last-child { border-bottom: 0; }
+[data-plugin-id="research-dashboard"] .rd-evidence-body { display: block; max-width: 80ch; }
+[data-plugin-id="research-dashboard"] .rd-evidence-meta {
+  align-items: baseline; display: flex; flex-wrap: wrap; gap: 4px 10px;
+}
 [data-plugin-id="research-dashboard"] .rd-progress-maintenance {
   border-top: var(--rd-edge); display: grid; gap: var(--rd-gap-tight); padding-top: 8px;
 }
@@ -2801,15 +2835,76 @@ export function projectWorkstreamCardData(axis: {
 }
 
 /**
- * V2b — the Progress evidence disclosure's summary text: the count of evidence **shown** when there is any,
- * otherwise just the section label. The count is the projection's own `evidence` length, which the read caps
- * per source — so it is labelled "shown" rather than presented as the workstream's exact total, which this
- * view cannot read. The empty case states the explicit absence in the disclosure's body
- * (`PROGRESS_NO_EVIDENCE_TEXT`), not in its summary. Pure and exported so both forms are pinned without a
- * DOM.
+ * V12 — the Supporting-evidence section's heading text. When the backend answered a real page
+ * (`total` provided) the heading carries that **authoritative total**, independent of how many rows
+ * the page returned; with no page (the legacy capped `axis.evidence` fallback) the count is the
+ * evidence *shown* and the heading says so rather than asserting a total the view cannot read. Pure
+ * and exported so both forms are pinned without a DOM.
  */
-export function progressEvidenceSummary(count: number): string {
-  return count > 0 ? `Evidence (${count} shown)` : "Evidence";
+export function progressEvidenceSummary(input: {
+  count: number;
+  total?: number | null;
+}): string {
+  if (input.total !== undefined && input.total !== null) {
+    return input.total > 0
+      ? `Supporting evidence (${input.total})`
+      : "Supporting evidence";
+  }
+  return input.count > 0
+    ? `Supporting evidence (${input.count} shown)`
+    : "Supporting evidence";
+}
+
+/**
+ * What one supporting-evidence record renders, resolved once so the view stays a map and a check can
+ * pin the meaning without a DOM. `href` is non-null only for an actual stored HTTP(S) `sourceUrl`, so
+ * no link is ever drawn to a guessed or non-web destination. `body` is the record's own text (an
+ * activity's summary, a note's full text); `author` joins the recorded category and actor id, never a
+ * name; `date` is the raw stored timestamp. A structural branch/PR has no stored body/author/date —
+ * those come back empty so the view omits them rather than inventing any.
+ *
+ * The primary name is what the row *is*: a PR is "Open pull request", a branch is "Open branch" only
+ * when there is a real URL to open (otherwise the stored branch name is shown, unlinked). The
+ * `provenance` token is the single source reference/type — an activity's derived label already
+ * carries both, so it is not repeated in a second tail.
+ */
+export function evidenceRecordParts(
+  item: AxisEvidence & Partial<AxisEvidenceRecord>
+): {
+  author: string;
+  body: string;
+  date: string;
+  href: string | null;
+  name: string;
+  provenance: string;
+} {
+  const href = /^https?:\/\//i.test(item.sourceUrl ?? "") ? item.sourceUrl : null;
+  const body = typeof item.summary === "string" ? item.summary : "";
+  const authorId = typeof item.authorId === "string" ? item.authorId : "";
+  const author = item.by ? (authorId ? `${item.by} · ${authorId}` : item.by) : authorId;
+  const date = item.at || "";
+  const label = item.label ?? "";
+  if (item.kind === "pull_request") {
+    return { author, body, date, href, name: "Open pull request", provenance: label };
+  }
+  if (item.kind === "branch") {
+    return {
+      author,
+      body,
+      date,
+      href,
+      name: href ? "Open branch" : label || "Branch",
+      provenance: href ? label : "",
+    };
+  }
+  if (item.kind === "annotation") {
+    // A note's full text is the content and its kind is already carried by the row; the label "note"
+    // is not repeated, so a row is never a generic "note · agent" line without its actual text.
+    return { author, body, date, href, name: label, provenance: "" };
+  }
+  // An activity: the real summary is the content and the derived label is the one source
+  // reference/type token (it names both), so the ref is not repeated in its own tail.
+  return { author, body, date, href, name: label, provenance: label };
 }
 
 /**
@@ -3812,6 +3907,7 @@ export function apply(ctx: Context) {
     plan,
     defaultOpen = true,
     collapsible = true,
+    statusPlacement = "inline",
   }: {
     label: string;
     /** Optional factual qualifier beside the label (e.g. "3 recorded steps"); absent means none is drawn. */
@@ -3825,6 +3921,7 @@ export function apply(ctx: Context) {
      */
     defaultOpen?: boolean;
     collapsible?: boolean;
+    statusPlacement?: "inline" | "right";
   }) {
     if (!plan || plan.steps.length === 0) {
       return null;
@@ -3832,7 +3929,7 @@ export function apply(ctx: Context) {
     const PlanContainer = collapsible ? "details" : "section";
     const PlanHeading = collapsible ? "summary" : "h4";
     return (
-      <PlanContainer className="rd-scoped-plan" {...(collapsible ? { open: defaultOpen } : {})}>
+      <PlanContainer className="rd-scoped-plan" data-rd-plan-status={statusPlacement} {...(collapsible ? { open: defaultOpen } : {})}>
         <PlanHeading>
           {label}
           {hint ? <span className="rd-plan-hint">{` · ${hint}`}</span> : null}
@@ -3853,9 +3950,11 @@ export function apply(ctx: Context) {
                   {step.position === null ? null : (
                     <span className="rd-plan-position">{step.position}</span>
                   )}
-                  <span className="rd-strong">{step.title}</span>
+                  {statusPlacement === "inline" ? (
+                    <span className="rd-strong">{step.title}{" "}<StateBadge kind="stored" state={step.state} /></span>
+                  ) : <span className="rd-strong">{step.title}</span>}
                 </span>
-                <StateBadge kind="stored" state={step.state} />
+                {statusPlacement === "right" ? <StateBadge kind="stored" state={step.state} /> : null}
               </span>
             </li>
           ))}
@@ -4613,7 +4712,7 @@ export function apply(ctx: Context) {
               <section className="rd-side-card">
                 <h3 className="rd-side-title">Related repositories</h3>
                 <div
-                  className="rd-cluster rd-tags"
+                  className="rd-cluster rd-tags rd-person-repository-list"
                   data-rd-person-repositories={relatedRepositories.length}
                 >
                   {relatedRepositories.map((repository) => (
@@ -5288,9 +5387,12 @@ export function apply(ctx: Context) {
     busy,
     conflict,
     correction,
+    evidenceOffset,
+    evidencePage,
     loading,
     onActivityOffset,
     onCorrection,
+    onEvidenceOffset,
     onOpenEntity,
     onReloadCorrection,
     onSaveCorrection,
@@ -5309,9 +5411,17 @@ export function apply(ctx: Context) {
     conflict: ConflictState;
     /** The correction draft in flight for the selected workstream, or null. */
     correction: AxisCorrection | null;
+    /** The offset the evidence pager last asked for; the page below reads its own `offset` too. */
+    evidenceOffset: number;
+    /**
+     * The backend page of this workstream's **complete** supporting evidence (`evidencePage`), or null
+     * when the read offered none — in which case the section falls back to the capped `axis.evidence`.
+     */
+    evidencePage: Page<AxisEvidenceRecord> | null;
     loading: boolean;
     onActivityOffset: (next: number) => void;
     onCorrection: (next: AxisCorrection | null) => void;
+    onEvidenceOffset: (next: number) => void;
     onOpenEntity: (type: EntityType, id: string) => void;
     onReloadCorrection: () => void;
     onSaveCorrection: () => void;
@@ -5359,10 +5469,12 @@ export function apply(ctx: Context) {
       : activityAll.slice(activityOffset, activityOffset + PROGRESS_PAGE_SIZE);
     const activityTotal = activityPage ? activityPage.total : activityAll.length;
     const axisRepositories = axis?.repositories ?? [];
-    // The projection's own recorded evidence for the selected workstream (`axisEvidence`, capped per
-    // source). The disclosure's count is this array's length, so it is labelled as the evidence *shown*
-    // rather than presented as the workstream's exact total (see `progressEvidenceSummary`).
+    // The legacy capped evidence line, kept for the fallback and the `data-rd-axis-evidence` hook. When
+    // the backend answered the complete page, the section reads the page instead — its rows and its
+    // authoritative total — and the capped line is only reported, never called complete.
     const evidence = axis?.evidence ?? [];
+    const evidenceItems: Array<AxisEvidence & Partial<AxisEvidenceRecord>> =
+      evidencePage ? evidencePage.items : evidence;
     const correcting = correction != null && correction.axisId === axis?.id;
     const projectName =
       workstream?.topic.name ??
@@ -5555,6 +5667,7 @@ export function apply(ctx: Context) {
                         )}
                         collapsible={false}
                         label="Workstream plan"
+                        statusPlacement="right"
                         plan={axis.plan}
                       />
                     </section>
@@ -5737,63 +5850,109 @@ export function apply(ctx: Context) {
                     onSave={onSaveCorrection}
                   />
                 ) : null}
-                {/* V2b — evidence is a secondary native disclosure, after the tasks, read straight off the
-                    axis's own recorded `evidence` set (the same set the store's write rule accepts for a
-                    `confirmed` claim). The summary states the count of evidence *shown*, because the
-                    projection is capped per source and is not the workstream's exact total; the body lists
-                    each reference with its own label, its author where one is named, and its actual stored
-                    `sourceUrl` where there is one — never a guessed destination — or its recorded source
-                    ref where there is not. The explicit no-evidence sentence is preserved verbatim, and the
-                    confidence distinctions stay on the reading/blocker claims in the compact header, not
-                    here. */}
+                {/* V12 — supporting evidence is a static secondary section after maintenance. It reads the
+                    workstream's **complete** evidence page when the backend answered one (`evidencePage`, a
+                    true LIMIT/OFFSET page with an authoritative total), and falls back to the capped
+                    `axis.evidence` line — labelled as the count *shown* — when no page was offered. The
+                    shared Pager, labelled Evidence, pages it independently of tasks and activity. Each row
+                    is a real record: a structural branch/PR is named for what it opens and links only to an
+                    actual stored HTTP(S) URL; an activity shows its summary and its one source
+                    reference/type; a note shows its full text behind the shared excerpt. The date is the
+                    stored timestamp's UTC day and the author is the recorded category and id — never a
+                    name. A structural row's absent date/author are omitted, not faked. The explicit
+                    no-evidence sentence is preserved verbatim, and the confidence distinctions stay on the
+                    reading/blocker claims in the compact header, not here. */}
                 <section
                   className="rd-progress-evidence"
                   data-rd-axis-evidence={evidence.length}
                   data-rd-has-evidence={evidence.length > 0}
                   data-rd-progress-evidence={evidence.length}
+                  data-rd-progress-evidence-page={evidencePage ? "true" : "false"}
+                  data-rd-progress-evidence-total={evidencePage ? evidencePage.total : ""}
                 >
-                  <h4 className="rd-section-heading">{progressEvidenceSummary(evidence.length)}</h4>
-                  {evidence.length > 0 ? (
+                  <h4 className="rd-section-heading">
+                    {progressEvidenceSummary({
+                      count: evidence.length,
+                      total: evidencePage ? evidencePage.total : null,
+                    })}
+                  </h4>
+                  {evidenceItems.length > 0 ? (
                     <ul
                       className="rd-evidence-list"
                       data-rd-evidence-list="true"
                     >
-                      {evidence.map((item, index) => (
-                        <li
-                          key={`${item.sourceRef}-${index}`}
-                          data-rd-evidence-ref={item.sourceRef || String(index)}
-                        >
-                          <span className="rd-strong">{item.label}</span>
-                          {item.by ? (
-                            <span className="rd-meta">{` · ${item.by}`}</span>
-                          ) : null}
-                          {item.sourceUrl ? (
-                            <a
-                              className="rd-repo-ext"
-                              data-rd-evidence-url={item.sourceRef || String(index)}
-                              href={item.sourceUrl}
-                              rel="noopener noreferrer"
-                              target="_blank"
-                              title={item.sourceUrl}
-                            >
-                              source ↗
-                            </a>
-                          ) : (
-                            <span
-                              className="rd-meta"
-                              data-rd-evidence-no-url="true"
-                            >
-                              {item.sourceRef || item.sourceType}
-                            </span>
-                          )}
-                        </li>
-                      ))}
+                      {evidenceItems.map((item, index) => {
+                        const parts = evidenceRecordParts(item);
+                        const ref = item.sourceRef || String(index);
+                        const record = item as Partial<AxisEvidenceRecord>;
+                        const id =
+                          typeof record.id === "string" && record.id
+                            ? record.id
+                            : ref;
+                        const structural =
+                          item.kind === "branch" ||
+                          item.kind === "pull_request";
+                        return (
+                          <li
+                            data-rd-evidence-id={id}
+                            data-rd-evidence-kind={item.kind}
+                            data-rd-evidence-no-url={parts.href ? undefined : "true"}
+                            data-rd-evidence-record-id={record.recordId ?? ""}
+                            data-rd-evidence-ref={ref}
+                            key={id}
+                          >
+                            {structural || !parts.body ? (
+                              <span className="rd-strong">{structural ? item.label : parts.name}</span>
+                            ) : (
+                              <span className="rd-evidence-body">
+                                <TextExcerpt text={parts.body} />
+                              </span>
+                            )}
+                            <div className="rd-evidence-meta">
+                            {item.kind === "annotation" ? <span className="rd-meta">Note</span> : null}
+                            {parts.body && parts.provenance && !structural ? (
+                              <span className="rd-meta">{parts.provenance}</span>
+                            ) : null}
+                            {parts.author ? (
+                              <span
+                                className="rd-meta"
+                                data-rd-evidence-author={parts.author}
+                              >
+                                {parts.author}
+                              </span>
+                            ) : null}
+                            {parts.date ? <EventDate at={parts.date} /> : null}
+                            {parts.href ? (
+                              <a
+                                className="rd-repo-ext"
+                                data-rd-evidence-url={ref}
+                                href={parts.href}
+                                rel="noopener noreferrer"
+                                target="_blank"
+                                title={parts.href}
+                              >
+                                {structural ? `${parts.name} ↗` : "Open source ↗"}
+                              </a>
+                            ) : null}
+                            </div>
+                          </li>
+                        );
+                      })}
                     </ul>
                   ) : (
                     <p className="rd-muted" data-rd-evidence-empty="true">
                       {PROGRESS_NO_EVIDENCE_TEXT}
                     </p>
                   )}
+                  {evidencePage && evidencePage.total > 0 ? (
+                    <Pager
+                      label="Evidence"
+                      offset={evidenceOffset}
+                      onOffset={onEvidenceOffset}
+                      pageSize={evidencePage.limit}
+                      total={evidencePage.total}
+                    />
+                  ) : null}
                 </section>
 
                 {/* V12 — provenance: the workstream's explicit supporting-repository links, secondary and
@@ -5897,14 +6056,23 @@ export function apply(ctx: Context) {
     const [workstreamActivity, setWorkstreamActivity] = React.useState<
       Page<Activity> | null
     >(null);
+    /**
+     * The workstream's **complete** supporting-evidence page (`evidencePage`), or null when the read
+     * answered none — in which case the evidence section falls back to the capped `axis.evidence` line.
+     * Held beside the task/activity pages so the three pagers page independently.
+     */
+    const [workstreamEvidence, setWorkstreamEvidence] = React.useState<
+      Page<AxisEvidenceRecord> | null
+    >(null);
     /** The workstream's task page, enriched (`problemPage`) — what the visible task cards read. */
     const [workstreamTask, setWorkstreamTask] = React.useState<
       Page<WorkstreamTask> | null
     >(null);
     const [workstreamLoading, setWorkstreamLoading] = React.useState(false);
-    /** Independent page offsets: tasks and activity page separately, each five at a time. */
+    /** Independent page offsets: tasks, activity and evidence page separately, each five at a time. */
     const [taskOffset, setTaskOffset] = React.useState(0);
     const [activityOffset, setActivityOffset] = React.useState(0);
+    const [evidenceOffset, setEvidenceOffset] = React.useState(0);
     const [correction, setCorrection] = React.useState<AxisCorrection | null>(
       null
     );
@@ -6015,29 +6183,37 @@ export function apply(ctx: Context) {
      * recorded activity all use, so a write never re-reads a scope the reader is not looking at.
      */
     function reloadCurrent(): Promise<void> {
-      // A refresh (or a write) re-reads the workstream the reader is looking at, at both page offsets they
-      // are on, so the selected context does not go stale behind a global reload.
+      // A refresh (or a write) re-reads the workstream the reader is looking at, at all three page
+      // offsets they are on, so the selected context does not go stale behind a global reload.
       if (progressSelection) {
-        void loadWorkstream(progressSelection, taskOffset, activityOffset);
+        void loadWorkstream(
+          progressSelection,
+          taskOffset,
+          activityOffset,
+          evidenceOffset
+        );
       }
       return load(scopeWindow);
     }
 
     /**
-     * Read one workstream's task page and activity page. The scoped
-     * `get_topic({topicId, axisId, offset, pageSize})` returns the axis in full (its plan and its tasks)
-     * plus the backend `activityPage` **and** the enriched `problemPage` — both for the one `offset` sent.
-     * The two pagers are independent, so each page state issues **its own** request at **its own** offset:
-     * the task pager asks with `taskOffset`, the activity pager with `activityOffset`, and each response's
-     * page is committed only under the pager that asked for it. `items` and `total` come from one
-     * axis-scoped snapshot, so the page and its count agree.
+     * Read one workstream's task page, activity page and complete evidence page. The scoped
+     * `get_topic({topicId, axisId, offset, pageSize, evidenceOffset, evidencePageSize})` returns the axis
+     * in full (its plan and its tasks) plus the backend `activityPage` **and** the enriched `problemPage`
+     * for the one `offset`, and the `evidencePage` for its own `evidenceOffset`. The three pagers are
+     * independent, so each page state issues -- or rides on -- a request at **its own** offset: the task
+     * request carries `taskOffset` *and* `evidenceOffset` (one call answers both pages, so evidence needs
+     * no third duplicate read), the activity request carries `activityOffset`, and each response's page is
+     * committed only under the pager that asked for it. `items` and `total` come from one axis-scoped
+     * snapshot, so a page and its count agree.
      *
      * Returns the axis it landed on so a caller can rebuild a draft from the refreshed facts.
      */
     async function loadWorkstream(
       selection: { axisId: string; topicId: string },
       nextTaskOffset: number,
-      nextActivityOffset: number
+      nextActivityOffset: number,
+      nextEvidenceOffset: number
     ): Promise<AxisDetail | null> {
       const seq = ++workstreamSeq.current;
       const stale = () => workstreamSeq.current !== seq;
@@ -6046,6 +6222,7 @@ export function apply(ctx: Context) {
         activityPage?: Page<Activity>;
         axes?: AxisDetail[];
         axis?: AxisDetail;
+        evidencePage?: Page<AxisEvidenceRecord>;
         ok?: boolean;
         problemPage?: Page<WorkstreamTask>;
         topic?: { id: string; name: string; status: string };
@@ -6058,7 +6235,12 @@ export function apply(ctx: Context) {
       const [taskResult, activityResult] = await Promise.all([
         call<WorkstreamRead>(
           "get_topic",
-          { ...scope, offset: nextTaskOffset },
+          {
+            ...scope,
+            evidenceOffset: nextEvidenceOffset,
+            evidencePageSize: PROGRESS_PAGE_SIZE,
+            offset: nextTaskOffset,
+          },
           { isStale: stale }
         ),
         call<WorkstreamRead>(
@@ -6102,10 +6284,12 @@ export function apply(ctx: Context) {
             }
           : null
       );
-      // Each page is committed only from the newest request, so the two offsets stay independent and a
-      // slower page response cannot overwrite the page the reader last asked for.
+      // Each page is committed only from the newest request, so the three offsets stay independent and a
+      // slower page response cannot overwrite the page the reader last asked for. The evidence page rides
+      // on the task request's own response and is committed under the same generation guard.
       setWorkstreamTask(taskResult?.problemPage ?? null);
       setWorkstreamActivity(activityResult?.activityPage ?? null);
+      setWorkstreamEvidence(taskResult?.evidencePage ?? null);
       return axis;
     }
 
@@ -6120,14 +6304,17 @@ export function apply(ctx: Context) {
       setProgressSelection(next);
       setTaskOffset(0);
       setActivityOffset(0);
+      setEvidenceOffset(0);
       setCorrection(null);
       setConflict(null);
       // Identity-safe: a new workstream must not render the previous one's context or pages while its own
-      // read is in flight — clear them so no stale scoped page shows under the new selection.
+      // read is in flight — clear them, including the evidence page, so no stale scoped page shows under
+      // the new selection.
       setWorkstream(null);
       setWorkstreamTask(null);
       setWorkstreamActivity(null);
-      void loadWorkstream(next, 0, 0);
+      setWorkstreamEvidence(null);
+      void loadWorkstream(next, 0, 0, 0);
     }
 
     /** The problem a direct task navigation asked for; applied once its workstream lands. */
@@ -6164,6 +6351,21 @@ export function apply(ctx: Context) {
       }
     }, [entityTarget?.id, entityTarget?.seq, visibleProgress]);
 
+    // Like the other indexes, Progress opens its first selectable row on initial entry. Wait for the
+    // scoped index, and never override an explicit entity destination or an existing manual selection.
+    React.useEffect(() => {
+      if (
+        view !== "progress" || progressSelection || !visibleProgress ||
+        entityTarget?.type === "axis" || entityTarget?.type === "problem"
+      ) {
+        return;
+      }
+      const first = visibleProgress.axes.axes.find((row) => row.id && row.topicId);
+      if (first) {
+        selectWorkstream(first.topicId, first.id);
+      }
+    }, [view, visibleProgress, progressSelection, entityTarget?.type]);
+
     /** Open the containing task page of a directly-navigated problem once its workstream has loaded. */
     React.useEffect(() => {
       const focus = problemFocusRef.current;
@@ -6176,8 +6378,14 @@ export function apply(ctx: Context) {
       if (at >= 0) {
         const next = Math.floor(at / PROGRESS_PAGE_SIZE) * PROGRESS_PAGE_SIZE;
         setTaskOffset(next);
-        // The containing page is a backend request at that offset, not a client slice.
-        void loadWorkstream(progressSelection, next, activityOffset);
+        // The containing page is a backend request at that offset, not a client slice. The activity and
+        // evidence offsets ride along so their own pages are re-committed unchanged.
+        void loadWorkstream(
+          progressSelection,
+          next,
+          activityOffset,
+          evidenceOffset
+        );
       }
     }, [workstream]);
 
@@ -6316,7 +6524,8 @@ export function apply(ctx: Context) {
       const fresh = await loadWorkstream(
         progressSelection,
         taskOffset,
-        activityOffset
+        activityOffset,
+        evidenceOffset
       );
       if (ctx.signal.aborted) {
         return;
@@ -6932,16 +7141,36 @@ export function apply(ctx: Context) {
             busy={busy}
             conflict={conflict}
             correction={correction}
+            evidenceOffset={evidenceOffset}
+            evidencePage={workstreamEvidence}
             loading={workstreamLoading}
             onActivityOffset={(next) => {
               setActivityOffset(next);
-              // Each pager requests its **own** page at its own offset; the other page is re-committed from
-              // its own request, so the two offsets stay independent.
+              // Each pager requests its **own** page at its own offset; the other pages are re-committed
+              // from their own requests, so the three offsets stay independent.
               if (progressSelection) {
-                void loadWorkstream(progressSelection, taskOffset, next);
+                void loadWorkstream(
+                  progressSelection,
+                  taskOffset,
+                  next,
+                  evidenceOffset
+                );
               }
             }}
             onCorrection={setCorrection}
+            onEvidenceOffset={(next) => {
+              setEvidenceOffset(next);
+              // The evidence pager requests its own offset; tasks and activity ride at their current
+              // offsets, so a new evidence page never disturbs them.
+              if (progressSelection) {
+                void loadWorkstream(
+                  progressSelection,
+                  taskOffset,
+                  activityOffset,
+                  next
+                );
+              }
+            }}
             onOpenEntity={openEntity}
             onReloadCorrection={() => {
               void reloadWorkstreamCorrection();
@@ -6953,7 +7182,12 @@ export function apply(ctx: Context) {
             onTaskOffset={(next) => {
               setTaskOffset(next);
               if (progressSelection) {
-                void loadWorkstream(progressSelection, next, activityOffset);
+                void loadWorkstream(
+                  progressSelection,
+                  next,
+                  activityOffset,
+                  evidenceOffset
+                );
               }
             }}
             progress={visibleProgress}
