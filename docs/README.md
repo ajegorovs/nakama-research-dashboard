@@ -8,6 +8,7 @@
 | Four-view design and interaction specification | [Design](design/dashboard-information-architecture-pivot.md) |
 | Implemented schema, tools, authorship and paging | [Data/API contract](design/dashboard-minimal-implementation-design.md) |
 | Source investigation and data maintenance | [Maintenance](design/dashboard-data-and-maintenance-contract.md) |
+| Draft librarian agent/tooling control workstream | [Librarian plan](design/librarian-tooling-plan.md) |
 | Presentation, evidence and safety policies | [Decisions](ux-v2/DECISIONS.md) |
 | Build, preview, installation and verification | [Development](DEVELOPMENT.md), [preview mechanics](../harness/preview/README.md) |
 | Visual information-design research problem and next checkpoint | [Research brief](design/visual-information-design.md) |
