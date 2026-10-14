@@ -54,11 +54,13 @@ See the shipped coordinator skill and implementation contract for supported inpu
 
 ## 18. Evidence belongs to the selected workstream
 
-Progress renders evidence directly from the selected `axis.evidence`, not activity totals,
-confidence or a progress score. Empty evidence says:
+Progress renders the selected workstream's complete SQL-backed `evidencePage`, independently
+paged in groups of five, not activity totals, confidence or a progress score. Legacy responses
+without a page retain their explicitly labelled shown-count fallback. Empty evidence says:
 **No evidence on record — a 'confirmed' reading needs evidence**.
-The three-entry preview is source-labelled and uses **+ more recorded evidence**, not an
-invented exact remainder. Asserted confirmed claims require evidence. An unasserted database
+References preserve recorded URLs, dates and readable note text. Explicit task-to-evidence
+citations remain deferred; see the [data contract](../design/dashboard-data-and-maintenance-contract.md#deferred-task-to-evidence-traceability).
+Asserted confirmed workstream claims require evidence. An unasserted database
 `confirmed` default may exist without evidence; do not manufacture a research claim from it or
 silently change persisted confidence. The accepted regression displayed ACTIVE.
 

@@ -35,10 +35,10 @@ SHA-256 of raw file bytes, not generated bundle or base-commit identity. Contrac
 
 | File | SHA-256 |
 |---|---|
-| `src/store.ts` | `8209de152ab4f05d150a4c584b51d765ff98cd821f2b14ef05c17860c3e6bbda` |
-| `src/actions.ts` | `dba075ebaece57f43242114c95121ca7ad579ce8a61da04e648d71ae651adbee` |
-| `src/ui.tsx` | `fdadf8b71f652521fa6141ced6f8e2741e5bf6442e229f33a1633e290a19d844` |
-| `nakama.plugin.json` | `13f8cfd98b4b7c74bc30ba9d857e46daf23c892abebe1495122877e7bdeec402` |
+| `src/store.ts` | `3d781e958773986a0a657f3748f324367696c2baf4b24bd038d87c81a17c6b4b` |
+| `src/actions.ts` | `209238d3bc6e90cdc452deacb7a925cc62e0fc6f6a2376315d82f5b18c06ce58` |
+| `src/ui.tsx` | `3920c63efdf5da33457101da4505c71d6c0e52222d590555d0ac033dbf2d2c5c` |
+| `nakama.plugin.json` | `b3612c030e4bfc47b3a8c7b70096fbf6bb64d02efae023c9f0f12538c3198488` |
 | `migrations/001-research.sql` | `78d5d2f49b06b6e91981b41a2661689cbd6421d3b86de5ec697534a39e91fcaf` |
 | `migrations/002-coordination-model.sql` | `adba7a10debbe85b60742d4f0f82370cfa9822eea67e73f994be2cbe3b165790` |
 | `migrations/003-drop-legacy.sql` | `e91f537fa012b7d9ac455ac761daf7419d9b675956a032a4d8e7a4b9bcecca03` |
@@ -46,7 +46,7 @@ SHA-256 of raw file bytes, not generated bundle or base-commit identity. Contrac
 | `migrations/005-external-evidence.sql` | `bd6617c8bc231749841ae03cf4d498d39feb67e2cdfe2e3531867b187d9fb081` |
 | `migrations/006-task-plan-text.sql` | `97e9c81c585fcf14408550e93db6967130d704e34e38cf53800778f62c078328` |
 | `harness/preview/make-fixtures.mjs` | `306d2fb3937ad084b77052d89a86bea4592f2e8103e7b796ce8469c25256a230` |
-| `harness/preview/preview-main.tsx` | `dc2c56e46d46fde272df7ad3754e53106079df6ee48580c942d79bf6f262a870` |
+| `harness/preview/preview-main.tsx` | `222d1285583b7c230f187105318f953959b23bc1da40f88f96c0fa5d4c1590eb` |
 | `harness/preview/run.mjs` | `27a264de47111dad0a4c2754b92383b22e85c70ad409d8ccbb0bf547c96b1bb5` |
 
 ## 3. Canonical identities and projects

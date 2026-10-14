@@ -28,6 +28,41 @@ skill defines operational tool use. This document does not authorize writes or d
 - Use `personActorId` at the public activity boundary; reserved `actorId` is stripped by the
   host. This is a read filter, not access control.
 
+## Supporting evidence
+
+- Progress has its own five-item evidence page, independent of task and activity pages. The scoped
+  `get_topic` read opts in through `evidenceOffset` / `evidencePageSize` (default 5, maximum 100)
+  and returns `evidencePage: { items, limit, offset, total, hasMore }`.
+- Membership is the workstream's recorded branch/PR plus all activity and annotations explicitly
+  attached to that workstream, including multi-target notes. Structural branch and PR entries come
+  first, followed by dated records newest-first with a stable kind/record-ID tie-break. SQL performs
+  paging over the complete collection; the authoritative total does not come from the legacy capped list.
+- Each record retains a stable evidence ID, underlying record ID where available, full activity/note
+  text, occurrence/creation date, recorded author ID/category and source reference/URL. Attribution
+  does not imply that one reference proves a particular claim; evidence association is workstream-level.
+- PR/activity links use stored source URLs. A branch destination can be composed only when exactly one
+  explicitly linked repository has a recognized GitHub repository URL; ambiguous destinations remain
+  plain text. Exposing a destination does not establish that it was fetched or verified externally.
+- Internal note content remains readable through inline full-text expansion, not a generic note stub.
+  Missing dates, URLs and author identities remain absent or explicitly unknown, never invented.
+- Legacy `axis.evidence` and `coverage.evidence` retain their capped per-source semantics for existing
+  callers and claim validation. A legacy consumer can describe returned records as shown, not as the
+  complete evidence total. The new read does not strengthen or weaken writer admission checks.
+- Offset paging on retained data has deterministic ordering, not stability under concurrent insertions.
+
+### Deferred: task-to-evidence traceability
+
+The current UI rework retains workstream-level supporting evidence. Tasks do not explicitly cite
+these records as backing for their statements or resolution. Task-associated activities/annotations
+are related records, not automatically proof of a task's result. The admission check establishes
+presence of workstream backing, not claim-specific attribution or scientific sufficiency.
+
+A later, separately scoped extension should define optional explicit task-to-evidence references,
+expose them through the supported read/write boundary, and display inspectable citations beneath
+tasks. Define reference scope, missing/deleted-record behavior and claim-validation policy before
+implementation. Do not automatically associate every workstream record with every child task or
+make citations mandatory as part of this UI closeout.
+
 ## Minimal maintenance workflow
 
 1. Read current dashboard context and search for existing identities before creating records.

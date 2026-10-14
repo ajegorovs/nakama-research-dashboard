@@ -72,9 +72,11 @@ to state findings from it as measurements rather than impressions. The instrumen
    truncation; do not silently raise the cap or filter the dataset to hide it.
 7. **An intentional ellipsis is not overflow.** Classify an overflowing element by its computed
    `text-overflow`/`white-space` before reporting it; a designed single-line clamp is reported separately.
-8. **Do not commit the shots.** Generated captures are ignored by policy (AGENTS.md); `--out` defaults under
-   the git-ignored `.hermes/scratch/`. The committed packs belong to the served acceptance pass, not to a
-   preview capture.
+8. **Keep routine shots in scratch.** `--out` defaults under the git-ignored `.hermes/scratch/`.
+   Only under explicit owner instruction, curate a small labelled illustrative gallery for the README;
+   retain its frozen public-safe fixture, actual viewport/selection and source/bundle/image hashes.
+   Keep campaign packs and operational logs out of the public gallery. Illustrative preview images do
+   not become served acceptance records merely by being included in the repository.
 9. **A preview capture is not a served record.** Light theme, writes refused, a different mount entry. It
    supports composition, density and styling judgements; it is not production readiness, and it does not
    replace `harness/read-pass.sh`.
