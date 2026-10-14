@@ -8,7 +8,8 @@ Overview, one-selected-problem and five-tab composition instructions.
 ## Navigation and factual presentation
 
 - Projects is the landing view; the other views are Progress, People and Repositories.
-  Overview is retired to the folded Dashboard summary. Navigation is read-only and selects
+  Overview and the legacy Dashboard summary presentation are retired; the accepted V12 layout
+  has no replacement aggregate disclosure. Backend aggregate reads remain unchanged. Navigation is read-only and selects
   the exact entity, not merely its destination tab. Status indicators are never navigation.
 - Display Project → Workstream → Task while retaining topic/axis/problem storage identifiers.
 - Missing data remains explicit. Relationships do not imply maintainership or event authorship.

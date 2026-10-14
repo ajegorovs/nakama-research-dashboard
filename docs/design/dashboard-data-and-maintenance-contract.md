@@ -11,6 +11,9 @@ skill defines operational tool use. This document does not authorize writes or d
 - Project summary is concise orientation; description is full purpose. Task title is concise,
   statement is full requested work. A workstream's current reading is not automatically its
   enduring purpose. Librarian synthesis must remain source-grounded and respect authored text.
+- Project Description is retained for compatibility but marked for possible retirement from the
+  presentation/model in the current UI review. It is a real stored field; no deletion or migration
+  is authorized. Its label stays visible and long prose uses inline text expansion, not a section fold.
 - Task title/statement protection is row-level. Topic text has no mechanical authorship guard;
   respecting human words there is a coordinator obligation, not an enforced schema guarantee.
 - Plans have explicit immutable owners and preserve step order/state. No inheritance, checkpoint
