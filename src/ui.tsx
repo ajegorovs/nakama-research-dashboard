@@ -756,9 +756,14 @@ const css = `
  */
 [data-plugin-id="research-dashboard"] {
   --rd-title-view: 23px;
-  --rd-body: 14px;
-  --rd-meta: 12px;
-  --rd-label: 12px;
+  /* V12 iteration 2 (V-02, 2026-10-13) — the shared reader scale was recalibrated down from 14/12/12 to
+     the accepted Tinted reader's compact steps: body ~13px answers the question, meta ~11px supports it,
+     label ~11px names a section. One shared block, so every view moves together rather than by a
+     page-specific patch; the design-system reference sizes (body ~12.5-13, meta ~10.5-11) are proportions,
+     not forced pixel values. */
+  --rd-body: 13px;
+  --rd-meta: 11px;
+  --rd-label: 11px;
   --rd-quiet: 0.72;
   --rd-gap-row: 2px;
   --rd-gap-tight: 4px;
@@ -782,12 +787,12 @@ const css = `
      long entity names wrapped to three and four lines. One basis, and the rail does not shrink below it:
      where there is not room for both, .rd-split wraps the detail below rather than squeezing the index.
      Progress used to carry its own 16rem override; it takes this one now. */
-  /* Pivot port (2026-10-10) — one shared selector-rail width for all four views, matching the accepted
-     prototype's 380px desktop rail. The four side selectors used to disagree (Progress carried a narrower
-     240px variant); the pivot's "All four side selectors use the same pane width (380px at the measured
-     desktop viewports)" is the value the token now holds, and Progress takes this one too — it no longer
-     overrides itself. */
-  --rd-index-basis: 23.75rem;
+  /* V12 (2026-10-13) — one shared selector-rail width for all four views, at the accepted Tinted
+     prototype's measured desktop target (~315px), not the earlier pivot port's 380px. V12 also unboxes the
+     rail: it is now a quiet stack of flat rows on hairlines rather than a bordered card, so this width is
+     the one thing the four selectors share. The basis is a hard flex-basis — where there is not room for
+     both, .rd-split wraps the detail below rather than squeezing the rail. */
+  --rd-index-basis: 19.6875rem;
   /* One box edge and one inner line: a surface is a card, and everything inside it is a rule, not a box. */
   --rd-edge: 1px solid var(--border);
   --rd-rule: 1px solid var(--border);
@@ -798,6 +803,14 @@ const css = `
   --rd-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --rd-radius-panel: 4px;
   --rd-radius-control: 3px;
+  /* V12 — the shell's own navigation surface, theme-aware. The literals are the accepted Tinted study's
+     light-theme references; the @supports block below (with the top bar) re-derives them from the host's own
+     --foreground and --card, so a dark theme inverts the bar instead of showing a pale strip on a dark page. */
+  --rd-nav-surface: #edf3f8;
+  --rd-nav-edge: #d8e3ed;
+  --rd-nav-active: #dae7f2;
+  --rd-nav-active-edge: #557998;
+  --rd-nav-ink: #253e55;
   /* H1 — keyboard focus, one rule for every control this page draws. The host paints its ring at half alpha
      (Tailwind's ring-ring/50), which measures about 2:1 on the surfaces this page sits on: a reader can see it,
      but it is under the 3:1 that non-text contrast asks for. The plugin asks for the same hue at full strength,
@@ -919,27 +932,6 @@ const css = `
   @media (max-width: 899px) {
     [data-plugin-id="research-dashboard"] .rd-landing-grid { grid-template-columns: minmax(0, 1fr); }
   }
-  /* The collapsed Dashboard summary above the Projects landing (Overview retired). A quiet disclosure in the
-     shared token vocabulary: a bold muted summary heading, and the six aggregates as a compact stat row. */
-  [data-plugin-id="research-dashboard"] .rd-dashboard-summary { margin-bottom: var(--rd-gap-block); }
-  [data-plugin-id="research-dashboard"] .rd-dashboard-summary > summary {
-    color: var(--rd-muted);
-    cursor: pointer;
-    font-size: var(--rd-label);
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-  [data-plugin-id="research-dashboard"] .rd-stat-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-    gap: var(--rd-gap);
-    list-style: none;
-    margin: var(--rd-gap-block) 0 0;
-    padding: 0;
-  }
-  [data-plugin-id="research-dashboard"] .rd-stat { display: grid; gap: 2px; }
-  [data-plugin-id="research-dashboard"] .rd-stat-value { font-size: 1.4rem; font-weight: 700; letter-spacing: -0.02em; }
 [data-plugin-id="research-dashboard"] .rd-row {
   display: flex;
   align-items: center;
@@ -972,41 +964,112 @@ const css = `
   padding-left: 0;
   border-left: 0;
 }
+/* V12 — one top bar: brand left, the four canonical tabs, the real Refresh right, on the accepted Tinted
+   surface (theme-aware nav tokens). No second heading row sits under it — ViewHeading is visually hidden
+   below, so the bar is the page's only heading row while the accessible hierarchy is preserved. */
 [data-plugin-id="research-dashboard"] [data-rd-topbar] {
-  justify-content: flex-start;
+  align-items: center;
+  background: var(--rd-nav-surface);
+  border: 1px solid var(--rd-nav-edge);
+  border-radius: 3px;
   flex-wrap: wrap;
-  margin-bottom: 14px;
+  gap: 7px 10px;
+  justify-content: flex-start;
+  margin-bottom: 16px;
+  padding: 8px 11px;
 }
 [data-plugin-id="research-dashboard"] [data-rd-topbar] .rd-page-title {
+  color: var(--rd-nav-ink);
+  font-size: 15px;
+  font-weight: 760;
+  letter-spacing: -0.02em;
+  margin: 0 8px 0 0;
+  padding-right: 22px;
+  position: relative;
   white-space: nowrap;
 }
+/* The quiet rule separating the brand from the tabs. ::after content is decorative, never page text. */
+[data-plugin-id="research-dashboard"] [data-rd-topbar] .rd-page-title::after {
+  background: var(--rd-nav-edge);
+  border-radius: 1px;
+  content: "";
+  height: 24px;
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+}
 [data-plugin-id="research-dashboard"] [data-rd-topbar] .rd-toolbar {
+  align-items: center;
   flex: 1 1 auto;
+  gap: 10px;
   justify-content: space-between;
 }
 [data-plugin-id="research-dashboard"] [data-rd-topbar] .rd-group {
   border: 0;
+  min-height: 0;
   padding: 0;
 }
-/* Variant C — the active view is marked by a slate underline edge, not a lifted white pill. */
+/* The real Refresh keeps its host Button, restyled to the bar's own compact light control with an
+   accessible (aria-hidden, text-labelled) refresh glyph. Behaviour is untouched: the same onClick reload. */
+[data-plugin-id="research-dashboard"] [data-rd-topbar] [data-rd-group="actions"] button {
+  align-items: center;
+  background: var(--card, #fff);
+  border: 1px solid var(--rd-nav-active-edge);
+  border-radius: 4px;
+  box-shadow: none;
+  color: var(--rd-nav-ink);
+  display: inline-flex;
+  font-weight: 600;
+  gap: 4px;
+  min-height: 0;
+  padding: 3px 10px;
+}
+[data-plugin-id="research-dashboard"] .rd-refresh-glyph {
+  font-size: 0.95em;
+  line-height: 1;
+}
+/* Theme awareness for the nav surface: where the browser can mix, derive the Tinted surfaces from an
+   accepted-blue accent mixed into the host's own card. The earlier pass mixed the *ink* (#253e55) at a
+   low percentage into the card; against a light host card that yielded an almost-neutral grey bar
+   (measured ~#eceef0) rather than the accepted pale-blue surface. The mix below instead uses a mid blue
+   whose channels are chosen so the light-theme result lands on the accepted references — surface ~#edf3f8,
+   perimeter ~#d8e3ed, selected fill ~#dae7f2, its stroke ~#557998 — while the *base stays var(--card)*, so
+   a dark host card yields a correspondingly dark, subtly-blue bar and the ink, still derived from the host
+   foreground, stays readable in both themes. The literal tokens above remain the no-mix fallback. */
+@supports (background: color-mix(in oklab, red, blue)) {
+  [data-plugin-id="research-dashboard"] {
+    --rd-nav-surface: color-mix(in oklab, #6f97ba 12%, var(--card, #ffffff));
+    --rd-nav-edge: color-mix(in oklab, #6f97ba 27%, var(--card, #ffffff));
+    --rd-nav-active: color-mix(in oklab, #6f97ba 25%, var(--card, #ffffff));
+    --rd-nav-active-edge: color-mix(in oklab, #557998 88%, var(--card, #ffffff));
+    --rd-nav-ink: color-mix(in oklab, var(--foreground, #253e55) 88%, var(--card, #ffffff));
+  }
+}
+/* V12 — the four canonical tabs read as navigation: a quiet label when inactive, the accepted Tinted
+   filled tab when current. Selection is a surface, not focus — the shared focus ring below is untouched. */
 [data-plugin-id="research-dashboard"] .rd-views { gap: 2px; }
 [data-plugin-id="research-dashboard"] .rd-views [data-rd-view-option] {
-  border-color: transparent;
-  border-bottom: var(--rd-tech-edge) solid transparent;
-  border-radius: var(--rd-radius-control);
   background: transparent;
-  padding: 6px 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 3px;
+  color: #4a6178;
+  color: color-mix(in oklab, var(--rd-nav-ink) 72%, var(--rd-nav-surface));
+  font-weight: 600;
+  padding: 8px 12px;
 }
 [data-plugin-id="research-dashboard"] .rd-views [aria-pressed="true"] {
-  border-color: transparent;
-  border-bottom: var(--rd-tech-edge) solid var(--rd-tech);
-  background: transparent;
+  background: var(--rd-nav-active);
+  border-bottom-color: var(--rd-nav-active-edge);
   box-shadow: none;
-  color: var(--rd-tech);
+  color: var(--rd-nav-ink);
+  font-weight: 760;
 }
-[data-plugin-id="research-dashboard"] .rd-views [data-rd-view-option]:hover {
-  border-color: var(--border);
-  border-bottom-color: var(--rd-tech);
+[data-plugin-id="research-dashboard"] .rd-views [data-rd-view-option]:not([aria-pressed="true"]):hover {
+  background: var(--rd-nav-active);
+  color: var(--rd-nav-ink);
 }
 [data-plugin-id="research-dashboard"] .rd-muted { color: #59616d; font-size: var(--rd-meta); }
 [data-plugin-id="research-dashboard"] .rd-error { color: var(--destructive, #b91c1c); font-size: var(--rd-body); }
@@ -1069,23 +1132,25 @@ const css = `
    declaration is flex: 0 0 100% — grid-column alone was inert and let the index share the heading's line,
    which pushed the detail into a second row and broke the "tops aligned" geometry. Both are declared so the
    rule survives a change of layout mode. */
+/* V12 — the accepted shell has ONE heading row: the top bar. The view's own name is no longer drawn as a
+   redundant H1 below it. The existing heading stays in the DOM, keeping its data hooks and its hint (which
+   names the view for assistive tech), but is visually hidden — the interim the V12 brief allows, preserving
+   the accessible hierarchy while the duplicate visible row is removed. */
 [data-plugin-id="research-dashboard"] .rd-view-heading {
-  align-items: flex-end;
-  display: flex;
-  flex: 0 0 100%;
-  gap: var(--rd-gap-block);
-  grid-column: 1 / -1;
-  justify-content: space-between;
+  border: 0;
+  clip-path: inset(50%);
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
 }
 [data-plugin-id="research-dashboard"] .rd-view-titles {
   display: grid;
   gap: 2px;
   min-width: 0;
-}
-/* Overview's heading carries the window selector at its right edge: the control belongs to the tab, so it
-   sits with the heading that names it rather than in the global toolbar. */
-[data-plugin-id="research-dashboard"] .rd-overview-head {
-  align-items: flex-end;
 }
 [data-plugin-id="research-dashboard"] .rd-view-title {
   font-size: var(--rd-title-view);
@@ -1145,27 +1210,47 @@ const css = `
   line-height: 1.45;
   opacity: var(--rd-quiet);
 }
-[data-plugin-id="research-dashboard"] .rd-state {
-  font-size: var(--rd-label);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 1px 6px;
-  border-radius: var(--rd-radius-control);
-  border: var(--rd-edge);
-}
-[data-plugin-id="research-dashboard"] .rd-state[data-rd-state="blocked"] {
-  border-color: #9b2c2c;
-  color: #9b2c2c;
-}
-[data-plugin-id="research-dashboard"] .rd-count {
+/* V12 — one squared semantic tag grammar for workstream/task/plan states: a compact square label with a
+   muted stored-state fill and its own ink, never a pill. The state's own text is always present, so meaning
+   never rests on colour alone; an unmatched state keeps a truthful neutral, never a default positive. */
+[data-plugin-id="research-dashboard"] .rd-state,
+[data-plugin-id="research-dashboard"] .rd-step-state {
+  background: #e9edf2;
+  border: 0;
+  border-radius: 3px;
+  color: #5a6979;
   font-size: var(--rd-meta);
+  font-weight: 700;
+  letter-spacing: 0.05em;
   padding: 1px 6px;
-  border-radius: var(--rd-radius-control);
-  background: var(--muted, rgba(127, 127, 127, 0.1));
+  text-transform: uppercase;
 }
-[data-plugin-id="research-dashboard"] .rd-count[data-rd-state="blocked"] {
-  /* The state badge beside it already says blocked; a count is not a louder fact than the thing it counts. */
-  font-weight: 600;
+[data-plugin-id="research-dashboard"] .rd-state[data-rd-state="active"],
+[data-plugin-id="research-dashboard"] .rd-step-state[data-rd-step-state="active"] {
+  background: #deefe8;
+  color: #19694d;
+}
+[data-plugin-id="research-dashboard"] .rd-state[data-rd-state="completed"],
+[data-plugin-id="research-dashboard"] .rd-step-state[data-rd-step-state="done"] {
+  background: #e0eee6;
+  color: #246949;
+}
+[data-plugin-id="research-dashboard"] .rd-state[data-rd-state="blocked"],
+[data-plugin-id="research-dashboard"] .rd-step-state[data-rd-step-state="blocked"] {
+  background: #f7e4e1;
+  color: #9a332b;
+}
+[data-plugin-id="research-dashboard"] .rd-state[data-rd-state="parked"] {
+  background: #f6ecd8;
+  color: #7f5b24;
+}
+/* V12 — a count is quiet metadata, not a pill and never a louder fact than the state it counts. The blocked
+   count keeps the same treatment as any other: the state tag beside it already carries blocked. */
+[data-plugin-id="research-dashboard"] .rd-count {
+  background: none;
+  color: var(--muted-foreground, #5c6270);
+  font-size: var(--rd-meta);
+  padding: 0;
 }
 [data-plugin-id="research-dashboard"] .rd-blocker { font-size: var(--rd-meta); margin-top: 2px; }
 [data-plugin-id="research-dashboard"] .rd-blocker[data-rd-strong="true"] {
@@ -1223,6 +1308,32 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-activity li:last-child {
   border-bottom: 0;
 }
+/* V12 — one shared activity row: a genuine LEFT date gutter and the event summary/source/actor to its
+   right, the same grammar on every tab. The occurrence date stays on the left. */
+[data-plugin-id="research-dashboard"] .rd-activity-row {
+  align-items: start;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+}
+[data-plugin-id="research-dashboard"] .rd-activity-date {
+  display: grid; gap: 1px; font-variant-numeric: tabular-nums;
+}
+/* V12 iteration 2 (V-05) — the short weekday sits above the exact date, the accepted reference's compact
+   left date cell. The weekday is derived from the same UTC date portion the source stores (no local-time
+   reinterpretation and no invented time precision); when the stored timestamp does not carry a parseable
+   date the weekday is simply omitted, leaving the exact date. */
+[data-plugin-id="research-dashboard"] .rd-event-weekday {
+  color: var(--muted-foreground, #5c6270);
+  font-size: var(--rd-label);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+[data-plugin-id="research-dashboard"] .rd-activity-body { display: grid; gap: var(--rd-gap-tight); min-width: 0; }
+@media (max-width: 520px) {
+  [data-plugin-id="research-dashboard"] .rd-activity-row { gap: 4px; grid-template-columns: minmax(0, 1fr); }
+}
 [data-plugin-id="research-dashboard"] .rd-form { display: grid; gap: var(--rd-gap); }
 [data-plugin-id="research-dashboard"] .rd-divider {
   border-top: var(--rd-edge);
@@ -1265,16 +1376,20 @@ const css = `
 }
 [data-plugin-id="research-dashboard"] .rd-claim { display: grid; gap: var(--rd-gap-row); }
 [data-plugin-id="research-dashboard"] .rd-claim-value { font-size: var(--rd-body); }
+/* V12 — the confidence qualifier is deliberately NOT a state tag: neutral text with a dotted underline, so
+   an inferred claim reads as a qualified claim, never as another squared status, and stays legible. */
 [data-plugin-id="research-dashboard"] .rd-conf {
-  font-size: var(--rd-label);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 0 5px;
-  border-radius: var(--rd-radius-control);
-  border: 1px dashed var(--border);
-  color: #59616d;
+  border: 0;
+  color: var(--muted-foreground, #5c6270);
+  font-size: var(--rd-meta);
+  font-weight: 500;
+  letter-spacing: normal;
+  padding: 0;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  text-transform: none;
 }
-[data-plugin-id="research-dashboard"] .rd-conf[data-rd-conf="confirmed"] { border-style: solid; }
+[data-plugin-id="research-dashboard"] .rd-conf[data-rd-conf="confirmed"] { text-decoration-style: solid; }
 [data-plugin-id="research-dashboard"] .rd-evidence { font-size: var(--rd-meta); }
 [data-plugin-id="research-dashboard"] .rd-history { display: grid; gap: var(--rd-gap-tight); margin: 0; padding: 0; list-style: none; }
 [data-plugin-id="research-dashboard"] .rd-history li {
@@ -1319,16 +1434,21 @@ const css = `
   max-height: min(72vh, 760px);
   overflow-y: auto;
   overscroll-behavior: contain;
-  /* The index is a surface, not a bare list — the prototype's panel. Rows sit inside on a small inset,
-     so a pressed row reads as a selected row within a panel rather than a stray rectangle on the page. */
+  /* V12 — the rail is no longer a bordered card: a quiet stack of flat rows divided by hairlines, so the
+     entity rows read as an index rather than as chips inside a box. */
+  /* Flat rows still need six pixels inside the scrollport for the shared outward focus indicator.
+     Scroll margin alone cannot provide leading-edge clearance when scrollTop is already zero. */
   padding: 6px;
   list-style: none;
   display: grid;
   gap: 0;
   align-content: start;
-  background: var(--card, #fff);
-  border: var(--rd-edge);
-  border-radius: var(--rd-radius-panel);
+  background: transparent;
+  border: 0;
+}
+/* Narrow: stack safely — the rail takes the full width and stops clamping its own height. */
+@media (max-width: 720px) {
+  [data-plugin-id="research-dashboard"] .rd-index { flex: 0 0 100%; max-height: none; }
 }
 [data-plugin-id="research-dashboard"] .rd-index-item {
   width: 100%;
@@ -1339,13 +1459,13 @@ const css = `
   border: 0;
   border-bottom: var(--rd-edge);
   border-radius: 0;
-  padding: 7px 9px;
+  /* V12 iteration 2 (V-02) — one step tighter vertically, matching the compact reader scale above. */
+  padding: 8px 10px;
   cursor: pointer;
 }
 [data-plugin-id="research-dashboard"] .rd-index-item:last-child { border-bottom: 0; }
 [data-plugin-id="research-dashboard"] .rd-index-item:hover {
-  background: var(--muted, rgba(127, 127, 127, 0.06));
-  border-color: var(--border);
+  background: var(--rd-nav-surface);
 }
 /* An index row's age stays whole at the row's end and never breaks mid-label; the counts line below it
    is free to wrap. */
@@ -1360,8 +1480,12 @@ const css = `
    never became the subject of the right-hand pane — its identity sat in the index row and was repeated as tags
    inside the Problem column. The sections inside the pane stay individually conditional, so a subject without a
    plan or without support material collapses honestly instead of reserving space for it. */
-[data-plugin-id="research-dashboard"] .rd-progress-top > .rd-progress-index {
+[data-plugin-id="research-dashboard"] .rd-progress-top > .rd-progress-rail {
   flex: 0 0 var(--rd-index-basis);
+}
+/* Narrow: the Progress rail stacks the same way the shared index does. */
+@media (max-width: 720px) {
+  [data-plugin-id="research-dashboard"] .rd-progress-top > .rd-progress-rail { flex: 0 0 100%; }
 }
 /* V1/A5 — this pane is a Card now, like the other three views' detail panes, so its surface comes from the
    shared host grammar rather than from the 1px rule it used to carry on its left edge. That lone rule was
@@ -1379,7 +1503,7 @@ const css = `
   flex: 1 1 34rem;
   gap: var(--rd-gap-block);
   min-width: 20rem;
-  padding: 16px;
+  padding: 0;
   /* V1 Phase-4 ruling (DECISIONS §14.10) — the support band is container-responsive at exactly 720/480.
      The band fills this pane's content box, so the pane is the size query container: its inline-size is
      the band's own width, which is what the ruling's "available" means and what the harness reads. */
@@ -1486,6 +1610,7 @@ const css = `
   display: grid;
   gap: var(--rd-gap-row);
 }
+[data-plugin-id="research-dashboard"] .rd-activity > .rd-activity-row,
 [data-plugin-id="research-dashboard"] .rd-progress-activity .rd-feed > li {
   border-bottom: var(--rd-edge);
   padding: 5px 0 6px;
@@ -1542,13 +1667,11 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-plan-step {
   display: grid;
   gap: var(--rd-gap-row);
+  /* V12 iteration 2 (V-04): positioning context for the connector pseudo-element below. */
+  position: relative;
 }
-[data-plugin-id="research-dashboard"] .rd-step-state {
-  border: var(--rd-edge);
-  border-radius: var(--rd-radius-control);
-  font-size: var(--rd-meta);
-  padding: 0 6px;
-}
+/* V12 — the plan step's state tag is the shared squared grammar (see the .rd-state block above); no extra
+   rule here, so the two cannot drift. */
 /* A scoped plan step's marker line. The shared cluster is a wrapping flex row and a step number is a
    block-level meta span, so when a title is long enough the cluster's single flex line breaks and the
    number is left stranded on its own line above the title (short titles fit, which is why the flaw hid).
@@ -1586,25 +1709,27 @@ const css = `
   padding-top: 8px;
 }
 [data-plugin-id="research-dashboard"] .rd-tags { gap: var(--rd-gap-tight); }
-/* An entity tag: navigation, not a filter — it reads as a chip because it goes somewhere. */
+/* V12 — an entity tag is navigation, and navigation is an underlined link, not framed tag text. The link
+   colour stays distinct from squared state tags and from the confidence qualifier; repository ids keep
+   their mono face. An entity tag stays ONE line: a long name truncates rather than wrapping the cluster,
+   and its full label stays on the element. */
 [data-plugin-id="research-dashboard"] .rd-tag {
-  background: transparent;
-  border: var(--rd-edge);
-  border-radius: var(--rd-radius-control);
-  color: inherit;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  color: #2f668e;
   cursor: pointer;
   font: inherit;
   font-size: var(--rd-meta);
-  /* An entity tag is ONE line: a long repository or topic name must not wrap it into a two-line chip,
-     which breaks a cluster's baseline and the rail's rhythm. It truncates instead, and the full label
-     stays available on the element (title + the accessible name). No font-size games. */
   max-width: 100%;
   overflow: hidden;
-  padding: 0 6px;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-[data-plugin-id="research-dashboard"] .rd-tag:hover { border-color: inherit; opacity: var(--rd-quiet); }
+[data-plugin-id="research-dashboard"] .rd-tag:hover { opacity: var(--rd-quiet); }
 [data-plugin-id="research-dashboard"] .rd-evidence,
 [data-plugin-id="research-dashboard"] .rd-steering {
   display: grid;
@@ -1634,11 +1759,10 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-index-item[data-rd-problem-index] {
   border-color: var(--border);
 }
-/* …and the selection treatment, on top of that base. */
+/* …and the selection treatment, on top of that base: a separate tint, distinct from hover and from focus. */
 [data-plugin-id="research-dashboard"] .rd-index-item[aria-pressed="true"] {
-  border-color: var(--border);
-  background: var(--muted, rgba(127, 127, 127, 0.08));
-  box-shadow: inset 3px 0 0 var(--rd-tech);
+  background: var(--rd-nav-active);
+  box-shadow: inset 3px 0 0 var(--rd-nav-active-edge);
 }
 [data-plugin-id="research-dashboard"] .rd-panel {
   flex: 1 1 22rem;
@@ -1747,7 +1871,12 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-side-stack {
   display: grid;
   gap: var(--rd-gap-rail);
-  border-left: var(--rd-tech-edge) solid var(--rd-tech);
+  /* V12 iteration 2 (V-10) — the support aside's delimiter was a 2px slate technical bar
+     (--rd-tech-edge solid --rd-tech), which read more forcefully than the accepted reference's subdued
+     editorial rule. It keeps a rule (the relationship sections stay visibly a secondary column) but takes
+     the shared hairline edge token instead, so involvement, affiliated projects, direct repository
+     activity and supporting-workstream recency remain distinct without the heavy rail. */
+  border-left: var(--rd-edge);
   padding: 0 0 0 10px;
 }
 [data-plugin-id="research-dashboard"] .rd-side-card {
@@ -1816,23 +1945,62 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-project-heading::after {
   border-top: var(--rd-edge); content: ""; flex: 1;
 }
+[data-plugin-id="research-dashboard"] .rd-progress-index .rd-project-heading {
+  display: block; border-top: var(--rd-edge); border-bottom: var(--rd-edge);
+  padding: 8px 0; margin: 0 0 8px;
+}
+[data-plugin-id="research-dashboard"] .rd-progress-index .rd-project-heading::after { content: none; }
+[data-plugin-id="research-dashboard"] :is(.rd-person-grid, .rd-repository-grid) .rd-current-work > .rd-section {
+  display: block; border-bottom: var(--rd-edge); padding-bottom: 8px;
+}
+[data-plugin-id="research-dashboard"] :is(.rd-person-grid, .rd-repository-grid) .rd-project-heading::after { content: none; }
+[data-plugin-id="research-dashboard"] :is(.rd-person-grid, .rd-repository-grid) .rd-project-heading { font-size: 16px; color: var(--foreground, #111827); }
+[data-plugin-id="research-dashboard"] :is(.rd-person-grid, .rd-repository-grid) .rd-work-card { margin-left: 16px; }
+[data-plugin-id="research-dashboard"] :is(.rd-person-grid, .rd-repository-grid) .rd-work-title { font-size: 14px; }
+[data-plugin-id="research-dashboard"] :is(.rd-person-grid, .rd-repository-grid) .rd-project-intro { justify-content: flex-start; }
+[data-plugin-id="research-dashboard"] .rd-person-grid .rd-affiliations-summary { text-transform: uppercase; }
+
+[data-plugin-id="research-dashboard"] :is(.rd-person-grid, .rd-repository-grid) .rd-project-intro {
+  border-bottom: var(--rd-edge); padding-bottom: 8px;
+}
+[data-plugin-id="research-dashboard"] .rd-person-grid .rd-affiliations { border-top: var(--rd-edge); padding-top: 8px; }
+[data-plugin-id="research-dashboard"] .rd-person-grid .rd-affiliations-summary { font-weight: 700; margin: 0; }
+[data-plugin-id="research-dashboard"] .rd-person-grid .rd-side-card + .rd-side-card {
+  border-top: var(--rd-edge); padding-top: 10px;
+}
+[data-plugin-id="research-dashboard"] :is(.rd-person-grid, .rd-repository-grid) > .rd-side-stack {
+  align-self: stretch; align-content: start;
+}
+[data-plugin-id="research-dashboard"] :is(.rd-person-activity, .rd-repository-activity) .rd-empty-activity-head {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px;
+}
+[data-plugin-id="research-dashboard"] .rd-empty-activity-head > * { margin: 0; }
+[data-plugin-id="research-dashboard"] .rd-progress-tasks > .rd-section-head {
+  border-bottom: var(--rd-edge); padding-bottom: 8px;
+}
 /* The project intro row: a short description left, right-aligned Open project action. */
 [data-plugin-id="research-dashboard"] .rd-project-intro {
   align-items: center; display: flex; gap: 12px; justify-content: space-between;
   margin-bottom: 12px;
 }
 [data-plugin-id="research-dashboard"] .rd-project-intro p { margin: 0; }
-/* A shared workstream card (Projects, People and Repositories all reuse this one surface). */
+/* V12 — a shared workstream is an editorial row, not a repeated card: a flat stack separated by hairlines,
+   with its state beside its title. Every fact the card carried (reading, latest event, task counts,
+   repository links) stays. */
 [data-plugin-id="research-dashboard"] .rd-work-card {
-  background: var(--card, #fff);
-  border: var(--rd-edge);
-  border-left: var(--rd-tech-edge) solid var(--rd-tech);
-  border-radius: var(--rd-radius-control);
+  background: none;
+  border: 0;
+  border-bottom: var(--rd-edge);
+  border-radius: 0;
   display: grid;
   gap: var(--rd-gap-tight);
-  padding: 10px 12px;
+  /* V12 iteration 2 (V-06) — the compact workstream inventory tightens a step from the earlier 10/12
+     rhythm so the rows read as a list of workstreams, not a run of headed cards. Horizontal padding is
+     left to the Projects-scoped rule below. */
+  padding: 8px 0 10px;
 }
-[data-plugin-id="research-dashboard"] .rd-work-card + .rd-work-card { margin-top: 10px; }
+[data-plugin-id="research-dashboard"] .rd-work-card:last-child { border-bottom: 0; }
+[data-plugin-id="research-dashboard"] .rd-work-card + .rd-work-card { margin-top: 0; }
 /* No status-coloured contour: the pivot retired the workstream status outline (and the orange/red
    blocker banner). A blocked workstream reads through its state badge and its recorded counts, exactly
    as an active one does; the blocker's own prose lives in the Progress context, not on this card. */
@@ -1842,25 +2010,21 @@ const css = `
    split, so the 380px selector rail is never pushed onto a row of its own. */
 [data-plugin-id="research-dashboard"] .rd-view-topics { display: grid; gap: var(--rd-gap-block); }
 [data-plugin-id="research-dashboard"] .rd-topic-summary {
-  align-items: flex-start; cursor: pointer; display: flex; gap: 10px; justify-content: space-between;
-  list-style: none; padding-bottom: 10px;
+  align-items: flex-start; display: flex; gap: 10px; justify-content: space-between;
+  padding-bottom: 10px; border-bottom: var(--rd-edge);
 }
-[data-plugin-id="research-dashboard"] .rd-topic-summary::-webkit-details-marker { display: none; }
-/* The shared disclosure affordance (the prototype's caret): a closed panel reads ▸, an open one ▾, on every
-   detail whose header is a native summary — Projects, People and Repositories alike. */
-[data-plugin-id="research-dashboard"] .rd-topic-summary::before {
-  content: "▸"; display: inline-block; flex: 0 0 12px; font-size: 15px; line-height: 1; width: 12px;
-}
-[data-plugin-id="research-dashboard"] .rd-topic-detail[open] > .rd-topic-summary::before { content: "▾"; }
-/* People and Repositories share the same disclosure: their header (DetailHeader) is the summary's one
-   child, so it takes the row and the panel's own padding does the rest. */
 [data-plugin-id="research-dashboard"] .rd-topic-summary > .rd-detail-head { flex: 1 1 auto; min-width: 0; }
 /* The project summary's title row takes the slack so the title sits beside the caret and the status/last-activity
    cluster stays right — without it the three flex children (caret, title, meta) would centre the title. */
 [data-plugin-id="research-dashboard"] .rd-topic-summary > .rd-row { flex: 1 1 auto; min-width: 0; }
 [data-plugin-id="research-dashboard"] .rd-topic-summary .rd-detail-head .rd-row { margin: 0; }
 [data-plugin-id="research-dashboard"] .rd-topic-summary-meta { align-items: center; display: flex; gap: 8px; }
-[data-plugin-id="research-dashboard"] .rd-topic-detail[open] > .rd-topic-summary { border-bottom: var(--rd-edge); }
+[data-plugin-id="research-dashboard"] .rd-topic-summary-meta > :not(:first-child)::before {
+  content: "|"; color: var(--muted-foreground, #5c6270); margin-right: 8px;
+}
+[data-plugin-id="research-dashboard"] .rd-topic-body > .rd-current-work { border-top: var(--rd-edge); padding-top: 10px; }
+
+
 [data-plugin-id="research-dashboard"] .rd-topic-body { display: grid; gap: var(--rd-gap-block); padding-top: 12px; }
 [data-plugin-id="research-dashboard"] .rd-context-tags,
 [data-plugin-id="research-dashboard"] .rd-references {
@@ -1869,15 +2033,24 @@ const css = `
 }
 [data-plugin-id="research-dashboard"] .rd-topic-controls > summary { cursor: pointer; }
 [data-plugin-id="research-dashboard"] .rd-topic-controls[open] > summary { margin-bottom: var(--rd-gap-row); }
+/* V12 — the state sits beside its title, not floated to the far edge. */
 [data-plugin-id="research-dashboard"] .rd-work-head {
-  align-items: flex-start; display: flex; gap: 10px; justify-content: space-between;
+  align-items: baseline; display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-start;
 }
 [data-plugin-id="research-dashboard"] .rd-work-title { font-size: 16px; font-weight: 640; letter-spacing: -0.005em; line-height: 1.4; margin: 0; }
-[data-plugin-id="research-dashboard"] .rd-work-link { color: inherit; text-decoration: none; }
-[data-plugin-id="research-dashboard"] .rd-work-link:hover { text-decoration: underline; }
-/* The blocked-task count pill: red, matching sibling pills' typography/padding/height. */
-[data-plugin-id="research-dashboard"] .rd-blocked-pill,
-[data-plugin-id="research-dashboard"] .rd-count[data-rd-state="blocked"] { color: #9b2c2c; background: #fdecec; }
+/* V12 — a title that navigates reads as a link, not as colour-only: the underline is the affordance (the
+   hover-only rule was invisible to a reader scanning the page). The owning rule for every navigational work
+   title (Projects, People and Repositories share it). */
+[data-plugin-id="research-dashboard"] .rd-work-link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+[data-plugin-id="research-dashboard"] .rd-work-link:hover { text-decoration-thickness: 2px; }
+/* A child's recorded blocked count is independent of its parent's state. Keep its semantic ink without
+   restoring a pill or inferring child status from the parent. */
+[data-plugin-id="research-dashboard"] .rd-count[data-rd-state="blocked"] { color: #9a332b; }
 /* The selected workstream's full-context panel (Progress): purpose, reading, blocker, plan. */
 [data-plugin-id="research-dashboard"] .rd-context-panel {
   background: var(--card, #fff);
@@ -1905,6 +2078,12 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-context-label {
   color: var(--rd-tech); font-size: var(--rd-label); font-weight: 700;
   letter-spacing: 0.06em; text-transform: uppercase; opacity: 1;
+  /* V12 iteration 2 (V-09) — the section label is a heading, not an inline run-in. As an inline span it
+     sat flush against the content that followed it, which on a no-purpose fixture read as
+     'PURPOSENo workstream purpose recorded.' (the two elements are adjacent siblings, so JSX emits no
+     whitespace between them). Giving the shared label its own line and a small gap harmonizes the
+     label+content spacing in Current reading and the Workstream plan alike. */
+  display: block; margin-bottom: 2px;
 }
 /* The evidence line (D1/#17/#18) and its one-line clamp are retired: V2b renders evidence as the native
    rd-progress-evidence disclosure (count in the summary, full list in the body), so the block-level
@@ -1940,6 +2119,11 @@ const css = `
 [data-plugin-id="research-dashboard"] .rd-progress-evidence,
 [data-plugin-id="research-dashboard"] .rd-progress-activity {
   border-top: var(--rd-edge); display: grid; gap: var(--rd-gap-tight); min-width: 0; padding-top: 10px;
+}
+[data-plugin-id="research-dashboard"] .rd-section-heading { margin: 0; font-size: var(--rd-body); font-weight: 700; }
+[data-plugin-id="research-dashboard"] .rd-progress-col .rd-scoped-plan > h4 {
+  margin: 0; color: var(--rd-tech); font-size: var(--rd-label); font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
 }
 [data-plugin-id="research-dashboard"] .rd-progress-evidence > summary,
 [data-plugin-id="research-dashboard"] .rd-progress-activity > summary {
@@ -1992,13 +2176,14 @@ const css = `
 }
 /* The pager: the segmented-switch grammar, one numbered control per paged list. */
 [data-plugin-id="research-dashboard"] .rd-pager { align-items: center; display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between; margin-top: 10px; row-gap: 6px; }
+/* V12 — the pager keeps its controls, handlers and totals but is unboxed: ordinary text controls on the
+   page, not a tinted/boxed switch surface. */
 [data-plugin-id="research-dashboard"] .rd-pager-switch {
-  background: var(--muted, #e5e7eb); border: var(--rd-edge); border-radius: 5px;
-  display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 2px;
+  display: inline-flex; flex-wrap: wrap; gap: 2px;
 }
 [data-plugin-id="research-dashboard"] .rd-pager-btn {
   background: transparent; border: 0; border-bottom: var(--rd-tech-edge) solid transparent;
-  border-radius: var(--rd-radius-control); color: var(--muted-foreground, #5c6270);
+  border-radius: 0; color: var(--muted-foreground, #5c6270);
   cursor: pointer; font: inherit; opacity: 0.72; padding: 5px 8px;
 }
 [data-plugin-id="research-dashboard"] .rd-pager-btn[aria-current="page"] {
@@ -2016,16 +2201,26 @@ const css = `
    native disclosure keeps the lane compact while preserving each affiliation's tag, status and role. */
 [data-plugin-id="research-dashboard"] .rd-affiliations { margin-top: var(--rd-gap-block); min-width: 0; }
 [data-plugin-id="research-dashboard"] .rd-affiliations-summary {
-  color: var(--muted-foreground, #5c6270); cursor: pointer;
+  color: var(--muted-foreground, #5c6270); cursor: default;
   font-size: var(--rd-body); font-weight: 700;
 }
 [data-plugin-id="research-dashboard"] .rd-affiliation-list {
-  display: grid; gap: var(--rd-gap-tight); list-style: none;
-  margin: var(--rd-gap-row) 0 0; padding: 0; min-width: 0;
+  display: grid; column-gap: 12px; row-gap: 0; list-style: none;
+  border-top: var(--rd-edge); margin: var(--rd-gap-row) 0 0; padding: 0; min-width: 0;
+}
+/* V12 iteration 2 (V-07) — People: the named project-only affiliations read as a compact two-column grid
+   at desktop width instead of one long single column, matching the accepted reference's denser
+   affiliation block. minmax(0, 1fr) lets a long topic name shrink into its column rather than force the
+   lane wide (the affiliation tag already wraps at overflow-wrap:anywhere below), and the aside/rail is a
+   separate grid cell so the second column never collides with it. One column again at narrow widths. */
+@media (min-width: 720px) {
+  [data-plugin-id="research-dashboard"] .rd-affiliation-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 [data-plugin-id="research-dashboard"] .rd-affiliation {
-  align-items: baseline; display: flex; flex-wrap: wrap; gap: 8px;
-  min-width: 0;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
+  border-bottom: var(--rd-edge); padding: 8px 0; min-width: 0;
 }
 /* A long affiliation topic name: the shared tag is normally nowrap (max-width:100%, ellipsis). Inside the
    People lane that nowrap min-content sets the affiliation row's own min-content, forces the lane's grid
@@ -2051,6 +2246,325 @@ const css = `
    above a long title. The title, not the row, takes the wrap. */
 [data-plugin-id="research-dashboard"] .rd-index-item > .rd-cluster { flex-wrap: nowrap; }
 [data-plugin-id="research-dashboard"] .rd-index-item > .rd-cluster > .rd-strong { min-width: 0; }
+
+/* ============================================================================
+   V12 — Progress: the accepted Tinted composition, ported onto the plugin's own rules.
+   Left rail: a visible "Workstreams" heading level with the hero, project groups and flat rows whose
+   state is a narrow spaced pipe (not a pill, dot or duplicated tag). Right pane: a selected-workstream
+   kicker + title/state and compact facts, then Current reading and the optional Workstream plan as two
+   adjacent columns under matching headings with no dividing rule, then flat ordinal task rows, then
+   evidence/provenance/maintenance and the full-width activity.
+   ============================================================================ */
+/* The rail is the split's fixed column; its heading sits at the top, level with the hero kicker. */
+[data-plugin-id="research-dashboard"] .rd-progress-rail {
+  align-content: start;
+  display: grid;
+  flex: 0 0 var(--rd-index-basis);
+  gap: 10px;
+  min-width: 0;
+}
+[data-plugin-id="research-dashboard"] .rd-index-head { display: grid; gap: 2px; }
+[data-plugin-id="research-dashboard"] .rd-index-title {
+  font-size: 32px; font-weight: 740; letter-spacing: -0.015em; line-height: 1.25; margin: 0;
+}
+[data-plugin-id="research-dashboard"] .rd-index-head > .rd-meta { margin-top: 0; }
+[data-plugin-id="research-dashboard"] .rd-visually-hidden {
+  border: 0; clip-path: inset(50%); height: 1px; margin: -1px; overflow: hidden;
+  padding: 0; position: absolute; white-space: nowrap; width: 1px;
+}
+/* Progress selector rows: a ~4px state pipe hard left, spanning the row's own multiline content, with a
+   ~8px gap between rows. The pipe is decorative; the row's stored state and confidence stay as assistive
+   text inside the button, so the semantic is never colour-only. */
+[data-plugin-id="research-dashboard"] .rd-progress-index .rd-index-item {
+  gap: 0;
+  padding: 10px 10px 10px 14px;
+  position: relative;
+}
+[data-plugin-id="research-dashboard"] .rd-progress-index .rd-index-list > li + li { margin-top: 8px; }
+[data-plugin-id="research-dashboard"] .rd-progress-index .rd-index-item::before {
+  background: #8a97a4;
+  border-radius: 2px;
+  bottom: 5px;
+  content: "";
+  left: 0;
+  position: absolute;
+  top: 5px;
+  width: 4px;
+}
+[data-plugin-id="research-dashboard"] .rd-progress-index .rd-index-item[data-rd-index-state="active"]::before,
+[data-plugin-id="research-dashboard"] .rd-progress-index .rd-index-item[data-rd-index-state="completed"]::before { background: #176b4d; }
+[data-plugin-id="research-dashboard"] .rd-progress-index .rd-index-item[data-rd-index-state="blocked"]::before { background: #a33f2c; }
+[data-plugin-id="research-dashboard"] .rd-progress-index .rd-index-item[data-rd-index-state="parked"]::before { background: #8a611a; }
+[data-plugin-id="research-dashboard"] .rd-progress-index .rd-index-item > .rd-strong { min-width: 0; }
+/* The selected-workstream hero: kicker, prominent title + adjacent state, one factual metadata line. */
+[data-plugin-id="research-dashboard"] .rd-progress-hero {
+  background: none;
+  border: 0;
+  border-bottom: var(--rd-edge);
+  border-radius: 0;
+  display: grid;
+  gap: 4px;
+  padding: 0 0 12px;
+}
+[data-plugin-id="research-dashboard"] .rd-hero-kicker,
+[data-plugin-id="research-dashboard"] .rd-section-head .rd-section {
+  color: var(--rd-tech);
+  font-size: var(--rd-label);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+[data-plugin-id="research-dashboard"] .rd-hero-kicker { margin: 0; }
+[data-plugin-id="research-dashboard"] .rd-hero-title { font-size: 20px; font-weight: 750; letter-spacing: -0.012em; }
+[data-plugin-id="research-dashboard"] .rd-hero-meta { margin-top: 2px; }
+/* Keep reading primary: the plan uses its intrinsic width, capped near one third of the row,
+   with a readable minimum. No plan leaves one full-width reading track; narrow screens stack. */
+[data-plugin-id="research-dashboard"] .rd-progress-columns {
+  border-top: 0;
+  display: grid;
+  gap: 14px 22px;
+  grid-template-columns: minmax(0, 1fr);
+  padding-top: 12px;
+}
+@media (min-width: 1001px) {
+  [data-plugin-id="research-dashboard"] .rd-progress-columns:has(> [data-rd-progress-col="plan"]) {
+    grid-template-columns: minmax(0, 1fr) fit-content(34%);
+  }
+  [data-plugin-id="research-dashboard"] [data-rd-progress-col="plan"] {
+    min-width: 16rem;
+  }
+}
+[data-plugin-id="research-dashboard"] .rd-progress-col { border-left: 0; display: grid; gap: 4px; min-width: 0; }
+[data-plugin-id="research-dashboard"] .rd-section-head { align-items: baseline; display: flex; gap: 8px; }
+[data-plugin-id="research-dashboard"] .rd-progress-col .rd-claim-value { margin: 0; }
+[data-plugin-id="research-dashboard"] .rd-progress-col .rd-context-more {
+  border-top: var(--rd-edge); display: block; margin-top: 4px; padding-top: 8px;
+}
+[data-plugin-id="research-dashboard"] .rd-progress-col .rd-scoped-plan {
+  border-top: 0; margin-top: 0; padding-top: 0;
+}
+/* The workstream plan's own summary takes the column heading's treatment, so the two headings match. */
+[data-plugin-id="research-dashboard"] .rd-progress-col .rd-scoped-plan > summary {
+  color: var(--rd-tech); font-size: var(--rd-label); font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+}
+[data-plugin-id="research-dashboard"] .rd-progress-col .rd-scoped-plan > summary::after { content: " ▸"; opacity: var(--rd-quiet); }
+[data-plugin-id="research-dashboard"] .rd-progress-col .rd-scoped-plan[open] > summary::after { content: " ▾"; }
+/* ============================================================================
+   V12 — Projects: the accepted Tinted composition, ported onto the plugin's own rules.
+   Left rail: a visible "Projects" heading level with the selected-project hero. Right pane: an unboxed
+   hero (kicker + title + factual metadata) over the project's claims/participants/repositories, then a flat
+   full-width workstream inventory (thin dividers, subtle alternating fill, no card frames) and the
+   project-scoped activity below. Scoped to the Projects view so People/Repositories are untouched.
+   ============================================================================ */
+[data-plugin-id="research-dashboard"] .rd-topic-rail {
+  align-content: start;
+  display: grid;
+  flex: 0 0 var(--rd-index-basis);
+  gap: 10px;
+  min-width: 0;
+}
+@media (max-width: 720px) {
+  [data-plugin-id="research-dashboard"] .rd-topic-rail { flex: 0 0 100%; }
+}
+/* The selected-project detail is the hero surface: unboxed, no frame, opening on the hero's own hairline. */
+[data-plugin-id="research-dashboard"] .rd-view-topics .rd-topic-detail {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+/* The summary becomes the hero column — kicker, title, facts — with no disclosure caret (the detail is
+   always open), so the rail's "Projects" heading aligns with the kicker as in the accepted reference. */
+[data-plugin-id="research-dashboard"] .rd-view-topics .rd-topic-summary {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 12px;
+}
+[data-plugin-id="research-dashboard"] .rd-view-topics .rd-topic-summary::before { content: none; }
+[data-plugin-id="research-dashboard"] .rd-view-topics .rd-topic-summary-meta { margin-top: 2px; }
+/* The flat full-width workstream inventory: rows touch (the hairline is the row's own bottom border) and
+   alternate a subtle fill, so the lane reads as an index rather than a run of spaced cards. The lane's own
+   18px gap is overridden: the card rule is flat, so the gap was the only thing setting the rows apart. */
+[data-plugin-id="research-dashboard"] .rd-view-topics .rd-current-work > .rd-axes { gap: 0; }
+[data-plugin-id="research-dashboard"] .rd-view-topics .rd-current-work .rd-axes > li {
+  border-bottom: var(--rd-edge);
+}
+[data-plugin-id="research-dashboard"] .rd-view-topics .rd-current-work .rd-axes > li:last-child {
+  border-bottom: 0;
+}
+[data-plugin-id="research-dashboard"] .rd-view-topics .rd-current-work .rd-axes > li:nth-child(odd) {
+  background: var(--muted, rgba(127, 127, 127, 0.04));
+}
+[data-plugin-id="research-dashboard"] .rd-view-topics .rd-current-work .rd-work-card {
+  border-bottom: 0;
+  padding: 8px 12px;
+}
+[data-plugin-id="research-dashboard"] .rd-plan-hint {
+  color: var(--muted-foreground, #5c6270); font-size: var(--rd-meta); font-weight: 600;
+  letter-spacing: 0; text-transform: none;
+}
+/* A neutral stored plan-step position: a small circle numeral (0 and every stored value render as stored;
+   an absent position renders no numeral at all). V12 iteration 2 (V-04): the border was declared
+   '1px solid var(--rd-edge)', but --rd-edge already expands to '1px solid var(--border)', so the whole
+   value was invalid at computed-value time and the circle drew no outline at all. It now takes the token
+   directly — the same valid border every other rule uses. */
+[data-plugin-id="research-dashboard"] .rd-plan-position {
+  align-items: center; border: var(--rd-edge); border-radius: 50%;
+  color: var(--muted-foreground, #5c6270); display: inline-flex; flex: none;
+  font-size: var(--rd-meta); height: 18px; justify-content: center; min-width: 18px; padding: 0 4px;
+  position: relative; z-index: 1;
+}
+/* The linked vertical sequence between plan steps: one hairline from under each circle to the next step,
+   kept subtle (the circle's own outline carries the marker). Drawn from the circle's centre column so it
+   reads as a connected sequence rather than a heavy timeline rail; the last step draws none. The stored
+   literal 0 and every other stored position keep their own circle unchanged. */
+[data-plugin-id="research-dashboard"] .rd-plan-step:not(:last-child)::before {
+  background: var(--border, #d8e2eb);
+  bottom: calc(-1 * var(--rd-gap-tight) - 1px);
+  content: "";
+  left: 9px;
+  opacity: 0.7;
+  position: absolute;
+  top: 20px;
+  width: 1px;
+}
+/* The inline Purpose excerpt retains both exact source slices in DOM; only the suffix is hidden until
+   expanded, so the toggle can follow the genuine excerpt on the same line without a block clamp. */
+[data-plugin-id="research-dashboard"] .rd-purpose { display: block; margin-top: 4px; }
+[data-plugin-id="research-dashboard"] .rd-purpose-text {
+  display: inline; overflow-wrap: anywhere; white-space: pre-wrap;
+}
+[data-plugin-id="research-dashboard"] .rd-purpose-text.is-expanded {
+  line-height: 1.6;
+}
+[data-plugin-id="research-dashboard"] .rd-purpose-toggle {
+  background: none; border: 0; color: var(--rd-tech); cursor: pointer; font: inherit;
+  padding: 0; text-decoration: underline; width: fit-content;
+}
+/* Task rows: a subdued ordinary-font page ordinal in its own left gutter, the authored title/statement and
+   its adjacent state at full width, then facts, the task's own plan, links and people. No decorative bar. */
+[data-plugin-id="research-dashboard"] .rd-task-card {
+  background: none;
+  border: 0;
+  border-bottom: var(--rd-edge);
+  border-radius: 0;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 3.25rem minmax(0, 1fr);
+  margin-top: 0;
+  /* V12 iteration 2 (V-02) — task rows take the same tighter vertical rhythm as the compact reader. */
+  padding: 10px 0;
+}
+[data-plugin-id="research-dashboard"] .rd-task-card + .rd-task-card { margin-top: 0; }
+[data-plugin-id="research-dashboard"] .rd-task-card:last-child { border-bottom: 0; }
+[data-plugin-id="research-dashboard"] .rd-task-ordinal {
+  color: #8a97a4; font-size: 26px; font-weight: 400; font-variant-numeric: tabular-nums;
+  align-self: center; line-height: 1.1; padding-top: 0; user-select: none;
+}
+[data-plugin-id="research-dashboard"] .rd-task-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; min-width: 0; }
+[data-plugin-id="research-dashboard"] .rd-task-body .rd-repo-pair { min-width: 0; max-width: 100%; }
+[data-plugin-id="research-dashboard"] .rd-task-body .rd-repo-pair .rd-tag { white-space: normal; overflow-wrap: anywhere; }
+
+/* ============================================================================
+   V12 — People and Repositories: the accepted Tinted composition, on the shared grammar.
+   A named selector rail on the left whose heading sits level with the selected-entity hero beside it (the
+   same rd-index-head / rd-hero-kicker vocabulary Projects and Progress use); the detail is unboxed and
+   opens on the hero's own kicker; the body is the shared dominant-lane-plus-aside grid; and the entity's
+   own activity reads full width at the foot of the detail, never a permanent side rail.
+   ============================================================================ */
+[data-plugin-id="research-dashboard"] .rd-view-people,
+[data-plugin-id="research-dashboard"] .rd-view-repositories { display: grid; gap: var(--rd-gap-block); }
+[data-plugin-id="research-dashboard"] .rd-person-rail,
+[data-plugin-id="research-dashboard"] .rd-repository-rail {
+  align-content: start;
+  display: grid;
+  flex: 0 0 var(--rd-index-basis);
+  gap: 10px;
+  min-width: 0;
+}
+@media (max-width: 720px) {
+  [data-plugin-id="research-dashboard"] .rd-person-rail,
+  [data-plugin-id="research-dashboard"] .rd-repository-rail { flex: 0 0 100%; }
+}
+/* The owning layout for the People / Repositories detail bodies: the entity's work in the dominant lane and
+   a quiet aside beside it, exactly the proportions the shared detail grid keeps. */
+[data-plugin-id="research-dashboard"] .rd-person-grid,
+[data-plugin-id="research-dashboard"] .rd-repository-grid {
+  align-items: start;
+  display: grid;
+  gap: var(--rd-gap-block);
+  grid-template-columns: minmax(0, 1fr) minmax(min(250px, 37.5%), 0.6fr);
+}
+@media (max-width: 1000px) {
+  [data-plugin-id="research-dashboard"] .rd-person-grid,
+  [data-plugin-id="research-dashboard"] .rd-repository-grid { grid-template-columns: minmax(0, 1fr); }
+}
+/* The selected-entity detail is unboxed, scoped to these two views: it opens on the hero's own hairline
+   rather than a card frame. The shared rd-topic-detail box stays for anything else that uses it. */
+[data-plugin-id="research-dashboard"] .rd-view-people .rd-topic-detail,
+[data-plugin-id="research-dashboard"] .rd-view-repositories .rd-topic-detail {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+/* The entity's own activity at the foot of the detail, full width — not a permanent side rail. */
+[data-plugin-id="research-dashboard"] .rd-person-activity,
+[data-plugin-id="research-dashboard"] .rd-repository-activity {
+  border-top: var(--rd-edge);
+  display: grid;
+  align-content: start;
+  gap: var(--rd-gap-tight);
+  padding-top: 10px;
+}
+/* The repository's own recorded description with its separate external destination: a quiet inline label
+   and the stored text, wrapping rather than truncating. */
+[data-plugin-id="research-dashboard"] .rd-repository-overview {
+  display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.6fr); gap: 24px; align-content: start;
+}
+[data-plugin-id="research-dashboard"] .rd-repository-purpose,
+[data-plugin-id="research-dashboard"] .rd-repository-scope { display: grid; align-content: start; gap: 8px; min-width: 0; }
+[data-plugin-id="research-dashboard"] .rd-overview-heading { margin: 0; border-bottom: var(--rd-edge); padding-bottom: 8px; }
+[data-plugin-id="research-dashboard"] .rd-repository-grid .rd-side-title { text-transform: uppercase; border-bottom: var(--rd-edge); padding-bottom: 8px; }
+[data-plugin-id="research-dashboard"] .rd-repository-grid .rd-side-card + .rd-side-card { border-top: var(--rd-edge); padding-top: 10px; }
+[data-plugin-id="research-dashboard"] .rd-repository-grid .rd-completed-fold { border-top: var(--rd-edge); padding-top: 8px; }
+[data-plugin-id="research-dashboard"] .rd-repository-grid .rd-completed-fold > summary { font-weight: 700; }
+[data-plugin-id="research-dashboard"] .rd-repository-grid .rd-project-group > .rd-work-card:nth-of-type(even) { background: var(--muted, #f5f5f5); }
+[data-plugin-id="research-dashboard"] .rd-view-repositories .rd-topic-body { align-content: start; gap: 24px; }
+@media (max-width: 720px) { [data-plugin-id="research-dashboard"] .rd-repository-overview { grid-template-columns: minmax(0, 1fr); } }
+/* Each desktop selector/detail pair shares two rows. Subgrid lets either header set the
+   first row height, including wrapped titles, without JavaScript height synchronization. */
+[data-plugin-id="research-dashboard"] .rd-progress-content {
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--rd-gap-block); min-width: 0; align-content: start;
+}
+@media (min-width: 721px) {
+  [data-plugin-id="research-dashboard"] .rd-split:has(> .rd-topic-rail),
+  [data-plugin-id="research-dashboard"] .rd-split:has(> .rd-person-rail),
+  [data-plugin-id="research-dashboard"] .rd-split:has(> .rd-repository-rail),
+  [data-plugin-id="research-dashboard"] .rd-progress-top {
+    display: grid; grid-template-columns: var(--rd-index-basis) minmax(0, 1fr);
+    grid-template-rows: auto auto; column-gap: var(--rd-gap-block); row-gap: 12px;
+    align-items: stretch;
+  }
+  [data-plugin-id="research-dashboard"] .rd-split > :is(.rd-topic-rail, .rd-person-rail, .rd-repository-rail, .rd-progress-rail) {
+    display: grid; grid-column: 1; grid-row: 1 / span 2;
+    grid-template-rows: subgrid; row-gap: inherit; min-width: 0;
+  }
+  [data-plugin-id="research-dashboard"] .rd-split > :is(.rd-topic-detail, .rd-progress-detail) {
+    display: grid; grid-column: 2; grid-row: 1 / span 2;
+    grid-template-rows: subgrid; row-gap: inherit; min-width: 0; container-type: normal;
+  }
+  [data-plugin-id="research-dashboard"] .rd-split > :is(.rd-topic-rail, .rd-person-rail, .rd-repository-rail, .rd-progress-rail) > .rd-index-head {
+    align-content: start; border-bottom: var(--rd-edge); padding-bottom: 12px;
+  }
+  [data-plugin-id="research-dashboard"] .rd-split > :is(.rd-topic-detail, .rd-progress-detail) > :is(.rd-topic-summary, .rd-progress-hero) {
+    align-content: start;
+  }
+  [data-plugin-id="research-dashboard"] .rd-split > .rd-topic-detail > .rd-topic-body { padding-top: 0; }
+  [data-plugin-id="research-dashboard"] .rd-progress-columns { padding-top: 0; }
+}
+
 
 `;
 
@@ -2767,14 +3281,35 @@ export function apply(ctx: Context) {
   }
 
   /**
-   * A compact exact event date (component-contract.md § EventDate): `2026-09-28`. One place so the four
-   * views and the Progress feed cannot drift into three date formats. The attribute carries the full
-   * timestamp, so a check can compare what was rendered against the projection the page actually read.
+   * A compact exact event date. V12 iteration 2 (V-05) — the visible cell now reads as a human date
+   * ('03 Oct 2026') rather than a raw backend slice ('2026-10-03'), while the attribute still carries the
+   * full stored timestamp so a check can compare the rendered row against the projection the page read.
+   * The date portion is the stored timestamp's own first ten characters, interpreted as UTC — the same
+   * UTC date the source records — so no timezone is invented and no sub-day precision is implied. A row
+   * whose timestamp cannot be parsed as a date falls back to the raw slice rather than guessing.
    */
+  const RD_MONTHS_SHORT = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  ];
+  const RD_WEEKDAYS_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  /** Split a stored timestamp's UTC date portion into the exact label and its short weekday (or null). */
+  function eventDayParts(at: string): { label: string; weekday: string | null } {
+    const day = at.slice(0, 10);
+    const [year, monthRaw, dayRaw] = day.split("-");
+    const month = Number(monthRaw);
+    const label =
+      Number.isInteger(month) && month >= 1 && month <= 12
+        ? `${dayRaw} ${RD_MONTHS_SHORT[month - 1]} ${year}`
+        : day;
+    const ms = Date.parse(`${day}T00:00:00Z`);
+    const weekday = Number.isNaN(ms) ? null : RD_WEEKDAYS_SHORT[new Date(ms).getUTCDay()];
+    return { label, weekday };
+  }
   function EventDate({ at }: { at: string }) {
     return (
       <span className="rd-meta" data-rd-event-date={at}>
-        {at.slice(0, 10)}
+        {eventDayParts(at).label}
       </span>
     );
   }
@@ -2887,13 +3422,21 @@ export function apply(ctx: Context) {
     // One decision, one place: mapped → person tag, recorded system → a visible `system` label,
     // anything else → the caller's unattributed words. The source type is not consulted.
     const actorIndication = activityActorIndication(item.actorType, person !== null);
+    // The shared left date cell: the short weekday above the exact date (weekday omitted if unparseable).
+    const eventDay = eventDayParts(item.occurredAt);
     return (
-      <li data-rd-activity-event="true" {...(attrs ?? {})}>
-        <div className="rd-cluster">
+      <li className="rd-activity-row" data-rd-activity-event="true" {...(attrs ?? {})}>
+        <span className="rd-activity-date">
+          {eventDay.weekday ? (
+            <span className="rd-event-weekday" aria-hidden="true">
+              {eventDay.weekday}
+            </span>
+          ) : null}
           <EventDate at={item.occurredAt} />
-          <span className="rd-strong">{item.summary}</span>
-        </div>
-        <div className="rd-cluster rd-tags" data-rd-event-tags="true">
+        </span>
+        <div className="rd-activity-body">
+          <span className="rd-strong"><TextExcerpt text={item.summary} /></span>
+          <div className="rd-cluster rd-tags" data-rd-event-tags="true">
           <span className="rd-meta">
             {describeSource(item.sourceType, item.sourceRef ?? "")}
           </span>
@@ -2953,6 +3496,7 @@ export function apply(ctx: Context) {
               type="problem"
             />
           ) : null}
+          </div>
         </div>
       </li>
     );
@@ -3024,6 +3568,8 @@ export function apply(ctx: Context) {
     onOpenEntity,
     person = null,
     scope,
+    scopeNote,
+    inlineEmpty = false,
   }: {
     /** The container's row-count attribute, e.g. `data-rd-person-activity`. */
     countAttr: string;
@@ -3038,6 +3584,8 @@ export function apply(ctx: Context) {
     onOpenEntity: (type: EntityType, id: string) => void;
     person?: { displayName: string; id: string } | null;
     scope: { personActorId?: string; axisId?: string; repositoryId?: string; topicId?: string };
+    scopeNote?: string;
+    inlineEmpty?: boolean;
   }) {
     const [page, setPage] = React.useState<Page<Activity> | null>(null);
     const [offset, setOffset] = React.useState(0);
@@ -3088,6 +3636,11 @@ export function apply(ctx: Context) {
     const total = page?.total ?? 0;
     return (
       <>
+        <div className={inlineEmpty && !loading && items.length === 0 ? "rd-empty-activity-head" : undefined}>
+          <h4 className="rd-section-heading">{progressActivitySummary(total)}</h4>
+          {inlineEmpty && !loading && items.length === 0 ? <span className="rd-muted">{emptyText}</span> : null}
+        </div>
+        {scopeNote ? <span className="rd-meta">{scopeNote}</span> : null}
         <ul
           className="rd-activity"
           data-rd-activity-shown={items.length}
@@ -3109,7 +3662,7 @@ export function apply(ctx: Context) {
               />
             );
           })}
-          {!loading && items.length === 0 ? (
+          {!inlineEmpty && !loading && items.length === 0 ? (
             <li className="rd-muted">{emptyText}</li>
           ) : null}
         </ul>
@@ -3254,27 +3807,37 @@ export function apply(ctx: Context) {
    * only where the step claims a `position` — stored positions are shown as stored, never rebased.
    */
   function ScopedPlan({
+    hint,
     label,
     plan,
     defaultOpen = true,
+    collapsible = true,
   }: {
     label: string;
+    /** Optional factual qualifier beside the label (e.g. "3 recorded steps"); absent means none is drawn. */
+    hint?: string;
     plan: StoredPlan | null;
     /**
      * V2b — whether the disclosure starts open. The default is `true` (a task's own implementation plan),
-     * preserving every existing call site's behaviour; the Progress workstream's plan passes `false` so its
-     * summary is the route and the reader opens it. Either way the summary is visible and every stored step
-     * is retained in the body — collapse hides nothing that a click cannot restore.
+     * preserving every existing call site's behaviour; the Progress workstream's plan passes `true` too
+     * under V12, so its summary is the section heading the reader can still fold. Either way every stored
+     * step is retained in the body — collapse hides nothing that a click cannot restore.
      */
     defaultOpen?: boolean;
+    collapsible?: boolean;
   }) {
     if (!plan || plan.steps.length === 0) {
       return null;
     }
+    const PlanContainer = collapsible ? "details" : "section";
+    const PlanHeading = collapsible ? "summary" : "h4";
     return (
-      <details className="rd-scoped-plan" open={defaultOpen}>
-        <summary>{label}</summary>
-        {plan.plan.summary ? <p className="rd-meta">{plan.plan.summary}</p> : null}
+      <PlanContainer className="rd-scoped-plan" {...(collapsible ? { open: defaultOpen } : {})}>
+        <PlanHeading>
+          {label}
+          {hint ? <span className="rd-plan-hint">{` · ${hint}`}</span> : null}
+        </PlanHeading>
+        {plan.plan.summary ? <p className="rd-meta"><TextExcerpt text={plan.plan.summary} /></p> : null}
         <ol className="rd-plan-steps" data-rd-scoped-plan-steps={plan.steps.length}>
           {plan.steps.map((step) => (
             <li
@@ -3288,7 +3851,7 @@ export function apply(ctx: Context) {
               <span className="rd-row">
                 <span className="rd-cluster">
                   {step.position === null ? null : (
-                    <span className="rd-meta">{`${step.position}.`}</span>
+                    <span className="rd-plan-position">{step.position}</span>
                   )}
                   <span className="rd-strong">{step.title}</span>
                 </span>
@@ -3297,7 +3860,57 @@ export function apply(ctx: Context) {
             </li>
           ))}
         </ol>
-      </details>
+      </PlanContainer>
+    );
+  }
+
+  /**
+   * V12 — the Purpose excerpt: the genuine stored purpose rendered inline with a real **show full / show
+   * less** button (never a native `<details>`, never a paraphrase). The complete stored string is always
+   * the node's text content, never truncated or paraphrased in
+   * the DOM — collapsed it hides only a word-boundary suffix while the real toggle stays inline; expanding
+   * reveals exactly the authored text, whitespace and all. Its own React state sits
+   * inside the keyed axis body: a **different** workstream remounts it (reset), a same-axis page keeps it
+   * (survives paging). The `data-rd-axis-description` marker stays on the excerpt node itself.
+   */
+  function TextExcerpt({ text, emptyText = "" }: { text: string | null; emptyText?: string }) {
+    return <PurposeExcerpt text={text} emptyText={emptyText} purpose={false} />;
+  }
+
+  function PurposeExcerpt({ text, emptyText = "No workstream purpose recorded.", purpose = true }: {
+    text: string | null; emptyText?: string; purpose?: boolean;
+  }) {
+    const [expanded, setExpanded] = React.useState(false);
+    if (!text) {
+      return (
+        <span className="rd-muted" data-rd-axis-description={purpose ? "true" : undefined}>
+          {emptyText}
+        </span>
+      );
+    }
+    const boundary = text.length > 220 ? text.lastIndexOf(" ", 220) : text.length;
+    const cut = boundary > 0 ? boundary : Math.min(text.length, 220);
+    const hasRemainder = cut < text.length;
+    return (
+      <span className="rd-purpose" data-rd-purpose-excerpt={purpose ? "true" : undefined} data-rd-text-excerpt="true">
+        <span
+          className={`rd-purpose-text${expanded ? " is-expanded" : ""}`}
+          data-rd-axis-description={purpose ? "true" : undefined}
+          data-rd-text-content="true"
+        >
+          {text.slice(0, cut)}<span hidden={!expanded}>{text.slice(cut)}</span>
+        </span>
+        {hasRemainder ? <> {!expanded ? "… " : " "}<button
+          aria-expanded={expanded}
+          className="rd-purpose-toggle"
+          data-rd-purpose-toggle={purpose ? (expanded ? "less" : "full") : undefined}
+          data-rd-text-toggle={expanded ? "less" : "full"}
+          onClick={() => setExpanded((value) => !value)}
+          type="button"
+        >
+          {expanded ? "Show less" : "Show full text"}
+        </button></> : null}
+      </span>
     );
   }
 
@@ -3398,10 +4011,12 @@ export function apply(ctx: Context) {
   function WorkstreamCard({
     axis,
     context = GENERAL_WORKSTREAM_CARD_CONTEXT,
+    hierarchical = false,
     onOpenEntity,
     onOpenWorkstream,
   }: {
     axis: WorkstreamCardData;
+    hierarchical?: boolean;
     /**
      * Where the card is being read. Omitted (People) is the default `{ view: "general" }`, which renders
      * every supporting repository. The repository panel passes `{ view: "repository", repositoryId }` so the
@@ -3430,7 +4045,7 @@ export function apply(ctx: Context) {
       >
         <div className="rd-work-head">
           <h3 className="rd-work-title">
-            <a
+            {hierarchical ? axis.title : <a
               className="rd-work-link"
               data-rd-work-link={axis.id}
               href={`#/progress/${axis.id}`}
@@ -3440,18 +4055,18 @@ export function apply(ctx: Context) {
               }}
             >
               {axis.title}
-            </a>
+            </a>}
           </h3>
           <StateBadge confidence={axis.stateConfidence} state={axis.state} />
         </div>
         {reading ? (
           <p className="rd-meta" data-rd-work-summary="true">
-            {reading}
+            <TextExcerpt text={reading} />
           </p>
         ) : null}
         {axis.latestEvent && workstreamCardShowsEvent(context) ? (
           <p className="rd-meta" data-rd-work-event="true">
-            <EventDate at={axis.latestEvent.at} /> | {axis.latestEvent.summary}
+            <EventDate at={axis.latestEvent.at} /> | <TextExcerpt text={axis.latestEvent.summary} />
           </p>
         ) : null}
         <div className="rd-cluster rd-tags">
@@ -3465,7 +4080,7 @@ export function apply(ctx: Context) {
               {countLabel(axis.blockedTasks, "blocked", "blocked")}
             </span>
           ) : null}
-          {visibleWorkstreamRepositories(axis.repositories, context).map(
+          {!hierarchical ? visibleWorkstreamRepositories(axis.repositories, context).map(
             (repository) => (
               <RepoLinkPair
                 key={repository.id}
@@ -3473,8 +4088,14 @@ export function apply(ctx: Context) {
                 repository={repository}
               />
             ),
-          )}
+          ) : null}
         </div>
+        {hierarchical ? (
+          <p className="rd-meta rd-work-navigation">
+            {visibleWorkstreamRepositories(axis.repositories, context).length > 0 ? <>Repository · {visibleWorkstreamRepositories(axis.repositories, context).map(repository => repository.fullName).join(" · ")} · </> : null}
+            <a className="rd-work-link" href={`#/progress/${axis.id}`} data-rd-work-link={axis.id} onClick={event => { event.preventDefault(); onOpenWorkstream(axis.id); }}>Open in Progress →</a>
+          </p>
+        ) : null}
       </article>
     );
   }
@@ -3688,7 +4309,7 @@ export function apply(ctx: Context) {
     axes: AxisScan[];
     axisCounts: Record<AxisState, number>;
     topics: unknown[];
-  }): string {
+  }, separator = " · "): string {
     const parts: string[] = [];
     if (entry.axisCounts.active > 0) {
       parts.push(`${entry.axisCounts.active} active`);
@@ -3698,7 +4319,7 @@ export function apply(ctx: Context) {
     }
     parts.push(countLabel(entry.axes.length, "workstream", "workstreams"));
     parts.push(countLabel(entry.topics.length, "project", "projects"));
-    return parts.join(" · ");
+    return parts.join(separator);
   }
 
   /**
@@ -3822,34 +4443,42 @@ export function apply(ctx: Context) {
       entry.topics,
     );
     return (
-      <details
+      <section
         className="rd-panel rd-topic-detail"
         data-rd-detail-header="true"
-        data-rd-detail-mode="disclosure"
+        data-rd-detail-mode="static"
         data-rd-person-panel={entry.person.displayName}
-        open
       >
-        <summary className="rd-topic-summary">
-          <DetailHeader
-            badge={
-              entry.person.githubLogin ? (
+        <header className="rd-topic-summary">
+          {/* V12 — the selected-person hero, reusing the shared kicker/title/meta grammar: a kicker naming
+              the selection, the prominent name, then one factual involvement line. The hero is a single flex
+              child of the shared `.rd-topic-summary`, so the disclosure caret that rule draws stays inline
+              with the hero rather than stranding on a line of its own — the control is preserved with
+              coherent marker-title geometry. */}
+          <div className="rd-detail-head rd-hero-stack">
+            <p className="rd-hero-kicker" data-rd-person-kicker="true">
+              Selected person
+            </p>
+            <span className="rd-row rd-detail-title-row">
+              <CardTitle className="rd-hero-title">{entry.person.displayName}</CardTitle>
+              {entry.person.githubLogin ? (
                 <span className="rd-muted">@{entry.person.githubLogin}</span>
-              ) : null
-            }
-            title={<CardTitle>{entry.person.displayName}</CardTitle>}
-          >
-            <span className="rd-meta" data-rd-person-counts="true">
-              {involvementLine(entry)}
+              ) : null}
             </span>
-          </DetailHeader>
-        </summary>
+            <span className="rd-cluster rd-topic-summary-meta">
+              <span className="rd-meta" data-rd-person-counts="true">
+                {involvementLine(entry, " | ")}
+              </span>
+            </span>
+          </div>
+        </header>
         <div className="rd-topic-body">
           {/* C2 increment 2: the inner split, on C1's own grid. `rd-detail-grid` is the composition unit the
               Topics detail already uses — a 1fr lane against a `minmax(250px, 0.6fr)` rail, which is exactly
               what makes the lane measurably dominant (≥1.25×) at both reference viewports rather than merely
               wider, and it stacks below 1000px. Inheriting the grid means People inherits the dominance rule
               rather than restating it with its own numbers. */}
-          <div className="rd-detail-grid" data-rd-person-split="true">
+          <div className="rd-detail-grid rd-person-grid" data-rd-person-split="true">
             <div className="rd-current-work" data-rd-person-lane="current">
               {/* Q2 (ruled): "Current involvement" is false the moment completed work sits under it — Topics
                   and Repositories both fold terminal axes out, so the rollup was the one place calling a
@@ -3858,6 +4487,9 @@ export function apply(ctx: Context) {
                   section, no sub-navigation: a fold can come later if historical axes ever outnumber these. */}
               <span className="rd-section">Involvement</span>
               <div className="rd-work-groups" data-rd-person-topics={entry.topics.length}>
+                {bearingProjects.length === 0 ? (
+                  <p className="rd-muted" data-rd-person-involvement-empty="true">No explicitly linked workstreams for this person.</p>
+                ) : null}
                 {bearingProjects.map((involvement) => (
                   <section
                     className="rd-project-group"
@@ -3874,7 +4506,7 @@ export function apply(ctx: Context) {
                       className="rd-project-heading"
                       data-rd-project-name={involvement.topic.name}
                     >
-                      {involvement.topic.name}
+                      Project: {involvement.topic.name}
                     </div>
                     <div
                       className="rd-project-intro"
@@ -3885,15 +4517,7 @@ export function apply(ctx: Context) {
                           ? `${involvement.topic.status} · ${involvement.role}`
                           : involvement.topic.status}
                       </p>
-                      <Button
-                        onClick={() =>
-                          onOpenEntity("topic", involvement.topic.id)
-                        }
-                        size="sm"
-                        variant="outline"
-                      >
-                        Open project →
-                      </Button>
+                      <a className="rd-work-link" href={`#/topics/${involvement.topic.id}`} onClick={event => { event.preventDefault(); onOpenEntity("topic", involvement.topic.id); }}>Open in Projects →</a>
                     </div>
                     {[
                       ...involvement.axes.filter(
@@ -3904,6 +4528,7 @@ export function apply(ctx: Context) {
                       ),
                     ].map((axis) => (
                       <WorkstreamCard
+                        hierarchical
                         axis={{
                           id: axis.id,
                           repositories: axis.repositories,
@@ -3929,13 +4554,13 @@ export function apply(ctx: Context) {
                     `data-rd-person-topics`), the project tag navigates to the exact topic, and the
                     status · role meta is the recorded role, the same string the group intro shows. */}
                 {projectOnly.length > 0 ? (
-                  <details
+                  <section
                     className="rd-affiliations"
                     data-rd-person-affiliations={projectOnly.length}
                   >
-                    <summary className="rd-affiliations-summary">
+                    <h4 className="rd-affiliations-summary">
                       Project-only affiliations ({projectOnly.length})
-                    </summary>
+                    </h4>
                     <p className="rd-meta">No explicitly linked workstreams</p>
                     <ul className="rd-affiliation-list">
                       {projectOnly.map((involvement) => (
@@ -3953,13 +4578,13 @@ export function apply(ctx: Context) {
                           />
                           <span className="rd-meta">
                             {involvement.role
-                              ? `${involvement.topic.status} · ${involvement.role}`
-                              : involvement.topic.status}
+                              ? `${involvement.role} · project-only`
+                              : "project-only"}
                           </span>
                         </li>
                       ))}
                     </ul>
-                  </details>
+                  </section>
                 ) : null}
                 {entry.topics.length === 0 ? (
                   <Notice kind="empty">
@@ -3971,58 +4596,13 @@ export function apply(ctx: Context) {
             </div>
 
             <aside className="rd-side-stack" data-rd-person-rail="true">
-              <section className="rd-side-card">
-                <h3 className="rd-side-title">Recent activity</h3>
-                {entry.attributable ? (
-                  <PagedActivityFeed
-                    countAttr="data-rd-person-activity-total"
-                    dataAttr="data-rd-person-activity"
-                    emptyText="No attributable activity recorded yet."
-                    key={entry.person.id}
-                    labelFor={(item) => ({
-                      topic:
-                        entry.topics.find(
-                          (involvement) => involvement.topic.id === item.topicId
-                        )?.topic.name ?? null,
-                    })}
-                    onOpenEntity={onOpenEntity}
-                    person={{
-                      displayName: entry.person.displayName,
-                      id: entry.person.id,
-                    }}
-                    scope={{ personActorId: entry.person.nakamaUserId ?? undefined }}
-                  />
-                ) : (
-                  <p className="rd-muted" data-rd-attributable="false">
-                    No account is mapped to this person, so no recorded event can be
-                    attributed to them. That is a missing link, not an absence of
-                    work.
-                  </p>
-                )}
-                <span className="rd-cluster" data-rd-person-last="true">
-                  {entry.lastActivityAt ? (
-                    <RecencyLabel at={entry.lastActivityAt} prefix="last activity " />
-                  ) : (
-                    <span className="rd-muted">no attributable activity yet</span>
-                  )}
-                  {entry.lastReviewedAt ? (
-                    <RecencyLabel
-                      at={entry.lastReviewedAt}
-                      prefix="· last reviewed "
-                    />
-                  ) : (
-                    <span className="rd-muted">· never reviewed</span>
-                  )}
-                </span>
-              </section>
-
               {/* About is the person's own recorded note and nothing else: no generated prose, no inferred
                   role, no summary of their involvement dressed up as a description. Where the record holds no
                   note the card says so, which is the same claim the rest of the page makes about absences. */}
               <section className="rd-side-card">
                 <h3 className="rd-side-title">About</h3>
                 {entry.person.notes ? (
-                  <p data-rd-person-notes="true">{entry.person.notes}</p>
+                  <p data-rd-person-notes="true"><TextExcerpt text={entry.person.notes} /></p>
                 ) : (
                   <p className="rd-muted" data-rd-person-notes="empty">
                     No note recorded for this person.
@@ -4054,8 +4634,58 @@ export function apply(ctx: Context) {
               </section>
             </aside>
           </div>
+
+          {/* V12 — the person's own activity is full width at the foot of the detail, never a permanent
+              side rail. Its scope is unchanged: only events the store attributes to this person's mapped
+              account, paged from the backend with its own honest total. A missing account is stated as its
+              own fact, distinct from zero activity, exactly as before. */}
+          <section className="rd-person-activity" data-rd-person-activity-section="true">
+            {!entry.attributable ? <h4 className="rd-section-heading">Recent activity</h4> : null}
+            {entry.attributable ? (
+              <PagedActivityFeed
+                countAttr="data-rd-person-activity-total"
+                dataAttr="data-rd-person-activity"
+                inlineEmpty
+                emptyText="No attributable activity recorded yet."
+                key={entry.person.id}
+                labelFor={(item) => ({
+                  topic:
+                    entry.topics.find(
+                      (involvement) => involvement.topic.id === item.topicId
+                    )?.topic.name ?? null,
+                })}
+                onOpenEntity={onOpenEntity}
+                person={{
+                  displayName: entry.person.displayName,
+                  id: entry.person.id,
+                }}
+                scope={{ personActorId: entry.person.nakamaUserId ?? undefined }}
+              />
+            ) : (
+              <p className="rd-muted" data-rd-attributable="false">
+                No account is mapped to this person, so no recorded event can be
+                attributed to them. That is a missing link, not an absence of
+                work.
+              </p>
+            )}
+            <span className="rd-cluster" data-rd-person-last="true">
+              {entry.lastActivityAt ? (
+                <RecencyLabel at={entry.lastActivityAt} prefix="last activity " />
+              ) : (
+                <span className="rd-muted">no attributable activity yet</span>
+              )}
+              {entry.lastReviewedAt ? (
+                <RecencyLabel
+                  at={entry.lastReviewedAt}
+                  prefix="· last reviewed "
+                />
+              ) : (
+                <span className="rd-muted">· never reviewed</span>
+              )}
+            </span>
+          </section>
         </div>
-      </details>
+      </section>
     );
   }
 
@@ -4104,10 +4734,20 @@ export function apply(ctx: Context) {
     }
 
     return (
-      <div className="rd-split" data-rd-view="people">
+      <div className="rd-view-people" data-rd-view="people">
         <ViewHeading view="people" />
+        {/* V12 — the accepted Tinted composition: a named "People" rail on the left whose heading sits level
+            with the selected-person hero beside it, exactly as Projects names its own rail. The index carries
+            the server's order unreranked; the only client state is which person is selected. */}
+        <div className="rd-split">
+        <div className="rd-person-rail" data-rd-person-rail-view="true">
+        <div className="rd-index-head">
+          <h2 className="rd-index-title">People</h2>
+          <p className="rd-meta">Choose a person · direct and project-only relationships distinguished</p>
+        </div>
         <ul
-          className="rd-index"
+          aria-label="People"
+          className="rd-index rd-person-index"
           data-rd-people={people.length}
           data-rd-people-truncated={truncated}
         >
@@ -4163,6 +4803,7 @@ export function apply(ctx: Context) {
             </li>
           ))}
         </ul>
+        </div>
         {selected ? (
           <PersonPanel
             entry={selected}
@@ -4170,44 +4811,8 @@ export function apply(ctx: Context) {
             windowDays={windowDays}
           />
         ) : null}
+        </div>
       </div>
-    );
-  }
-
-  /**
-   * The collapsed **Dashboard summary** the accepted pivot puts above the Projects landing, replacing the
-   * retired Overview's always-on count row and its duplicate fast-access. Six aggregates, each the payload's
-   * own: Projects = `counts.topics` · Workstreams = `counts.axes` · Repositories · People · Open tasks and
-   * Blocked tasks = `problemsByState`. Open/Blocked are the **stored** task states (one grouped query over
-   * `problems`), never inferred from a workstream blocker. Before the payload loads every figure reads "—"
-   * rather than a guessed 0 — an honest empty state, not a synthetic fact.
-   */
-  function DashboardSummary({ overview }: { overview: Overview | null }) {
-    const figure = (n: number | undefined): string =>
-      overview && typeof n === "number" ? String(n) : "—";
-    const stats: Array<{ label: string; value: string }> = [
-      { label: "Projects", value: figure(overview?.counts.topics) },
-      { label: "Workstreams", value: figure(overview?.counts.axes) },
-      { label: "Open tasks", value: figure(overview?.problemsByState.open) },
-      { label: "Blocked tasks", value: figure(overview?.problemsByState.blocked) },
-      { label: "Repositories", value: figure(overview?.counts.repositories) },
-      { label: "People", value: figure(overview?.counts.people) },
-    ];
-    return (
-      <details
-        className="rd-panel rd-dashboard-summary"
-        data-rd-dashboard-summary={overview ? "ready" : "loading"}
-      >
-        <summary>Dashboard summary</summary>
-        <ul className="rd-stat-grid">
-          {stats.map((stat) => (
-            <li className="rd-stat" key={stat.label}>
-              <span className="rd-stat-value">{stat.value}</span>
-              <span className="rd-meta">{stat.label}</span>
-            </li>
-          ))}
-        </ul>
-      </details>
     );
   }
 
@@ -4306,7 +4911,6 @@ export function apply(ctx: Context) {
       const link = linkByTopic.get(topicId);
       return (
         <div className="rd-project-intro" data-rd-project-link={topicId}>
-          <p className="rd-meta">Workstreams this repository supports.</p>
           {link ? (
             <span
               className="rd-meta"
@@ -4315,13 +4919,7 @@ export function apply(ctx: Context) {
               {link.relationship}
             </span>
           ) : null}
-          <Button
-            onClick={() => onOpenEntity("topic", topicId)}
-            size="sm"
-            variant="outline"
-          >
-            Open project →
-          </Button>
+          <a className="rd-work-link" href={`#/topics/${topicId}`} onClick={event => { event.preventDefault(); onOpenEntity("topic", topicId); }}>Open in Projects →</a>
         </div>
       );
     };
@@ -4333,6 +4931,7 @@ export function apply(ctx: Context) {
     const groupCards = (axes: AxisScan[]) =>
       axes.map((axis) => (
         <WorkstreamCard
+          hierarchical
           axis={{
             id: axis.id,
             repositories: axis.repositories,
@@ -4369,10 +4968,20 @@ export function apply(ctx: Context) {
     }
 
     return (
-      <div className="rd-split" data-rd-view="repositories">
+      <div className="rd-view-repositories" data-rd-view="repositories">
         <ViewHeading view="repositories" />
+        {/* V12 — the accepted Tinted composition: a named "Repositories" rail on the left whose heading sits
+            level with the selected-repository hero beside it. The index carries the server's order
+            unreranked; the only client state is which repository is selected. */}
+        <div className="rd-split">
+        <div className="rd-repository-rail" data-rd-repository-rail-view="true">
+        <div className="rd-index-head">
+          <h2 className="rd-index-title">Repositories</h2>
+          <p className="rd-meta">Choose a repository · selected record shown at right</p>
+        </div>
         <ul
-          className="rd-index"
+          aria-label="Repositories"
+          className="rd-index rd-repository-index"
           data-rd-repositories={repositories.length}
           data-rd-repositories-truncated={truncated}
         >
@@ -4398,80 +5007,82 @@ export function apply(ctx: Context) {
             </li>
           ))}
         </ul>
+        </div>
         {selected ? (
-          <details
+          <section
             className="rd-panel rd-topic-detail"
             data-rd-detail-header="true"
-            data-rd-detail-mode="disclosure"
+            data-rd-detail-mode="static"
             data-rd-repository-panel={selected.repository.fullName}
-            open
-          >
-            <summary className="rd-topic-summary">
-              <DetailHeader
-                badge={
-                  /* The prototype's age box: how stale this is, before any of the detail, in the title row
-                     where it reads. The marker the previous composition carried moves with it. The label is
-                     "related activity" because the repository's recency is a union of its own events and those
-                     recorded against its associated workstreams (never its projects); the quiet note beside
-                     it states that scope, always, so the age is never read as this repository's own events
-                     alone. */
+              >
+            <header className="rd-topic-summary">
+              {/* V12 — the selected-repository hero, reusing the shared kicker/title/meta grammar: a kicker
+                  naming the selection, the prominent (monospace) repository name, then one factual metadata
+                  line. The recency stays a **related**-activity fact — its own events plus those recorded
+                  against its associated workstreams, never its projects — with the scope note beside it, and
+                  the default-branch fact joins the line. Repository-scoped activity remains distinct, below. */}
+              <div className="rd-detail-head rd-hero-stack">
+                <p className="rd-hero-kicker" data-rd-repository-kicker="true">
+                  Selected repository
+                </p>
+                <span className="rd-row rd-detail-title-row">
+                  <CardTitle className="rd-hero-title">{selected.repository.fullName}</CardTitle>
+                </span>
+                <span className="rd-cluster rd-topic-summary-meta">
+                  {selected.axes.length > 0 ? (
+                    <span className="rd-meta">
+                      {countLabel(selected.axes.length, "workstream", "workstreams")}
+                    </span>
+                  ) : null}
                   <span className="rd-cluster" data-rd-repository-last="true">
                     {selected.lastActivityAt ? (
                       <RecencyLabel at={selected.lastActivityAt} prefix="related activity " />
                     ) : (
                       <span className="rd-muted">no activity recorded yet</span>
                     )}
-                    <span className="rd-meta" data-rd-repository-recency-note="true">
-                      Recency includes repository and associated workstream events.
-                    </span>
                   </span>
-                }
-                context={
-                  /* C5, narrowed by the V1-B/B2 review and V1b: the header states the repository's own
-                     workstream total as quiet metadata only. Its supporting projects are navigation now —
-                     each is named and navigated once in its work group or the "Other project links" card —
-                     so the header carries no project tags. */
-                  selected.axes.length > 0 ? (
-                    <span className="rd-meta">
-                      {countLabel(selected.axes.length, "workstream", "workstreams")}
-                    </span>
-                  ) : null
-                }
-                title={<CardTitle>{selected.repository.fullName}</CardTitle>}
-              >
-                <span className="rd-meta" data-rd-repository-description="true">
-                  {selected.repository.description || "no description recorded"}
-                </span>
-                {/* The description footer: the default branch as separate metadata on the left, and the
-                    repository's **actual external URL** as the GitHub ↗ destination on the lower right —
-                    distinct from the internal dashboard entry the WorkstreamCard repository names open. */}
-                <div className="rd-context-footer">
                   <span className="rd-meta" data-rd-repository-branch="true">
                     {selected.repository.defaultBranch
                       ? `Default branch · ${selected.repository.defaultBranch}`
                       : "Default branch · not recorded"}
                   </span>
-                  {selected.repository.url ? (
-                    <a
-                      aria-label={`Open ${selected.repository.fullName} on GitHub`}
-                      className="rd-repo-ext"
-                      data-rd-repository-url="true"
-                      href={selected.repository.url}
-                      rel="noopener noreferrer"
-                      target="_blank"
-                      title={`Open ${selected.repository.fullName} on GitHub`}
-                    >
-                      GitHub ↗
-                    </a>
-                  ) : null}
-                </div>
-              </DetailHeader>
-            </summary>
+                </span>
+
+              </div>
+            </header>
             <div className="rd-topic-body">
-              {/* C5 convergence: the shared detail grid. The repository's current supported work is the dominant
-                  lane; everything else is a rail beside it — the composition the Topics and People panels
-                  already use, and the reason the panel no longer reads as four equal stacked sections. */}
-              <div className="rd-detail-grid" data-rd-repository-split="true">
+              {/* The repository's own recorded description, verbatim, with its **actual external URL** as
+                  the separate GitHub destination — distinct from the internal dashboard entry the
+                  WorkstreamCard repository names open. Nothing here is generated; an absent description
+                  states so rather than inventing a purpose. */}
+              <div className="rd-repository-overview">
+              <section className="rd-repository-purpose">
+                <h3 className="rd-context-label rd-overview-heading">Repository purpose</h3>
+                <span className="rd-meta" data-rd-repository-description="true">
+                  <TextExcerpt text={selected.repository.description} emptyText="no description recorded" />
+                </span>
+                {selected.repository.url ? (
+                  <a
+                    aria-label={`Open ${selected.repository.fullName} on GitHub`}
+                    className="rd-repo-ext"
+                    data-rd-repository-url="true"
+                    href={selected.repository.url}
+                    rel="noopener noreferrer"
+                    target="_blank"
+                    title={`Open ${selected.repository.fullName} on GitHub`}
+                  >
+                    GitHub ↗
+                  </a>
+                ) : null}
+              </section>
+              <section className="rd-repository-scope">
+                <h3 className="rd-context-label rd-overview-heading">Relationship scope</h3>
+                <p className="rd-meta" data-rd-repository-recency-note="true">Recency includes repository and associated workstream events. Repository-scoped activity remains distinct below.</p>
+              </section>
+              </div>
+              {/* V12 — the shared detail grid: the repository's supported work in the dominant lane, the
+                  other relationships in a quiet aside beside it. */}
+              <div className="rd-detail-grid rd-repository-grid" data-rd-repository-split="true">
                 <section
                   className="rd-current-work"
                   data-rd-repository-current={nonterminalCount}
@@ -4482,7 +5093,7 @@ export function apply(ctx: Context) {
                       count, exactly as the Progress panel's "Tasks (N)" heading does. The heading names the
                       workstreams it holds rather than the partition, so "nonterminal" reads only where the
                       contrast matters: the fold below, which is the completed-and-abandoned work. */}
-                  <span className="rd-section">{`Workstreams (${nonterminalCount})`}</span>
+                  <span className="rd-section">{`Supported workstreams (${nonterminalCount} visible)`}</span>
                   {selected.axes.length === 0 ? (
                     <p className="rd-muted">
                       No workstream names this repository yet.
@@ -4500,7 +5111,7 @@ export function apply(ctx: Context) {
                           key={group.topicId}
                         >
                           <div className="rd-project-heading">
-                            {nameFor(group.topicId)}
+                            Project: {nameFor(group.topicId)}
                           </div>
                           {groupIntro(group.topicId)}
                           {groupCards(group.nonterminal)}
@@ -4520,7 +5131,7 @@ export function apply(ctx: Context) {
                               key={group.topicId}
                             >
                               <div className="rd-project-heading">
-                                {nameFor(group.topicId)}
+                                Project: {nameFor(group.topicId)}
                               </div>
                               {/* The project's nav lives once: a group already stated in the lane does
                                   not repeat it here, so the fold navigates only the projects it alone
@@ -4537,31 +5148,7 @@ export function apply(ctx: Context) {
                   )}
                 </section>
 
-                <aside className="rd-side-stack">
-                  <section className="rd-side-card">
-                    <h3 className="rd-side-title">Repository-scoped activity</h3>
-                    {/* V1b: this feed is the *directly* scoped page — events recorded against this
-                        repository itself. Events associated with its workstreams (and projects) live on
-                        those entities, so an empty here is not a claim that nothing related happened; the
-                        empty text says exactly that, and names only workstream events — recency is never
-                        asserted to include project events. */}
-                    <PagedActivityFeed
-                      countAttr="data-rd-repository-activity"
-                      dataAttr="data-rd-repository-activity-list"
-                      emptyText="No directly scoped events recorded. Related workstream events may still exist."
-                      key={selected.repository.id}
-                      labelFor={(item) => ({
-                        axis:
-                          selected.axes.find((axis) => axis.id === item.axisId)?.title ?? null,
-                        topic:
-                          selected.topics.find((link) => link.topic.id === item.topicId)?.topic
-                            .name ?? null,
-                      })}
-                      onOpenEntity={onOpenEntity}
-                      scope={{ repositoryId: selected.repository.id }}
-                    />
-                  </section>
-
+                <aside className="rd-side-stack" data-rd-repository-rail="true">
                   {/* Consolidation: a direct topic link whose project is already a work group is named and
                       navigated in that group, so this card lists only the links no work group represents —
                       every link stays reachable, nothing is listed twice. When that leaves nothing to show
@@ -4655,9 +5242,34 @@ export function apply(ctx: Context) {
                   <div className="rd-row" data-rd-repository-notes-omitted="true" />
                 </aside>
               </div>
+
+              {/* V12 — the repository's own directly scoped activity, full width at the foot of the detail
+                  and separate from the related-workstream recency stated in the hero (no union): events
+                  recorded against this repository itself, paged from the backend with its own honest total.
+                  An empty here is not a claim that its workstreams recorded nothing — the empty text says so. */}
+              <section className="rd-repository-activity" data-rd-repository-activity-section="true">
+                <PagedActivityFeed
+                  inlineEmpty
+                  scopeNote="Repository-scoped events only"
+                  countAttr="data-rd-repository-activity"
+                  dataAttr="data-rd-repository-activity-list"
+                  emptyText="No directly scoped events recorded. Related workstream events may still exist."
+                  key={selected.repository.id}
+                  labelFor={(item) => ({
+                    axis:
+                      selected.axes.find((axis) => axis.id === item.axisId)?.title ?? null,
+                    topic:
+                      selected.topics.find((link) => link.topic.id === item.topicId)?.topic
+                        .name ?? null,
+                  })}
+                  onOpenEntity={onOpenEntity}
+                  scope={{ repositoryId: selected.repository.id }}
+                />
+              </section>
             </div>
-          </details>
+          </section>
         ) : null}
+        </div>
       </div>
     );
   }
@@ -4734,6 +5346,7 @@ export function apply(ctx: Context) {
     // client slice of the same array — same rows, same order, one code path.
     const tasks = axis?.problems ?? [];
     const taskTotal = taskPage ? taskPage.total : tasks.length;
+    const taskStart = taskPage?.offset ?? taskOffset;
     const taskShown = taskPage
       ? taskPage.items
       : tasks.slice(taskOffset, taskOffset + PROGRESS_PAGE_SIZE);
@@ -4762,59 +5375,65 @@ export function apply(ctx: Context) {
       <div className="rd-stack" data-rd-view="progress">
         <ViewHeading view="progress" />
         <div className="rd-split rd-progress-top" data-rd-progress-top="true">
-          <ul
-            className="rd-index rd-progress-index"
-            data-rd-progress-index="true"
-            data-rd-progress-index-rows={axisRows.length}
-            data-rd-progress-index-window={progress?.axes.activitySinceDays ?? 0}
-          >
-            {groups.map((group) => (
-              <li className="rd-project-group" key={group.rows[0]?.topicId ?? group.name}>
-                <div className="rd-project-heading">{group.name}</div>
-                <ul className="rd-index-list">
-                  {group.rows.map((row) => (
-                    <li key={row.id}>
-                      <button
-                        aria-pressed={selection?.axisId === row.id}
-                        className="rd-index-item"
-                        data-rd-index-axis={row.id}
-                        data-rd-index-open-problems={row.openProblems}
-                        data-rd-index-problems={row.problems}
-                        data-rd-index-recency={row.recencyAt ?? ""}
-                        data-rd-index-state={row.state}
-                        data-rd-index-topic={row.topicName}
-                        onClick={() => onSelectWorkstream(row.topicId, row.id)}
-                        type="button"
-                      >
-                        <span className="rd-cluster">
-                          <span
-                            aria-hidden="true"
-                            className="rd-status-dot"
-                            data-rd-state={row.state}
-                          />
+          {/* V12 — the left rail is a named selector: the visible "Workstreams" heading sits level with the
+              hero kicker, then the workstreams grouped by project. A row carries no pill, count, plan flag or
+              recency; its state is a narrow spaced pipe (pure CSS, decorative) while the stored state and
+              confidence stay as assistive text inside the button, so the semantic is never colour-only. */}
+          <div className="rd-progress-rail" data-rd-progress-rail="true">
+            <div className="rd-index-head">
+              <h2 className="rd-index-title">Workstreams</h2>
+              <p className="rd-meta">Choose a workstream · organized by project</p>
+            </div>
+            <ul
+              className="rd-index rd-progress-index"
+              data-rd-progress-index="true"
+              data-rd-progress-index-rows={axisRows.length}
+              data-rd-progress-index-window={progress?.axes.activitySinceDays ?? 0}
+            >
+              {groups.map((group) => (
+                <li className="rd-project-group" key={group.rows[0]?.topicId ?? group.name}>
+                  <div className="rd-project-heading">{group.name}</div>
+                  <ul className="rd-index-list">
+                    {group.rows.map((row) => (
+                      <li key={row.id}>
+                        <button
+                          aria-pressed={selection?.axisId === row.id}
+                          className="rd-index-item"
+                          data-rd-index-axis={row.id}
+                          data-rd-index-open-problems={row.openProblems}
+                          data-rd-index-problems={row.problems}
+                          data-rd-index-recency={row.recencyAt ?? ""}
+                          data-rd-index-state={row.state}
+                          data-rd-index-topic={row.topicName}
+                          onClick={() => onSelectWorkstream(row.topicId, row.id)}
+                          type="button"
+                        >
                           <span className="rd-strong">{row.title}</span>
-                        </span>
-                        <span className="rd-meta">
-                          <StateBadge
-                            confidence={row.stateConfidence}
-                            state={row.state}
-                          />
-                          {` · ${countLabel(row.openProblems, "open task", "open tasks")}`}
-                          {row.plan ? "" : " · No plan"}
-                          {row.recencyAt ? ` · ${describeAge(row.recencyAt)}` : ""}
-                        </span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ))}
-            {axisRows.length === 0 ? (
-              <li className="rd-muted" data-rd-progress-index-empty="true">
-                No workstreams yet.
-              </li>
-            ) : null}
-          </ul>
+                          <span className="rd-meta">
+                            {countLabel(row.openProblems, "open task", "open tasks")}
+                            {row.plan ? "" : " · No plan"}
+                            {row.recencyAt ? ` · ${describeAge(row.recencyAt)}` : ""}
+                          </span>
+                          <span className="rd-visually-hidden">
+                            {`State ${row.state}${
+                              row.stateConfidence && row.stateConfidence !== "confirmed"
+                                ? ` (${row.stateConfidence})`
+                                : ""
+                            }`}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+              {axisRows.length === 0 ? (
+                <li className="rd-muted" data-rd-progress-index-empty="true">
+                  No workstreams yet.
+                </li>
+              ) : null}
+            </ul>
+          </div>
 
           <div
             className="rd-progress-detail"
@@ -4839,18 +5458,17 @@ export function apply(ctx: Context) {
                  disclosures are never re-closed under them. The correction draft/conflict reload and
                  save handlers live in the page state above, so nothing the reader typed is lost. */
               <React.Fragment key={axis.id}>
-                {/* V2b — the compact header leads: title + state, then the current reading and (where
-                    there is one) the blocker in full, each with its own confidence badge. The enduring
-                    purpose is one native disclosure away and the axis's own people are stated explicitly;
-                    the workstream plan, activity, evidence, provenance and maintenance all follow the
-                    tasks below. */}
-                <section
-                  className="rd-context-panel"
-                  data-rd-context-panel={axis.id}
-                >
+                {/* V12 — the selected-workstream hero: a kicker naming the selection and its project, then
+                    the prominent title with its state beside it, then one factual metadata line. The
+                    enduring purpose, the reading, the blocker and the axis's own people move into the
+                    reading column, which pairs with the workstream plan below. */}
+                <section className="rd-progress-hero" data-rd-context-panel={axis.id}>
+                  <p className="rd-hero-kicker" data-rd-progress-kicker="true">
+                    {`Selected workstream · ${projectName}`}
+                  </p>
                   <div className="rd-work-head">
                     <h3
-                      className="rd-work-title"
+                      className="rd-work-title rd-hero-title"
                       data-rd-progress-detail-title="true"
                     >
                       {axis.title}
@@ -4860,12 +5478,41 @@ export function apply(ctx: Context) {
                       state={axis.state}
                     />
                   </div>
-                  <div className="rd-context-body" data-rd-progress-context="true">
-                    <span className="rd-context-label">Current reading</span>
+                  <p className="rd-meta rd-hero-meta" data-rd-progress-hero-meta="true">
+                    {[
+                      countLabel(taskTotal, "task", "tasks"),
+                      axis.plan && axis.plan.steps.length > 0
+                        ? countLabel(
+                            axis.plan.steps.length,
+                            "recorded plan step",
+                            "recorded plan steps"
+                          )
+                        : null,
+                      activityTotal > 0
+                        ? `${activityTotal} recorded ${
+                            activityTotal === 1 ? "activity" : "activities"
+                          } in scope`
+                        : null,
+                    ]
+                      .filter((part): part is string => part !== null)
+                      .join(" | ")}
+                  </p>
+                </section>
+
+                <div className="rd-progress-content" data-rd-progress-content="true">
+                {/* V12 — Current reading and the optional Workstream plan sit as adjacent columns under
+                    matching headings with **no** vertical dividing rule. The plan comes before the tasks and
+                    is open by default; a workstream with no plan renders no dead column at all (the reading
+                    then takes the full width), and the absence is never filled with a fabricated step. */}
+                <div className="rd-progress-columns" data-rd-progress-columns="true">
+                  <section className="rd-progress-col" data-rd-progress-col="reading">
+                    <div className="rd-section-head">
+                      <span className="rd-section">Current reading</span>
+                    </div>
                     <p className="rd-claim-value" data-rd-axis-reading="true">
                       {axis.currentState ? (
                         <>
-                          {axis.currentState}
+                          <TextExcerpt text={axis.currentState} />
                           <ConfidenceBadge value={axis.currentStateConfidence} />
                         </>
                       ) : (
@@ -4878,35 +5525,47 @@ export function apply(ctx: Context) {
                       <>
                         <span className="rd-context-label">Blocker</span>
                         <p className="rd-claim-value" data-rd-axis-blocker="true">
-                          {axis.blocker}
+                          <TextExcerpt text={axis.blocker} />
                           <ConfidenceBadge value={axis.blockerConfidence} />
                         </p>
                       </>
                     ) : null}
-                  </div>
-                  <details
-                    className="rd-context-more"
-                    data-rd-progress-context-more="true"
-                  >
-                    <summary className="rd-context-label">Purpose</summary>
-                    <p className="rd-claim-value" data-rd-axis-description="true">
-                      {axis.description ? (
-                        axis.description
-                      ) : (
-                        <span className="rd-muted">
-                          No workstream purpose recorded.
-                        </span>
-                      )}
-                    </p>
-                  </details>
-                  <Participants onOpen={onOpenEntity} people={axis.people} />
-                </section>
+                    {/* Purpose is an inline expandable excerpt — a real show full / show less button over the
+                        complete stored text, never a paraphrase and never a native details. The
+                        `data-rd-axis-description` marker stays on the excerpt node and `context-more` on
+                        this block, both on their actual corresponding nodes. */}
+                    <div className="rd-context-more" data-rd-progress-context-more="true">
+                      <span className="rd-context-label">Purpose</span>
+                      <PurposeExcerpt text={axis.description ?? null} />
+                    </div>
+                    <Participants onOpen={onOpenEntity} people={axis.people} />
+                  </section>
+                  {axis.plan && axis.plan.steps.length > 0 ? (
+                    <section
+                      className="rd-progress-col"
+                      data-rd-progress-col="plan"
+                      data-rd-progress-plan="true"
+                    >
+                      <ScopedPlan
+                        defaultOpen={true}
+                        hint={countLabel(
+                          axis.plan.steps.length,
+                          "recorded step",
+                          "recorded steps"
+                        )}
+                        collapsible={false}
+                        label="Workstream plan"
+                        plan={axis.plan}
+                      />
+                    </section>
+                  ) : null}
+                </div>
 
                 <section
                   className="rd-progress-tasks"
                   data-rd-progress-tasks={taskTotal}
                 >
-                  <div className="rd-row">
+                  <div className="rd-section-head">
                     <span className="rd-section">{`Tasks (${taskTotal})`}</span>
                   </div>
                   {taskTotal === 0 ? (
@@ -4916,52 +5575,60 @@ export function apply(ctx: Context) {
                   ) : (
                     <>
                       <div className="rd-task-list">
-                        {taskShown.map((task) => (
+                        {taskShown.map((task, index) => (
                           <article
                             className="rd-task-card"
                             data-rd-task-card={task.id}
+                            data-rd-task-ordinal={taskStart + index + 1}
                             data-rd-task-state={task.state}
                             key={task.id}
                           >
-                            <div className="rd-work-head">
-                              <h4 className="rd-task-title">
-                                {task.title || task.statement}
-                              </h4>
-                              <StateBadge
-                                confidence={task.stateConfidence}
-                                state={task.state as ProblemState}
+                            {/* Continuous display position across pages, not a stored task rank or plan-step
+                                position. Use the returned page offset when available. */}
+                            <span className="rd-task-ordinal" aria-hidden="true">
+                              {String(taskStart + index + 1).padStart(2, "0")}
+                            </span>
+                            <div className="rd-task-body">
+                              <div className="rd-work-head">
+                                <h4 className="rd-task-title">
+                                  {task.title || <TextExcerpt text={task.statement} />}
+                                </h4>
+                                <StateBadge
+                                  confidence={task.stateConfidence}
+                                  state={task.state as ProblemState}
+                                />
+                              </div>
+                              {task.title && task.title !== task.statement ? (
+                                <p className="rd-task-statement"><TextExcerpt text={task.statement} /></p>
+                              ) : null}
+                              <span className="rd-meta" data-rd-task-facts="true">
+                                {task.authorType === "human"
+                                  ? "owner-authored"
+                                  : "librarian-inferred"}
+                                {task.planStepTitle
+                                  ? ` · step: ${task.planStepTitle}`
+                                  : ""}
+                              </span>
+                              <ScopedPlan label="Task plan" plan={task.plan} />
+                              {task.repositories.length > 0 ? (
+                                <div className="rd-cluster rd-tags">
+                                  <span className="rd-meta">
+                                    Supporting repositories ·
+                                  </span>
+                                  {task.repositories.map((repository) => (
+                                    <RepoLinkPair
+                                      key={repository.id}
+                                      onOpen={onOpenEntity}
+                                      repository={repository}
+                                    />
+                                  ))}
+                                </div>
+                              ) : null}
+                              <Participants
+                                onOpen={onOpenEntity}
+                                people={task.people}
                               />
                             </div>
-                            {task.title && task.title !== task.statement ? (
-                              <p className="rd-task-statement">{task.statement}</p>
-                            ) : null}
-                            <span className="rd-meta" data-rd-task-facts="true">
-                              {task.authorType === "human"
-                                ? "owner-authored"
-                                : "librarian-inferred"}
-                              {task.planStepTitle
-                                ? ` · step: ${task.planStepTitle}`
-                                : ""}
-                            </span>
-                            <ScopedPlan label="Task plan" plan={task.plan} />
-                            {task.repositories.length > 0 ? (
-                              <div className="rd-cluster rd-tags">
-                                <span className="rd-meta">
-                                  Supporting repositories ·
-                                </span>
-                                {task.repositories.map((repository) => (
-                                  <RepoLinkPair
-                                    key={repository.id}
-                                    onOpen={onOpenEntity}
-                                    repository={repository}
-                                  />
-                                ))}
-                              </div>
-                            ) : null}
-                            <Participants
-                              onOpen={onOpenEntity}
-                              people={task.people}
-                            />
                           </article>
                         ))}
                       </div>
@@ -4976,87 +5643,16 @@ export function apply(ctx: Context) {
                   )}
                 </section>
 
-                {/* V2b — evidence is a secondary native disclosure, after the tasks, read straight off the
-                    axis's own recorded `evidence` set (the same set the store's write rule accepts for a
-                    `confirmed` claim). The summary states the count of evidence *shown*, because the
-                    projection is capped per source and is not the workstream's exact total; the body lists
-                    each reference with its own label, its author where one is named, and its actual stored
-                    `sourceUrl` where there is one — never a guessed destination — or its recorded source
-                    ref where there is not. The explicit no-evidence sentence is preserved verbatim, and the
-                    confidence distinctions stay on the reading/blocker claims in the compact header, not
-                    here. */}
-                <details
-                  className="rd-progress-evidence"
-                  data-rd-axis-evidence={evidence.length}
-                  data-rd-has-evidence={evidence.length > 0}
-                  data-rd-progress-evidence={evidence.length}
-                >
-                  <summary>{progressEvidenceSummary(evidence.length)}</summary>
-                  {evidence.length > 0 ? (
-                    <ul
-                      className="rd-evidence-list"
-                      data-rd-evidence-list="true"
-                    >
-                      {evidence.map((item, index) => (
-                        <li
-                          key={`${item.sourceRef}-${index}`}
-                          data-rd-evidence-ref={item.sourceRef || String(index)}
-                        >
-                          <span className="rd-strong">{item.label}</span>
-                          {item.by ? (
-                            <span className="rd-meta">{` · ${item.by}`}</span>
-                          ) : null}
-                          {item.sourceUrl ? (
-                            <a
-                              className="rd-repo-ext"
-                              data-rd-evidence-url={item.sourceRef || String(index)}
-                              href={item.sourceUrl}
-                              rel="noopener noreferrer"
-                              target="_blank"
-                              title={item.sourceUrl}
-                            >
-                              source ↗
-                            </a>
-                          ) : (
-                            <span
-                              className="rd-meta"
-                              data-rd-evidence-no-url="true"
-                            >
-                              {item.sourceRef || item.sourceType}
-                            </span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="rd-muted" data-rd-evidence-empty="true">
-                      {PROGRESS_NO_EVIDENCE_TEXT}
-                    </p>
-                  )}
-                </details>
-
-                {/* V2b — the workstream's own scoped plan, collapsed by default: its summary is the route
-                    and every stored step is retained. A **task's** own plan keeps its existing default open
-                    (`ScopedPlan`'s `defaultOpen` default), so only the workstream-level call changes. */}
-                {axis.plan ? (
-                  <div data-rd-progress-plan="true">
-                    <ScopedPlan
-                      defaultOpen={false}
-                      label="Workstream plan"
-                      plan={axis.plan}
-                    />
-                  </div>
-                ) : null}
-
-                {/* V2b — recent activity is a native disclosure, collapsed by default, its exact scoped
-                    total stated in the summary; the rows and the backend Pager are the existing scoped
-                    ones (unchanged handlers, exact total, five per page). */}
-                <details
+                {/* V12 — recent activity is the bottom, full-width dated ledger, **open by default** to
+                    reflect the target composition. Its rows and the backend Pager are the existing scoped
+                    ones (unchanged handlers, exact total, five per page); the exact scoped total stays in
+                    the summary, and the section is scoped to this workstream's own history only. */}
+                <section
                   className="rd-progress-activity"
                   data-rd-progress-activity="true"
                   data-rd-progress-activity-total={activityTotal}
                 >
-                  <summary>{progressActivitySummary(activityTotal)}</summary>
+                  <h4 className="rd-section-heading">{progressActivitySummary(activityTotal)}</h4>
                   {activityItems.length === 0 ? (
                     <p className="rd-muted" data-rd-progress-feed-empty="true">
                       Nothing recorded against this workstream.
@@ -5084,26 +5680,7 @@ export function apply(ctx: Context) {
                       total={activityTotal}
                     />
                   ) : null}
-                </details>
-
-                {/* V2b — provenance: the workstream's explicit supporting-repository links, secondary and
-                    after the tasks, unchanged in substance from the context panel they used to sit in. */}
-                {axisRepositories.length > 0 ? (
-                  <div
-                    className="rd-cluster rd-tags"
-                    data-rd-context-repositories={axisRepositories.length}
-                    data-rd-progress-provenance="true"
-                  >
-                    <span className="rd-meta">Supporting repositories ·</span>
-                    {axisRepositories.map((repository) => (
-                      <RepoLinkPair
-                        key={repository.id}
-                        onOpen={onOpenEntity}
-                        repository={repository}
-                      />
-                    ))}
-                  </div>
-                ) : null}
+                </section>
 
                 {/* V2b — maintenance is secondary and after the tasks: the correction control and the
                     retained Return to project live here. The correction form is **never** hidden behind a
@@ -5160,6 +5737,84 @@ export function apply(ctx: Context) {
                     onSave={onSaveCorrection}
                   />
                 ) : null}
+                {/* V2b — evidence is a secondary native disclosure, after the tasks, read straight off the
+                    axis's own recorded `evidence` set (the same set the store's write rule accepts for a
+                    `confirmed` claim). The summary states the count of evidence *shown*, because the
+                    projection is capped per source and is not the workstream's exact total; the body lists
+                    each reference with its own label, its author where one is named, and its actual stored
+                    `sourceUrl` where there is one — never a guessed destination — or its recorded source
+                    ref where there is not. The explicit no-evidence sentence is preserved verbatim, and the
+                    confidence distinctions stay on the reading/blocker claims in the compact header, not
+                    here. */}
+                <section
+                  className="rd-progress-evidence"
+                  data-rd-axis-evidence={evidence.length}
+                  data-rd-has-evidence={evidence.length > 0}
+                  data-rd-progress-evidence={evidence.length}
+                >
+                  <h4 className="rd-section-heading">{progressEvidenceSummary(evidence.length)}</h4>
+                  {evidence.length > 0 ? (
+                    <ul
+                      className="rd-evidence-list"
+                      data-rd-evidence-list="true"
+                    >
+                      {evidence.map((item, index) => (
+                        <li
+                          key={`${item.sourceRef}-${index}`}
+                          data-rd-evidence-ref={item.sourceRef || String(index)}
+                        >
+                          <span className="rd-strong">{item.label}</span>
+                          {item.by ? (
+                            <span className="rd-meta">{` · ${item.by}`}</span>
+                          ) : null}
+                          {item.sourceUrl ? (
+                            <a
+                              className="rd-repo-ext"
+                              data-rd-evidence-url={item.sourceRef || String(index)}
+                              href={item.sourceUrl}
+                              rel="noopener noreferrer"
+                              target="_blank"
+                              title={item.sourceUrl}
+                            >
+                              source ↗
+                            </a>
+                          ) : (
+                            <span
+                              className="rd-meta"
+                              data-rd-evidence-no-url="true"
+                            >
+                              {item.sourceRef || item.sourceType}
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="rd-muted" data-rd-evidence-empty="true">
+                      {PROGRESS_NO_EVIDENCE_TEXT}
+                    </p>
+                  )}
+                </section>
+
+                {/* V12 — provenance: the workstream's explicit supporting-repository links, secondary and
+                    after the tasks, unchanged in substance. */}
+                {axisRepositories.length > 0 ? (
+                  <div
+                    className="rd-cluster rd-tags"
+                    data-rd-context-repositories={axisRepositories.length}
+                    data-rd-progress-provenance="true"
+                  >
+                    <span className="rd-meta">Supporting repositories ·</span>
+                    {axisRepositories.map((repository) => (
+                      <RepoLinkPair
+                        key={repository.id}
+                        onOpen={onOpenEntity}
+                        repository={repository}
+                      />
+                    ))}
+                  </div>
+                ) : null}
+                </div>
               </React.Fragment>
             ) : null}
           </div>
@@ -5784,6 +6439,9 @@ export function apply(ctx: Context) {
                 }}
                 variant="outline"
               >
+                <span aria-hidden="true" className="rd-refresh-glyph">
+                  ↻
+                </span>
                 Refresh
               </Button>
             </div>
@@ -5801,19 +6459,25 @@ export function apply(ctx: Context) {
             {/* The brand stays in the top bar while this view names itself; readers arriving from a
                 tag need not infer the destination from the selected navigation button. */}
             <ViewHeading view="topics" />
-            {/* The accepted pivot retires Overview: its aggregate counts live in a **collapsed**
-                Dashboard summary directly above the Projects landing, not in duplicate fast-access rows.
-                Every number is the payload's own (`getOverview.counts` and `problemsByState`); Open and
-                Blocked are the stored task states, never inferred from a workstream blocker. It spans the
-                full width above the split. */}
-            <DashboardSummary overview={overview} />
+            {/* V12 iteration 2 (V-03, owner decision 2026-10-13): the legacy collapsed **Dashboard
+                summary** is removed from the Projects presentation — it pushed the selector/hero
+                alignment down and broke the direct entry into the selected project that the accepted
+                Tinted reference opens with. It is **not** relocated: no replacement row, no top-bar
+                accessory. The aggregates themselves are preserved in the backend `get_overview` read,
+                which every other view still consumes; only this Projects-only presentation is retired. */}
             {/* The accepted prototype's composition: a **380px selector rail on the left** and the
                 selected project's detail beside it, in the one shared `rd-split` all four views use. The
-                heading and the summary are above it, so the rail is never pushed to a row of its own. */}
+                rail opens the view directly, with no header row above it to push it to a row of its own. */}
             <div className="rd-split">
-            {/* C1 — the prototype's composition: a compact index rail, and ONE persistent detail. The
-                index carries the server's order unreranked; the only client state is which topic is
-                selected. There is no disclosure control, so the detail is never "closed". */}
+            {/* V12 — the accepted Tinted composition: a named selector rail on the left whose "Projects"
+                heading sits level with the selected-project hero beside it, exactly as Progress names its
+                own rail. The index carries the server's order unreranked; the only client state is which
+                topic is selected. */}
+            <div className="rd-topic-rail" data-rd-topic-rail="true">
+            <div className="rd-index-head">
+              <h2 className="rd-index-title">Projects</h2>
+              <p className="rd-meta">Choose a project · selected record shown at right</p>
+            </div>
             <ul
               aria-label="Projects"
               className="rd-index rd-topic-index"
@@ -5863,6 +6527,7 @@ export function apply(ctx: Context) {
                 );
               })}
             </ul>
+            </div>
 
             {selectedEntry ? (
               /* V2 correction — the project detail is keyed by the selected topic id. A different
@@ -5871,25 +6536,37 @@ export function apply(ctx: Context) {
                  previous project (the outer panel and the activity fold carry an explicit `open`, so
                  they stay open). A write draft that the reader typed lives in the page state above as
                  a controlled field, so remounting never drops it. */
-              <details
+              <section
                 className="rd-panel rd-topic-detail"
                 data-rd-detail={selectedEntry.topic.name}
                 data-rd-detail-header="true"
-                data-rd-detail-mode="disclosure"
+                data-rd-detail-mode="static"
                 key={selectedEntry.topic.id}
-                open
               >
                 {/* The shared **native disclosure**: the `<summary>` carries the project's title and
                     status; the body carries the concise summary, the full description, the participants
                     and supporting repositories, the optional project plan, the workstream cards and the
                     paged activity below. Projects orients — the full workstream reading stays in
                     Progress, and the blocker's prose lives there too. */}
-                <summary className="rd-topic-summary">
+                <header className="rd-topic-summary">
+                  {/* V12 — the selected-project hero, reusing Progress's hero grammar: a kicker naming the
+                      selection, the prominent title, then one factual metadata line. The rail's "Projects"
+                      heading sits level with this kicker. The status stays as assistive/quiet text and the
+                      workstream cards carry the real state tags. */}
+                  <p className="rd-hero-kicker" data-rd-topic-kicker="true">
+                    Selected project
+                  </p>
                   <span className="rd-row rd-detail-title-row">
-                    <CardTitle>{selectedEntry.topic.name}</CardTitle>
+                    <CardTitle className="rd-hero-title">{selectedEntry.topic.name}</CardTitle>
                   </span>
                   <span className="rd-cluster rd-topic-summary-meta">
-                    <span className="rd-muted">{selectedEntry.topic.status}</span>
+                    <span className="rd-meta" data-rd-topic-workstreams="true">
+                      {countLabel(
+                        currentAxes.length + foldedAxes.length,
+                        "workstream",
+                        "workstreams",
+                      )}
+                    </span>
                     {selectedEntry.lastActivityAt ? (
                       <RecencyLabel
                         at={selectedEntry.lastActivityAt}
@@ -5897,7 +6574,7 @@ export function apply(ctx: Context) {
                       />
                     ) : null}
                   </span>
-                </summary>
+                </header>
                 <div className="rd-topic-body">
                 {selectedDetails ? (
                   <div className="rd-detail-claims">
@@ -5909,9 +6586,7 @@ export function apply(ctx: Context) {
                     <div className="rd-claim rd-claim-summary">
                       <span className="rd-context-label">Summary</span>
                       <span className="rd-claim-value" data-rd-claim="summary">
-                        {selectedDetails.topic.summary || (
-                          <span className="rd-muted">No summary recorded.</span>
-                        )}
+                        <TextExcerpt text={selectedDetails.topic.summary} emptyText="No summary recorded." />
                       </span>
                     </div>
                     {/* V2a — the complete stored `description` stays reachable but not prominent: a
@@ -5919,14 +6594,12 @@ export function apply(ctx: Context) {
                         and whose body carries the exact stored string (or its own honest empty). Nothing
                         is hidden silently — the label names the field — and no preview is clamped here,
                         so no arbitrary visual truncation stands between the reader and the full text. */}
-                    <details className="rd-claim rd-description" data-rd-description-field="true">
-                      <summary className="rd-context-label">Description</summary>
+                    <div className="rd-claim rd-description" data-rd-description-field="true">
+                      <span className="rd-context-label">Description</span>
                       <span className="rd-claim-value" data-rd-claim="description">
-                        {selectedDetails.topic.description || (
-                          <span className="rd-muted">No description recorded.</span>
-                        )}
+                        <TextExcerpt text={selectedDetails.topic.description} emptyText="No description recorded." />
                       </span>
-                    </details>
+                    </div>
                   </div>
                 ) : null}
                 {/* Participants — an explicit quiet inline label beneath a divider. The hook the
@@ -6012,9 +6685,12 @@ export function apply(ctx: Context) {
                     puts the compact shared workstream cards across the detail, with the project's
                     activity in its own independent collapsible section below. There is no side rail. */}
                 <section className="rd-current-work" data-rd-current-work={currentAxes.length}>
-                  <span className="rd-context-label">
-                    Workstreams ({currentAxes.length})
-                  </span>
+                  <div className="rd-section-head">
+                    <span className="rd-section">
+                      {`Workstreams (${currentAxes.length})`}
+                    </span>
+                    <span className="rd-plan-hint">Recorded work, not estimated progress</span>
+                  </div>
                   {currentAxes.length === 0 ? (
                     <p className="rd-muted">No workstreams on this project.</p>
                   ) : (
@@ -6072,12 +6748,11 @@ export function apply(ctx: Context) {
                     workstreams, paged five backend rows at a time and scoped to this project. The items
                     and the total are the page's own (`get_topic` offset/pageSize → `activityPage`); the
                     legacy `activity` array is never re-sliced here. */}
-                <details
+                <section
                   className="rd-scoped-plan rd-topic-activity-fold"
                   data-rd-topic-activity-fold="true"
-                  open
                 >
-                  <summary>Activity ({topicActivityTotal})</summary>
+                  <h4 className="rd-section-heading">{progressActivitySummary(topicActivityTotal)}</h4>
                   <ul
                     className="rd-activity"
                     data-rd-topic-activity={topicActivityTotal}
@@ -6115,7 +6790,7 @@ export function apply(ctx: Context) {
                     pageSize={PROGRESS_PAGE_SIZE}
                     total={topicActivityTotal}
                   />
-                </details>
+                </section>
 
                 {/* The existing write controls, **preserved but secondary**: Notes/corrections and
                     Record activity sit behind one disclosure at the foot of the detail, so the project
@@ -6134,7 +6809,7 @@ export function apply(ctx: Context) {
                       >
                         {selectedDetails.notes.map((note) => (
                           <li key={note.id}>
-                            <div>{note.text}</div>
+                            <div><TextExcerpt text={note.text} /></div>
                             <span className="rd-meta">
                               {note.authorType} · {note.createdAt.slice(0, 10)}
                             </span>
@@ -6221,7 +6896,7 @@ export function apply(ctx: Context) {
                   </details>
                 ) : null}
                 </div>
-              </details>
+              </section>
             ) : null}
             </div>
           </div>

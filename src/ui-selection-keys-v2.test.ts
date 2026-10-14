@@ -73,10 +73,10 @@ describe("V2 correction — Projects selection-boundary key", () => {
   });
 
   test("the full stored description is still rendered verbatim — the correction changes no string", () => {
-    expect(source).toContain("{selectedDetails.topic.description || (");
+    expect(source).toContain('<TextExcerpt text={selectedDetails.topic.description} emptyText="No description recorded." />');
     expect(source).toContain("No description recorded.");
     // The summary label is untouched.
-    expect(source).toContain('<summary className="rd-context-label">Description</summary>');
+    expect(source).toContain('<span className="rd-context-label">Description</span>');
   });
 });
 
